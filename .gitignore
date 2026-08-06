@@ -1,0 +1,31 @@
+# deps / build
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# env & secrets
+.env
+.env.*
+!**/.env.example
+
+# editors / local
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+.claude/
+.superpowers/
+*.local
+*.log
+
+# coverage
+coverage/
+htmlcov/
+.coverage

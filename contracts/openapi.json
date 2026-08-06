@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GameForge-Copilot",
+    "version": "0.0.0",
+    "description": "占位快照。M0 后由后端 `uv run python -m app.export_openapi` 生成真实内容并覆盖本文件后提交。前端据本文件生成 TS 类型。"
+  },
+  "paths": {}
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mock Game</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: Inter, system-ui, sans-serif; }
+      .wrap { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; }
+      h1 { font-weight: 500; letter-spacing: -0.02em; }
+      p { opacity: 0.7; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div>
+        <h1>Mock playable shell</h1>
+        <p id="meta"></p>
+      </div>
+    </div>
+    <script>
+      const q = new URLSearchParams(location.search)
+      document.getElementById('meta').textContent =
+        [...q.entries()].map(([k,v]) => k + '=' + v).join(' · ') || 'no params'
+    </script>
+  </body>
+</html>

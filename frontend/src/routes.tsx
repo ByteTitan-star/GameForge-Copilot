@@ -1,0 +1,45 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AppShell } from '@/components/layout/AppShell'
+import { RequireAdmin } from '@/components/layout/RequireAdmin'
+import { RequireAuth } from '@/components/layout/RequireAuth'
+import { AdminPage } from '@/pages/admin/AdminPage'
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
+import { LoginPage } from '@/pages/auth/LoginPage'
+import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
+import { ForgePage } from '@/pages/forge/ForgePage'
+import { GamesPage } from '@/pages/games/GamesPage'
+import { LandingPage } from '@/pages/LandingPage'
+import { DraftPlayPage } from '@/pages/play/DraftPlayPage'
+import { PlayPage } from '@/pages/play/PlayPage'
+import { SettingsPage } from '@/pages/settings/SettingsPage'
+import { ToonHubHero } from '@/pages/preview/ToonHubHero'
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/play/:slug" element={<PlayPage />} />
+      <Route path="/draft/:gameId/:version" element={<DraftPlayPage />} />
+      <Route path="/preview/toonhub" element={<ToonHubHero />} />
+
+      <Route element={<RequireAuth />}>
+        <Route element={<AppShell />}>
+          <Route path="/games" element={<GamesPage />} />
+          <Route path="/forge" element={<ForgePage />} />
+          <Route path="/forge/:gameId" element={<ForgePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
