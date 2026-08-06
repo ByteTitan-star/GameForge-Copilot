@@ -6,7 +6,7 @@ import { ApiError } from './errors'
 describe('MSW · 认证与用量', () => {
   it('login 成功返回 snake_case session', async () => {
     const data = await authApi.login('demo@gameforge.dev', 'password123')
-    expect(data.access_token).toMatch(/^mock-access-/)
+    expect(data.access_token).toMatch(/^mock-access\./)
     expect(data.user.email_verified).toBe(true)
     expect(data.user.role).toBe('user')
   })

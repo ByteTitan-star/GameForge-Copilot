@@ -25,9 +25,15 @@ export function getBearer(req: Request): string | null {
 
 export function userFromAccess(token: string | null): MockAccount | null {
   if (!token) return null
-  const userId = mockDb.refreshTokens.get(`access:${token}`)
-  if (!userId) return null
-  return mockDb.users.find((u) => u.user_id === userId) ?? null
+  // mock-access.{userId}.{nonce}
+  if (token.startsWith('mock-access.')) {
+    const userId = token.slice('mock-access.'.length).split('.').slice(0, -1).join('.')
+    return mockDb.users.find((u) => u.user_id === userId) ?? null
+  }
+  // 兼容旧格式：access:{token} -> userId
+  const mapped = mockDb.refreshTokens.get(`access:${token}`)
+  if (mapped) return mockDb.users.find((u) => u.user_id === mapped) ?? null
+  return null
 }
 
 export function requireUser(req: Request) {

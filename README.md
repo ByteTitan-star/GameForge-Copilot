@@ -1,96 +1,154 @@
 # GameForge-Copilot
 
-🎮 AI-powered game studio in your browser. Turn your wild ideas into playable HTML games through multi-round dialogue, and real-time token metering. Just describe, iterate, and publish — zero coding required.
+🎮 浏览器里的 AI 游戏工作室。用多轮对话把想法锻成**可玩的 HTML 小游戏**——描述、确认、试玩、发布。
 
-中文：浏览器里的 AI 游戏工作室。通过多轮对话将你的奇思妙想转化为可玩的 HTML 游戏。只需描述、迭代、发布——无需编写任何代码。
+> From prompt to playable. · 当前仓库含可跑的前端 mock 闭环（MSW）；后端并行推进中。
 
-> 用户在 Web 端用自然语言多轮对话，从 0 到 1 设计并发布一款在线可运行的小游戏。
+<p align="center">
+  <img src="docs/assets/01-landing.png" alt="GameForge Landing" width="900" />
+</p>
 
-GameForge-Copilot 是一个生产级的 Web 应用服务（非手机端、非微信小游戏）。用户描述「我想设计一个 XX 游戏」，系统通过自研编排框架驱动多角色 Agent 生成可运行的游戏代码，产物托管上线即可玩；支持发布审批、多租户 token 用量计量、用户自带 LLM apikey。
+<p align="center">
+  <code>描述玩法</code> → <code>HITL 确认策划</code> → <code>生成构建</code> → <code>沙箱试玩</code> → <code>提交发布</code>
+</p>
 
-## 核心能力
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#demo-cases">Cases</a> ·
+  <a href="#product-ui">UI</a> ·
+  <a href="#for-contributors">Contributors</a>
+</p>
 
-- **对话式游戏生成**：多轮对话，从需求到可运行游戏，Agent 自主生成代码，不在业务代码中硬编码任何游戏逻辑约束。
-- **在线可玩**：生成的游戏作为静态产物托管，按 slug 路由直接访问运行。
-- **发布审批流**：未发布的游戏仅创建者可见（管理员也不可见）；发布后由管理员审批、上架、下架。
-- **多租户用量计量**：基于 LLM 响应真实 token 用量，Redis 累计系统总量与每用户用量，用于配额与限流。
-- **用户自带 LLM Key**：provider/model/apikey 在 Web 端 setting 由用户自配，系统不绑死任何厂商。
-- **生产级账号体系**：邮箱注册 + 验证 + JWT 认证 + 用户/管理员双角色。
+---
 
-## 技术栈
+## Demo Cases
 
-| 层 | 选型 | 理由 |
-|---|---|---|
-| 编排框架 | LangGraph | 检查点/可恢复长任务、HITL 审批中断、子图多角色、流式、LLM 无关 |
-| LLM | Claude（默认，可换） | provider 抽象，用户自带 key |
-| 后端 | Python 3.12 + FastAPI + uv | async 契合 IO 密集；沙箱资产同栈可复用 |
-| 前端 | React + Vite + TypeScript + Tailwind + shadcn/ui | 轻量、生态大、便于嵌入游戏产物 |
-| 数据库 | PostgreSQL | 用户/游戏/发布记录等主数据 |
-| 缓存/计量 | Redis | token 用量、会话、限流、检查点 KV |
-| 沙箱 | execute_code sandbox（资源分级） | Agent 生成期代码执行与产物构建 |
-| 部署 | Docker + GitLab CI | 可复现、生产级 |
+落地页里的三条样例路径（mock 库同款）。完整卡片见下图。
 
-## 架构一览
+<p align="center">
+  <img src="docs/assets/01-landing-cases.png" alt="Landing features and cases" width="900" />
+</p>
 
+| Case | 一句话开局 | 状态 | 你会看到 |
+|---|---|---|---|
+| **霓虹贪吃蛇** | 「方向键 + 计分，失败一键重开」 | Draft | 进工坊继续打磨、预览、提交发布 |
+| **像素跑酷** | 「障碍节奏 + 皮肤切换」 | Published | 公开 slug 试玩入口 |
+| **塔防雏形** | 「路径与波次先数值确认」 | Rejected → 可再提审 | HITL 改策划稿后再出可运行版 |
+
+---
+
+## Product UI
+
+截图来自本地 `pnpm dev` + `VITE_USE_MOCK=true`（2026-08）。顶部绿色条是 mock 提示，不是生产文案。
+
+### 登录 · 液态玻璃
+
+<p align="center">
+  <img src="docs/assets/02-login.png" alt="Login" width="900" />
+</p>
+
+### 我的游戏 · 深色 Library
+
+封面卡、状态筛选、发布 / 删除。
+
+<p align="center">
+  <img src="docs/assets/03-games.png" alt="Games library" width="900" />
+</p>
+
+### 设计工坊 · 命令台三栏
+
+左 Chat · 中 Pipeline + HITL · 右事件日志 / 试玩。
+
+<p align="center">
+  <img src="docs/assets/04-forge.png" alt="Forge console with HITL" width="900" />
+</p>
+
+### Setting · LLM Key 与用量
+
+自带 apikey（掩码展示）+ 日/月/累计 token 看板（图表字体：Noto Sans SC）。
+
+<p align="center">
+  <img src="docs/assets/05-settings.png" alt="Settings LLM and usage" width="900" />
+</p>
+
+### 对话长什么样
+
+```text
+你：做一个霓虹贪吃蛇，方向键控制，带计分。
+工坊：run xxx · mock WS 已连接
+工坊：策划稿已就绪，请在中间面板确认…
+—— HITL ——
+Gameplay: 移动、收集、计分；失败一键重开
+Controls: 方向键 / WASD；空格暂停
+Levels: 热身关 · 加速关 · 障碍关
+你：[批准继续] → art → code → qa → 右侧试玩
 ```
-[Web 前端] ──HTTP/WS──▶ [FastAPI 后端]
-                          │
-        ┌─────────────────┼──────────────────┐
-        ▼                 ▼                  ▼
-   [LangGraph 编排]   [认证/权限]      [游戏产物托管]
-   ├ 策划子图          └ 用户/管理员       └ 静态资源 /slug
-   ├ 美术子图
-   ├ 代码子图 ──▶ [沙箱 execute_code]  生成 → 构建 → 托管
-   └ 质检子图
-        │
-        ▼
-   [LLM Provider 抽象]  ◀── 用户 Web 端自配 apikey
-        │
-        ▼
-   [Redis 用量计量]   [PostgreSQL 主数据]
-```
 
-详见 [docs/02-architecture.md](docs/02-architecture.md)。
+---
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 前端（当前可用：VITE_USE_MOCK=true 走 MSW）
-cd frontend
+git clone https://github.com/ByteTitan-star/GameForge-Copilot.git
+cd GameForge-Copilot/frontend
 pnpm install
-cp .env.example .env
+cp .env.example .env   # VITE_USE_MOCK=true
 pnpm dev
-
-# 后端（骨架推进中）
-cd backend
-uv sync
-cp .env.example .env   # 填 DB/Redis 等
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
 ```
 
-访问 `http://127.0.0.1:5173`。Mock 账号：`demo@gameforge.dev` / `password123`。
+打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)
 
-## 文档
+| | |
+|---|---|
+| Mock 账号 | `demo@gameforge.dev` / `password123` |
+| 管理员 | `admin@gameforge.dev` / `password123` |
+| 未验证邮箱 | `unverified@gameforge.dev` / `password123` |
 
-完整设计文档在 [docs/](docs/)：
+```bash
+pnpm test    # vitest + MSW
+pnpm build
+```
 
-- [01-features.md](docs/01-features.md) — 功能清单
-- [02-architecture.md](docs/02-architecture.md) — 整体架构
-- [03-game-generation.md](docs/03-game-generation.md) — 游戏生成编排
-- [04-hosting-and-publish.md](docs/04-hosting-and-publish.md) — 产物托管与发布审批
-- [05-tenant-usage-llm.md](docs/05-tenant-usage-llm.md) — 多租户/用量计量/LLM 配置
-- [06-auth-and-security.md](docs/06-auth-and-security.md) — 认证与权限
-- [07-api-and-data-model.md](docs/07-api-and-data-model.md) — API 与数据模型
-- [08-frontend.md](docs/08-frontend.md) — 前端
-- [09-deployment.md](docs/09-deployment.md) — 部署与运维
-- [10-contract-and-parallel-dev.md](docs/10-contract-and-parallel-dev.md) — 前后端契约与并行开发
+---
 
-协作目录 [contracts/](contracts/) — 前后端接口契约与协作流程（openapi.json + CHANGELOG + INTEGRATION），前后端 agent 靠 git 通信、不轮询。
+## For Contributors
 
-## 开发约定
+### 技术栈
 
-见 [CLAUDE.md](CLAUDE.md)。
+| 层 | 选型 |
+|---|---|
+| 编排 | LangGraph（检查点 / HITL / 子图） |
+| 后端 | Python 3.12 · FastAPI · uv |
+| 前端 | React · Vite · TypeScript · Tailwind · TanStack Query · Zustand · MSW |
+| 数据 | PostgreSQL · Redis |
+| 沙箱 | execute_code（生成期构建） |
+
+### 架构
+
+```
+[Web] ──HTTP/WS──▶ [FastAPI]
+                     ├ forge (plan→art→code→qa)
+                     ├ auth / publish / usage
+                     └ hosting /play/{slug}
+```
+
+### 文档与契约
+
+- [docs/](docs/) — 功能 / 架构 / 生成 / 托管 / 用量 / 认证 / API / 前端 / 部署
+- [docs/10-contract-and-parallel-dev.md](docs/10-contract-and-parallel-dev.md) — **契约圣经**
+- [contracts/](contracts/) — `openapi.json` · `CHANGELOG.md` · `INTEGRATION.md`（前后端靠 git 协作，不轮询）
+
+约定见 [CLAUDE.md](CLAUDE.md)。截图资源在 [docs/assets/](docs/assets/)。
+
+### 里程碑（摘要）
+
+| | 前端 | 联调 |
+|---|---|---|
+| M0–M3 | ✅ enums · types · MSW · 认证 · LLM · 用量 | mock |
+| M4–M6 | Forge / HITL / 试玩（mock WS） | 待真实 WS |
+| M7–M8 | 审批后台 | 待后端 |
+
+---
 
 ## License
 

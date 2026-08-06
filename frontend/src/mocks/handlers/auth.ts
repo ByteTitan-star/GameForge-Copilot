@@ -16,10 +16,10 @@ function toUser(account: (typeof mockDb.users)[number]) {
 }
 
 function issueTokens(userId: string) {
-  const access_token = `mock-access-${uid('a')}`
-  const refresh_token = `mock-refresh-${uid('r')}`
+  // 把 user_id 编进 token，页面刷新后 mockDb 重置仍可鉴权（对齐 localStorage 会话）
+  const access_token = `mock-access.${userId}.${uid('a')}`
+  const refresh_token = `mock-refresh.${userId}.${uid('r')}`
   mockDb.refreshTokens.set(refresh_token, userId)
-  mockDb.refreshTokens.set(`access:${access_token}`, userId)
   return { access_token, refresh_token, expires_in: 900 }
 }
 
@@ -64,8 +64,13 @@ export const authHandlers = [
   http.post(`${base}/auth/refresh`, async ({ request }) => {
     await delay(200)
     const body = await readJson<{ refresh_token: string }>(request)
-    const userId = mockDb.refreshTokens.get(body.refresh_token)
-    if (!userId) return fail(401, ErrorCode.UNAUTHORIZED, 'refresh token 无效')
+    let userId = mockDb.refreshTokens.get(body.refresh_token)
+    if (!userId && body.refresh_token?.startsWith('mock-refresh.')) {
+      userId = body.refresh_token.slice('mock-refresh.'.length).split('.').slice(0, -1).join('.')
+    }
+    if (!userId || !mockDb.users.some((u) => u.user_id === userId)) {
+      return fail(401, ErrorCode.UNAUTHORIZED, 'refresh token 无效')
+    }
     mockDb.refreshTokens.delete(body.refresh_token)
     return ok(issueTokens(userId))
   }),
