@@ -29,3 +29,6 @@
 coverage/
 htmlcov/
 .coverage
+
+.promptrail/
+**/.promptrail/
