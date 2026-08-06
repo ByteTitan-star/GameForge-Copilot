@@ -1,8 +1,12 @@
 # GameForge-Copilot
 
+🎮 AI-powered game studio in your browser. Turn your wild ideas into playable HTML games through multi-round dialogue, and real-time token metering. Just describe, iterate, and publish — zero coding required.
+
+中文：浏览器里的 AI 游戏工作室。通过多轮对话将你的奇思妙想转化为可玩的 HTML 游戏。只需描述、迭代、发布——无需编写任何代码。
+
 > 用户在 Web 端用自然语言多轮对话，从 0 到 1 设计并发布一款在线可运行的小游戏。
 
-GameForge-Copilot 是一个生产级的 Web 应用服务（非手机端、非微信小游戏）。用户描述"我想设计一个 XX 游戏"，系统通过自研编排框架驱动多角色 Agent 生成可运行的游戏代码，产物托管上线即可玩；支持发布审批、多租户 token 用量计量、用户自带 LLM apikey。
+GameForge-Copilot 是一个生产级的 Web 应用服务（非手机端、非微信小游戏）。用户描述「我想设计一个 XX 游戏」，系统通过自研编排框架驱动多角色 Agent 生成可运行的游戏代码，产物托管上线即可玩；支持发布审批、多租户 token 用量计量、用户自带 LLM apikey。
 
 ## 核心能力
 
@@ -50,26 +54,22 @@ GameForge-Copilot 是一个生产级的 Web 应用服务（非手机端、非微
 
 ## 快速开始
 
-> 代码尚未实现。以下为规划的目标启动方式，落地时以此为准。
-
 ```bash
-# 后端
-cd backend
-uv sync
-cp .env.example .env   # 填 DB/Redis/默认 LLM 等
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
-
-# 前端
+# 前端（当前可用：VITE_USE_MOCK=true 走 MSW）
 cd frontend
 pnpm install
+cp .env.example .env
 pnpm dev
 
-# 依赖（Docker）
-docker compose up -d postgres redis worker   # sandbox 镜像由后端按 run 拉起，无需常驻
+# 后端（骨架推进中）
+cd backend
+uv sync
+cp .env.example .env   # 填 DB/Redis 等
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
 ```
 
-访问 `http://localhost:5173`，注册账号，在 setting 上传 LLM apikey，开始设计游戏。
+访问 `http://127.0.0.1:5173`。Mock 账号：`demo@gameforge.dev` / `password123`。
 
 ## 文档
 
@@ -94,4 +94,4 @@ docker compose up -d postgres redis worker   # sandbox 镜像由后端按 run �
 
 ## License
 
-待定。
+[MIT](LICENSE)
