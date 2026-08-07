@@ -2,9 +2,23 @@ type ClientLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 type ClientLogExtra = Record<string, unknown>
 
+function beijingTimestamp(): string {
+  const text = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(new Date())
+  return `${text.replace(' ', 'T')}+08:00`
+}
+
 function emit(level: ClientLogLevel, message: string, extra?: ClientLogExtra) {
   const payload = {
-    ts: new Date().toISOString(),
+    ts: beijingTimestamp(),
     level: level.toUpperCase(),
     service: 'frontend',
     message,

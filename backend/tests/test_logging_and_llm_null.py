@@ -2,25 +2,42 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.core.logging import setup_logging
-from app.llm.provider import Usage, complete
+from app.core.logging import BEIJING, beijing_date_key, setup_logging
 from app.enums import LLMProvider
+from app.llm.provider import Usage, complete
+
+_FIXED = datetime(2026, 8, 7, 15, 51, 19, tzinfo=BEIJING)
 
 
-def test_setup_logging_writes_file(tmp_path: Path) -> None:
+def test_beijing_date_key() -> None:
+    assert beijing_date_key(_FIXED) == "26-08-07"
+
+
+def test_setup_logging_writes_dated_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.core.logging as logmod
+
+    monkeypatch.setattr(logmod, "beijing_now", lambda: _FIXED)
+    monkeypatch.setattr(logmod, "beijing_date_key", lambda when=None: "26-08-07")
+
     log_dir = str(tmp_path / "logs")
     setup_logging("INFO", service="backend", log_dir=log_dir)
     logging.getLogger("test.file").info("disk-log")
     for handler in logging.getLogger().handlers:
         handler.flush()
-    content = (tmp_path / "logs" / "backend.log").read_text(encoding="utf-8")
+        handler.close()
+
+    log_file = tmp_path / "logs" / "26-08-07" / "backend.log"
+    content = log_file.read_text(encoding="utf-8")
     row = json.loads(content.strip().splitlines()[-1])
     assert row["service"] == "backend"
     assert row["message"] == "disk-log"
+    assert "+08:00" in row["ts"]
 
 
 @pytest.mark.asyncio

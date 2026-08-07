@@ -426,20 +426,24 @@ rabbitmqctl purge_queue gameforge.worker             # 或管理台 http://127.0
 
 ### 日志落盘（`logs/`）
 
-本地开发时，三类进程各自写 JSON 行日志到仓库根目录 **`logs/`**（已在 `.gitignore`，不会进 Git）：
+本地开发时，按 **北京时间当天** 分目录，三类进程各写一份 JSON 行日志（已在 `.gitignore`）：
 
-| 文件 | 来源 | 说明 |
-|---|---|---|
-| `logs/backend.log` | `uvicorn app.main:app` | API 请求、DB/Redis 错误、forge 异常栈 |
-| `logs/worker.log` | `python -m app.messaging.worker` | 任务消费、邮件 `[dev-email]`、run 失败栈 |
-| `logs/frontend.log` | `pnpm dev`（Vite 插件） | 浏览器 `window.error`、未捕获 Promise、手动 `clientLog.*` |
+```text
+logs/
+└── 26-08-07/          # YY-MM-DD（北京时间）
+    ├── backend.log    # uvicorn API
+    ├── worker.log     # RabbitMQ worker
+    └── frontend.log   # pnpm dev 浏览器
+```
+
+每条日志的 `ts` 字段为 **北京时间**（`+08:00`）。
 
 **查看最近错误：**
 
 ```bash
-tail -f logs/worker.log    # 生成 RUN_FAILED 时先看这里（含 exc_info 栈）
-tail -f logs/backend.log
-tail -f logs/frontend.log
+DAY=$(TZ=Asia/Shanghai date +%y-%m-%d)
+tail -f logs/$DAY/worker.log
+grep exc_info logs/$DAY/worker.log
 ```
 
 配置（`backend/.env`）：

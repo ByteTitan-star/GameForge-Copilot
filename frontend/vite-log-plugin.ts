@@ -2,14 +2,46 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 
-/** Dev-only: append browser logs to repo-root ``logs/frontend.log``. */
+const BEIJING_TZ = 'Asia/Shanghai'
+
+/** Daily folder ``YY-MM-DD`` in Beijing time, e.g. ``26-08-07``. */
+export function beijingDateKey(when = new Date()): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: BEIJING_TZ,
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(when)
+      .map((p) => [p.type, p.value]),
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+/** ISO-like timestamp with ``+08:00`` offset (Beijing). */
+export function beijingTimestamp(when = new Date()): string {
+  const text = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: BEIJING_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(when)
+  return `${text.replace(' ', 'T')}+08:00`
+}
+
+/** Dev-only: append browser logs to ``logs/YY-MM-DD/frontend.log``. */
 export function devLogFilePlugin(repoRoot: string): Plugin {
-  const logDir = path.join(repoRoot, 'logs')
-  const logFile = path.join(logDir, 'frontend.log')
+  const logRoot = path.join(repoRoot, 'logs')
 
   const append = (line: string) => {
-    fs.mkdirSync(logDir, { recursive: true })
-    fs.appendFileSync(logFile, `${line}\n`, 'utf8')
+    const dayDir = path.join(logRoot, beijingDateKey())
+    fs.mkdirSync(dayDir, { recursive: true })
+    fs.appendFileSync(path.join(dayDir, 'frontend.log'), `${line}\n`, 'utf8')
   }
 
   return {
