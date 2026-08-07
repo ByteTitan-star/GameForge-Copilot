@@ -27,6 +27,7 @@ class AdminSettings(BaseModel):
     default_daily_token_limit: int
     default_monthly_token_limit: int = 10_000_000
     default_rate_limit_per_min: int
+    admin_contact_email: str = ""
 
 
 class AuditLogItem(BaseModel):
@@ -36,6 +37,11 @@ class AuditLogItem(BaseModel):
     target: str | None
     detail: dict[str, Any] | None
     created_at: datetime
+
+
+class AdminGameSchedulePatch(BaseModel):
+    scheduled_take_down_at: datetime | None = None
+    scheduled_publish_at: datetime | None = None
 
 
 class AdminGameItem(BaseModel):

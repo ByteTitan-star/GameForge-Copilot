@@ -1,6 +1,7 @@
 """管理后台：用户管理 + 全局设置 + 审计 + 已发布游戏列表（admin）。"""
 
 import uuid
+from datetime import datetime
 
 import redis.asyncio as redis
 from sqlalchemy import func, select
@@ -17,6 +18,39 @@ from app.schemas.admin import AdminSettings
 from app.usage import quota as quota_mod
 
 _LIMITS_KEY = "limits"
+_GENERAL_KEY = "general"
+
+
+async def get_admin_contact_email(db: AsyncSession) -> str:
+    """禁用账号登录提示中的管理员邮箱：DB 设置 > 环境变量 > 首个可用管理员。"""
+    row = await db.get(SystemSetting, _GENERAL_KEY)
+    if row is not None:
+        contact = (row.value or {}).get("admin_contact_email", "").strip()
+        if contact:
+            return contact
+    if settings.admin_contact_email.strip():
+        return settings.admin_contact_email.strip()
+    admins = await list_admin_emails(db)
+    if admins:
+        return admins[0]
+    return "admin@example.com"
+
+
+async def disabled_user_message(db: AsyncSession) -> str:
+    contact = await get_admin_contact_email(db)
+    return f"当前账号已违规，请联系管理员<{contact}>申请解封"
+
+
+async def _active_admin_count(db: AsyncSession) -> int:
+    return int(
+        await db.scalar(
+            select(func.count()).select_from(User).where(
+                User.role == Role.ADMIN.value,
+                User.disabled.is_(False),
+            )
+        )
+        or 0
+    )
 
 
 async def list_users(
@@ -56,6 +90,15 @@ async def patch_user(
     user = await db.get(User, user_id)
     if user is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "用户不存在")
+    if disabled is True and user.id == admin.id:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "不能禁用当前登录的管理员账号")
+    if (
+        role is not None
+        and role != Role.ADMIN
+        and user.role == Role.ADMIN.value
+        and await _active_admin_count(db) <= 1
+    ):
+        raise AppError(ErrorCode.VALIDATION_ERROR, "至少保留一名可用管理员")
     detail: dict = {}
     if role is not None:
         user.role = role.value
@@ -71,12 +114,40 @@ async def patch_user(
     return user
 
 
+async def delete_user(
+    db: AsyncSession,
+    r: redis.Redis,
+    admin: User,
+    user_id: uuid.UUID,
+) -> None:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "用户不存在")
+    if user.id == admin.id:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "不能删除当前登录的管理员账号")
+    if user.role == Role.ADMIN.value and await _active_admin_count(db) <= 1:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "至少保留一名可用管理员")
+    email = user.email
+    await db.delete(user)
+    db.add(
+        AuditLog(
+            actor_id=admin.id,
+            action="delete_user",
+            target=str(user_id),
+            detail={"email": email},
+        )
+    )
+    await db.commit()
+    await r.delete(f"quota:user:{user_id}")
+
+
 async def get_settings(db: AsyncSession) -> AdminSettings:
     daily, monthly, rate = await get_effective_limits(db)
     return AdminSettings(
         default_daily_token_limit=daily,
         default_monthly_token_limit=monthly,
         default_rate_limit_per_min=rate,
+        admin_contact_email=await get_admin_contact_email(db),
     )
 
 
@@ -93,9 +164,21 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     else:
         row.value = value
         row.updated_by = admin.id
+    general = await db.get(SystemSetting, _GENERAL_KEY)
+    general_value = {"admin_contact_email": req.admin_contact_email.strip()}
+    if general is None:
+        db.add(
+            SystemSetting(key=_GENERAL_KEY, value=general_value, updated_by=admin.id)
+        )
+    else:
+        general.value = general_value
+        general.updated_by = admin.id
     db.add(
         AuditLog(
-            actor_id=admin.id, action="update_settings", target=_LIMITS_KEY, detail=value
+            actor_id=admin.id,
+            action="update_settings",
+            target=_LIMITS_KEY,
+            detail={**value, **general_value},
         )
     )
     await db.commit()
@@ -166,3 +249,35 @@ async def list_admin_emails(db: AsyncSession) -> list[str]:
         )
     ).all()
     return [u.email for u in rows]
+
+
+async def patch_game_schedule(
+    db: AsyncSession,
+    admin: User,
+    game_id: uuid.UUID,
+    scheduled_take_down_at: datetime | None,
+    scheduled_publish_at: datetime | None,
+) -> Game:
+    game = await db.get(Game, game_id)
+    if game is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在")
+    game.scheduled_take_down_at = scheduled_take_down_at
+    game.scheduled_publish_at = scheduled_publish_at
+    db.add(
+        AuditLog(
+            actor_id=admin.id,
+            action="schedule_game",
+            target=str(game_id),
+            detail={
+                "scheduled_take_down_at": scheduled_take_down_at.isoformat()
+                if scheduled_take_down_at
+                else None,
+                "scheduled_publish_at": scheduled_publish_at.isoformat()
+                if scheduled_publish_at
+                else None,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(game)
+    return game

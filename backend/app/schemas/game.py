@@ -7,8 +7,9 @@ from app.enums import GameStatus
 
 
 class GameCreate(BaseModel):
-    title: str
-    requirement: str
+    title: str | None = None
+    requirement: str | None = None
+    template_id: str | None = None
 
 
 class GamePatch(BaseModel):
@@ -56,3 +57,12 @@ class GameDetailResp(BaseModel):
 class GameDeleteResp(BaseModel):
     game_id: uuid.UUID
     deleted: bool = True
+
+
+class PublicGameItem(BaseModel):
+    game_id: uuid.UUID
+    title: str
+    slug: str
+    cover_url: str | None = None
+    published_at: datetime | None
+    play_count: int

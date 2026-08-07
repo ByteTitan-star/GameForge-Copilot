@@ -12,11 +12,11 @@ BASE = "/api/v1/me/llm-configs"
 _BODY = {"provider": "anthropic", "model": "claude-sonnet-5", "apikey": "sk-test-1234567890"}
 
 
-async def _ok(_provider, _apikey, _base_url=None) -> tuple[bool, str | None]:
+async def _ok(_provider, _apikey, _model, _base_url=None) -> tuple[bool, str | None]:
     return True, None
 
 
-async def _fail(_provider, _apikey, _base_url=None) -> tuple[bool, str | None]:
+async def _fail(_provider, _apikey, _model, _base_url=None) -> tuple[bool, str | None]:
     return False, "HTTP 401"
 
 
@@ -81,6 +81,52 @@ async def test_test_endpoint(
     assert d["error"] is None
 
 
+async def test_draft_test_endpoint(
+    auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(provider, "test_connectivity", _ok)
+    r = await auth_client.post(f"{BASE}/test", json=_BODY)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["tested_ok"] is True
+    assert d["error"] is None
+
+
+async def test_draft_test_fail_returns_error_not_400(
+    auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(provider, "test_connectivity", _fail)
+    r = await auth_client.post(f"{BASE}/test", json=_BODY)
+    assert r.status_code == 200
+    d = r.json()["data"]
+    assert d["tested_ok"] is False
+    assert d["error"] == "HTTP 401"
+
+
+async def test_saved_test_passes_model_and_base_url(
+    auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple] = []
+
+    async def _spy(provider, apikey, model, base_url=None):
+        calls.append((provider, apikey, model, base_url))
+        return True, None
+
+    monkeypatch.setattr(provider, "test_connectivity", _spy)
+    body = {
+        **_BODY,
+        "base_url": "https://proxy.example.com/v1",
+    }
+    r = await auth_client.post(BASE, json=body)
+    cid = r.json()["data"]["config_id"]
+
+    r = await auth_client.post(f"{BASE}/{cid}/test")
+    assert r.status_code == 200
+    assert len(calls) == 2
+    assert calls[-1][2] == "claude-sonnet-5"
+    assert calls[-1][3] == "https://proxy.example.com/v1"
+
+
 async def test_create_connectivity_fail_not_saved(
     auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -126,9 +172,18 @@ async def test_compat_requires_base_url() -> None:
     from app.enums import LLMProvider as P
     from app.llm.provider import test_connectivity
 
-    ok, err = await test_connectivity(P.OPENAI_COMPAT, "sk")
+    ok, err = await test_connectivity(P.OPENAI_COMPAT, "sk", "gpt-4o")
     assert not ok
     assert err and "base_url" in err
+
+
+async def test_empty_model_rejected() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import test_connectivity
+
+    ok, err = await test_connectivity(P.OPENAI, "sk", "   ")
+    assert not ok
+    assert err and "model" in err
 
 
 async def test_not_found_404(

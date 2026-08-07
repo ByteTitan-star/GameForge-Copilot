@@ -1,0 +1,34 @@
+[
+  {
+    "asset_id": "sprite_player_blue",
+    "filename": "player_blue.png",
+    "kind": "sprite",
+    "tags": ["player", "character", "blue"],
+    "description": "16x16 blue square player (CC0 procedural)",
+    "data_uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAAAf8/9hAAAAHUlEQVR42mNk+M9Qz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC"
+  },
+  {
+    "asset_id": "sprite_enemy_red",
+    "filename": "enemy_red.png",
+    "kind": "sprite",
+    "tags": ["enemy", "red"],
+    "description": "16x16 red enemy sprite (CC0 procedural)",
+    "data_uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAAAf8/9hAAAAHUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC"
+  },
+  {
+    "asset_id": "bg_grid_dark",
+    "filename": "bg_grid.png",
+    "kind": "background",
+    "tags": ["background", "grid", "dark"],
+    "description": "Dark grid background tile (CC0 procedural)",
+    "data_uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC"
+  },
+  {
+    "asset_id": "sfx_beep",
+    "filename": "beep.wav",
+    "kind": "audio",
+    "tags": ["sfx", "beep"],
+    "description": "Short beep placeholder (silent wav header, CC0)",
+    "data_uri": "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="
+  }
+]

@@ -1,6 +1,6 @@
 """LLM provider 抽象：连通性测试 + complete() 调用。
 
-docs/05 §连通性测试：保存前发最小请求，失败不让保存。
+docs/05 §连通性测试：保存前发最小 completion，失败不让保存。
 complete() 返回 (content, usage)，usage 取响应真实字段，不估算（docs/05）。
 """
 
@@ -10,9 +10,9 @@ import httpx
 
 from app.enums import LLMProvider
 
-_MODELS_URL = {
-    LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1/messages",
-    LLMProvider.OPENAI: "https://api.openai.com/v1/chat/completions",
+_DEFAULT_API_BASE = {
+    LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1",
+    LLMProvider.OPENAI: "https://api.openai.com/v1",
 }
 
 # 拉取失败时的回退白名单（docs/05 §模型列表来源）
@@ -35,29 +35,57 @@ def _auth_headers(provider: LLMProvider, apikey: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {apikey}"}
 
 
-async def test_connectivity(
-    provider: LLMProvider, apikey: str, base_url: str | None = None
-) -> tuple[bool, str | None]:
-    """返回 (ok, error)。openai_compat 需 base_url 才测；其余调 /v1/models。"""
+def _api_base(provider: LLMProvider, base_url: str | None) -> str:
+    """解析 API 根路径；官方 provider 可省略 base_url，openai_compat 必填。"""
     if provider == LLMProvider.OPENAI_COMPAT:
         if not base_url:
-            return False, "openai_compat 需配置 base_url"
-        headers = _auth_headers(provider, apikey)
-        url = f"{base_url.rstrip('/')}/models"
-    else:
-        headers = _auth_headers(provider, apikey)
-        url = {
-            LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1/models",
-            LLMProvider.OPENAI: "https://api.openai.com/v1/models",
-        }[provider]
+            raise ValueError("openai_compat 需配置 base_url")
+        return base_url.rstrip("/")
+    if base_url:
+        return base_url.rstrip("/")
+    return _DEFAULT_API_BASE[provider]
+
+
+def _messages_url(provider: LLMProvider, base_url: str | None) -> str:
+    base = _api_base(provider, base_url)
+    if provider == LLMProvider.ANTHROPIC:
+        return f"{base}/messages"
+    return f"{base}/chat/completions"
+
+
+def _models_list_url(provider: LLMProvider, base_url: str | None) -> str:
+    return f"{_api_base(provider, base_url)}/models"
+
+
+async def test_connectivity(
+    provider: LLMProvider,
+    apikey: str,
+    model: str,
+    base_url: str | None = None,
+) -> tuple[bool, str | None]:
+    """最小 completion 探测 provider + apikey + model + base_url（compat 必填）。"""
+    trimmed = model.strip()
+    if not trimmed:
+        return False, "model 不能为空"
+    if provider == LLMProvider.OPENAI_COMPAT and not base_url:
+        return False, "openai_compat 需配置 base_url"
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, headers=headers)
+        await complete(
+            provider,
+            apikey,
+            trimmed,
+            "You are a connectivity probe.",
+            "Reply with OK.",
+            base_url=base_url,
+            max_tokens=8,
+        )
+        return True, None
     except httpx.HTTPError as e:
         return False, f"网络错误: {e}"
-    if resp.status_code == 200:
-        return True, None
-    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    except (RuntimeError, ValueError) as e:
+        return False, str(e)[:200]
+    except Exception as e:  # noqa: BLE001 探测失败统一返回文案
+        return False, str(e)[:200]
 
 
 async def list_models(
@@ -65,14 +93,9 @@ async def list_models(
 ) -> list[str]:
     """按 provider 拉 /models；失败回退白名单（docs/05 §模型列表来源）。"""
     try:
-        if provider == LLMProvider.OPENAI_COMPAT:
-            if not base_url:
-                return list(_MODEL_WHITELIST[provider])
-            url = f"{base_url.rstrip('/')}/models"
-        elif provider == LLMProvider.ANTHROPIC:
-            url = "https://api.anthropic.com/v1/models"
-        else:
-            url = "https://api.openai.com/v1/models"
+        if provider == LLMProvider.OPENAI_COMPAT and not base_url:
+            return list(_MODEL_WHITELIST[provider])
+        url = _models_list_url(provider, base_url)
         headers = _auth_headers(provider, apikey)
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
@@ -96,31 +119,28 @@ async def complete(
     system: str,
     user_msg: str,
     base_url: str | None = None,
+    *,
+    max_tokens: int = 4096,
 ) -> tuple[str, Usage]:
     """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
     headers = {**_auth_headers(provider, apikey), "content-type": "application/json"}
+    url = _messages_url(provider, base_url)
     if provider == LLMProvider.ANTHROPIC:
         body = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": user_msg}],
         }
-        url = _MODELS_URL[LLMProvider.ANTHROPIC]
-    else:  # openai / openai_compat（compat 用 base_url）
+    else:
         body = {
             "model": model,
+            "max_tokens": max_tokens,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
             ],
         }
-        if provider == LLMProvider.OPENAI_COMPAT:
-            if not base_url:
-                raise RuntimeError("openai_compat 需配置 base_url")
-            url = f"{base_url.rstrip('/')}/chat/completions"
-        else:
-            url = _MODELS_URL[LLMProvider.OPENAI]
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, headers=headers, json=body)
     if resp.status_code != 200:
@@ -139,4 +159,3 @@ async def complete(
             output_tokens=data.get("usage", {}).get("completion_tokens", 0),
         )
     return content, usage
-

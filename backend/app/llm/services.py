@@ -20,8 +20,10 @@ from app.schemas.llm_config import (
     LLMConfigCreate,
     LLMConfigCreateResp,
     LLMConfigDeleteResp,
+    LLMConfigDryTestResp,
     LLMConfigPatch,
     LLMConfigResp,
+    LLMConfigTestReq,
     LLMConfigTestResp,
 )
 
@@ -96,7 +98,9 @@ async def create_config(
     db: AsyncSession, user: User, req: LLMConfigCreate
 ) -> LLMConfigCreateResp:
     """连通测试通过才保存（docs/05 §连通性测试）。openai_compat 校验 base_url。"""
-    ok, err = await provider.test_connectivity(req.provider, req.apikey, req.base_url)
+    ok, err = await provider.test_connectivity(
+        req.provider, req.apikey, req.model, req.base_url
+    )
     if not ok:
         raise AppError(ErrorCode.LLM_CONFIG_INVALID, f"连通测试失败: {err}")
     if req.is_default:
@@ -145,11 +149,22 @@ async def delete_config(
     return LLMConfigDeleteResp(config_id=cfg.id)
 
 
+async def test_draft_config(req: LLMConfigTestReq) -> LLMConfigDryTestResp:
+    """保存前探测，不写入数据库。"""
+    ok, err = await provider.test_connectivity(
+        req.provider, req.apikey, req.model, req.base_url
+    )
+    return LLMConfigDryTestResp(tested_ok=ok, error=err)
+
+
 async def test_config(
     db: AsyncSession, user: User, config_id: UUID
 ) -> LLMConfigTestResp:
     cfg = await _get_owned(db, user, config_id)
     ok, err = await provider.test_connectivity(
-        LLMProvider(cfg.provider), crypto.decrypt_apikey(cfg.apikey_enc)
+        LLMProvider(cfg.provider),
+        crypto.decrypt_apikey(cfg.apikey_enc),
+        cfg.model,
+        cfg.base_url,
     )
     return LLMConfigTestResp(config_id=cfg.id, tested_ok=ok, error=err)

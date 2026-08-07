@@ -104,6 +104,7 @@ async def test_password_reset_flow(client: httpx.AsyncClient, sent: dict[str, st
         json={"token": token, "new_password": "newpassword123"},
     )
     assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["email"] == EMAIL
 
     # 用新密码登录
     resp = await client.post(

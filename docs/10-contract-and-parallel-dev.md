@@ -178,6 +178,55 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 ```
 可见性：仅返回 `owner_id = me` 的记录，**无论 role**（admin 也只看自己的，除非走审批队列）。
 
+### GET /api/v1/games/public （B2 · 无需登录）
+查询：`?page=1&size=20&sort=updated_at|play_count`
+响应 `data[]`：
+```json
+[{
+  "game_id": "uuid",
+  "title": "贪吃蛇",
+  "slug": "snake-abc123",
+  "cover_url": null,
+  "published_at": "2026-08-07T12:00:00Z",
+  "play_count": 42
+}]
+```
+可见性：仅 `status=published`；不含 owner 邮箱等 PII；admin 草稿/审批中游戏不可见。
+
+### GET /api/v1/official-games （Batch A · R1 · 无需登录）
+响应 `data[]`：
+```json
+[{
+  "slug": "official-neon-snake",
+  "title": "霓虹贪吃蛇",
+  "description": "方向键控制，吃豆得分",
+  "play_url": "/play/official-neon-snake",
+  "thumbnail_url": null
+}]
+```
+可见性：仅系统预置 `status=published` 官方游戏；不含 owner PII。
+
+### POST /api/v1/games/fork/{slug} （Batch A · R1）
+- 需 Bearer + 邮箱已验证
+- 从官方 published 游戏复制 title（加「（副本）」后缀）、requirement、v1 产物
+- 新 game：`status=draft`, `owner=当前用户`, `current_version=1`；不调用 LLM，不 enqueue run
+- 响应 `data`：同 `GameResp`
+- 错误：`GAME_NOT_FOUND`（非官方 slug）、`QUOTA_EXCEEDED`（草稿上限）
+
+### POST /api/v1/games/{game_id}/versions/{version}/activate （Batch A · R4）
+- 需 Bearer + owner
+- 校验 `GameVersion` 存在 → 更新 `games.current_version = version`（不删更高版本文件）
+- 可选：将该版本 `design_doc` 同步为后续 run 上下文
+- 响应 `data`：同 `GameResp`
+- 错误：`GAME_NOT_FOUND`、`INVALID_STATE`
+
+### POST /api/v1/runs/{run_id}/retry （Batch A · R3）
+- 需 Bearer + owner
+- 条件：`status=failed` 或 `status=paused` 且检查点 `phase in (sandbox_failed, qa_failed)`
+- 从失败阶段重新 enqueue resume（不清版本号；成功后仍递增新版本）
+- 响应 `data`：`{ "run_id", "status": "running", "phase": "code" }`
+- 与 `POST /runs/{id}/resume` 区分：resume 用于 HITL/pause；retry 用于失败恢复
+
 ### GET /api/v1/games/{game_id}
 响应 `data`：
 ```json
@@ -246,10 +295,15 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 { "type": "<WSEventType>", "run_id": "uuid", "ts": "iso8601", "payload": {...} }
 ```
 
-### phase_start
+### phase_start （Batch A · R3 增人话字段）
 ```json
-{ "phase": "plan" | "art" | "code" | "qa" | "done" }
+{
+  "phase": "plan" | "art" | "code" | "qa" | "done",
+  "human_label": "正在整理玩法说明",
+  "eta_seconds": 120
+}
 ```
+`human_label` / `eta_seconds` 由 `app.forge.phase_labels` 静态映射，便于前端阶段卡片展示。
 
 ### llm_call
 ```json
@@ -260,21 +314,39 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 ```json
 { "phase": "code", "tool": "execute_code", "args": {...}, "status": "ok" | "error", "summary": "构建成功" }
 ```
+art 阶段 `asset_pick` 额外携带 `artifacts: [{ asset_id, filename, kind, data_uri }]`（B9）。
 
 ### build_done
 ```json
 { "version": 3, "artifact_path": "...", "preview_url": "/draft/{game_id}/3" }
 ```
 
-### qa_report
+### qa_report （B1 · 沙箱试玩）
 ```json
-{ "passed": false, "issues": ["启动正常", "计分未递增"], "log_excerpt": "..." }
+{
+  "passed": false,
+  "issues": ["pageerror: ReferenceError: x is not defined"],
+  "log_excerpt": "playtest: static mode\n...",
+  "console_logs": ["console:error:..."],
+  "playtest_mode": "sandbox"
+}
 ```
+判定来源：`app.sandbox.playtest.run_playtest(index.html)`，非 LLM 自评。失败时在 `qa_max_retries` 内回退 `code` 节点。
 
-### hitl_wait
+### hitl_wait （Batch A · R3 结构化 design_doc）
 ```json
-{ "node": "plan_confirm", "design_doc": { "title": "...", "gameplay": "...", "controls": "...", "levels": [...] }, "action_url": "/api/v1/games/{game_id}/runs/{run_id}/hitl/resolve" }
+{
+  "node": "plan_confirm",
+  "design_doc": {
+    "title": "霓虹贪吃蛇",
+    "gameplay": "移动、吃豆、计分…",
+    "controls": "方向键 / WASD",
+    "levels": ["热身", "加速"]
+  },
+  "action_url": "/api/v1/games/{game_id}/runs/{run_id}/hitl/resolve"
+}
 ```
+LLM 输出非 JSON 时 fallback：整段文本放入 `gameplay`，其余字段默认。
 
 ### usage
 ```json

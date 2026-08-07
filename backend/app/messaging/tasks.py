@@ -12,6 +12,7 @@ TASK_RESUME_RUN = "resume_run"
 TASK_SEND_VERIFICATION = "send_verification_email"
 TASK_SEND_RESET = "send_reset_email"
 TASK_SEND_NOTIFICATION = "send_notification_email"
+TASK_SCAN_SCHEDULES = "scan_schedules"
 
 TASK_EXCHANGE = "gameforge.tasks"
 TASK_QUEUE = "gameforge.worker"

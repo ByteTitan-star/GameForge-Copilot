@@ -8,27 +8,9 @@ import pytest
 
 from app.forge.graph import run_generation
 from app.forge.runner import execute_run
-from app.llm.provider import Usage
 
 GAME_BODY = {"title": "贪吃蛇", "requirement": "方向键"}
 RUN_BODY = {"requirement": "加入加速道具"}
-
-
-@pytest.fixture
-def _fake_llm(monkeypatch: pytest.MonkeyPatch):
-    """mock call_llm：code 阶段返 HTML，其余返桩文本。"""
-
-    async def _fake(db, r, user_id, config_id, system, user_msg):
-        if "HTML5" in system:
-            return "<html><body><h1>stub game</h1></body></html>", Usage(20, 10)
-        if "质检" in system or "PASSED" in system or "FAILED" in system:
-            return "PASSED\n全部通过", Usage(5, 3)
-        return "stub design doc", Usage(10, 5)
-
-    from app.llm import client as llm_client
-
-    monkeypatch.setattr(llm_client, "call_llm", _fake)
-    return _fake
 
 
 async def _make_game(client: httpx.AsyncClient) -> uuid.UUID:
@@ -122,7 +104,39 @@ async def test_full_generation_with_hitl(
     assert len(versions) == 1 and versions[0]["version"] == 1
 
     r = await verified_client.get(f"/draft/{gid}/1")
-    assert r.status_code == 200 and "stub game" in r.text
+    assert r.status_code == 200 and "canvas" in r.text
+
+
+async def test_qa_playtest_failure_retries_then_hitl(
+    verified_client: httpx.AsyncClient,
+    redis_client: fakeredis.aioredis.FakeRedis,
+    _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """QA 试玩失败 → 回退 code 重试；耗尽后进 qa_failed HITL。"""
+    from app.sandbox.playtest import PlaytestResult
+
+    calls = {"n": 0}
+
+    async def _fail_playtest(_html: str) -> PlaytestResult:
+        calls["n"] += 1
+        return PlaytestResult(ok=False, errors=["mock js error"], console_logs=["err"])
+
+    monkeypatch.setattr("app.forge.graph.run_playtest", _fail_playtest)
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "qa_max_retries", 1)
+
+    gid = await _make_game(verified_client)
+    rid = await _make_run(verified_client, gid)
+    ctx = {"redis": redis_client}
+    await execute_run(ctx, rid)
+    await run_generation(ctx, rid, resume=True, decision="approve")
+
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    assert r.json()["data"]["status"] == "paused"
+    assert r.json()["data"]["current_hitl"]["node"] == "qa_failed"
+    assert calls["n"] >= 1
 
 
 async def test_hitl_resolve_endpoint(

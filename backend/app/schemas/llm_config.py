@@ -9,8 +9,17 @@ class LLMConfigCreate(BaseModel):
     provider: LLMProvider
     model: str
     apikey: str
-    base_url: str | None = None  # openai_compat 必填
+    base_url: str | None = None  # openai_compat 必填；官方 provider 可选（代理/私有网关）
     is_default: bool = False
+
+
+class LLMConfigTestReq(BaseModel):
+    """保存前探测：provider + model + apikey + base_url（不落库）。"""
+
+    provider: LLMProvider
+    model: str
+    apikey: str
+    base_url: str | None = None
 
 
 class LLMConfigPatch(BaseModel):
@@ -33,6 +42,11 @@ class LLMConfigCreateResp(LLMConfigResp):
 
 class LLMConfigTestResp(BaseModel):
     config_id: uuid.UUID
+    tested_ok: bool
+    error: str | None = None
+
+
+class LLMConfigDryTestResp(BaseModel):
     tested_ok: bool
     error: str | None = None
 

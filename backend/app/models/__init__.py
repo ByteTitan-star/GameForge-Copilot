@@ -6,6 +6,7 @@ from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
 from app.models.llm_config import UserLLMConfig
 from app.models.notification import Notification
+from app.models.oauth_account import OAuthAccount
 from app.models.password_reset import PasswordResetToken
 from app.models.publish_request import PublishRequest
 from app.models.system_setting import SystemSetting
@@ -24,4 +25,5 @@ __all__ = [
     "AuditLog",
     "SystemSetting",
     "Notification",
+    "OAuthAccount",
 ]

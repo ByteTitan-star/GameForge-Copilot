@@ -9,6 +9,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin.services import disabled_user_message
 from app.auth.security import decode_access_token
 from app.core.db import get_db
 from app.core.errors import AppError, ErrorCode
@@ -41,7 +42,7 @@ async def current_user(creds: Creds, db: DbSession) -> User:
     if user is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "未登录或 token 失效")
     if user.disabled:
-        raise AppError(ErrorCode.FORBIDDEN, "账号已禁用")
+        raise AppError(ErrorCode.FORBIDDEN, await disabled_user_message(db))
     return user
 
 

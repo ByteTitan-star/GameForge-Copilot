@@ -46,6 +46,8 @@ class QaReportPayload(BaseModel):
     passed: bool
     issues: list[str]
     log_excerpt: str
+    console_logs: list[str] = []
+    playtest_mode: str = "sandbox"
 
 
 class DesignDoc(BaseModel):

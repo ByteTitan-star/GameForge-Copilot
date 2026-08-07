@@ -71,6 +71,7 @@ class PasswordResetConfirmReq(BaseModel):
 
 class PasswordResetConfirmResp(BaseModel):
     user_id: uuid.UUID
+    email: str
     reset: bool = True
 
 

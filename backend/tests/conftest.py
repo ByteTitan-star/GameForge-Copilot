@@ -10,6 +10,7 @@ from pathlib import Path
 
 import fakeredis.aioredis
 import httpx
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
@@ -48,6 +49,45 @@ async def _noop_enqueue_resume(_run_id: uuid.UUID, _decision: str, _modify: str 
     return None
 
 
+@pytest.fixture(autouse=True)
+def _playtest_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """默认试玩通过；个别测试单独 mock 失败。"""
+    from app.sandbox.playtest import PlaytestResult
+
+    async def _ok(_html: str) -> PlaytestResult:
+        return PlaytestResult(ok=True, errors=[], console_logs=["mock playtest ok"])
+
+    monkeypatch.setattr("app.forge.graph.run_playtest", _ok)
+
+
+@pytest.fixture
+def _fake_llm(monkeypatch: pytest.MonkeyPatch):
+    """mock call_llm：plan 返 JSON，code 返 HTML。"""
+    from app.llm.provider import Usage
+
+    async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
+        if "JSON" in system or "策划" in system:
+            return (
+                '{"title":"测试游戏","gameplay":"stub design","controls":"方向键",'
+                '"levels":["关卡1"]}',
+                Usage(10, 5),
+            )
+        if "HTML5" in system:
+            return (
+                "<html><body><canvas id='c'></canvas>"
+                "<button>play</button><script></script></body></html>",
+                Usage(20, 10),
+            )
+        if "质检辅助" in system:
+            return "试玩摘要 ok", Usage(5, 3)
+        return "stub design doc", Usage(10, 5)
+
+    from app.llm import client as llm_client
+
+    monkeypatch.setattr(llm_client, "call_llm", _fake)
+    return _fake
+
+
 async def _get_test_db() -> AsyncIterator[AsyncSession]:
     async with _SessionLocal() as session:
         yield session
@@ -79,8 +119,10 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     _fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     _orig_hosting = settings.hosting_root
     _orig_messaging = settings.messaging_backend
+    _orig_admin_contact = settings.admin_contact_email
     settings.hosting_root = str(tmp_path)
     settings.messaging_backend = "memory"
+    settings.admin_contact_email = ""
     reset_messaging()
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -102,6 +144,7 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     forge_queue.enqueue_resume = _real_enqueue_resume  # type: ignore[assignment]
     settings.hosting_root = _orig_hosting
     settings.messaging_backend = _orig_messaging
+    settings.admin_contact_email = _orig_admin_contact
     reset_messaging()
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -139,6 +182,12 @@ async def me_user_id(auth_client: httpx.AsyncClient) -> uuid.UUID:
         user = (await s.scalars(select(User).where(User.email == "u@b.com"))).first()
         assert user is not None
         return user.id
+
+
+@pytest_asyncio.fixture
+async def db_session(_env: dict[str, str]) -> AsyncIterator[AsyncSession]:
+    async with _SessionLocal() as session:
+        yield session
 
 
 @pytest_asyncio.fixture

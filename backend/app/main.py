@@ -1,7 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, auth, games, health, llm_config, notifications, publish, runs, usage
+from app.api import (
+    admin,
+    auth,
+    dev,
+    games,
+    health,
+    llm_config,
+    notifications,
+    official,
+    publish,
+    runs,
+    templates,
+    usage,
+)
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import setup_logging
@@ -34,8 +47,12 @@ register_metrics(app)
 
 app.include_router(health.router)
 app.include_router(auth.router, prefix=API_V1)
+if settings.env == "development":
+    app.include_router(dev.router, prefix=API_V1)
 app.include_router(llm_config.router, prefix=API_V1)
 app.include_router(games.router, prefix=API_V1)
+app.include_router(official.router, prefix=API_V1)
+app.include_router(templates.router, prefix=API_V1)
 app.include_router(runs.router, prefix=API_V1)
 app.include_router(publish.router, prefix=API_V1)
 app.include_router(usage.router, prefix=API_V1)

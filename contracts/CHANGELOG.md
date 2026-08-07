@@ -10,7 +10,25 @@
 
 <!-- 后端改契约后在此追加，commit 时归入下一条日期标题 -->
 
-- ADDED: `PATCH /games/{id}` — 草稿重命名（`GamePatch.title`）；响应 `GameResp` 含 `title` (docs/01)
+- ADDED: `GET /official-games` — 官方预置游戏列表（无需登录）；`OfficialGameItem` (Batch A · R1)
+- ADDED: `POST /games/fork/{slug}` — Fork 官方游戏为当前用户 draft，复制 v1 产物 (Batch A · R1)
+- MODIFIED: WS `phase_start` — 新增 `human_label`、`eta_seconds` (Batch A · R3)
+- MODIFIED: WS `hitl_wait.design_doc` — 结构化 JSON + 纯文本 fallback (Batch A · R3)
+- ADDED: `POST /runs/{run_id}/retry` — 失败阶段重试（sandbox_failed/qa_failed）(Batch A · R3)
+- ADDED: `POST /games/{game_id}/versions/{version}/activate` — 版本回滚切换 current_version (Batch A · R4)
+- ADDED: `GET /me/usage/breakdown?scope=game|run` — 按游戏/Run 维度用量明细 + 估算 USD (B3)
+- ADDED: `GET /games/{game_id}/usage` — 单游戏当月用量汇总 (B3)
+- ADDED: `GET /games/{game_id}/analytics` — PV/UV + play_count (B4)
+- ADDED: `GET /admin/analytics/top` — 管理员 Top 游戏 PV 排行 (B4)
+- ADDED: `GET /templates` — 内置模板目录；`POST /games` 可选 `template_id` 预填 title/requirement (B5)
+- MODIFIED: 产物托管 — `HOSTING_BACKEND=local|s3`，S3 写远端 + 本地缓存 (B6)
+- ADDED: `GET /oauth/{provider}/start|callback` — GitHub/Google OAuth 登录/绑定 (B7)
+- ADDED: `PATCH /admin/games/{game_id}/schedule` — 设置 `scheduled_take_down_at` / `scheduled_publish_at`；worker 每 60s 扫描到期下架 (B8)
+- ADDED: `GET /games/public` — 公开已发布游戏发现（无需登录）；`PublicGameItem` 含 `game_id, title, slug, cover_url, published_at, play_count`；无 owner PII (B2)
+- MODIFIED: `qa_report` WS payload — 新增 `console_logs[]`、`playtest_mode`；QA 由沙箱试玩驱动非 LLM 自评 (B1)
+- MODIFIED: `tool_call` art 阶段 — `asset_pick` 返回 `artifacts[]` 清单 (B9)
+- MODIFIED: `AdminSettings` — 新增 `admin_contact_email`；禁用账号登录提示联系邮箱
+- ADDED: `DELETE /admin/users/{id}` — 管理员删除用户
 - ADDED: `POST /runs/{id}/pause|resume|cancel` — 长任务中断/续跑/取消；HITL 后 run.status=`paused` (docs/01)
 - ADDED: `GET /me/notifications`、`POST /me/notifications/{id}/read` — 站内通知收件箱 (docs/04)
 - ADDED: `GET /admin/audit-logs` — 管理员操作审计分页 (docs/01 §8)
@@ -33,6 +51,8 @@
 ## 2026-08-06
 
 - MODIFIED: `POST /me/llm-configs` 请求体 + `LLMConfigResp` 新增 `base_url` 字段（`openai_compat` 必填）；连通测试与 `complete()` 对 compat 使用 base_url，无 base_url → 测试失败（code-review #9） (M2/修复)
+- ADDED: `POST /me/llm-configs/test` — 保存前 dry-run 连通测试（provider + model + apikey + base_url，不落库）
+- MODIFIED: 连通测试由 GET `/models` 改为最小 completion；已保存配置测试补传 `base_url` + `model`；官方 provider 可选 `base_url` 覆盖（代理/私有网关）
 - MODIFIED: `/play/{slug}`、`/draft/{game_id}/{version}` 的 CSP 放开 `script-src/style-src 'unsafe-inline'`——LLM 生成单文件 HTML 内联脚本，iframe `sandbox=allow-scripts`（不加 allow-same-origin）已隔离 origin，inline 不引入同源风险（code-review #1） (M5/修复)
 - ADDED: `GET /admin/users`（分页，admin）、`PATCH /admin/users/{id}`（disable/role，admin，落审计）、`GET /admin/settings`、`PUT /admin/settings`（admin，存 system_settings 表，运行时配额读取覆盖值）— M8 管理后台；新增 403(非 admin)/404(用户不存在)；禁用用户登录/访问 → 403 (M8)
 - ADDED: `users.disabled` 列、`system_settings` 表（迁移 0005）；`/me/usage`、`POST /games/{id}/runs` 的日配额读取 admin 设置覆盖值（env 默认回退） (M8)

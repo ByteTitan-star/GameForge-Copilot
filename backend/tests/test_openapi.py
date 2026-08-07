@@ -23,6 +23,7 @@ REQUIRED_PATHS = {
     "/api/v1/auth/password/change",
     "/api/v1/auth/logout",
     "/api/v1/me/llm-configs",
+    "/api/v1/me/llm-configs/test",
     "/api/v1/me/llm-configs/{config_id}",
     "/api/v1/me/llm-configs/{config_id}/test",
     "/api/v1/me/usage",

@@ -16,6 +16,7 @@ from app.forge.runner import execute_run, resume_run
 from app.messaging.tasks import (
     TASK_EXECUTE_RUN,
     TASK_RESUME_RUN,
+    TASK_SCAN_SCHEDULES,
     TASK_SEND_NOTIFICATION,
     TASK_SEND_RESET,
     TASK_SEND_VERIFICATION,
@@ -55,5 +56,11 @@ async def dispatch_task(task: str, payload: dict) -> None:
                 payload["decision"],
                 payload.get("modify_text"),
             )
+        case _ if task == TASK_SCAN_SCHEDULES:
+            from app.core import db as dbmod
+            from app.scheduler.services import scan_scheduled
+
+            async with dbmod.SessionLocal() as s:
+                await scan_scheduled(s)
         case _:
             raise ValueError(f"unknown task: {task}")

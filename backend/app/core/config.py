@@ -27,10 +27,21 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_pass: str = ""
     smtp_from: str = ""
+    smtp_from_name: str = "GameForge"
     frontend_base_url: str = "http://127.0.0.1:5173"
+    api_public_url: str = "http://127.0.0.1:8000"
+    # 账号禁用时登录提示中的管理员联系邮箱（可被后台设置覆盖）
+    admin_contact_email: str = ""
+
+    # OAuth（B7）
+    oauth_github_client_id: str = ""
+    oauth_github_client_secret: str = ""
+    oauth_google_client_id: str = ""
+    oauth_google_client_secret: str = ""
 
     # 产物托管
     hosting_root: str = ".hosting"
+    hosting_backend: str = "local"  # local | s3
     artifact_max_size_mb: int = 50
     s3_endpoint: str = ""
     s3_bucket: str = ""
@@ -52,6 +63,7 @@ class Settings(BaseSettings):
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     code_max_retries: int = 3  # code/qa 失败重试上限（docs/03）
+    qa_max_retries: int = 2  # QA 试玩失败回退 code 重试上限
     models_cache_ttl_s: int = 600  # /models 短期缓存（docs/05）
 
     # langfuse（SaaS Cloud，trace 上报）

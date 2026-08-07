@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>霓虹贪吃蛇</title>
+  <style>
+    body { margin: 0; background: #0a0a1a; color: #0ff; font-family: sans-serif; text-align: center; }
+    canvas { display: block; margin: 12px auto; border: 2px solid #f0f; box-shadow: 0 0 12px #f0f; }
+    button { background: #f0f; color: #000; border: none; padding: 8px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>霓虹贪吃蛇</h1>
+  <p>方向键移动 · 吃豆得分</p>
+  <canvas id="c" width="320" height="320"></canvas>
+  <p>得分: <span id="score">0</span></p>
+  <button id="play">开始</button>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    let snake, dir, food, score, timer, running;
+    function reset() {
+      snake = [{x:8,y:8}]; dir = {x:1,y:0}; score = 0; scoreEl.textContent = '0';
+      food = {x: Math.floor(Math.random()*16), y: Math.floor(Math.random()*16)};
+      running = true;
+    }
+    function tick() {
+      if (!running) return;
+      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+      if (head.x < 0 || head.y < 0 || head.x > 15 || head.y > 15) { running = false; return; }
+      snake.unshift(head);
+      if (head.x === food.x && head.y === food.y) {
+        score++; scoreEl.textContent = score;
+        food = {x: Math.floor(Math.random()*16), y: Math.floor(Math.random()*16)};
+      } else snake.pop();
+      ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0,320,320);
+      ctx.fillStyle = '#f0f'; ctx.fillRect(food.x*20, food.y*20, 18, 18);
+      ctx.fillStyle = '#0ff';
+      snake.forEach(s => ctx.fillRect(s.x*20, s.y*20, 18, 18));
+    }
+    document.getElementById('play').onclick = () => { reset(); clearInterval(timer); timer = setInterval(tick, 140); };
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowUp' && dir.y !== 1) dir = {x:0,y:-1};
+      if (e.key === 'ArrowDown' && dir.y !== -1) dir = {x:0,y:1};
+      if (e.key === 'ArrowLeft' && dir.x !== 1) dir = {x:-1,y:0};
+      if (e.key === 'ArrowRight' && dir.x !== -1) dir = {x:1,y:0};
+    });
+  </script>
+</body>
+</html>

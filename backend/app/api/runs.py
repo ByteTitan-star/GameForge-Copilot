@@ -154,6 +154,23 @@ async def cancel_run(
 
 
 @router.post(
+    "/runs/{run_id}/retry",
+    response_model=ApiResponse[RunControlResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def retry_run(
+    run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
+) -> ApiResponse[RunControlResp]:
+    """从失败阶段重试（Batch A · R3）。"""
+    run = await services.retry_run(db, r, user, run_id)
+    return ApiResponse(
+        data=RunControlResp(
+            run_id=run.id, status=RunStatus.RUNNING, phase=RunPhase(run.phase)
+        )
+    )
+
+
+@router.post(
     "/games/{game_id}/runs/{run_id}/hitl/resolve",
     response_model=ApiResponse[HitlResolveResp],
     responses={**ERR_404, **ERR_409},

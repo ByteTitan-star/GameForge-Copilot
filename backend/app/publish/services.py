@@ -105,6 +105,7 @@ async def approve(db: AsyncSession, admin: User, pr_id: uuid.UUID) -> tuple[Publ
     req.reviewed_at = datetime.now(UTC)
     game.status = GameStatus.PUBLISHED.value
     game.slug = _gen_slug(game.title)
+    game.published_at = datetime.now(UTC)
     await _audit(db, admin.id, "approve", str(pr_id), {"game_id": str(game.id)})
     await db.commit()
     await db.refresh(req)

@@ -2,8 +2,13 @@
 /**
  * API 冒烟 — 联调自检。
  * 用法：API=http://127.0.0.1:8000/api/v1 node scripts/real-smoke.mjs
+ *
+ * 邮箱验证：development 下 register 会把验证码写入 Redis；
+ * 脚本通过 GET /dev/verification-code 读取（需 ENV=development）。
+ * 也可手动：SMOKE_VERIFY_CODE=123456
  */
 const API = (process.env.API ?? 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
+const BASE = API.replace(/\/api\/v1$/, '')
 
 const stamp = Date.now()
 const email = `smoke-${stamp}@example.com`
@@ -22,7 +27,7 @@ function fail(label, err) {
   console.error(`✗ ${label}:`, err instanceof Error ? err.message : err)
 }
 
-async function req(path, { method = 'GET', token, body } = {}) {
+async function req(path, { method = 'GET', token, body, allowError = false } = {}) {
   const headers = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = `Bearer ${token}`
@@ -32,7 +37,7 @@ async function req(path, { method = 'GET', token, body } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   const json = await res.json().catch(() => null)
-  if (!res.ok) {
+  if (!res.ok && !allowError) {
     const msg = json?.error?.message ?? json?.detail ?? res.statusText
     throw new Error(`${res.status} ${msg}`)
   }
@@ -40,11 +45,49 @@ async function req(path, { method = 'GET', token, body } = {}) {
   return json
 }
 
+async function sleep(ms) {
+  await new Promise((r) => setTimeout(r, ms))
+}
+
+async function resolveVerificationCode() {
+  if (process.env.SMOKE_VERIFY_CODE) {
+    return process.env.SMOKE_VERIFY_CODE
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const data = await req(`/dev/verification-code?email=${encodeURIComponent(email)}`, {
+        allowError: true,
+      })
+      if (data?.code) return String(data.code)
+    } catch {
+      /* retry — register may still be committing */
+    }
+    await sleep(250)
+  }
+  throw new Error(
+    '无法获取验证码：确认 ENV=development、Redis 可达，或设置 SMOKE_VERIFY_CODE',
+  )
+}
+
+async function verifyEmailAndRelogin() {
+  const code = await resolveVerificationCode()
+  await req('/auth/verify-email', {
+    method: 'POST',
+    body: { email, code },
+  })
+  ok('POST /auth/verify-email')
+  const login = await req('/auth/login', {
+    method: 'POST',
+    body: { email, password: `${password}!` },
+  })
+  return login.access_token
+}
+
 async function main() {
   console.log(`Real smoke → ${API}\n`)
 
   try {
-    await fetch(`${API.replace(/\/api\/v1$/, '')}/healthz`)
+    await fetch(`${BASE}/healthz`)
     ok('GET /healthz')
   } catch (e) {
     fail('GET /healthz', e)
@@ -52,23 +95,37 @@ async function main() {
     process.exit(1)
   }
 
-  let access
-  let refresh
-  let userId
+  try {
+    const official = await req('/official-games')
+    if (!Array.isArray(official) || official.length < 1) {
+      throw new Error('expected official games — 请先 uv run python -m scripts.seed_official_games')
+    }
+    ok(`GET /official-games (${official.length})`)
+  } catch (e) {
+    fail('GET /official-games', e)
+  }
 
   try {
-    const reg = await req('/auth/register', {
+    const playRes = await fetch(`${BASE}/play/official-neon-snake`)
+    if (!playRes.ok) throw new Error(`${playRes.status} ${playRes.statusText}`)
+    ok('GET /play/official-neon-snake')
+  } catch (e) {
+    fail('GET /play/official-neon-snake', e)
+  }
+
+  let access
+  let refresh
+
+  try {
+    await req('/auth/register', {
       method: 'POST',
       body: { email, password },
     })
-    userId = reg.user_id
     ok('POST /auth/register')
   } catch (e) {
     fail('POST /auth/register', e)
   }
 
-  // dev 环境 token 由 worker 打印；冒烟用 verify 需从 DB/日志取 token。
-  // 此处跳过 verify，直接测 login（未验证应仍可 login，生成会被拦）
   try {
     const login = await req('/auth/login', {
       method: 'POST',
@@ -112,6 +169,12 @@ async function main() {
     }
 
     try {
+      access = await verifyEmailAndRelogin()
+    } catch (e) {
+      fail('email verification', e)
+    }
+
+    try {
       const models = await req('/me/llm-configs/models?provider=anthropic', { token: access })
       if (!Array.isArray(models)) throw new Error('expected array')
       ok('GET /me/llm-configs/models')
@@ -127,16 +190,40 @@ async function main() {
     }
 
     try {
+      const templates = await req('/templates')
+      if (!Array.isArray(templates)) throw new Error('expected array')
+      ok('GET /templates')
+    } catch (e) {
+      fail('GET /templates', e)
+    }
+
+    try {
       const game = await req('/games', {
         method: 'POST',
         token: access,
-        body: { title: `smoke-${stamp}` },
+        body: {
+          title: `smoke-${stamp}`,
+          requirement: 'smoke test game requirement',
+        },
       })
       await req(`/games/${game.game_id}`, { token: access })
       await req('/games', { token: access })
       ok('POST/GET /games')
     } catch (e) {
       fail('games CRUD', e)
+    }
+
+    try {
+      const forked = await req('/games/fork/official-neon-snake', {
+        method: 'POST',
+        token: access,
+      })
+      if (forked.status !== 'draft' || forked.current_version < 1) {
+        throw new Error('fork expected draft with version >= 1')
+      }
+      ok('POST /games/fork/official-neon-snake')
+    } catch (e) {
+      fail('POST /games/fork/{slug}', e)
     }
   }
 

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>像素跑酷</title>
+  <style>
+    body { margin: 0; background: #222; color: #fff; font-family: monospace; text-align: center; }
+    canvas { display: block; margin: 12px auto; image-rendering: pixelated; border: 4px solid #555; }
+    button { padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>像素跑酷</h1>
+  <p>空格跳跃 · 躲避障碍</p>
+  <canvas id="c" width="400" height="200"></canvas>
+  <p>距离: <span id="dist">0</span></p>
+  <button id="play">开始</button>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const distEl = document.getElementById('dist');
+    let y, vy, obstacles, dist, timer, running;
+    function reset() {
+      y = 140; vy = 0; obstacles = []; dist = 0; distEl.textContent = '0'; running = true;
+    }
+    function tick() {
+      if (!running) return;
+      vy += 0.6; y += vy; if (y > 140) { y = 140; vy = 0; }
+      dist += 1; distEl.textContent = dist;
+      if (Math.random() < 0.03) obstacles.push({x: 400, h: 30 + Math.random()*20});
+      obstacles.forEach(o => o.x -= 4);
+      obstacles = obstacles.filter(o => o.x > -20);
+      ctx.fillStyle = '#87ceeb'; ctx.fillRect(0,0,400,200);
+      ctx.fillStyle = '#654'; ctx.fillRect(0, 160, 400, 40);
+      ctx.fillStyle = '#3a3'; ctx.fillRect(40, y, 24, 24);
+      ctx.fillStyle = '#a33';
+      obstacles.forEach(o => ctx.fillRect(o.x, 160 - o.h, 16, o.h));
+      obstacles.forEach(o => { if (o.x < 64 && o.x > 36 && y > 160 - o.h - 24) running = false; });
+    }
+    document.getElementById('play').onclick = () => { reset(); clearInterval(timer); timer = setInterval(tick, 30); };
+    document.addEventListener('keydown', e => { if (e.code === 'Space' && y >= 140) vy = -10; });
+  </script>
+</body>
+</html>

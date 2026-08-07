@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin.services import disabled_user_message
 from app.auth.security import (
     create_access_token,
     hash_password,
@@ -128,8 +129,14 @@ async def login_user(
     user = await db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(password, user.password_hash):
         raise AppError(ErrorCode.UNAUTHORIZED, "邮箱或密码错误")
+    return await issue_session(db, r, user)
+
+
+async def issue_session(
+    db: AsyncSession, r: redis.Redis, user: User
+) -> tuple[User, str, str]:
     if user.disabled:
-        raise AppError(ErrorCode.FORBIDDEN, "账号已禁用")
+        raise AppError(ErrorCode.FORBIDDEN, await disabled_user_message(db))
     access = create_access_token(user_id=user.id, role=user.role)
     refresh = await issue_refresh(r, user.id)
     return user, access, refresh
@@ -145,6 +152,8 @@ async def refresh_tokens(
     user = await db.get(User, user_id)
     if user is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "refresh token 无效")
+    if user.disabled:
+        raise AppError(ErrorCode.FORBIDDEN, await disabled_user_message(db))
     access = create_access_token(user_id=user.id, role=user.role)
     return access, new_refresh
 

@@ -50,6 +50,22 @@ def _rank_key() -> str:
     return f"usage:rank:month:{datetime.now(UTC):%Y-%m}"
 
 
+def _game_month_key(game_id: uuid.UUID) -> str:
+    return f"usage:game:{game_id}:month:{datetime.now(UTC):%Y-%m}"
+
+
+def _run_month_key(run_id: uuid.UUID) -> str:
+    return f"usage:run:{run_id}:month:{datetime.now(UTC):%Y-%m}"
+
+
+def _user_games_index(user_id: uuid.UUID) -> str:
+    return f"usage:user:{user_id}:games:{datetime.now(UTC):%Y-%m}"
+
+
+def _user_runs_index(user_id: uuid.UUID) -> str:
+    return f"usage:user:{user_id}:runs:{datetime.now(UTC):%Y-%m}"
+
+
 async def record_usage(
     r: redis.Redis,
     user_id: uuid.UUID,
@@ -57,10 +73,13 @@ async def record_usage(
     input_tokens: int,
     output_tokens: int,
     calls: int = 1,
+    game_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     """M4 LLM 层调用：累加 user/sys 的 day/month/total + 月榜 ZSET。一次 pipeline。
 
     day/month key 设 TTL（只增数据不无限堆积），total 不设。
+    可选 game_id/run_id 维度（B3）。
     """
     total = input_tokens + output_tokens
     uid = str(user_id)
@@ -76,13 +95,26 @@ async def record_usage(
         (_sys_month(), 40 * 86400),
         (_sys_total(), None),
     )
-    for key, ttl in (*user_keys, *sys_keys):
+    extra: list[tuple[str, int | None]] = []
+    if game_id is not None:
+        extra.append((_game_month_key(game_id), 40 * 86400))
+    if run_id is not None:
+        extra.append((_run_month_key(run_id), 40 * 86400))
+    for key, ttl in (*user_keys, *sys_keys, *extra):
         pipe.hincrby(key, "input_tokens", input_tokens)
         pipe.hincrby(key, "output_tokens", output_tokens)
         pipe.hincrby(key, "calls", calls)
         if ttl is not None:
             pipe.expire(key, ttl)
     pipe.zincrby(_rank_key(), total, uid)
+    if game_id is not None:
+        idx = _user_games_index(user_id)
+        pipe.sadd(idx, str(game_id))
+        pipe.expire(idx, 40 * 86400)
+    if run_id is not None:
+        idx = _user_runs_index(user_id)
+        pipe.sadd(idx, str(run_id))
+        pipe.expire(idx, 40 * 86400)
     await pipe.execute()
 
 
@@ -151,3 +183,89 @@ async def get_admin_usage(r: redis.Redis, db: AsyncSession) -> AdminUsageResp:
     return AdminUsageResp(
         system=await get_system_usage(r), top_users=await get_top_users(r, db)
     )
+
+
+async def get_game_usage(r: redis.Redis, game_id: uuid.UUID) -> UsageBucket:
+    return await _bucket(r, _game_month_key(game_id))
+
+
+async def get_run_usage(r: redis.Redis, run_id: uuid.UUID) -> UsageBucket:
+    return await _bucket(r, _run_month_key(run_id))
+
+
+async def list_usage_breakdown(
+    r: redis.Redis,
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    scope: str,
+    page: int,
+    size: int,
+    *,
+    provider: str = "openai_compat",
+    model: str = "default",
+) -> tuple[list[dict], int]:
+    """scope=game|run → [{ id, title?, ...tokens, estimated_usd }]"""
+    from app.models.game import Game
+    from app.models.generation_run import GenerationRun
+    from app.usage.pricing import estimate_usd
+
+    if scope == "game":
+        idx = _user_games_index(user_id)
+        ids_raw = await r.smembers(idx)
+        ids = [uuid.UUID(x) for x in ids_raw]
+        rows = (await db.scalars(select(Game).where(Game.id.in_(ids)))).all() if ids else []
+        title_map = {g.id: g.title for g in rows}
+        items: list[tuple[uuid.UUID, UsageBucket, str | None]] = []
+        for gid in ids:
+            b = await get_game_usage(r, gid)
+            if b.calls == 0 and b.input_tokens == 0:
+                continue
+            items.append((gid, b, title_map.get(gid)))
+    elif scope == "run":
+        idx = _user_runs_index(user_id)
+        ids_raw = await r.smembers(idx)
+        ids = [uuid.UUID(x) for x in ids_raw]
+        runs = (
+            await db.scalars(select(GenerationRun).where(GenerationRun.id.in_(ids)))
+        ).all() if ids else []
+        title_by_run: dict[uuid.UUID, str | None] = {}
+        if runs:
+            gids = {run.game_id for run in runs}
+            games = (await db.scalars(select(Game).where(Game.id.in_(gids)))).all()
+            gt = {g.id: g.title for g in games}
+            for run in runs:
+                title_by_run[run.id] = gt.get(run.game_id)
+        items = []
+        for rid in ids:
+            b = await get_run_usage(r, rid)
+            if b.calls == 0 and b.input_tokens == 0:
+                continue
+            items.append((rid, b, title_by_run.get(rid)))
+    else:
+        return [], 0
+
+    items.sort(key=lambda x: x[1].input_tokens + x[1].output_tokens, reverse=True)
+    total = len(items)
+    start = (page - 1) * size
+    page_items = items[start : start + size]
+    out: list[dict] = []
+    for eid, bucket, title in page_items:
+        out.append(
+            {
+                "id": eid,
+                "title": title,
+                "input_tokens": bucket.input_tokens,
+                "output_tokens": bucket.output_tokens,
+                "calls": bucket.calls,
+                "estimated_usd": round(
+                    estimate_usd(
+                        provider,
+                        model,
+                        input_tokens=bucket.input_tokens,
+                        output_tokens=bucket.output_tokens,
+                    ),
+                    6,
+                ),
+            }
+        )
+    return out, total

@@ -86,6 +86,13 @@ CORS_ORIGINS=https://...
 
 - Alembic 管理 schema，CI 在预生产自动迁移，生产手动 gate。
 - 破坏性迁移走在线变更流程（先兼容旧代码→迁移→切代码）。
+- **官方预置游戏（R1）不随 migrate 写入**，新环境在 `alembic upgrade head` 后须执行：
+
+```bash
+cd backend && uv run python -m scripts.seed_official_games
+```
+
+幂等，可重复执行；Docker 环境：`docker compose exec backend uv run python -m scripts.seed_official_games`。
 
 ## 运维与监控
 
@@ -110,6 +117,7 @@ CORS_ORIGINS=https://...
 - [ ] CORS/限流/鉴权中间件就位
 - [ ] 邮件可达（验证/重置/通知）
 - [ ] DB 迁移已执行
+- [ ] 官方预置游戏 seed 已执行（`scripts.seed_official_games`；`/api/v1/official-games` 返回 3 项）
 - [ ] Redis key 命名空间无冲突
 - [ ] 沙箱无网络、资源分级生效
 - [ ] 日志聚合与告警就位

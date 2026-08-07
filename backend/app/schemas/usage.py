@@ -39,3 +39,25 @@ class AdminUserUsage(BaseModel):
 class AdminUsageResp(BaseModel):
     system: SystemUsage
     top_users: list[AdminUserUsage]
+
+
+class UsageBreakdownItem(BaseModel):
+    id: uuid.UUID
+    title: str | None = None
+    input_tokens: int
+    output_tokens: int
+    calls: int
+    estimated_usd: float
+
+
+class GameUsageResp(BaseModel):
+    game_id: uuid.UUID
+    month: UsageBucket
+    estimated_usd: float
+
+
+class GameAnalyticsResp(BaseModel):
+    game_id: uuid.UUID
+    play_count: int
+    pv_30d: int
+    uv_30d: int

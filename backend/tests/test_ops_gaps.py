@@ -141,15 +141,19 @@ async def test_smtp_send_uses_aiosmtplib(monkeypatch: pytest.MonkeyPatch) -> Non
 
     async def _fake_send(msg, **kwargs):
         sent["to"] = msg["To"]
+        sent["from"] = msg["From"]
         sent["kwargs"] = kwargs
 
     monkeypatch.setattr(settings, "smtp_host", "smtp.example.com")
     monkeypatch.setattr(settings, "smtp_from", "noreply@example.com")
+    monkeypatch.setattr(settings, "smtp_from_name", "GameForge")
     monkeypatch.setattr(settings, "smtp_user", "u")
     monkeypatch.setattr(settings, "smtp_pass", "p")
     monkeypatch.setattr(worker.aiosmtplib, "send", _fake_send)
     await worker.send_notification_email({}, "a@b.com", "subj", "body")
     assert sent["to"] == "a@b.com"
+    assert "GameForge" in sent["from"]
+    assert "noreply@example.com" in sent["from"]
     assert sent["kwargs"]["hostname"] == "smtp.example.com"
 
 

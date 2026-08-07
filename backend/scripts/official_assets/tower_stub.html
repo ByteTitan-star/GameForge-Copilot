@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>塔防雏形</title>
+  <style>
+    body { margin: 0; background: #1a2a1a; color: #cfc; font-family: sans-serif; text-align: center; }
+    canvas { display: block; margin: 12px auto; border: 2px solid #6a6; cursor: crosshair; }
+    button { padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>塔防雏形</h1>
+  <p>点击画布放置防御塔 · 拦截沿路径前进的小怪</p>
+  <canvas id="c" width="360" height="360"></canvas>
+  <p>生命: <span id="lives">5</span> · 波次: <span id="wave">1</span></p>
+  <button id="play">开始</button>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const livesEl = document.getElementById('lives');
+    const waveEl = document.getElementById('wave');
+    const path = [{x:0,y:180},{x:120,y:180},{x:120,y:60},{x:280,y:60},{x:280,y:300},{x:360,y:300}];
+    let towers = [], enemies = [], lives = 5, wave = 1, timer, running, spawnT = 0;
+    function reset() { towers = []; enemies = []; lives = 5; wave = 1; running = true; livesEl.textContent = '5'; waveEl.textContent = '1'; spawnT = 0; }
+    function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+    function tick() {
+      if (!running) return;
+      spawnT++; if (spawnT % 60 === 0) enemies.push({i:0, t:0, hp:3});
+      enemies.forEach(e => {
+        const a = path[e.i], b = path[e.i+1];
+        if (!b) { lives--; livesEl.textContent = lives; e.dead = true; if (lives <= 0) running = false; return; }
+        e.t += 0.02; if (e.t >= 1) { e.i++; e.t = 0; }
+        const p = {x: a.x + (b.x-a.x)*e.t, y: a.y + (b.y-a.y)*e.t};
+        e.x = p.x; e.y = p.y;
+        towers.forEach(t => { if (dist(t, p) < 40) e.hp -= 0.05; });
+        if (e.hp <= 0) e.dead = true;
+      });
+      enemies = enemies.filter(e => !e.dead);
+      ctx.fillStyle = '#2a3a2a'; ctx.fillRect(0,0,360,360);
+      ctx.strokeStyle = '#8a8'; ctx.lineWidth = 4; ctx.beginPath(); path.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+      ctx.fillStyle = '#6af'; towers.forEach(t => { ctx.beginPath(); ctx.arc(t.x, t.y, 10, 0, Math.PI*2); ctx.fill(); });
+      ctx.fillStyle = '#f66'; enemies.forEach(e => { ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); });
+      if (enemies.length === 0 && spawnT > 120) { wave++; waveEl.textContent = wave; spawnT = 0; }
+    }
+    canvas.onclick = e => {
+      const r = canvas.getBoundingClientRect();
+      towers.push({x: e.clientX - r.left, y: e.clientY - r.top});
+    };
+    document.getElementById('play').onclick = () => { reset(); clearInterval(timer); timer = setInterval(tick, 33); };
+  </script>
+</body>
+</html>

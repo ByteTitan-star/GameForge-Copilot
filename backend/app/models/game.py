@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -20,3 +21,11 @@ class Game(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(24), default=GameStatus.DRAFT.value)
     current_version: Mapped[int] = mapped_column(Integer, default=0)
     requirement: Mapped[str] = mapped_column(Text, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    play_count: Mapped[int] = mapped_column(Integer, default=0)
+    scheduled_take_down_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    scheduled_publish_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

@@ -98,6 +98,9 @@ async def call_llm(
     config_id: uuid.UUID | None,
     system: str,
     user_msg: str,
+    *,
+    game_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
 ) -> tuple[str, provider.Usage]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
@@ -121,7 +124,12 @@ async def call_llm(
     LLM_TOKENS.labels(prov.value, "input").inc(usage.input_tokens)
     LLM_TOKENS.labels(prov.value, "output").inc(usage.output_tokens)
     await record_usage(
-        r, user_id, input_tokens=usage.input_tokens, output_tokens=usage.output_tokens
+        r,
+        user_id,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        game_id=game_id,
+        run_id=run_id,
     )
     await _maybe_quota_alert(db, r, user_id)
     await _maybe_system_alert(db, r)

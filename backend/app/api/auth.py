@@ -24,11 +24,11 @@ from app.schemas.auth import (
     RefreshReq,
     RegisterReq,
     RegisterResp,
+    ResendVerificationReq,
+    ResendVerificationResp,
     TokenResp,
     VerifyEmailReq,
     VerifyEmailResp,
-    ResendVerificationReq,
-    ResendVerificationResp,
 )
 from app.schemas.common import UserPublic
 
@@ -139,7 +139,9 @@ async def password_reset_confirm(
     req: PasswordResetConfirmReq, db: DbSession
 ) -> ApiResponse[PasswordResetConfirmResp]:
     user = await services.confirm_password_reset(db, req.token, req.new_password)
-    return ApiResponse(data=PasswordResetConfirmResp(user_id=user.id))
+    return ApiResponse(
+        data=PasswordResetConfirmResp(user_id=user.id, email=user.email)
+    )
 
 
 @router.post(
@@ -160,3 +162,36 @@ async def logout(req: RefreshReq, r: RedisClient) -> None:
     """登出：refresh 从 Redis 删除，access 自然过期。"""
     await services.logout(r, req.refresh_token)
     return None
+
+
+@router.get("/oauth/{provider}/start")
+async def oauth_start(provider: str, r: RedisClient) -> ApiResponse[dict]:
+    from app.auth import oauth as oauth_mod
+
+    return ApiResponse(data=await oauth_mod.oauth_start(r, provider))
+
+
+@router.get("/oauth/{provider}/callback", response_model=ApiResponse[LoginResp])
+async def oauth_callback(
+    provider: str,
+    code: str,
+    state: str,
+    db: DbSession,
+    r: RedisClient,
+) -> ApiResponse[LoginResp]:
+    from app.auth import oauth as oauth_mod
+
+    user, access, refresh = await oauth_mod.oauth_callback(db, r, provider, code, state)
+    return ApiResponse(
+        data=LoginResp(
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=settings.jwt_access_ttl,
+            user=UserPublic(
+                user_id=user.id,
+                email=user.email,
+                role=Role(user.role),
+                email_verified=user.email_verified,
+            ),
+        )
+    )

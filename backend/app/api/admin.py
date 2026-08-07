@@ -10,6 +10,7 @@ from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.enums import GameStatus, Role
 from app.schemas.admin import (
     AdminGameItem,
+    AdminGameSchedulePatch,
     AdminSettings,
     AdminUserItem,
     AdminUserPatch,
@@ -83,6 +84,16 @@ async def patch_user(
     )
 
 
+@router.delete("/users/{user_id}", status_code=204, responses=ERR_404)
+async def delete_user(
+    user_id: UUID,
+    admin: AdminUser,
+    db: DbSession,
+    r: RedisClient,
+) -> None:
+    await services.delete_user(db, r, admin, user_id)
+
+
 @router.get("/settings", response_model=ApiResponse[AdminSettings])
 async def get_settings(admin: AdminUser, db: DbSession) -> ApiResponse[AdminSettings]:
     _ = admin
@@ -150,4 +161,35 @@ async def list_admin_games(
         total=total,
         page=page,
         size=size,
+    )
+
+
+@router.patch(
+    "/games/{game_id}/schedule",
+    response_model=ApiResponse[AdminGameItem],
+    responses=ERR_404,
+)
+async def patch_game_schedule(
+    game_id: UUID,
+    req: AdminGameSchedulePatch,
+    admin: AdminUser,
+    db: DbSession,
+) -> ApiResponse[AdminGameItem]:
+    g = await services.patch_game_schedule(
+        db,
+        admin,
+        game_id,
+        req.scheduled_take_down_at,
+        req.scheduled_publish_at,
+    )
+    return ApiResponse(
+        data=AdminGameItem(
+            game_id=g.id,
+            title=g.title,
+            status=GameStatus(g.status),
+            slug=g.slug,
+            owner_id=g.owner_id,
+            current_version=g.current_version,
+            updated_at=g.updated_at,
+        )
     )

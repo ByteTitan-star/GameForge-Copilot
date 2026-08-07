@@ -48,6 +48,10 @@ async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
     return game
 
 
+async def get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    return await _get_owned_game(db, user, game_id)
+
+
 async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> int:
     n = await db.scalar(
         select(func.count())
@@ -59,6 +63,21 @@ async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> i
 
 async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
     _require_verified(user)
+    title = (req.title or "").strip()
+    requirement = (req.requirement or "").strip()
+    if req.template_id:
+        from app.forge.templates.loader import get_template
+
+        tpl = get_template(req.template_id)
+        if not title:
+            title = str(tpl["title"])
+        if not requirement:
+            requirement = str(tpl["requirement_seed"])
+    if not title or not requirement:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            "title 与 requirement 必填（或使用 template_id）",
+        )
     drafts = await _count_games(db, user.id, GameStatus.DRAFT)
     if drafts >= settings.max_drafts_per_user:
         raise AppError(
@@ -67,8 +86,8 @@ async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
         )
     game = Game(
         owner_id=user.id,
-        title=req.title,
-        requirement=req.requirement,
+        title=title,
+        requirement=requirement,
         status=GameStatus.DRAFT.value,
         current_version=0,
     )
@@ -89,6 +108,22 @@ async def list_games(
         await db.scalars(
             base.order_by(Game.updated_at.desc()).limit(size).offset((page - 1) * size)
         )
+    ).all()
+    return list(rows), int(total or 0)
+
+
+async def list_public_games(
+    db: AsyncSession,
+    page: int,
+    size: int,
+    sort: str = "updated_at",
+) -> tuple[list[Game], int]:
+    """公开已发布游戏列表（无 PII，admin 草稿不可见）。"""
+    base = select(Game).where(Game.status == GameStatus.PUBLISHED.value)
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    order = Game.play_count.desc() if sort == "play_count" else Game.updated_at.desc()
+    rows = (
+        await db.scalars(base.order_by(order).limit(size).offset((page - 1) * size))
     ).all()
     return list(rows), int(total or 0)
 
@@ -296,3 +331,58 @@ async def assert_can_publish(db: AsyncSession, owner_id: UUID) -> None:
             ErrorCode.QUOTA_EXCEEDED,
             f"已发布游戏数已达上限（{settings.max_published_per_user}）",
         )
+
+
+_ACTIVATABLE = {
+    GameStatus.DRAFT,
+    GameStatus.REJECTED,
+    GameStatus.TAKEN_DOWN,
+    GameStatus.PUBLISHED,
+}
+_RETRY_PHASES = frozenset({"sandbox_failed", "qa_failed"})
+
+
+async def activate_version(
+    db: AsyncSession, user: User, game_id: UUID, version: int
+) -> Game:
+    """切换 current_version（Batch A · B-A6）。"""
+    game = await _get_owned_game(db, user, game_id)
+    if GameStatus(game.status) not in _ACTIVATABLE:
+        raise AppError(ErrorCode.INVALID_STATE, "当前状态不可切换版本")
+    gv = await db.scalar(
+        select(GameVersion).where(
+            GameVersion.game_id == game_id, GameVersion.version == version
+        )
+    )
+    if gv is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
+    game.current_version = version
+    if isinstance(gv.design_doc, dict):
+        gameplay = gv.design_doc.get("gameplay") or gv.design_doc.get("design")
+        if isinstance(gameplay, str) and gameplay.strip():
+            game.requirement = gameplay.strip()
+    await db.commit()
+    await db.refresh(game)
+    return game
+
+
+async def retry_run(
+    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
+) -> GenerationRun:
+    """从失败检查点重试（Batch A · B-A5）。"""
+    run = await get_run(db, user, run_id)
+    st = await ckpt.load_state(r, run_id) or {}
+    phase = st.get("phase")
+    if phase not in _RETRY_PHASES:
+        raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")
+    if run.status not in (RunStatus.FAILED.value, RunStatus.PAUSED.value):
+        raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")
+    await run_ctrl.clear_control(r, run_id)
+    await r.delete(f"run:hitl:{run_id}")
+    run.status = RunStatus.RUNNING.value
+    run.phase = RunPhase.CODE.value
+    run.ended_at = None
+    await db.commit()
+    await forge_queue.enqueue_resume(run_id, "approve", None)
+    await db.refresh(run)
+    return run

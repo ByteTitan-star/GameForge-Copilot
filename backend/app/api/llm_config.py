@@ -12,8 +12,10 @@ from app.schemas.llm_config import (
     LLMConfigCreate,
     LLMConfigCreateResp,
     LLMConfigDeleteResp,
+    LLMConfigDryTestResp,
     LLMConfigPatch,
     LLMConfigResp,
+    LLMConfigTestReq,
     LLMConfigTestResp,
 )
 
@@ -50,6 +52,17 @@ async def create_config(
     user: CurrentUser, db: DbSession, req: LLMConfigCreate
 ) -> ApiResponse[LLMConfigCreateResp]:
     return ApiResponse(data=await services.create_config(db, user, req))
+
+
+@router.post(
+    "/test",
+    response_model=ApiResponse[LLMConfigDryTestResp],
+)
+async def test_draft_config(
+    _user: CurrentUser, req: LLMConfigTestReq
+) -> ApiResponse[LLMConfigDryTestResp]:
+    """保存前连通测试（provider + model + apikey + base_url），不落库。"""
+    return ApiResponse(data=await services.test_draft_config(req))
 
 
 @router.patch("/{config_id}", response_model=ApiResponse[LLMConfigResp], responses=ERR_404)

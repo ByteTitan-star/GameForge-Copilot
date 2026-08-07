@@ -6,11 +6,12 @@ docs/04：/play/{slug} 公开仅 published；/draft/{game_id}/{version} owner on
 
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from app.auth.deps import CurrentUser, DbSession
+from app.analytics import store as analytics_store
+from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus
 from app.hosting import store
@@ -28,7 +29,13 @@ _CSP = (
 
 
 @router.get("/play/{slug}")
-async def play(slug: str, db: DbSession) -> FileResponse:
+async def play(
+    slug: str,
+    request: Request,
+    background: BackgroundTasks,
+    db: DbSession,
+    r: RedisClient,
+) -> FileResponse:
     """已发布游戏入口，公开。非 published 一律 404。"""
     game = await db.scalar(
         select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
@@ -38,6 +45,12 @@ async def play(slug: str, db: DbSession) -> FileResponse:
     path = store.index_path(game.id, game.current_version)
     if path is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
+    visitor = request.headers.get("x-forwarded-for") or (
+        request.client.host if request.client else "anon"
+    )
+    background.add_task(
+        analytics_store.record_play, r, db, slug=slug, game_id=game.id, visitor_id=visitor
+    )
     return FileResponse(
         path,
         headers={

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from app.auth.deps import CurrentUser, DbSession
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.enums import GameStatus
+from app.games import official as official_svc
 from app.games import services
 from app.models.game import Game
 from app.models.game_version import GameVersion
@@ -17,6 +18,7 @@ from app.schemas.game import (
     GameListItem,
     GamePatch,
     GameResp,
+    PublicGameItem,
     VersionItem,
 )
 
@@ -56,6 +58,46 @@ def _to_version(v: GameVersion) -> VersionItem:
 @router.post("", response_model=ApiResponse[GameResp], status_code=201, responses=ERR_403)
 async def create_game(req: GameCreate, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
     return ApiResponse(data=_to_resp(await services.create_game(db, user, req)))
+
+
+@router.get("/public", response_model=PaginatedData[PublicGameItem])
+async def list_public_games(
+    db: DbSession,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    sort: str = Query("updated_at", pattern="^(updated_at|play_count)$"),
+) -> PaginatedData[PublicGameItem]:
+    """公开已发布游戏发现页（无需登录，无 owner PII）。"""
+    rows, total = await services.list_public_games(db, page, size, sort)
+    return PaginatedData(
+        data=[
+            PublicGameItem(
+                game_id=g.id,
+                title=g.title,
+                slug=g.slug or "",
+                cover_url=None,
+                published_at=g.published_at,
+                play_count=g.play_count,
+            )
+            for g in rows
+        ],
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+@router.post(
+    "/fork/{slug}",
+    response_model=ApiResponse[GameResp],
+    status_code=201,
+    responses={**ERR_403, **ERR_404, **ERR_409},
+)
+async def fork_official_game(
+    slug: str, user: CurrentUser, db: DbSession
+) -> ApiResponse[GameResp]:
+    """Fork 官方预置游戏为当前用户 draft（Batch A · R1）。"""
+    return ApiResponse(data=_to_resp(await official_svc.fork_official_game(db, user, slug)))
 
 
 @router.get("", response_model=PaginatedData[GameListItem])
@@ -118,3 +160,17 @@ async def list_versions(
 ) -> ApiResponse[list[VersionItem]]:
     rows = await services.list_versions(db, user, game_id)
     return ApiResponse(data=[_to_version(v) for v in rows])
+
+
+@router.post(
+    "/{game_id}/versions/{version}/activate",
+    response_model=ApiResponse[GameResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def activate_version(
+    game_id: UUID, version: int, user: CurrentUser, db: DbSession
+) -> ApiResponse[GameResp]:
+    """切换 current_version（Batch A · R4）。"""
+    return ApiResponse(
+        data=_to_resp(await services.activate_version(db, user, game_id, version))
+    )
