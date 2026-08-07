@@ -120,9 +120,11 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     _orig_hosting = settings.hosting_root
     _orig_messaging = settings.messaging_backend
     _orig_admin_contact = settings.admin_contact_email
+    _orig_log_dir = settings.log_dir
     settings.hosting_root = str(tmp_path)
     settings.messaging_backend = "memory"
     settings.admin_contact_email = ""
+    settings.log_dir = "-"
     reset_messaging()
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -148,6 +150,7 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     settings.hosting_root = _orig_hosting
     settings.messaging_backend = _orig_messaging
     settings.admin_contact_email = _orig_admin_contact
+    settings.log_dir = _orig_log_dir
     reset_messaging()
     from app.forge.event_log import bind_event_redis
 

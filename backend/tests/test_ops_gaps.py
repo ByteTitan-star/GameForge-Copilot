@@ -35,7 +35,7 @@ async def test_metrics_endpoint(client: httpx.AsyncClient) -> None:
 
 
 def test_json_logging_format(capsys: pytest.CaptureFixture[str]) -> None:
-    setup_logging("INFO")
+    setup_logging("INFO", log_dir="-")
     logging.getLogger("test.json").info("hello-ops")
     out = capsys.readouterr().out.strip().splitlines()[-1]
     payload = json.loads(out)

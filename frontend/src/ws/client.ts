@@ -1,5 +1,6 @@
 import type { WsEnvelope } from '@/api/ws-types'
 import { wsRunUrl } from '@/lib/hosting'
+import { clientLog } from '@/lib/client-log'
 
 export type RunWsHandle = {
   close: () => void
@@ -49,8 +50,14 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
       const ev = parseWsEnvelope(String(msg.data))
       if (ev) options.onEvent(ev)
     }
-    socket.onerror = (err) => options.onError?.(err)
+    socket.onerror = (err) => {
+      clientLog.error('ws.error', { runId: options.runId })
+      options.onError?.(err)
+    }
     socket.onclose = (ev) => {
+      if (ev.code !== 1000) {
+        clientLog.warn('ws.close', { runId: options.runId, code: ev.code, reason: ev.reason })
+      }
       options.onClose?.(ev)
       if (closed) return
       if (ev.code === 4401 || ev.code === 4403) return

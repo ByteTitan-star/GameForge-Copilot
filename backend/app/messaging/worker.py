@@ -7,6 +7,7 @@ import contextlib
 import logging
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.messaging.handlers import dispatch_task
 from app.messaging.rabbit import _task_channel, close_connection
 from app.messaging.tasks import TASK_QUEUE, decode_task
@@ -55,7 +56,7 @@ async def _consume() -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=settings.log_level)
+    setup_logging(settings.log_level, service="worker", log_dir=settings.log_dir)
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_consume())
 

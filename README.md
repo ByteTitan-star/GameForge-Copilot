@@ -424,6 +424,33 @@ rabbitmqctl purge_queue gameforge.worker             # 或管理台 http://127.0
 - 后端：Redis 环形缓冲 `run:events:{run_id}`，WS 重连时回放；`GET /api/v1/me/runs/active` 列出进行中 run。
 - 前端：sessionStorage 记住 `{gameId, runId}`，回到 Forge 自动重连 WS；顶栏 **ActiveRunBanner** 可一键返回。
 
+### 日志落盘（`logs/`）
+
+本地开发时，三类进程各自写 JSON 行日志到仓库根目录 **`logs/`**（已在 `.gitignore`，不会进 Git）：
+
+| 文件 | 来源 | 说明 |
+|---|---|---|
+| `logs/backend.log` | `uvicorn app.main:app` | API 请求、DB/Redis 错误、forge 异常栈 |
+| `logs/worker.log` | `python -m app.messaging.worker` | 任务消费、邮件 `[dev-email]`、run 失败栈 |
+| `logs/frontend.log` | `pnpm dev`（Vite 插件） | 浏览器 `window.error`、未捕获 Promise、手动 `clientLog.*` |
+
+**查看最近错误：**
+
+```bash
+tail -f logs/worker.log    # 生成 RUN_FAILED 时先看这里（含 exc_info 栈）
+tail -f logs/backend.log
+tail -f logs/frontend.log
+```
+
+配置（`backend/.env`）：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | 日志级别 |
+| `LOG_DIR` | （空） | 空 = `autoGame/logs/`；`-` = 仅 stdout（pytest 用） |
+
+改 env 或代码后需 **重启 API / Worker**；前端 dev server 重启后才会新建 `frontend.log`。
+
 ---
 
 ## Demo Cases

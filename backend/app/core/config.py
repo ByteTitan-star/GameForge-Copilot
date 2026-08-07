@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     # 全局
     env: str = "development"
     log_level: str = "INFO"
+    # 落盘目录：空=仓库根 logs/；-=仅 stdout（pytest）
+    log_dir: str = ""
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
 

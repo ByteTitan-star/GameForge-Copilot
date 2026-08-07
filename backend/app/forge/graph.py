@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
@@ -48,6 +49,8 @@ QA_PROMPT = (
     "质检辅助：试玩已在沙箱完成，以下是自动化结果。"
     "若已通过可忽略；若失败请阅读 errors 协助修复方向。"
 )
+
+log = logging.getLogger(__name__)
 
 
 class ForgeState(TypedDict, total=False):
@@ -292,6 +295,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 elif qa_hint:
                     user_msg = f"{user_msg}{qa_hint}"
                 html = await _llm(ctx, CODE_PROMPT, user_msg)
+                html = html or ""
                 # 粗剥 markdown 围栏
                 if "```" in html:
                     parts = html.split("```")
@@ -508,6 +512,7 @@ async def run_generation(
             with observe_run(str(run_id)):
                 await _run_body(s, r, run, game, run_id, resume, decision, modify_text)
         except Exception as e:
+            log.exception("run_generation failed run_id=%s", run_id)
             run.status = RunStatus.FAILED.value
             run.ended_at = datetime.now(UTC)
             await s.commit()

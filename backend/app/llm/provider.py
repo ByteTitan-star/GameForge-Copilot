@@ -217,9 +217,10 @@ async def complete(
             output_tokens=data.get("usage", {}).get("output_tokens", 0),
         )
     else:
-        content = data["choices"][0]["message"]["content"]
+        raw = data["choices"][0]["message"].get("content")
+        content = raw if isinstance(raw, str) else (raw or "")
         usage = Usage(
             input_tokens=data.get("usage", {}).get("prompt_tokens", 0),
             output_tokens=data.get("usage", {}).get("completion_tokens", 0),
         )
-    return content, usage
+    return content or "", usage

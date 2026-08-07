@@ -25,7 +25,7 @@ from app.core.metrics import register_metrics
 from app.hosting import routes as hosting_routes
 from app.ws import runs as ws_runs
 
-setup_logging(settings.log_level)
+setup_logging(settings.log_level, service="backend", log_dir=settings.log_dir)
 
 API_V1 = "/api/v1"
 

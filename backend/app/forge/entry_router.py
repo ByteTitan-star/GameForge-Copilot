@@ -39,13 +39,14 @@ _SMALL_CHANGE_HINTS = (
 )
 
 
-def classify_entry_phase(requirement: str, *, has_prior_version: bool) -> EntryPhase:
+def classify_entry_phase(requirement: str | None, *, has_prior_version: bool) -> EntryPhase:
     """规则路由：有历史版本且命中小改关键词 → code，否则 plan。"""
     if not has_prior_version:
         return EntryPhase.PLAN
-    text = requirement.strip().lower()
-    if any(h in requirement or h in text for h in _LARGE_CHANGE_HINTS):
+    req = (requirement or "").strip()
+    text = req.lower()
+    if any(h in req or h in text for h in _LARGE_CHANGE_HINTS):
         return EntryPhase.PLAN
-    if any(h in requirement or h in text for h in _SMALL_CHANGE_HINTS):
+    if any(h in req or h in text for h in _SMALL_CHANGE_HINTS):
         return EntryPhase.CODE
     return EntryPhase.PLAN

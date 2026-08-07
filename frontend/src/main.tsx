@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { installClientLogHooks } from '@/lib/client-log'
 import { applyTheme } from '@/lib/theme/apply-theme'
 import { DEFAULT_THEME_SETTINGS } from '@/lib/theme/presets'
 import { useAuthStore } from '@/stores/auth-store'
@@ -22,6 +23,8 @@ useAuthStore.persist.onFinishHydration(() => {
 if (useAuthStore.persist.hasHydrated()) {
   useAuthStore.getState().setHydrated(true)
 }
+
+installClientLogHooks()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
