@@ -4,12 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     admin,
     auth,
+    creator,
     dev,
+    favorites,
     games,
     health,
     llm_config,
     notifications,
     official,
+    profile,
     publish,
     runs,
     templates,
@@ -53,6 +56,9 @@ app.include_router(llm_config.router, prefix=API_V1)
 app.include_router(games.router, prefix=API_V1)
 app.include_router(official.router, prefix=API_V1)
 app.include_router(templates.router, prefix=API_V1)
+app.include_router(profile.router, prefix=API_V1)
+app.include_router(creator.router, prefix=API_V1)
+app.include_router(favorites.router, prefix=API_V1)
 app.include_router(runs.router, prefix=API_V1)
 app.include_router(publish.router, prefix=API_V1)
 app.include_router(usage.router, prefix=API_V1)

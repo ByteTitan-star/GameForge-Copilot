@@ -23,6 +23,7 @@ class GenerationRun(Base, TimestampMixin):
         Uuid, ForeignKey("user_llm_config.id", ondelete="SET NULL"), nullable=True
     )
     requirement: Mapped[str] = mapped_column(Text, nullable=False)
+    entry_phase: Mapped[str] = mapped_column(String(8), default="plan")
     status: Mapped[str] = mapped_column(String(16), default=RunStatus.RUNNING.value)
     phase: Mapped[str | None] = mapped_column(String(16), default=RunPhase.PLAN.value)
     checkpoint_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)

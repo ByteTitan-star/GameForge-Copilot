@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.enums import RunPhase, RunStatus
+from app.enums import EntryPhase, RunPhase, RunStatus
 
 
 class RunCreate(BaseModel):
@@ -16,6 +16,7 @@ class RunResp(BaseModel):
     game_id: uuid.UUID
     status: RunStatus
     phase: RunPhase
+    entry_phase: EntryPhase
     ws_url: str
 
 
@@ -36,6 +37,7 @@ class RunStatusResp(BaseModel):
     game_id: uuid.UUID
     status: RunStatus
     phase: RunPhase
+    entry_phase: EntryPhase
     ws_url: str
     current_hitl: HitlState | None = None
 

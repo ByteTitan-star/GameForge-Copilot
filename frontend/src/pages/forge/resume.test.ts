@@ -43,7 +43,12 @@ describe('forge resume helpers', () => {
     }
     const hitl = buildResumeHitl(run, '霓虹蛇')
     expect(hitl?.node).toBe('plan_confirm')
-    expect(hitl?.design_doc.title).toContain('霓虹蛇')
+    expect(hitl?.design_doc).toBeDefined()
+    const docTitle =
+      typeof hitl?.design_doc === 'object' && hitl.design_doc && 'title' in hitl.design_doc
+        ? String(hitl.design_doc.title)
+        : ''
+    expect(docTitle || hitl?.node).toContain('霓虹蛇')
     expect(hitl?.action_url).toContain('/hitl/resolve')
   })
 

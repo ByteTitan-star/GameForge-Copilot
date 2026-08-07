@@ -186,6 +186,41 @@ async def test_empty_model_rejected() -> None:
     assert err and "model" in err
 
 
+def test_normalize_base_url_strips_completion_suffix() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import _api_base
+
+    base = _api_base(P.OPENAI, "https://api.openai.com/v1/chat/completions")
+    assert base == "https://api.openai.com/v1"
+
+
+def test_normalize_base_url_appends_v1_for_host_only() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import _api_base
+
+    base = _api_base(P.OPENAI_COMPAT, "https://api.deepseek.com")
+    assert base == "https://api.deepseek.com/v1"
+
+
+def test_custom_anthropic_base_uses_openai_compat_endpoint() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import _auth_headers, _messages_url
+
+    base_url = "https://coding.biomap-int.com"
+    assert _messages_url(P.ANTHROPIC, base_url) == (
+        "https://coding.biomap-int.com/v1/chat/completions"
+    )
+    assert "Authorization" in _auth_headers(P.ANTHROPIC, "sk-test", base_url)
+
+
+def test_official_anthropic_base_uses_messages_endpoint() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import _auth_headers, _messages_url
+
+    assert _messages_url(P.ANTHROPIC, None) == "https://api.anthropic.com/v1/messages"
+    assert "x-api-key" in _auth_headers(P.ANTHROPIC, "sk-test", None)
+
+
 async def test_not_found_404(
     auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

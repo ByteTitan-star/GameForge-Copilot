@@ -18,7 +18,20 @@ describe('formatApiError', () => {
     ).toBe('沙箱炸了')
   })
 
+  it('LLM 配置失败展示后端具体原因', () => {
+    expect(
+      formatApiError(
+        new ApiError(400, {
+          code: ErrorCode.LLM_CONFIG_INVALID,
+          message: '连通测试失败: LLM 调用失败 HTTP 404: Not Found',
+        }),
+      ),
+    ).toMatch(/404/)
+  })
+
   it('网络/CORS 失败给出连接提示', () => {
-    expect(formatApiError(new TypeError('Failed to fetch'), '注册失败')).toMatch(/无法连接后端/)
+    expect(
+      formatApiError(new TypeError('Failed to fetch'), '注册失败'),
+    ).toMatch(/无法连接后端/)
   })
 })

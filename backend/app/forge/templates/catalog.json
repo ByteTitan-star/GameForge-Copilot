@@ -4,20 +4,26 @@
     "title": "经典贪吃蛇",
     "description": "方向键控制蛇吃食物、变长、撞墙结束",
     "requirement_seed": "做一个经典贪吃蛇：方向键移动，吃食物变长，撞墙或自身失败，显示分数。",
-    "tags": ["arcade", "snake", "keyboard"]
+    "tags": ["arcade", "snake", "keyboard"],
+    "verified": true,
+    "reference_artifact": "references/arcade-snake.html"
   },
   {
     "template_id": "puzzle-2048",
     "title": "2048 合成",
     "description": "四方向滑动合并相同数字方块",
     "requirement_seed": "2048 风格：4x4 网格，方向键滑动合并相同数字，无法移动时游戏结束，显示最高分。",
-    "tags": ["puzzle", "2048", "keyboard"]
+    "tags": ["puzzle", "2048", "keyboard"],
+    "verified": true,
+    "reference_artifact": "references/puzzle-2048.html"
   },
   {
     "template_id": "clicker-idle",
     "title": "点击放置",
     "description": "点击得分、升级自动产出",
     "requirement_seed": "点击放置小游戏：点击主按钮得分，用分数购买升级提高自动得分速度，UI 简洁。",
-    "tags": ["clicker", "idle", "casual"]
+    "tags": ["clicker", "idle", "casual"],
+    "verified": true,
+    "reference_artifact": "references/clicker-idle.html"
   }
 ]

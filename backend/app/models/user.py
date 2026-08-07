@@ -18,3 +18,6 @@ class User(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(16), default=Role.USER.value)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    handle: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    profile_public: Mapped[bool] = mapped_column(Boolean, default=True)

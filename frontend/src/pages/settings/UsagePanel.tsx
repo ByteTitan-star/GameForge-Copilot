@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { meApi } from '@/api/me'
+import { usageBreakdownApi } from '@/api/usage-breakdown'
 import { UsageChart } from '@/components/usage/UsageChart'
+import { UsageBreakdownChart } from '@/components/usage/UsageBreakdown'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -19,6 +21,12 @@ export function UsagePanel() {
     queryFn: () => meApi.usage(token!),
   })
 
+  const breakdownQ = useQuery({
+    queryKey: ['me-usage-breakdown'],
+    enabled: Boolean(token),
+    queryFn: () => usageBreakdownApi.get(token!),
+  })
+
   const d = q.data
   const chartData = d
     ? [
@@ -28,12 +36,23 @@ export function UsagePanel() {
       ]
     : []
 
+  const quotaLow =
+    d && d.quota.daily_token_limit > 0 && d.quota.remaining / d.quota.daily_token_limit < 0.1
+
   return (
     <section className="gf-glass space-y-4 rounded-2xl p-5">
       <div>
         <h2 className="gf-page-body text-lg">{t('usageTitle')}</h2>
         <p className="mt-1 gf-page-muted text-sm">{t('usageSubtitle')}</p>
       </div>
+
+      {quotaLow ? (
+        <p role="status" className="rounded-xl border border-amber-300/40 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {t('usageQuotaWarning')
+            .replace('{remaining}', fmt(d!.quota.remaining))
+            .replace('{limit}', fmt(d!.quota.daily_token_limit))}
+        </p>
+      ) : null}
 
       {q.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
       {q.isError ? <p className="text-sm text-red-600">{t('usageLoadFailed')}</p> : null}
@@ -62,6 +81,19 @@ export function UsagePanel() {
           </p>
         </>
       ) : null}
+
+      <div className="border-t border-[var(--gf-border)] pt-4">
+        <h3 className="gf-page-body text-base">{t('usageBreakdownTitle')}</h3>
+        {breakdownQ.isLoading ? <p className="mt-2 gf-page-muted text-sm">{t('loading')}</p> : null}
+        {breakdownQ.data ? (
+          <div className="mt-3">
+            <UsageBreakdownChart items={breakdownQ.data.items} />
+            <p className="mt-2 font-mono text-[11px] gf-page-muted">
+              {t('usageBreakdownCost')}: ${breakdownQ.data.total_estimated_cost_usd.toFixed(2)}
+            </p>
+          </div>
+        ) : null}
+      </div>
     </section>
   )
 }

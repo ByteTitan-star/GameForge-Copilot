@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { Role } from '@/api/enums'
@@ -8,19 +8,25 @@ import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/stores/auth-store'
+import { ProfilePanel } from './ProfilePanel'
 import { LlmConfigPanel } from './LlmConfigPanel'
 import { UsagePanel } from './UsagePanel'
 import { ThemePanel } from '@/components/theme/ThemePanel'
 
-type SettingsTab = 'account' | 'appearance' | 'llm'
+type SettingsTab = 'account' | 'profile' | 'appearance' | 'llm'
 
 export function SettingsPage() {
   const t = useT()
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.access_token)
   const location = useLocation()
-  const state = location.state as { needVerify?: boolean; justVerified?: boolean } | null
-  const [tab, setTab] = useState<SettingsTab>('account')
+  const state = location.state as {
+    needVerify?: boolean
+    justVerified?: boolean
+    tab?: SettingsTab
+  } | null
+  const [tab, setTab] = useState<SettingsTab>(state?.tab ?? 'account')
 
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -61,6 +67,7 @@ export function SettingsPage() {
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'account', label: t('tabAccount') },
+    { id: 'profile', label: t('tabProfile') },
     { id: 'appearance', label: t('themeTab') },
     { id: 'llm', label: t('tabLlm') },
   ]
@@ -128,9 +135,15 @@ export function SettingsPage() {
             </dl>
             {!user?.email_verified ? (
               <div className="mt-4">
-                <Link to="/verify-email">
-                  <Button className="gf-btn-primary !rounded-xl !border-0 !text-sm">{t('goVerifyEmail')}</Button>
-                </Link>
+                <Button
+                  type="button"
+                  className="gf-btn-primary !rounded-xl !border-0 !text-sm"
+                  onClick={() =>
+                    navigate('/verify-email', { state: { email: user?.email } })
+                  }
+                >
+                  {t('goVerifyEmail')}
+                </Button>
               </div>
             ) : null}
           </section>
@@ -190,6 +203,8 @@ export function SettingsPage() {
             </p>
           </section>
         </div>
+      ) : tab === 'profile' && token ? (
+        <ProfilePanel accessToken={token} />
       ) : tab === 'appearance' ? (
         <ThemePanel />
       ) : (

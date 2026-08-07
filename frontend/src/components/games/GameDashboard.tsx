@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Plus, Search, Sparkles } from 'lucide-react'
 import { gamesApi } from '@/api/games'
+import { reactionsApi } from '@/api/reactions'
 import { GameStatus } from '@/api/enums'
 import { formatApiError } from '@/api/error-message'
 import type { GameSummary } from '@/api/types'
@@ -13,15 +14,18 @@ import { cn } from '@/lib/cn'
 import { isTrialUser } from '@/lib/trial'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { GameCard } from './GameCard'
+import { GameDetailDrawer } from './GameDetailDrawer'
+import { OfficialGameCards } from '@/components/onboarding/OfficialGameCards'
 
 import type { MessageKey } from '@/i18n/messages'
 
-const filterIds = ['all', 'draft', 'published', 'pipeline'] as const
+const filterIds = ['all', 'draft', 'published', 'pipeline', 'favorites'] as const
 const filterLabelKey: Record<(typeof filterIds)[number], MessageKey> = {
   all: 'filterAll',
   draft: 'filterDraft',
   published: 'filterPublished',
   pipeline: 'filterPipeline',
+  favorites: 'filterFavorites',
 }
 
 export function GameDashboard() {
@@ -34,12 +38,19 @@ export function GameDashboard() {
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GameSummary | null>(null)
+  const [detailGame, setDetailGame] = useState<GameSummary | null>(null)
   const [exitingId, setExitingId] = useState<string | null>(null)
 
   const query = useQuery({
     queryKey: ['games', user?.user_id],
     enabled: Boolean(token && user),
     queryFn: () => gamesApi.list(token!),
+  })
+
+  const favoritesQ = useQuery({
+    queryKey: ['favorites', user?.user_id],
+    enabled: Boolean(token && user),
+    queryFn: () => reactionsApi.listFavorites(token!),
   })
 
   const rows = query.data?.data ?? []
@@ -52,10 +63,26 @@ export function GameDashboard() {
     const pipeline = rows.filter(
       (g) => g.status === GameStatus.submitted || g.status === GameStatus.reviewing,
     ).length
-    return { all: rows.length, draft, published, pipeline }
-  }, [rows])
+    return { all: rows.length, draft, published, pipeline, favorites: favoritesQ.data?.length ?? 0 }
+  }, [rows, favoritesQ.data?.length])
 
   const list = useMemo(() => {
+    if (filter === 'favorites') {
+      const favRows = favoritesQ.data ?? []
+      return favRows
+        .filter((g) => !q || g.title.toLowerCase().includes(q.toLowerCase()))
+        .map(
+          (g) =>
+            ({
+              game_id: g.game_id,
+              title: g.title,
+              status: 'published',
+              current_version: 1,
+              slug: g.slug,
+              updated_at: g.published_at,
+            }) as GameSummary,
+        )
+    }
     return rows.filter((g) => {
       if (q && !g.title.toLowerCase().includes(q.toLowerCase())) return false
       if (filter === 'draft') return g.status === GameStatus.draft || g.status === GameStatus.rejected
@@ -64,7 +91,7 @@ export function GameDashboard() {
         return g.status === GameStatus.submitted || g.status === GameStatus.reviewing
       return true
     })
-  }, [filter, q, rows])
+  }, [filter, q, rows, favoritesQ.data])
 
   const removeMu = useMutation({
     mutationFn: (gameId: string) => gamesApi.remove(gameId, token!),
@@ -179,14 +206,16 @@ export function GameDashboard() {
         </div>
       ) : null}
 
-      {query.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
+      {query.isLoading || (filter === 'favorites' && favoritesQ.isLoading) ? (
+        <p className="gf-page-muted text-sm">{t('loading')}</p>
+      ) : null}
       {query.isError ? (
         <p role="alert" className="text-sm text-rose-300">
-          {t('loadFailed')}
+          {formatApiError(query.error, t('loadFailed'))}
         </p>
       ) : null}
 
-      {!query.isLoading && list.length === 0 ? (
+      {!query.isLoading && !(filter === 'favorites' && favoritesQ.isLoading) && list.length === 0 ? (
         <div className="gf-glass flex flex-col items-center rounded-2xl px-6 py-20 text-center">
           <div className="relative">
             <div className="gf-empty-glow absolute inset-0 scale-150 rounded-full blur-3xl" aria-hidden />
@@ -194,13 +223,27 @@ export function GameDashboard() {
               <Sparkles className="gf-text-accent h-9 w-9" />
             </div>
           </div>
-          <h2 className="gf-page-body mt-8 text-xl font-medium">{t('noGames')}</h2>
+          <h2 className="gf-page-body mt-8 text-xl font-medium">
+            {filter === 'favorites' ? t('favoritesEmpty') : t('noGames')}
+          </h2>
+          {filter === 'favorites' ? null : (
+            <>
           <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
+          <OfficialGameCards
+            accessToken={token}
+            userEmailVerified={user?.email_verified}
+            trial={trial}
+            onToast={setToast}
+            compact
+            className="mt-8 w-full max-w-2xl text-left"
+          />
           {trial ? null : (
             <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
               <Plus className="h-4 w-4" />
               {t('createFirstGame')}
             </Link>
+          )}
+            </>
           )}
         </div>
       ) : (
@@ -226,6 +269,7 @@ export function GameDashboard() {
                     onPublish={publishGame}
                     onRequestDelete={setDeleteTarget}
                     onRename={trial ? undefined : renameGame}
+                    onOpenDetail={g.current_version > 0 ? setDetailGame : undefined}
                   />
                 </motion.div>
               ))}
@@ -240,6 +284,16 @@ export function GameDashboard() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
       />
+
+      {token ? (
+        <GameDetailDrawer
+          game={detailGame}
+          accessToken={token}
+          readOnly={trial}
+          onClose={() => setDetailGame(null)}
+          onPublished={() => void qc.invalidateQueries({ queryKey: ['games', user?.user_id] })}
+        />
+      ) : null}
     </div>
   )
 }

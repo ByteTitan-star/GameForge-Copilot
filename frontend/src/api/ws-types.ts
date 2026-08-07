@@ -10,7 +10,11 @@ export type WsEnvelope<T = Record<string, unknown>> = {
   payload: T
 }
 
-export type PhaseStartPayload = { phase: RunPhase }
+export type PhaseStartPayload = {
+  phase: RunPhase
+  human_label?: string
+  eta_seconds?: number
+}
 export type LlmCallPayload = {
   phase: RunPhase
   model: string
@@ -35,15 +39,21 @@ export type QaReportPayload = {
   issues: string[]
   log_excerpt: string
 }
+export type DesignDocPayload = {
+  title: string
+  gameplay: string
+  controls: string
+  levels: string[] | Record<string, unknown>[]
+}
+
 export type HitlWaitPayload = {
   node: string
-  design_doc: {
-    title: string
-    gameplay: string
-    controls: string
-    levels: string[]
-  }
+  design_doc: DesignDocPayload | string
   action_url: string
+  error?: string
+  errors?: string[]
+  issues?: string[]
+  retries?: number
 }
 export type UsageEventPayload = {
   today_used: number

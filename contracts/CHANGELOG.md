@@ -10,6 +10,17 @@
 
 <!-- 后端改契约后在此追加，commit 时归入下一条日期标题 -->
 
+- MODIFIED: `GET /templates` — 仅返回 verified 模板；catalog 含 reference_artifact CI playtest (Batch B · B-B1)
+- MODIFIED: `POST /games/{id}/runs`、`GET /runs/{id}` — 响应增 `entry_phase: plan|code` 智能路由 (Batch B · R5)
+- ADDED: `GET/PATCH /me/profile` — handle/display_name/profile_public (Batch C · R6)
+- ADDED: `GET /u/{handle}` — 公开创作者主页 (Batch C · R6)
+- ADDED: `POST /games/{id}/like|favorite` — toggle 点赞/收藏 (Batch C · R7)
+- ADDED: `GET /me/favorites` — 我的收藏列表 (Batch C · R7)
+- ADDED: `GET /games/featured` — 本周精选 (Batch C · R7)
+- ADDED: `GET /games/public/{slug}` — 公开游戏元数据含 creator/计数 (Batch C · R7)
+- MODIFIED: `GET /games/public` — 增 creator、like_count、favorite_count (Batch C · R7)
+- ADDED: `PATCH /admin/games/{id}/featured` — 管理员设精选 rank + 审计 (Batch C · R7)
+- ADDED: 错误码 `HANDLE_TAKEN`(409)
 - ADDED: `GET /official-games` — 官方预置游戏列表（无需登录）；`OfficialGameItem` (Batch A · R1)
 - ADDED: `POST /games/fork/{slug}` — Fork 官方游戏为当前用户 draft，复制 v1 产物 (Batch A · R1)
 - MODIFIED: WS `phase_start` — 新增 `human_label`、`eta_seconds` (Batch A · R3)

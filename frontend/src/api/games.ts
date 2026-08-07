@@ -112,4 +112,25 @@ export const gamesApi = {
       body: { version, note },
     })
   },
+
+  /** B-A6：回滚 current_version 指针（不删文件） */
+  activateVersion(gameId: string, version: number, accessToken: string) {
+    return apiRequest<CreateGameResponse>(
+      `/games/${gameId}/versions/${version}/activate`,
+      {
+        method: 'POST',
+        token: accessToken,
+        body: {},
+      },
+    )
+  },
+
+  /** B-A5：从失败检查点重试 */
+  retryRun(runId: string, accessToken: string) {
+    return apiRequest<RunControlResponse>(`/runs/${runId}/retry`, {
+      method: 'POST',
+      token: accessToken,
+      body: {},
+    })
+  },
 }

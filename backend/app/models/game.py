@@ -29,3 +29,4 @@ class Game(Base, TimestampMixin):
     scheduled_publish_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    featured_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)

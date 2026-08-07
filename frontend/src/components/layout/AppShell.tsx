@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Gamepad2, Hammer, Languages, Palette, Settings, Shield } from 'lucide-react'
+import { Gamepad2, Hammer, Compass, Languages, Palette, Settings, Shield } from 'lucide-react'
 import { Role } from '@/api/enums'
 import { isTrialUser } from '@/lib/trial'
 import { useT } from '@/i18n/use-t'
@@ -11,6 +11,8 @@ import { ThemeBackground } from '@/components/theme/ThemeBackground'
 import { ThemePanelModal } from '@/components/theme/ThemePanelModal'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
+import { isOnboardingDone } from '@/lib/onboarding-storage'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -25,21 +27,31 @@ export function AppShell() {
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
   const user = useAuthStore((s) => s.user)
+  const token = useAuthStore((s) => s.access_token)
   const trial = isTrialUser(user)
   const [themeOpen, setThemeOpen] = useState(false)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+
+  useEffect(() => {
+    if (token && user && !trial && !isOnboardingDone()) {
+      setOnboardingOpen(true)
+    }
+  }, [token, user, trial])
 
   const navItems = [
     { to: '/games', icon: Gamepad2, label: t('games') },
     { to: '/forge', icon: Hammer, label: t('forge') },
+    { to: '/discover', icon: Compass, label: t('discover') },
     { to: '/settings', icon: Settings, label: t('settings') },
   ] as const
 
   return (
-    <div className="gf-workshop relative flex min-h-screen overflow-hidden">
+    <div className="gf-workshop relative">
       <ThemeBackground />
-      <aside className="gf-sidebar sticky top-0 z-40 flex h-screen w-[220px] shrink-0 flex-col border-r px-3 py-4 backdrop-blur-xl lg:w-[240px]">
+      <aside className="gf-sidebar flex flex-col border-r px-3 py-4 backdrop-blur-xl">
         <Link
-          to="/games"
+          to="/home"
+          title={t('backToHome')}
           className="gf-interactive flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]"
         >
           <span className="gf-logo-badge gf-interactive grid h-9 w-9 place-items-center rounded-xl text-sm font-black">
@@ -47,7 +59,7 @@ export function AppShell() {
           </span>
           <span>
             <span className="gf-page-body block text-sm font-semibold tracking-tight">GameForge</span>
-            <span className="gf-page-muted block text-[10px]">游戏工坊</span>
+            <span className="gf-page-muted block text-[10px]">{t('home')}</span>
           </span>
         </Link>
 
@@ -94,7 +106,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="relative z-[1] flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="gf-shell-main relative z-[1] flex flex-col">
         {trial ? (
           <div
             role="status"
@@ -107,7 +119,9 @@ export function AppShell() {
         <main
           className={cn(
             'gf-main-canvas relative min-h-0 flex-1',
-            isForge ? 'flex flex-col p-3 md:p-4' : 'mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8',
+            isForge
+              ? 'flex flex-col overflow-hidden p-3 md:p-4 lg:p-5'
+              : 'mx-auto w-full max-w-[1400px] overflow-y-auto px-4 py-6 md:px-8 md:py-8',
           )}
         >
           <Outlet />
@@ -115,6 +129,7 @@ export function AppShell() {
       </div>
 
       <ThemePanelModal open={themeOpen} onClose={() => setThemeOpen(false)} />
+      <OnboardingModal open={onboardingOpen} onClose={() => setOnboardingOpen(false)} />
     </div>
   )
 }

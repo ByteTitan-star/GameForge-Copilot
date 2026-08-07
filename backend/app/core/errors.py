@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     SANDBOX_FAILED = "SANDBOX_FAILED"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     EMAIL_TAKEN = "EMAIL_TAKEN"
+    HANDLE_TAKEN = "HANDLE_TAKEN"
 
 
 _CODE_STATUS = {
@@ -38,6 +39,7 @@ _CODE_STATUS = {
     ErrorCode.SANDBOX_FAILED: 500,
     ErrorCode.VALIDATION_ERROR: 400,
     ErrorCode.EMAIL_TAKEN: 409,
+    ErrorCode.HANDLE_TAKEN: 409,
 }
 CODE_TO_STATUS = {c.value: s for c, s in _CODE_STATUS.items()}
 

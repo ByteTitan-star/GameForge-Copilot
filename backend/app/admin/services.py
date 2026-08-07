@@ -281,3 +281,28 @@ async def patch_game_schedule(
     await db.commit()
     await db.refresh(game)
     return game
+
+
+async def patch_game_featured(
+    db: AsyncSession,
+    admin: User,
+    game_id: uuid.UUID,
+    featured_rank: int | None,
+) -> Game:
+    game = await db.get(Game, game_id)
+    if game is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在")
+    if game.status != GameStatus.PUBLISHED.value:
+        raise AppError(ErrorCode.INVALID_STATE, "仅已发布游戏可设为精选")
+    game.featured_rank = featured_rank
+    db.add(
+        AuditLog(
+            actor_id=admin.id,
+            action="feature_game",
+            target=str(game_id),
+            detail={"featured_rank": featured_rank},
+        )
+    )
+    await db.commit()
+    await db.refresh(game)
+    return game

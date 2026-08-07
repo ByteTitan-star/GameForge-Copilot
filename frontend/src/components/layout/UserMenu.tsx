@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronUp, LogOut, Settings, Shield, User } from 'lucide-react'
+import { ChevronUp, Home, LogOut, Settings, Shield, User } from 'lucide-react'
 import { Role } from '@/api/enums'
 import { cn } from '@/lib/cn'
 import { isTrialUser } from '@/lib/trial'
@@ -73,6 +73,15 @@ export function UserMenu() {
               邮箱 {user.email_verified ? '已验证' : '未验证'}
             </p>
           </div>
+          <Link
+            to="/home"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="gf-page-body flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm transition hover:bg-black/[0.03]"
+          >
+            <Home className="gf-page-muted h-4 w-4" />
+            {t('home')}
+          </Link>
           <Link
             to="/settings"
             role="menuitem"

@@ -1,12 +1,18 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, ChevronRight, LogOut, MessageSquareText, Bot, Gamepad2, ShieldCheck } from 'lucide-react'
+import { publicGamesApi } from '@/api/public-games'
+import { PublicGameCard } from '@/components/games/PublicGameCard'
+import { OfficialGameCards } from '@/components/onboarding/OfficialGameCards'
+import { FeaturedGamesStrip } from '@/components/discover/FeaturedGamesStrip'
 import { FadeIn } from '@/components/ui/fade-in'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/i18n/use-t'
 import { useLocaleStore } from '@/stores/locale-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { isTrialUser } from '@/lib/trial'
 import { cn } from '@/lib/cn'
 import heroArt from '@/assets/hero.png'
 
@@ -17,8 +23,14 @@ export function LandingPage() {
   const t = useT()
   const locale = useLocaleStore((s) => s.locale)
   const token = useAuthStore((s) => s.access_token)
+  const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const ctaTo = token ? '/forge' : '/register'
+
+  const publicQuery = useQuery({
+    queryKey: ['public-games', 'landing'],
+    queryFn: () => publicGamesApi.list(),
+  })
 
   const services = useMemo(
     () => [t('landingService1'), t('landingService2'), t('landingService3'), t('landingService4')],
@@ -35,14 +47,17 @@ export function LandingPage() {
     [locale],
   )
 
-  const cases = useMemo(
+  const staticCases = useMemo(
     () => [
-      { title: t('landingCase1Title'), tag: t('landingCase1Tag'), blurb: t('landingCase1Blurb') },
-      { title: t('landingCase2Title'), tag: t('landingCase2Tag'), blurb: t('landingCase2Blurb') },
-      { title: t('landingCase3Title'), tag: t('landingCase3Tag'), blurb: t('landingCase3Blurb') },
+      { title: t('landingCase1Title'), tag: t('landingCase1Tag'), blurb: t('landingCase1Blurb'), slug: null as string | null },
+      { title: t('landingCase2Title'), tag: t('landingCase2Tag'), blurb: t('landingCase2Blurb'), slug: null },
+      { title: t('landingCase3Title'), tag: t('landingCase3Tag'), blurb: t('landingCase3Blurb'), slug: null },
     ],
     [locale],
   )
+
+  const publishedCases = publicQuery.data?.slice(0, 3) ?? []
+  const useLiveCases = publishedCases.length > 0
 
   return (
     <div className="relative min-h-screen bg-[#0a0a0a] text-white">
@@ -69,8 +84,22 @@ export function LandingPage() {
               {t('brand')}
             </Link>
             <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              {token && user ? (
+                <span
+                  className="hidden max-w-[min(100%,220px)] truncate rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm sm:inline-block"
+                  title={user.email}
+                >
+                  {t('loggedInAs').replace('{email}', user.email)}
+                </span>
+              ) : null}
               {token ? (
                 <>
+                  <Link
+                    to="/discover"
+                    className="hidden cursor-pointer text-sm text-white/80 transition-colors hover:text-white sm:inline"
+                  >
+                    {t('discover')}
+                  </Link>
                   <Link
                     to="/games"
                     className="hidden cursor-pointer text-sm text-white/80 transition-colors hover:text-white sm:inline"
@@ -132,6 +161,12 @@ export function LandingPage() {
             </div>
           </header>
 
+          {token && user ? (
+            <p className="mt-3 truncate text-xs text-white/75 sm:hidden" title={user.email}>
+              {t('loggedInAs').replace('{email}', user.email)}
+            </p>
+          ) : null}
+
           <div className="flex flex-1 flex-col justify-between pt-24 sm:pt-28">
             <div className="flex flex-col justify-between gap-10 lg:flex-row lg:items-start">
               <div className="flex flex-col justify-between gap-8 sm:flex-row sm:flex-1">
@@ -181,6 +216,14 @@ export function LandingPage() {
                     <ChevronRight size={14} />
                   </MagneticButton>
                 </Link>
+                <Link to="/forge?template=snake">
+                  <Button
+                    variant="secondary"
+                    className="rounded-full px-6 py-3 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
+                  >
+                    {t('templateStart')}
+                  </Button>
+                </Link>
                 <a href="#cases">
                   <Button
                     variant="secondary"
@@ -191,6 +234,29 @@ export function LandingPage() {
                 </a>
               </FadeIn>
             </div>
+          </div>
+        </section>
+
+        <section
+          id="quick-start"
+          className="border-t border-white/15 bg-black/40 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12"
+        >
+          <div className="mx-auto max-w-6xl">
+            <FadeIn>
+              <OfficialGameCards
+                accessToken={token}
+                userEmailVerified={user?.email_verified}
+                trial={user ? isTrialUser(user) : false}
+              />
+            </FadeIn>
+          </div>
+        </section>
+
+        <section className="border-t border-white/15 bg-black/38 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12">
+          <div className="mx-auto max-w-6xl">
+            <FadeIn>
+              <FeaturedGamesStrip variant="dark" />
+            </FadeIn>
           </div>
         </section>
 
@@ -235,30 +301,36 @@ export function LandingPage() {
                     {t('casesTitle')}
                   </h2>
                 </div>
-                <Link to={ctaTo}>
+                <Link to={useLiveCases ? '/discover' : ctaTo}>
                   <MagneticButton className="!rounded-full !px-5 !py-2.5 text-xs sm:text-sm">
-                    {t('makeOneToo')}
+                    {useLiveCases ? t('discoverAll') : t('makeOneToo')}
                     <ArrowRight className="h-4 w-4" />
                   </MagneticButton>
                 </Link>
               </div>
             </FadeIn>
             <div className="mt-10 grid gap-4 md:grid-cols-3">
-              {cases.map((c, i) => (
-                <FadeIn key={c.title} delayMs={60 + i * 90}>
-                  <article className="flex h-full flex-col rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.16]">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{c.tag}</p>
-                    <h3 className="mt-3 text-xl font-medium">{c.title}</h3>
-                    <p className="mt-2 flex-1 text-sm leading-relaxed text-white/70">{c.blurb}</p>
-                    <Link
-                      to={token ? '/games' : '/register'}
-                      className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm text-white transition-all duration-200 hover:gap-2"
-                    >
-                      {t('trySimilar')} <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </article>
-                </FadeIn>
-              ))}
+              {useLiveCases
+                ? publishedCases.map((g, i) => (
+                    <FadeIn key={g.game_id} delayMs={60 + i * 90}>
+                      <PublicGameCard game={g} />
+                    </FadeIn>
+                  ))
+                : staticCases.map((c, i) => (
+                    <FadeIn key={c.title} delayMs={60 + i * 90}>
+                      <article className="flex h-full flex-col rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.16]">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{c.tag}</p>
+                        <h3 className="mt-3 text-xl font-medium">{c.title}</h3>
+                        <p className="mt-2 flex-1 text-sm leading-relaxed text-white/70">{c.blurb}</p>
+                        <Link
+                          to={token ? '/games' : '/register'}
+                          className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm text-white transition-all duration-200 hover:gap-2"
+                        >
+                          {t('trySimilar')} <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </article>
+                    </FadeIn>
+                  ))}
             </div>
           </div>
         </section>

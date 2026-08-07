@@ -30,6 +30,16 @@ class RunPhase(StrEnum):
     DONE = "done"
 
 
+class EntryPhase(StrEnum):
+    PLAN = "plan"
+    CODE = "code"
+
+
+class ReactionType(StrEnum):
+    LIKE = "like"
+    FAVORITE = "favorite"
+
+
 class PublishStatus(StrEnum):
     SUBMITTED = "submitted"
     REVIEWING = "reviewing"

@@ -56,6 +56,13 @@ export const adminApi = {
     })
   },
 
+  deleteUser(userId: string, accessToken: string) {
+    return apiRequest<void>(`/admin/users/${userId}`, {
+      method: 'DELETE',
+      token: accessToken,
+    })
+  },
+
   usage(accessToken: string) {
     return apiRequest<AdminUsage>('/admin/usage', { token: accessToken })
   },
@@ -83,6 +90,14 @@ export const adminApi = {
   listAuditLogs(accessToken: string, page = 1, size = 20) {
     return apiRequestList<AuditLogItem>(`/admin/audit-logs?page=${page}&size=${size}`, {
       token: accessToken,
+    })
+  },
+
+  setFeatured(gameId: string, featured: boolean, accessToken: string) {
+    return apiRequest<{ featured: boolean }>(`/admin/games/${gameId}/featured`, {
+      method: 'PATCH',
+      token: accessToken,
+      body: { featured },
     })
   },
 }

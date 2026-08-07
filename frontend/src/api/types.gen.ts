@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * Ready
-         * @description 就绪检查：DB + Redis 连通（docs/09 §运维）。
+         * @description 就绪检查：DB + Redis + RabbitMQ（memory 后端时 rabbitmq=true）。
          */
         get: operations["ready_ready_get"];
         put?: never;
@@ -112,6 +112,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Verification
+         * @description 重发 6 位邮箱验证码；防枚举恒返回 sent=true。
+         */
+        post: operations["resend_verification_api_v1_auth_resend_verification_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password/reset": {
         parameters: {
             query?: never;
@@ -183,6 +203,40 @@ export interface paths {
          * @description 登出：refresh 从 Redis 删除，access 自然过期。
          */
         post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oauth/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth Start */
+        get: operations["oauth_start_api_v1_auth_oauth__provider__start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oauth/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth Callback */
+        get: operations["oauth_callback_api_v1_auth_oauth__provider__callback_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -280,6 +334,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Public Games
+         * @description 公开已发布游戏发现页（无需登录，无 owner PII）。
+         */
+        get: operations["list_public_games_api_v1_games_public_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}": {
         parameters: {
             query?: never;
@@ -311,6 +385,23 @@ export interface paths {
         };
         /** List Versions */
         get: operations["list_versions_api_v1_games__game_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Templates */
+        get: operations["get_templates_api_v1_templates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -544,6 +635,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/usage/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Breakdown */
+        get: operations["usage_breakdown_api_v1_me_usage_breakdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Game Usage */
+        get: operations["game_usage_api_v1_games__game_id__usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Game Analytics */
+        get: operations["game_analytics_api_v1_games__game_id__analytics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/analytics/top": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Analytics Top */
+        get: operations["admin_analytics_top_api_v1_admin_analytics_top_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/notifications": {
         parameters: {
             query?: never;
@@ -605,7 +764,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete User */
+        delete: operations["delete_user_api_v1_admin_users__user_id__delete"];
         options?: never;
         head?: never;
         /** Patch User */
@@ -665,6 +825,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/games/{game_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Game Schedule */
+        patch: operations["patch_game_schedule_api_v1_admin_games__game_id__schedule_patch"];
         trace?: never;
     };
     "/play/{slug}": {
@@ -736,6 +913,13 @@ export interface components {
              */
             updated_at: string;
         };
+        /** AdminGameSchedulePatch */
+        AdminGameSchedulePatch: {
+            /** Scheduled Take Down At */
+            scheduled_take_down_at?: string | null;
+            /** Scheduled Publish At */
+            scheduled_publish_at?: string | null;
+        };
         /** AdminSettings */
         AdminSettings: {
             /** Default Daily Token Limit */
@@ -747,6 +931,11 @@ export interface components {
             default_monthly_token_limit: number;
             /** Default Rate Limit Per Min */
             default_rate_limit_per_min: number;
+            /**
+             * Admin Contact Email
+             * @default
+             */
+            admin_contact_email: string;
         };
         /** AdminUsageResp */
         AdminUsageResp: {
@@ -800,6 +989,10 @@ export interface components {
             /** Calls */
             calls: number;
         };
+        /** ApiResponse[AdminGameItem] */
+        ApiResponse_AdminGameItem_: {
+            data: components["schemas"]["AdminGameItem"];
+        };
         /** ApiResponse[AdminSettings] */
         ApiResponse_AdminSettings_: {
             data: components["schemas"]["AdminSettings"];
@@ -812,6 +1005,10 @@ export interface components {
         ApiResponse_AdminUserItem_: {
             data: components["schemas"]["AdminUserItem"];
         };
+        /** ApiResponse[GameAnalyticsResp] */
+        ApiResponse_GameAnalyticsResp_: {
+            data: components["schemas"]["GameAnalyticsResp"];
+        };
         /** ApiResponse[GameDeleteResp] */
         ApiResponse_GameDeleteResp_: {
             data: components["schemas"]["GameDeleteResp"];
@@ -823,6 +1020,10 @@ export interface components {
         /** ApiResponse[GameResp] */
         ApiResponse_GameResp_: {
             data: components["schemas"]["GameResp"];
+        };
+        /** ApiResponse[GameUsageResp] */
+        ApiResponse_GameUsageResp_: {
+            data: components["schemas"]["GameUsageResp"];
         };
         /** ApiResponse[Health] */
         ApiResponse_Health_: {
@@ -888,6 +1089,10 @@ export interface components {
         ApiResponse_RegisterResp_: {
             data: components["schemas"]["RegisterResp"];
         };
+        /** ApiResponse[ResendVerificationResp] */
+        ApiResponse_ResendVerificationResp_: {
+            data: components["schemas"]["ResendVerificationResp"];
+        };
         /** ApiResponse[RunControlResp] */
         ApiResponse_RunControlResp_: {
             data: components["schemas"]["RunControlResp"];
@@ -916,6 +1121,13 @@ export interface components {
         ApiResponse_VerifyEmailResp_: {
             data: components["schemas"]["VerifyEmailResp"];
         };
+        /** ApiResponse[dict] */
+        ApiResponse_dict_: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+        };
         /** ApiResponse[list[LLMConfigResp]] */
         ApiResponse_list_LLMConfigResp__: {
             /** Data */
@@ -936,10 +1148,22 @@ export interface components {
             /** Data */
             data: components["schemas"]["RunListItem"][];
         };
+        /** ApiResponse[list[TemplateItem]] */
+        ApiResponse_list_TemplateItem__: {
+            /** Data */
+            data: components["schemas"]["TemplateItem"][];
+        };
         /** ApiResponse[list[VersionItem]] */
         ApiResponse_list_VersionItem__: {
             /** Data */
             data: components["schemas"]["VersionItem"][];
+        };
+        /** ApiResponse[list[dict]] */
+        ApiResponse_list_dict__: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
         };
         /** ApiResponse[list[str]] */
         ApiResponse_list_str__: {
@@ -990,12 +1214,28 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /** GameAnalyticsResp */
+        GameAnalyticsResp: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Play Count */
+            play_count: number;
+            /** Pv 30D */
+            pv_30d: number;
+            /** Uv 30D */
+            uv_30d: number;
+        };
         /** GameCreate */
         GameCreate: {
             /** Title */
-            title: string;
+            title?: string | null;
             /** Requirement */
-            requirement: string;
+            requirement?: string | null;
+            /** Template Id */
+            template_id?: string | null;
         };
         /** GameDeleteResp */
         GameDeleteResp: {
@@ -1109,6 +1349,17 @@ export interface components {
          * @enum {string}
          */
         GameStatus: "draft" | "submitted" | "reviewing" | "published" | "rejected" | "taken_down";
+        /** GameUsageResp */
+        GameUsageResp: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            month: components["schemas"]["UsageBucket"];
+            /** Estimated Usd */
+            estimated_usd: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1332,6 +1583,28 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** PaginatedData[PublicGameItem] */
+        PaginatedData_PublicGameItem_: {
+            /** Data */
+            data: components["schemas"]["PublicGameItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
+        /** PaginatedData[UsageBreakdownItem] */
+        PaginatedData_UsageBreakdownItem_: {
+            /** Data */
+            data: components["schemas"]["UsageBreakdownItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /**
          * PasswordChangeReq
          * @description 登录态改密：校验旧密码后设新密码。
@@ -1369,6 +1642,8 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+            /** Email */
+            email: string;
             /**
              * Reset
              * @default true
@@ -1390,6 +1665,24 @@ export interface components {
              * @default true
              */
             sent: boolean;
+        };
+        /** PublicGameItem */
+        PublicGameItem: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Title */
+            title: string;
+            /** Slug */
+            slug: string;
+            /** Cover Url */
+            cover_url?: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Play Count */
+            play_count: number;
         };
         /** PublishApproveResp */
         PublishApproveResp: {
@@ -1482,6 +1775,8 @@ export interface components {
             db: boolean;
             /** Redis */
             redis: boolean;
+            /** Rabbitmq */
+            rabbitmq: boolean;
         };
         /** RefreshReq */
         RefreshReq: {
@@ -1512,6 +1807,22 @@ export interface components {
              * @default false
              */
             email_verified: boolean;
+        };
+        /** ResendVerificationReq */
+        ResendVerificationReq: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /** ResendVerificationResp */
+        ResendVerificationResp: {
+            /**
+             * Sent
+             * @default true
+             */
+            sent: boolean;
         };
         /**
          * Role
@@ -1619,6 +1930,19 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** TemplateItem */
+        TemplateItem: {
+            /** Template Id */
+            template_id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Requirement Seed */
+            requirement_seed: string;
+            /** Tags */
+            tags: string[];
+        };
         /** TokenResp */
         TokenResp: {
             /** Access Token */
@@ -1627,6 +1951,24 @@ export interface components {
             refresh_token: string;
             /** Expires In */
             expires_in: number;
+        };
+        /** UsageBreakdownItem */
+        UsageBreakdownItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Calls */
+            calls: number;
+            /** Estimated Usd */
+            estimated_usd: number;
         };
         /** UsageBucket */
         UsageBucket: {
@@ -1672,8 +2014,13 @@ export interface components {
         };
         /** VerifyEmailReq */
         VerifyEmailReq: {
-            /** Token */
-            token: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Code */
+            code: string;
         };
         /** VerifyEmailResp */
         VerifyEmailResp: {
@@ -1935,6 +2282,48 @@ export interface operations {
             };
         };
     };
+    resend_verification_api_v1_auth_resend_verification_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendVerificationReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ResendVerificationResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     password_reset_api_v1_auth_password_reset_post: {
         parameters: {
             query?: never;
@@ -2080,6 +2469,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_start_api_v1_auth_oauth__provider__start_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_dict_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_v1_auth_oauth__provider__callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_LoginResp_"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2393,6 +2847,39 @@ export interface operations {
             };
         };
     };
+    list_public_games_api_v1_games_public_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                sort?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedData_PublicGameItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_game_api_v1_games__game_id__get: {
         parameters: {
             query?: never;
@@ -2571,6 +3058,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_templates_api_v1_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_TemplateItem__"];
                 };
             };
         };
@@ -3224,6 +3731,141 @@ export interface operations {
             };
         };
     };
+    usage_breakdown_api_v1_me_usage_breakdown_get: {
+        parameters: {
+            query?: {
+                scope?: string;
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedData_UsageBreakdownItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    game_usage_api_v1_games__game_id__usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameUsageResp_"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    game_analytics_api_v1_games__game_id__analytics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameAnalyticsResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_analytics_top_api_v1_admin_analytics_top_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_dict__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_notifications_api_v1_me_notifications_get: {
         parameters: {
             query?: {
@@ -3314,6 +3956,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedData_AdminUserItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_api_v1_admin_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 用户不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3476,6 +4156,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedData_AdminGameItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_game_schedule_api_v1_admin_games__game_id__schedule_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGameSchedulePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AdminGameItem_"];
+                };
+            };
+            /** @description 用户不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8" /><title>Clicker Template Ref</title></head>
+<body>
+  <button id="click">点击得分</button>
+  <p>分数: <span id="score">0</span></p>
+  <script>
+    document.getElementById('click').onclick = function () {
+      document.getElementById('score').textContent = '1';
+    };
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.email_verification import EmailVerification
 from app.models.game import Game
+from app.models.game_reaction import GameReaction
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
 from app.models.llm_config import UserLLMConfig
@@ -19,6 +20,7 @@ __all__ = [
     "User",
     "UserLLMConfig",
     "Game",
+    "GameReaction",
     "GameVersion",
     "GenerationRun",
     "PublishRequest",

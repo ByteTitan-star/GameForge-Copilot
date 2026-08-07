@@ -11,6 +11,7 @@ from typing import Any, Literal, TypedDict
 
 import redis.asyncio as redis
 from langgraph.graph import END, START, StateGraph
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -52,6 +53,8 @@ QA_PROMPT = (
 class ForgeState(TypedDict, total=False):
     run_id: str
     resume: bool
+    entry_phase: str
+    entry_requirement: str | None
     decision: str | None
     modify_text: str | None
     design_doc: dict[str, Any] | str
@@ -160,6 +163,8 @@ async def _check_ctrl(
 def _build_graph(ctx: _Ctx) -> Any:
     async def route_start(state: ForgeState) -> Literal["plan", "art", "code"]:
         if not state.get("resume"):
+            if state.get("entry_phase") == "code":
+                return "code"
             return "plan"
         # sandbox/qa HITL 续跑直接进 code
         st = await ckpt.load_state(ctx.r, ctx.run.id) or {}
@@ -246,6 +251,9 @@ def _build_graph(ctx: _Ctx) -> Any:
                 state.get("design_doc") or {}, ctx.game.title
             )
             design_text = design_doc_to_text(design_doc)
+            entry_req = state.get("entry_requirement")
+            if entry_req:
+                design_text = f"{design_text}\n\n用户修改意见：{entry_req}"
             assets_block = ""
             artifacts = state.get("artifacts") or []
             if artifacts:
@@ -521,11 +529,23 @@ async def _run_body(
     modify_text: str | None,
 ) -> None:
     design_doc: dict[str, Any] | str = ""
+    entry_phase = getattr(run, "entry_phase", "plan") or "plan"
+    entry_requirement: str | None = None
     if resume:
         st = await ckpt.load_state(r, run_id) or {}
         design_doc = st.get("design_doc") or run.requirement
         run.status = RunStatus.RUNNING.value
         await s.commit()
+    elif entry_phase == "code" and game.current_version > 0:
+        gv = await s.scalar(
+            select(GameVersion).where(
+                GameVersion.game_id == game.id,
+                GameVersion.version == game.current_version,
+            )
+        )
+        if gv and gv.design_doc:
+            design_doc = gv.design_doc
+        entry_requirement = run.requirement
 
     forge_ctx = _Ctx(s, r, run, game)
     graph = _build_graph(forge_ctx)
@@ -535,5 +555,7 @@ async def _run_body(
         "decision": decision,
         "modify_text": modify_text,
         "design_doc": design_doc,
+        "entry_phase": entry_phase,
+        "entry_requirement": entry_requirement,
     }
     await graph.ainvoke(initial)

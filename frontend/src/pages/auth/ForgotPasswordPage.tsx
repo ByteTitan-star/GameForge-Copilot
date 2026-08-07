@@ -1,19 +1,22 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
+import { useAuthStore } from '@/stores/auth-store'
+
+type Step = 'request' | 'sent' | 'confirm' | 'done'
 
 export function ForgotPasswordPage() {
   const t = useT()
+  const navigate = useNavigate()
+  const setSession = useAuthStore((s) => s.setSession)
   const [params] = useSearchParams()
   const tokenFromLink = params.get('token') ?? ''
-  const [step, setStep] = useState<'request' | 'confirm' | 'done'>(
-    tokenFromLink ? 'confirm' : 'request',
-  )
+  const [step, setStep] = useState<Step>(tokenFromLink ? 'confirm' : 'request')
   const [email, setEmail] = useState('')
   const [token, setToken] = useState(tokenFromLink)
   const [password, setPassword] = useState('')
@@ -26,7 +29,7 @@ export function ForgotPasswordPage() {
     setLoading(true)
     try {
       await authApi.requestPasswordReset(email.trim())
-      setStep('confirm')
+      setStep('sent')
     } catch (err) {
       setError(formatApiError(err, '请求失败'))
     } finally {
@@ -39,7 +42,18 @@ export function ForgotPasswordPage() {
     setError('')
     setLoading(true)
     try {
-      await authApi.confirmPasswordReset(token.trim(), password)
+      const result = await authApi.confirmPasswordReset(token.trim(), password)
+      const loginEmail = result.email || email.trim()
+      if (loginEmail) {
+        const session = await authApi.login(loginEmail, password)
+        setSession({
+          user: session.user,
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        })
+        navigate('/games', { replace: true, state: { passwordReset: true } })
+        return
+      }
       setStep('done')
     } catch (err) {
       setError(formatApiError(err, '重置失败'))
@@ -52,10 +66,28 @@ export function ForgotPasswordPage() {
     <AuthShell title={t('forgotTitle')} subtitle={t('forgotHint')}>
       {step === 'done' ? (
         <div className="space-y-4 text-sm text-white/80">
-          <p role="status">密码已重置，请登录。</p>
+          <p role="status">{t('resetDoneManualLogin')}</p>
           <Link to="/login" className="inline-block text-white underline-offset-2 hover:underline">
             {t('login')}
           </Link>
+        </div>
+      ) : null}
+
+      {step === 'sent' ? (
+        <div className="space-y-4 text-sm text-white/80">
+          <p role="status">{t('resetEmailSent')}</p>
+          <button
+            type="button"
+            className="cursor-pointer text-xs text-white/65 underline-offset-2 hover:underline"
+            onClick={() => setStep('confirm')}
+          >
+            {t('resetEnterToken')}
+          </button>
+          <p className="text-center text-xs text-white/65">
+            <Link to="/login" className="underline-offset-2 hover:underline">
+              {t('login')}
+            </Link>
+          </p>
         </div>
       ) : null}
 
@@ -87,24 +119,30 @@ export function ForgotPasswordPage() {
 
       {step === 'confirm' ? (
         <form className="space-y-4" onSubmit={onConfirm}>
-          <p className="text-xs text-white/55">
-            已配置 SMTP 会收到邮件；否则在 Worker 终端查看 `[dev-email]` 重置令牌。
-          </p>
-          <Input
-            name="token"
-            label="重置令牌"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            required
-          />
+          {tokenFromLink ? (
+            <p className="text-xs text-white/55">{t('resetLinkReady')}</p>
+          ) : (
+            <p className="text-xs text-white/55">{t('resetTokenHint')}</p>
+          )}
+          {!tokenFromLink ? (
+            <Input
+              name="token"
+              label={t('resetToken')}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              required
+            />
+          ) : null}
           <Input
             name="password"
-            label="新密码"
+            label={t('newPassword')}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            autoComplete="new-password"
+            autoFocus={Boolean(tokenFromLink)}
           />
           {error ? (
             <p role="alert" className="text-sm text-red-300">
@@ -112,7 +150,7 @@ export function ForgotPasswordPage() {
             </p>
           ) : null}
           <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
-            确认重置
+            {loading ? t('loading') : t('resetConfirm')}
           </MagneticButton>
         </form>
       ) : null}

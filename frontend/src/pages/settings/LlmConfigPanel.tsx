@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Star, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { LLMProvider } from '@/api/enums'
 import { formatApiError } from '@/api/error-message'
 import { meApi } from '@/api/me'
@@ -15,6 +15,25 @@ const providers = [
   { id: LLMProvider.openai_compat, label: 'OpenAI Compatible' },
 ] as const
 
+const defaultModels: Record<LLMProvider, string> = {
+  [LLMProvider.anthropic]: 'claude-sonnet-4-20250514',
+  [LLMProvider.openai]: 'gpt-4o',
+  [LLMProvider.openai_compat]: '',
+}
+
+const defaultBaseUrls: Record<LLMProvider, string> = {
+  [LLMProvider.anthropic]: 'https://api.anthropic.com/v1',
+  [LLMProvider.openai]: 'https://api.openai.com/v1',
+  [LLMProvider.openai_compat]: '',
+}
+
+function normalizeBaseUrl(provider: LLMProvider, value: string): string | null {
+  const trimmed = value.trim()
+  if (trimmed) return trimmed
+  if (provider === LLMProvider.openai_compat) return null
+  return null
+}
+
 export function LlmConfigPanel() {
   const t = useT()
   const token = useAuthStore((s) => s.access_token)
@@ -22,9 +41,9 @@ export function LlmConfigPanel() {
   const trial = isTrialUser(user)
   const qc = useQueryClient()
   const [provider, setProvider] = useState<LLMProvider>(LLMProvider.anthropic)
-  const [model, setModel] = useState('claude-sonnet-4-20250514')
+  const [model, setModel] = useState(defaultModels[LLMProvider.anthropic])
   const [apikey, setApikey] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
+  const [baseUrl, setBaseUrl] = useState(defaultBaseUrls[LLMProvider.anthropic])
   const [isDefault, setIsDefault] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -35,36 +54,38 @@ export function LlmConfigPanel() {
   })
 
   const models = useQuery({
-    queryKey: ['llm-models', provider],
+    queryKey: ['llm-models', provider, baseUrl],
     enabled: Boolean(token),
     queryFn: () => meApi.listModels(token!, provider),
   })
 
-  useEffect(() => {
-    const opts = models.data
-    if (!opts?.length) return
-    if (!opts.includes(model)) setModel(opts[0])
-  }, [models.data, model])
+  const draftBody = () => ({
+    provider,
+    model: model.trim(),
+    apikey,
+    base_url: normalizeBaseUrl(provider, baseUrl),
+  })
+
+  const formInvalid =
+    trial ||
+    !apikey.trim() ||
+    !model.trim() ||
+    (provider === LLMProvider.openai_compat && !baseUrl.trim())
 
   const createMu = useMutation({
-    mutationFn: () =>
-      meApi.createLlmConfig(
-        {
-          provider,
-          model,
-          apikey,
-          base_url: provider === LLMProvider.openai_compat ? baseUrl.trim() || null : null,
-          is_default: isDefault,
-        },
-        token!,
-      ),
+    mutationFn: () => meApi.createLlmConfig({ ...draftBody(), is_default: isDefault }, token!),
     onSuccess: () => {
       setApikey('')
-      setBaseUrl('')
       setMsg(t('llmSavedOk'))
       void qc.invalidateQueries({ queryKey: ['llm-configs'] })
     },
     onError: (e) => setMsg(formatApiError(e, t('llmSaveFailed'))),
+  })
+
+  const dryTestMu = useMutation({
+    mutationFn: () => meApi.testLlmConfigDraft(draftBody(), token!),
+    onSuccess: (r) => setMsg(r.tested_ok ? t('llmTestOk') : r.error ?? t('llmTestFail')),
+    onError: (e) => setMsg(formatApiError(e, t('llmTestFailed'))),
   })
 
   const testMu = useMutation({
@@ -87,6 +108,12 @@ export function LlmConfigPanel() {
     onError: (e) => setMsg(formatApiError(e, t('llmDeleteFailed'))),
   })
 
+  const onProviderChange = (next: LLMProvider) => {
+    setProvider(next)
+    setModel(defaultModels[next])
+    setBaseUrl(defaultBaseUrls[next])
+  }
+
   return (
     <section className="gf-glass space-y-4 rounded-2xl p-5">
       <div>
@@ -107,7 +134,7 @@ export function LlmConfigPanel() {
           <span className="font-mono text-[10px] gf-page-muted uppercase">Provider</span>
           <select
             value={provider}
-            onChange={(e) => setProvider(e.target.value as LLMProvider)}
+            onChange={(e) => onProviderChange(e.target.value as LLMProvider)}
             disabled={trial}
             className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           >
@@ -125,6 +152,7 @@ export function LlmConfigPanel() {
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={trial}
+            placeholder={t('llmModelPlaceholder')}
             className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           />
           <datalist id="llm-model-options">
@@ -147,19 +175,21 @@ export function LlmConfigPanel() {
             className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           />
         </label>
-        {provider === LLMProvider.openai_compat ? (
-          <label className="space-y-1.5 text-sm md:col-span-2">
-            <span className="font-mono text-[10px] gf-page-muted uppercase">Base URL</span>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.example.com/v1"
-              className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
-              required
-              disabled={trial}
-            />
-          </label>
-        ) : null}
+        <label className="space-y-1.5 text-sm md:col-span-2">
+          <span className="font-mono text-[10px] gf-page-muted uppercase">Base URL</span>
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder={
+              provider === LLMProvider.openai_compat
+                ? 'https://api.example.com/v1'
+                : t('llmBaseUrlOptional')
+            }
+            required={provider === LLMProvider.openai_compat}
+            disabled={trial}
+            className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
+          />
+        </label>
       </div>
 
       <label className="flex items-center gap-2 text-sm gf-page-muted">
@@ -172,19 +202,25 @@ export function LlmConfigPanel() {
         {t('llmSetDefault')}
       </label>
 
-      <Button
-        className="!rounded-lg !bg-teal-400 !text-black hover:!bg-teal-300"
-        disabled={
-          trial ||
-          !apikey ||
-          createMu.isPending ||
-          (provider === LLMProvider.openai_compat && !baseUrl.trim())
-        }
-        onClick={() => createMu.mutate()}
-      >
-        {createMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        {t('llmSaveAndTest')}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="ghost"
+          className="!rounded-lg gf-page-muted"
+          disabled={formInvalid || dryTestMu.isPending}
+          onClick={() => dryTestMu.mutate()}
+        >
+          {dryTestMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {t('llmTestOnly')}
+        </Button>
+        <Button
+          className="!rounded-lg !bg-teal-400 !text-black hover:!bg-teal-300"
+          disabled={formInvalid || createMu.isPending}
+          onClick={() => createMu.mutate()}
+        >
+          {createMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {t('llmSaveAndTest')}
+        </Button>
+      </div>
 
       <ul className="space-y-2">
         {(list.data ?? []).map((c) => (
@@ -208,7 +244,7 @@ export function LlmConfigPanel() {
               <Button
                 variant="ghost"
                 className="!rounded-lg !px-2 !py-1.5 text-xs gf-page-muted"
-                disabled={trial}
+                disabled={trial || testMu.isPending}
                 onClick={() => testMu.mutate(c.config_id)}
               >
                 {t('llmTest')}

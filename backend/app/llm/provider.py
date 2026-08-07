@@ -15,6 +15,12 @@ _DEFAULT_API_BASE = {
     LLMProvider.OPENAI: "https://api.openai.com/v1",
 }
 
+# 官方 API 域名；自定义 base_url 走 OpenAI 兼容协议（多数内网代理只支持 /chat/completions）。
+_OFFICIAL_API_HOSTS: dict[LLMProvider, frozenset[str]] = {
+    LLMProvider.ANTHROPIC: frozenset({"api.anthropic.com"}),
+    LLMProvider.OPENAI: frozenset({"api.openai.com"}),
+}
+
 # 拉取失败时的回退白名单（docs/05 §模型列表来源）
 _MODEL_WHITELIST: dict[LLMProvider, list[str]] = {
     LLMProvider.ANTHROPIC: ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5"],
@@ -29,10 +35,57 @@ class Usage:
     output_tokens: int = 0
 
 
-def _auth_headers(provider: LLMProvider, apikey: str) -> dict[str, str]:
-    if provider == LLMProvider.ANTHROPIC:
+def _host_from_base_url(base_url: str | None) -> str | None:
+    if not base_url:
+        return None
+    from urllib.parse import urlparse
+
+    return (urlparse(base_url).hostname or "").lower() or None
+
+
+def _is_official_base(provider: LLMProvider, base_url: str | None) -> bool:
+    if not base_url:
+        return True
+    host = _host_from_base_url(base_url)
+    if not host:
+        return False
+    return host in _OFFICIAL_API_HOSTS.get(provider, frozenset())
+
+
+def _uses_anthropic_native_api(provider: LLMProvider, base_url: str | None) -> bool:
+    """Anthropic /messages 仅用于官方域名；自定义代理一律 OpenAI 兼容。"""
+    if provider != LLMProvider.ANTHROPIC:
+        return False
+    return _is_official_base(provider, base_url)
+
+
+def _auth_headers(provider: LLMProvider, apikey: str, base_url: str | None = None) -> dict[str, str]:
+    if _uses_anthropic_native_api(provider, base_url):
         return {"x-api-key": apikey, "anthropic-version": "2023-06-01"}
     return {"Authorization": f"Bearer {apikey}"}
+
+
+_STRIP_BASE_SUFFIXES = ("/chat/completions", "/messages", "/models")
+
+
+def _normalize_base_url(base_url: str) -> str:
+    """去掉用户误填的 endpoint 后缀，避免拼出双重路径导致 404。"""
+    base = base_url.strip().rstrip("/")
+    for suffix in _STRIP_BASE_SUFFIXES:
+        if base.endswith(suffix):
+            base = base[: -len(suffix)].rstrip("/")
+    return base
+
+
+def _ensure_api_version_path(base: str, provider: LLMProvider) -> str:
+    """域名根路径无 /v1 时补上（OpenAI 系常见约定）。"""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base)
+    path = (parsed.path or "").strip("/")
+    if path:
+        return base
+    return f"{base}/v1"
 
 
 def _api_base(provider: LLMProvider, base_url: str | None) -> str:
@@ -40,15 +93,17 @@ def _api_base(provider: LLMProvider, base_url: str | None) -> str:
     if provider == LLMProvider.OPENAI_COMPAT:
         if not base_url:
             raise ValueError("openai_compat 需配置 base_url")
-        return base_url.rstrip("/")
+        base = _ensure_api_version_path(_normalize_base_url(base_url), provider)
+        return base
     if base_url:
-        return base_url.rstrip("/")
+        base = _ensure_api_version_path(_normalize_base_url(base_url), provider)
+        return base
     return _DEFAULT_API_BASE[provider]
 
 
 def _messages_url(provider: LLMProvider, base_url: str | None) -> str:
     base = _api_base(provider, base_url)
-    if provider == LLMProvider.ANTHROPIC:
+    if _uses_anthropic_native_api(provider, base_url):
         return f"{base}/messages"
     return f"{base}/chat/completions"
 
@@ -96,7 +151,7 @@ async def list_models(
         if provider == LLMProvider.OPENAI_COMPAT and not base_url:
             return list(_MODEL_WHITELIST[provider])
         url = _models_list_url(provider, base_url)
-        headers = _auth_headers(provider, apikey)
+        headers = _auth_headers(provider, apikey, base_url)
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         if resp.status_code == 200:
@@ -123,9 +178,9 @@ async def complete(
     max_tokens: int = 4096,
 ) -> tuple[str, Usage]:
     """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
-    headers = {**_auth_headers(provider, apikey), "content-type": "application/json"}
+    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
     url = _messages_url(provider, base_url)
-    if provider == LLMProvider.ANTHROPIC:
+    if _uses_anthropic_native_api(provider, base_url):
         body = {
             "model": model,
             "max_tokens": max_tokens,
@@ -144,9 +199,16 @@ async def complete(
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, headers=headers, json=body)
     if resp.status_code != 200:
-        raise RuntimeError(f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:200]}")
+        hint = ""
+        if resp.status_code == 404:
+            hint = (
+                f"；请求 URL: {url}。"
+                "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
+                "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
+            )
+        raise RuntimeError(f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:200]}{hint}")
     data = resp.json()
-    if provider == LLMProvider.ANTHROPIC:
+    if _uses_anthropic_native_api(provider, base_url):
         content = "".join(b.get("text", "") for b in data.get("content", []))
         usage = Usage(
             input_tokens=data.get("usage", {}).get("input_tokens", 0),

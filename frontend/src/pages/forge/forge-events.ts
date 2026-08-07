@@ -4,6 +4,14 @@ import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { ChatMsg } from '@/components/forge/ChatPanel'
 import type { MessageKey } from '@/i18n/messages'
 import { resolveHostingUrl } from '@/lib/hosting'
+import { parseDesignDoc, isFailureHitlNode } from '@/lib/hitl-design-doc'
+
+import type { StagePipelineState } from '@/lib/stage-pipeline-state'
+import {
+  applyPhaseStart,
+  markAllDone,
+  markStageFailed,
+} from '@/lib/stage-pipeline-state'
 
 export type ForgeEventHandlers = {
   setPhase: (p: RunPhase | 'idle' | 'paused') => void
@@ -14,7 +22,11 @@ export type ForgeEventHandlers = {
   setSideTab: (t: 'log' | 'play') => void
   appendMessages: (msgs: ChatMsg[]) => void
   setQuotaHint?: (text: string | null) => void
+  setCurrentModel?: (model: string | null) => void
+  setRunError?: (runId: string, message: string) => void
+  setStagePipeline?: (updater: (prev: StagePipelineState) => StagePipelineState) => void
   gameId: string | undefined
+  runId?: string | null
   t: (key: MessageKey) => string
 }
 
@@ -44,15 +56,22 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     [RunPhase.done]: h.t('phaseDone'),
   }
   switch (ev.type) {
-    case WSEventType.phase_start:
-      h.setPhase(p.phase as RunPhase)
+    case WSEventType.phase_start: {
+      const phase = p.phase as RunPhase
+      h.setPhase(phase)
+      const humanLabel = typeof p.human_label === 'string' ? p.human_label : undefined
+      const etaSeconds = typeof p.eta_seconds === 'number' ? p.eta_seconds : undefined
+      h.setStagePipeline?.((prev) => applyPhaseStart(prev, phase, humanLabel, etaSeconds))
       h.pushItem({
-        label: `${h.t('phaseStarted')} · ${phaseLabel[p.phase as RunPhase] ?? String(p.phase)}`,
+        label: humanLabel ?? `${h.t('phaseStarted')} · ${phaseLabel[phase] ?? String(phase)}`,
+        detail: etaSeconds ? `~${Math.round(etaSeconds / 60)}min` : undefined,
         tone: 'info',
         at: ev.ts,
       })
       return
+    }
     case WSEventType.llm_call:
+      h.setCurrentModel?.(String(p.model ?? ''))
       h.pushItem({
         label: h.t('modelCall'),
         detail: `${String(p.model)} · ${String(p.input_tokens)}→${String(p.output_tokens)}`,
@@ -73,9 +92,14 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       h.setHitl(payload)
       h.setPhase('paused')
       h.setBusy(false)
+      if (isFailureHitlNode(payload.node)) {
+        const failPhase = payload.node === 'qa_failed' ? RunPhase.qa : RunPhase.code
+        h.setStagePipeline?.((prev) => markStageFailed(prev, failPhase))
+      }
+      const doc = parseDesignDoc(payload.design_doc)
       h.pushItem({
         label: h.t('humanReviewWaiting'),
-        detail: payload.design_doc.title,
+        detail: doc.title || payload.node,
         tone: 'warn',
         at: ev.ts,
       })
@@ -83,7 +107,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         {
           id: mid('m'),
           role: 'assistant',
-          content: `${h.t('confirmDesign')}：${payload.design_doc.title}。${h.t('continueAfterApproval')}。`,
+          content: `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
         },
       ])
       return
@@ -99,6 +123,9 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       return
     }
     case WSEventType.qa_report:
+      if (!p.passed) {
+        h.setStagePipeline?.((prev) => markStageFailed(prev, RunPhase.qa))
+      }
       h.pushItem({
         label: p.passed ? h.t('qaPassed') : h.t('qaFailed'),
         detail: Array.isArray(p.issues) ? (p.issues as string[]).join(' · ') : String(p.log_excerpt ?? ''),
@@ -127,6 +154,8 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     case WSEventType.error:
       h.setBusy(false)
       h.setPhase('idle')
+      if (h.runId) h.setRunError?.(h.runId, String(p.message))
+      h.setStagePipeline?.((prev) => markStageFailed(prev, RunPhase.code))
       h.pushItem({
         label: `${h.t('generationError')} · ${String(p.code)}`,
         detail: String(p.message),
@@ -143,6 +172,7 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
   h.setPhase(RunPhase.done)
   h.setBusy(false)
+  h.setStagePipeline?.((prev) => markAllDone(prev))
   h.setSideTab('play')
   const ver = Number(p.version ?? 1)
   const gid = String(p.game_id ?? h.gameId ?? '')

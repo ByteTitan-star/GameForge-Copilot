@@ -1,10 +1,9 @@
 import { Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 
-/** 裸域名 `/` 不直接展示页面：已登录进工作台，未登录进营销首页 `/home` */
+/** 裸路径 `/` 统一进入营销首页；已登录用户可在 /home 再进入各工作台页面 */
 export function RootRedirect() {
   const hydrated = useAuthStore((s) => s.hydrated)
-  const token = useAuthStore((s) => s.access_token)
 
   if (!hydrated) {
     return (
@@ -14,5 +13,5 @@ export function RootRedirect() {
     )
   }
 
-  return <Navigate to={token ? '/games' : '/home'} replace />
+  return <Navigate to="/home" replace />
 }

@@ -75,4 +75,12 @@ export const authApi = {
       token: accessToken,
     })
   },
+
+  /** OAuth 一键登录（B7）；未就绪时由 VITE_OAUTH_ENABLED 隐藏入口 */
+  oauthStart(provider: 'github' | 'google') {
+    return apiRequest<{ redirect_url: string }>(`/auth/oauth/${provider}/start`, {
+      method: 'POST',
+      body: {},
+    })
+  },
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, Loader2, Pencil, Sparkles, Trash2, Upload } from 'lucide-react'
+import { ArrowUpRight, History, Loader2, Pencil, Sparkles, Trash2, Upload } from 'lucide-react'
 import { GameStatus } from '@/api/enums'
 import type { GameSummary } from '@/api/types'
 import type { MessageKey } from '@/i18n/messages'
@@ -39,6 +39,7 @@ export type GameCardProps = {
   onPublish: (g: GameSummary, note: string) => Promise<void>
   onRequestDelete: (g: GameSummary) => void
   onRename?: (g: GameSummary, title: string) => Promise<void>
+  onOpenDetail?: (g: GameSummary) => void
 }
 
 export function GameCard({
@@ -47,6 +48,7 @@ export function GameCard({
   onPublish,
   onRequestDelete,
   onRename,
+  onOpenDetail,
 }: GameCardProps) {
   const t = useT()
   const locale = useLocaleStore((s) => s.locale)
@@ -163,6 +165,16 @@ export function GameCard({
         </p>
 
         <div className="flex flex-wrap gap-1.5">
+          {onOpenDetail && g.current_version > 0 ? (
+            <button
+              type="button"
+              onClick={() => onOpenDetail(g)}
+              className="gf-chip gf-interactive inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition hover:bg-black/[0.03]"
+            >
+              <History className="h-3.5 w-3.5" />
+              {t('gameViewDetail')}
+            </button>
+          ) : null}
           <Link
             to={`/forge/${g.game_id}`}
             className="gf-chip gf-interactive rounded-lg px-2.5 py-1.5 text-xs transition hover:bg-black/[0.03]"

@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
@@ -12,14 +12,29 @@ export function VerifyEmailPage() {
   const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
-  const emailFromState = (location.state as { email?: string } | null)?.email ?? ''
+  const [params] = useSearchParams()
+  const user = useAuthStore((s) => s.user)
+  const token = useAuthStore((s) => s.access_token)
   const patchUser = useAuthStore((s) => s.patchUser)
-  const [email, setEmail] = useState(emailFromState)
+  const emailFromQuery = params.get('email') ?? ''
+  const emailFromState = (location.state as { email?: string } | null)?.email ?? ''
+  const initialEmail = emailFromState || emailFromQuery || user?.email || ''
+  const [email, setEmail] = useState(initialEmail)
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
+
+  useEffect(() => {
+    if (token && user?.email_verified) {
+      navigate('/games', { replace: true })
+    }
+  }, [token, user?.email_verified, navigate])
+
+  useEffect(() => {
+    if (initialEmail && !email) setEmail(initialEmail)
+  }, [initialEmail, email])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -28,8 +43,18 @@ export function VerifyEmailPage() {
     setLoading(true)
     try {
       await authApi.verifyEmail(email.trim(), code.trim())
-      patchUser({ email_verified: true })
-      navigate('/settings', { replace: true, state: { justVerified: true } })
+      if (token) {
+        patchUser({ email_verified: true })
+        navigate('/settings', {
+          replace: true,
+          state: { justVerified: true, tab: 'llm' as const },
+        })
+      } else {
+        navigate('/login', {
+          replace: true,
+          state: { email: email.trim(), verified: true },
+        })
+      }
     } catch (err) {
       setError(formatApiError(err, t('verifyFailed')))
     } finally {
@@ -59,8 +84,8 @@ export function VerifyEmailPage() {
     <AuthShell
       title={t('verifyTitle')}
       subtitle={
-        emailFromState
-          ? t('verifySentTo').replace('{email}', emailFromState)
+        initialEmail
+          ? t('verifySentTo').replace('{email}', initialEmail)
           : t('verifyCodeHint')
       }
     >
@@ -73,6 +98,7 @@ export function VerifyEmailPage() {
           onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
+          readOnly={Boolean(token && user?.email)}
         />
         <Input
           name="code"
@@ -84,6 +110,7 @@ export function VerifyEmailPage() {
           maxLength={6}
           placeholder="123456"
           required
+          autoFocus
         />
         {error ? (
           <p role="alert" className="text-sm text-red-300">
@@ -96,7 +123,7 @@ export function VerifyEmailPage() {
           </p>
         ) : null}
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading || code.length !== 6}>
-          {loading ? '…' : t('verifySubmit')}
+          {loading ? t('loading') : t('verifySubmit')}
         </MagneticButton>
         <button
           type="button"
@@ -106,11 +133,19 @@ export function VerifyEmailPage() {
         >
           {resending ? t('loading') : t('verifyResend')}
         </button>
-        <p className="text-center text-xs text-white/65">
-          <Link to="/login" className="underline-offset-2 hover:underline">
-            {t('login')}
-          </Link>
-        </p>
+        {token ? (
+          <p className="text-center text-xs text-white/65">
+            <Link to="/games" className="underline-offset-2 hover:underline">
+              {t('skipToGames')}
+            </Link>
+          </p>
+        ) : (
+          <p className="text-center text-xs text-white/65">
+            <Link to="/login" className="underline-offset-2 hover:underline">
+              {t('login')}
+            </Link>
+          </p>
+        )}
       </form>
     </AuthShell>
   )

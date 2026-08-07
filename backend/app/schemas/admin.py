@@ -39,6 +39,10 @@ class AuditLogItem(BaseModel):
     created_at: datetime
 
 
+class AdminGameFeaturedPatch(BaseModel):
+    featured_rank: int | None = None
+
+
 class AdminGameSchedulePatch(BaseModel):
     scheduled_take_down_at: datetime | None = None
     scheduled_publish_at: datetime | None = None

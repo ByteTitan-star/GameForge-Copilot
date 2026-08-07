@@ -14,10 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import services as admin_services
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
-from app.enums import GameStatus, RunPhase, RunStatus
+from app.enums import EntryPhase, GameStatus, RunPhase, RunStatus
 from app.forge import control as run_ctrl
 from app.forge import queue as forge_queue
 from app.forge import state as ckpt
+from app.forge.entry_router import classify_entry_phase
 from app.hosting import store as hosting_store
 from app.models.game import Game
 from app.models.game_version import GameVersion
@@ -128,6 +129,34 @@ async def list_public_games(
     return list(rows), int(total or 0)
 
 
+async def list_featured_games(
+    db: AsyncSession,
+    page: int,
+    size: int,
+) -> tuple[list[Game], int]:
+    """本周精选：published 且 featured_rank 非空，按 rank 升序。"""
+    base = select(Game).where(
+        Game.status == GameStatus.PUBLISHED.value,
+        Game.featured_rank.is_not(None),
+    )
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    rows = (
+        await db.scalars(
+            base.order_by(Game.featured_rank.asc()).limit(size).offset((page - 1) * size)
+        )
+    ).all()
+    return list(rows), int(total or 0)
+
+
+async def get_public_game_by_slug(db: AsyncSession, slug: str) -> Game:
+    game = await db.scalar(
+        select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
+    )
+    if game is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或未发布")
+    return game
+
+
 async def get_game_detail(
     db: AsyncSession, user: User, game_id: UUID
 ) -> tuple[Game, list[GameVersion]]:
@@ -232,13 +261,18 @@ async def create_run(
         )
         if cfg is None:
             raise AppError(ErrorCode.LLM_CONFIG_NOT_FOUND, "LLM 配置不存在")
+    entry = classify_entry_phase(
+        req.requirement, has_prior_version=game.current_version > 0
+    )
+    initial_phase = RunPhase.CODE if entry == EntryPhase.CODE else RunPhase.PLAN
     run = GenerationRun(
         game_id=game.id,
         user_id=user.id,
         llm_config_id=req.llm_config_id,
         requirement=req.requirement,
+        entry_phase=entry.value,
         status=RunStatus.RUNNING.value,
-        phase=RunPhase.PLAN.value,
+        phase=initial_phase.value,
         started_at=datetime.now(UTC),
     )
     db.add(run)

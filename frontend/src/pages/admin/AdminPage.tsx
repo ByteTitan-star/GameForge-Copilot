@@ -2,16 +2,18 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, ShieldOff, X } from 'lucide-react'
 import { adminApi } from '@/api/admin'
+import { analyticsApi } from '@/api/analytics'
 import { Role } from '@/api/enums'
 import { formatApiError } from '@/api/error-message'
 import type { PublishQueueItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { UsageChart } from '@/components/usage/UsageChart'
+import { AnalyticsTrendChart } from '@/components/usage/UsageBreakdown'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 
-type Tab = 'queue' | 'published' | 'users' | 'usage' | 'audit' | 'settings'
+type Tab = 'queue' | 'published' | 'users' | 'usage' | 'analytics' | 'audit' | 'settings'
 
 export function AdminPage() {
   const t = useT()
@@ -24,6 +26,7 @@ export function AdminPage() {
     { id: 'published', label: t('adminTabPublished') },
     { id: 'users', label: t('adminTabUsers') },
     { id: 'usage', label: t('adminTabUsage') },
+    { id: 'analytics', label: t('adminTabAnalytics') },
     { id: 'audit', label: t('adminTabAudit') },
     { id: 'settings', label: t('adminTabSettings') },
   ]
@@ -64,6 +67,7 @@ export function AdminPage() {
       {tab === 'published' && token ? <PublishedGamesPanel token={token} onToast={setToast} /> : null}
       {tab === 'users' && token ? <UsersPanel token={token} onToast={setToast} /> : null}
       {tab === 'usage' && token ? <UsagePanel token={token} /> : null}
+      {tab === 'analytics' && token ? <AnalyticsPanel token={token} /> : null}
       {tab === 'audit' && token ? <AuditPanel token={token} /> : null}
       {tab === 'settings' && token ? <SettingsPanel token={token} onToast={setToast} /> : null}
     </div>
@@ -199,11 +203,21 @@ function QueueRow({
 
 function UsersPanel({ token, onToast }: { token: string; onToast: (m: string) => void }) {
   const qc = useQueryClient()
+  const meId = useAuthStore((s) => s.user?.user_id)
   const [quotaDraft, setQuotaDraft] = useState<Record<string, string>>({})
+  const [disableTarget, setDisableTarget] = useState<{ userId: string; email: string } | null>(
+    null,
+  )
+  const [deleteTarget, setDeleteTarget] = useState<{ userId: string; email: string } | null>(null)
   const users = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => adminApi.listUsers(token),
   })
+  const settings = useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: () => adminApi.getSettings(token),
+  })
+  const contactEmail = settings.data?.admin_contact_email || '管理员'
 
   const patchMu = useMutation({
     mutationFn: ({
@@ -224,8 +238,22 @@ function UsersPanel({ token, onToast }: { token: string; onToast: (m: string) =>
     onError: (e) => onToast(formatApiError(e, '更新失败')),
   })
 
+  const deleteMu = useMutation({
+    mutationFn: (userId: string) => adminApi.deleteUser(userId, token),
+    onSuccess: async () => {
+      setDeleteTarget(null)
+      await qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+      onToast('用户已删除')
+    },
+    onError: (e) => onToast(formatApiError(e, '删除失败')),
+  })
+
   return (
-    <AdminTable
+    <div className="space-y-4">
+      <p className="text-sm text-white/45">
+        禁用后用户无法登录，提示：当前账号已违规，请联系管理员&lt;{contactEmail}&gt;申请解封
+      </p>
+      <AdminTable
       headers={['邮箱', '角色', '验证', '状态', '日配额覆盖', '操作']}
       loading={users.isLoading}
       empty="暂无用户"
@@ -297,7 +325,8 @@ function UsersPanel({ token, onToast }: { token: string; onToast: (m: string) =>
               <Button
                 variant="ghost"
                 className="!h-8 !rounded-lg !px-2.5 !text-xs !text-white/55"
-                disabled={patchMu.isPending}
+                disabled={patchMu.isPending || u.user_id === meId}
+                title={u.user_id === meId ? '不能修改当前登录账号' : undefined}
                 onClick={() =>
                   patchMu.mutate({
                     userId: u.user_id,
@@ -305,21 +334,71 @@ function UsersPanel({ token, onToast }: { token: string; onToast: (m: string) =>
                   })
                 }
               >
-                切换角色
+                {u.role === Role.admin ? '降为普通用户' : '设为管理员'}
               </Button>
               <Button
                 variant="ghost"
                 className="!h-8 !rounded-lg !px-2.5 !text-xs !text-white/55"
-                disabled={patchMu.isPending}
-                onClick={() => patchMu.mutate({ userId: u.user_id, disabled: !u.disabled })}
+                disabled={patchMu.isPending || u.user_id === meId}
+                title={u.user_id === meId ? '不能禁用当前登录账号' : undefined}
+                onClick={() =>
+                  u.disabled
+                    ? patchMu.mutate({ userId: u.user_id, disabled: false })
+                    : setDisableTarget({ userId: u.user_id, email: u.email })
+                }
               >
                 {u.disabled ? '启用' : '禁用'}
+              </Button>
+              <Button
+                variant="ghost"
+                className="!h-8 !rounded-lg !px-2.5 !text-xs !text-red-200/80 hover:!bg-red-400/10"
+                disabled={deleteMu.isPending || u.user_id === meId}
+                title={u.user_id === meId ? '不能删除当前登录账号' : undefined}
+                onClick={() => setDeleteTarget({ userId: u.user_id, email: u.email })}
+              >
+                删除
               </Button>
             </div>
           </td>
         </tr>
       ))}
     />
+      {disableTarget ? (
+        <Modal
+          title="禁用用户"
+          onClose={() => setDisableTarget(null)}
+          onConfirm={() => {
+            patchMu.mutate({ userId: disableTarget.userId, disabled: true })
+            setDisableTarget(null)
+          }}
+          confirmLabel="确认禁用"
+          confirmDisabled={patchMu.isPending}
+          danger
+        >
+          <p className="text-sm text-white/70">
+            确定禁用 <span className="text-white">{disableTarget.email}</span>？
+          </p>
+          <p className="mt-2 text-xs text-white/45">
+            该用户将无法登录，并看到违规提示（联系 {contactEmail} 解封）。
+          </p>
+        </Modal>
+      ) : null}
+      {deleteTarget ? (
+        <Modal
+          title="删除用户"
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteMu.mutate(deleteTarget.userId)}
+          confirmLabel="确认删除"
+          confirmDisabled={deleteMu.isPending}
+          danger
+        >
+          <p className="text-sm text-white/70">
+            永久删除 <span className="text-white">{deleteTarget.email}</span>{' '}
+            及其游戏、配置等数据，此操作不可恢复。
+          </p>
+        </Modal>
+      ) : null}
+    </div>
   )
 }
 
@@ -386,6 +465,17 @@ function PublishedGamesPanel({
     queryFn: () => adminApi.listGames(token, 'published'),
   })
 
+  const featuredMu = useMutation({
+    mutationFn: ({ gameId, featured }: { gameId: string; featured: boolean }) =>
+      adminApi.setFeatured(gameId, featured, token),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin', 'games', 'published'] })
+      await qc.invalidateQueries({ queryKey: ['featured-games'] })
+      onToast('精选状态已更新')
+    },
+    onError: (e) => onToast(formatApiError(e, '操作失败')),
+  })
+
   const takeDownMu = useMutation({
     mutationFn: ({ gameId, reason }: { gameId: string; reason: string }) =>
       adminApi.takeDown(gameId, reason, token),
@@ -415,18 +505,33 @@ function PublishedGamesPanel({
               {new Date(g.updated_at).toLocaleString()}
             </td>
             <td className="px-4 py-3">
-              <Button
-                variant="ghost"
-                className="!h-8 !rounded-lg !px-2.5 !text-xs !text-red-200/80 hover:!bg-red-400/10"
-                disabled={takeDownMu.isPending}
-                onClick={() => {
-                  setTakeDownGameId(g.game_id)
-                  setTakeDownReason('')
-                }}
-              >
-                <ShieldOff className="h-3.5 w-3.5" />
-                下架
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="ghost"
+                  className="!h-8 !rounded-lg !px-2.5 !text-xs !text-amber-200/90 hover:!bg-amber-400/10"
+                  disabled={featuredMu.isPending}
+                  onClick={() =>
+                    featuredMu.mutate({
+                      gameId: g.game_id,
+                      featured: !(g as { featured?: boolean }).featured,
+                    })
+                  }
+                >
+                  {(g as { featured?: boolean }).featured ? '取消精选' : '设为精选'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="!h-8 !rounded-lg !px-2.5 !text-xs !text-red-200/80 hover:!bg-red-400/10"
+                  disabled={takeDownMu.isPending}
+                  onClick={() => {
+                    setTakeDownGameId(g.game_id)
+                    setTakeDownReason('')
+                  }}
+                >
+                  <ShieldOff className="h-3.5 w-3.5" />
+                  下架
+                </Button>
+              </div>
             </td>
           </tr>
         ))}
@@ -450,6 +555,47 @@ function PublishedGamesPanel({
             placeholder="下架原因…"
           />
         </Modal>
+      ) : null}
+    </div>
+  )
+}
+
+function AnalyticsPanel({ token }: { token: string }) {
+  const t = useT()
+  const q = useQuery({
+    queryKey: ['admin', 'analytics'],
+    queryFn: () => analyticsApi.getTop(token),
+  })
+
+  const data = q.data
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg text-white/90">{t('adminAnalyticsTitle')}</h2>
+        <p className="mt-1 text-sm text-white/40">{t('adminAnalyticsSubtitle')}</p>
+      </div>
+      {q.isLoading ? <p className="text-sm text-white/40">{t('loading')}</p> : null}
+      {data ? (
+        <>
+          <AdminTable
+            headers={[t('usageBreakdownGame'), 'slug', t('adminAnalyticsPv'), t('adminAnalyticsPlays')]}
+            loading={false}
+            empty={t('usageBreakdownEmpty')}
+            rows={data.top_games.map((g) => (
+              <tr key={g.game_id} className="border-t border-white/[0.06]">
+                <td className="px-4 py-3 text-sm text-white/85">{g.title}</td>
+                <td className="px-4 py-3 font-mono text-xs text-cyan-200/70">{g.slug}</td>
+                <td className="px-4 py-3 font-mono text-sm text-teal-300">{g.page_views.toLocaleString()}</td>
+                <td className="px-4 py-3 font-mono text-sm text-white/55">{g.play_count.toLocaleString()}</td>
+              </tr>
+            ))}
+          />
+          <section className="rounded-2xl border border-white/[0.08] bg-[#12151a] p-4">
+            <p className="mb-3 font-mono text-[10px] tracking-wider text-white/40 uppercase">{t('adminAnalyticsTrend')}</p>
+            <AnalyticsTrendChart data={data.trend} />
+          </section>
+        </>
       ) : null}
     </div>
   )
@@ -489,11 +635,13 @@ function SettingsPanel({ token, onToast }: { token: string; onToast: (m: string)
   const [daily, setDaily] = useState<number | ''>('')
   const [monthly, setMonthly] = useState<number | ''>('')
   const [rate, setRate] = useState<number | ''>('')
+  const [contactEmail, setContactEmail] = useState('')
 
   const loaded = settings.data
   const dailyVal = daily === '' ? (loaded?.default_daily_token_limit ?? '') : daily
   const monthlyVal = monthly === '' ? (loaded?.default_monthly_token_limit ?? '') : monthly
   const rateVal = rate === '' ? (loaded?.default_rate_limit_per_min ?? '') : rate
+  const contactVal = contactEmail === '' ? (loaded?.admin_contact_email ?? '') : contactEmail
 
   const saveMu = useMutation({
     mutationFn: () =>
@@ -502,6 +650,7 @@ function SettingsPanel({ token, onToast }: { token: string; onToast: (m: string)
           default_daily_token_limit: Number(dailyVal),
           default_monthly_token_limit: Number(monthlyVal),
           default_rate_limit_per_min: Number(rateVal),
+          admin_contact_email: String(contactVal).trim(),
         },
         token,
       ),
@@ -510,6 +659,7 @@ function SettingsPanel({ token, onToast }: { token: string; onToast: (m: string)
       setDaily('')
       setMonthly('')
       setRate('')
+      setContactEmail('')
       onToast('设置已保存')
     },
     onError: (e) => onToast(formatApiError(e, '保存失败')),
@@ -545,9 +695,20 @@ function SettingsPanel({ token, onToast }: { token: string; onToast: (m: string)
           className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
         />
       </label>
+      <label className="block space-y-1.5 text-sm">
+        <span className="font-mono text-[10px] text-white/40 uppercase">管理员联系邮箱</span>
+        <input
+          type="email"
+          value={contactVal}
+          onChange={(e) => setContactEmail(e.target.value)}
+          placeholder="wxcurry@163.com"
+          className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+        />
+        <p className="text-xs text-white/35">账号禁用时，登录页提示用户联系此邮箱申请解封。</p>
+      </label>
       <Button
         className="!rounded-lg !bg-teal-400 !text-black hover:!bg-teal-300"
-        disabled={saveMu.isPending || !dailyVal || !monthlyVal || !rateVal}
+        disabled={saveMu.isPending || !dailyVal || !monthlyVal || !rateVal || !contactVal}
         onClick={() => saveMu.mutate()}
       >
         {saveMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

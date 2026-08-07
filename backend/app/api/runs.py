@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
-from app.enums import RunPhase, RunStatus
+from app.enums import EntryPhase, RunPhase, RunStatus
 from app.forge import queue as forge_queue
 from app.forge import state as ckpt
 from app.games import services
@@ -42,6 +42,7 @@ def _to_resp(run: GenerationRun) -> RunResp:
         game_id=run.game_id,
         status=RunStatus(run.status),
         phase=RunPhase(run.phase),
+        entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
         ws_url=_WS.format(run_id=run.id),
     )
 
@@ -99,6 +100,7 @@ async def get_run(
             game_id=run.game_id,
             status=RunStatus(run.status),
             phase=RunPhase(run.phase),
+            entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
             ws_url=_WS.format(run_id=run.id),
             current_hitl=current_hitl,
         )

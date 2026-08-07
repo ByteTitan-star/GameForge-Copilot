@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,12 +15,21 @@ export function LoginPage() {
   const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
+  const authState = location.state as {
+    from?: string
+    email?: string
+    verified?: boolean
+  } | null
   const setSession = useAuthStore((s) => s.setSession)
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(authState?.email ?? '')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (authState?.email) setEmail(authState.email)
+  }, [authState?.email])
 
   function fillTrialAccount() {
     setEmail(TRIAL_EMAIL)
@@ -42,9 +52,12 @@ export function LoginPage() {
       if (!remember) {
         // 正式账号「不记住」仍走 persist；试用账号在 setSession 内已跳过落盘
       }
-      const from = (location.state as { from?: string } | null)?.from
+      const from = authState?.from
       if (!data.user.email_verified) {
-        navigate('/settings', { replace: true, state: { needVerify: true } })
+        navigate('/verify-email', {
+          replace: true,
+          state: { email: data.user.email },
+        })
       } else {
         navigate(from && from !== '/login' ? from : '/games', { replace: true })
       }
@@ -91,6 +104,11 @@ export function LoginPage() {
             {t('forgot')}
           </Link>
         </div>
+        {authState?.verified ? (
+          <p role="status" className="text-sm text-cyan-200/90">
+            {t('loginAfterVerified')}
+          </p>
+        ) : null}
         {error ? (
           <p role="alert" className="text-sm text-red-300">
             {error}
@@ -114,6 +132,7 @@ export function LoginPage() {
             {t('register')}
           </Link>
         </p>
+        <OAuthButtons className="mt-4 border-t border-white/10 pt-4" />
       </form>
     </AuthShell>
   )

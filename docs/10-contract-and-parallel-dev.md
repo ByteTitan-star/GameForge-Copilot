@@ -227,6 +227,52 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 - 响应 `data`：`{ "run_id", "status": "running", "phase": "code" }`
 - 与 `POST /runs/{id}/resume` 区分：resume 用于 HITL/pause；retry 用于失败恢复
 
+### GET /api/v1/templates （Batch B · R2）
+- 无需登录；仅 `verified=true` 模板
+- 响应 `data[]`：`{ template_id, title, description, tags[], requirement_seed }`
+
+### POST /api/v1/games/{game_id}/runs （Batch B · R5 增 entry_phase）
+响应 `data` 增 `entry_phase`: `"plan" | "code"`（智能路由，对用户透明）
+
+### GET /api/v1/runs/{run_id} （Batch B · R5）
+响应 `data` 增 `entry_phase`: `"plan" | "code"`
+
+### PATCH /api/v1/me/profile （Batch C · R6）
+- 需 Bearer
+- 请求：`{ handle?, display_name?, profile_public? }`
+- handle 规则：`^[a-z0-9_]{3,32}$`，唯一性冲突 → 409 `HANDLE_TAKEN`
+- 响应 `UserProfile`：`{ user_id, email, handle, display_name, profile_public }`
+
+### GET /api/v1/me/profile （Batch C · R6）
+- 需 Bearer；响应同上
+
+### GET /api/v1/u/{handle} （Batch C · R6 · 无需登录）
+- `profile_public=false` → 404
+- 响应 `data`：`{ handle, display_name, total_plays, latest_published_at, games[] }`
+- `games[]` 仅 published：`{ game_id, title, slug, play_count, published_at }`
+
+### POST /api/v1/games/{game_id}/like （Batch C · R7）
+- 需 Bearer；toggle；仅 published
+- 响应：`{ game_id, active, like_count, favorite_count }`
+
+### POST /api/v1/games/{game_id}/favorite （Batch C · R7）
+- 同上，收藏 toggle
+
+### GET /api/v1/me/favorites （Batch C · R7）
+- 需 Bearer；分页收藏列表
+
+### GET /api/v1/games/featured （Batch C · R7 · 无需登录）
+- 按 `featured_rank` 升序；仅 published 且 rank 非空
+
+### GET /api/v1/games/public/{slug} （Batch C · R7）
+- 无需登录；公开游戏元数据（含 `like_count`, `favorite_count`, `creator`）
+
+### PATCH /api/v1/admin/games/{game_id}/featured （Batch C · R7 · admin）
+- 请求：`{ featured_rank: int | null }`；仅 published；落 audit_logs
+
+### GET /api/v1/games/public （Batch C · 扩展）
+- `PublicGameItem` 增 `creator: { handle, display_name }`、`like_count`、`favorite_count`
+
 ### GET /api/v1/games/{game_id}
 响应 `data`：
 ```json
@@ -241,7 +287,7 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 响应 `data[]`：`[{ "version", "artifact_path", "created_at" }]`
 
 ### GET /api/v1/runs/{run_id}
-响应 `data`：`{ "run_id", "game_id", "status", "phase", "ws_url": "/ws/runs/{run_id}", "current_hitl": { "node": "plan_confirm" } | null }`
+响应 `data`：`{ "run_id", "game_id", "status", "phase", "entry_phase", "ws_url": "/ws/runs/{run_id}", "current_hitl": { "node": "plan_confirm" } | null }`
 错误：`GAME_NOT_FOUND`（非 owner 不可见）。
 
 ### POST /api/v1/games/{game_id}/take-down （admin）

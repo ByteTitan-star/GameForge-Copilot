@@ -9,6 +9,7 @@ from app.auth.deps import AdminUser, DbSession, RedisClient
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.enums import GameStatus, Role
 from app.schemas.admin import (
+    AdminGameFeaturedPatch,
     AdminGameItem,
     AdminGameSchedulePatch,
     AdminSettings,
@@ -182,6 +183,31 @@ async def patch_game_schedule(
         req.scheduled_take_down_at,
         req.scheduled_publish_at,
     )
+    return ApiResponse(
+        data=AdminGameItem(
+            game_id=g.id,
+            title=g.title,
+            status=GameStatus(g.status),
+            slug=g.slug,
+            owner_id=g.owner_id,
+            current_version=g.current_version,
+            updated_at=g.updated_at,
+        )
+    )
+
+
+@router.patch(
+    "/games/{game_id}/featured",
+    response_model=ApiResponse[AdminGameItem],
+    responses=ERR_404,
+)
+async def patch_game_featured(
+    game_id: UUID,
+    req: AdminGameFeaturedPatch,
+    admin: AdminUser,
+    db: DbSession,
+) -> ApiResponse[AdminGameItem]:
+    g = await services.patch_game_featured(db, admin, game_id, req.featured_rank)
     return ApiResponse(
         data=AdminGameItem(
             game_id=g.id,

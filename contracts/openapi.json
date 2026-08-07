@@ -1213,7 +1213,116 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedData_PublicGameItem_"
+                  "$ref": "#/components/schemas/PaginatedData_PublicGameMeta_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/featured": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "List Featured Games",
+        "description": "本周精选（Batch C · R7）。",
+        "operationId": "list_featured_games_api_v1_games_featured_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedData_PublicGameMeta_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/public/{slug}": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Get Public Game Meta",
+        "operationId": "get_public_game_meta_api_v1_games_public__slug__get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PublicGameMeta_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1646,6 +1755,122 @@
         }
       }
     },
+    "/api/v1/games/{game_id}/like": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Toggle Like",
+        "operationId": "toggle_like_api_v1_games__game_id__like_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReactionToggleResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/{game_id}/favorite": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Toggle Favorite",
+        "operationId": "toggle_favorite_api_v1_games__game_id__favorite_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ReactionToggleResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/official-games": {
       "get": {
         "tags": [
@@ -1681,6 +1906,199 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_list_TemplateItem__"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/profile": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Get Profile",
+        "operationId": "get_profile_api_v1_me_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_UserProfile_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Patch Profile",
+        "operationId": "patch_profile_api_v1_me_profile_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_UserProfile_"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "handle 冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/u/{handle}": {
+      "get": {
+        "tags": [
+          "creator"
+        ],
+        "summary": "Get Creator",
+        "operationId": "get_creator_api_v1_u__handle__get",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Handle"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CreatorProfile_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "创作者不存在或未公开",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/favorites": {
+      "get": {
+        "tags": [
+          "reactions"
+        ],
+        "summary": "List Favorites",
+        "operationId": "list_favorites_api_v1_me_favorites_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedData_FavoriteGameItem_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -3479,6 +3897,74 @@
         }
       }
     },
+    "/api/v1/admin/games/{game_id}/featured": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Patch Game Featured",
+        "operationId": "patch_game_featured_api_v1_admin_games__game_id__featured_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGameFeaturedPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AdminGameItem_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "用户不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/play/{slug}": {
       "get": {
         "tags": [
@@ -3579,6 +4065,23 @@
   },
   "components": {
     "schemas": {
+      "AdminGameFeaturedPatch": {
+        "properties": {
+          "featured_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured Rank"
+          }
+        },
+        "type": "object",
+        "title": "AdminGameFeaturedPatch"
+      },
       "AdminGameItem": {
         "properties": {
           "game_id": {
@@ -3879,6 +4382,18 @@
         ],
         "title": "ApiResponse[AdminUserItem]"
       },
+      "ApiResponse_CreatorProfile_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CreatorProfile"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[CreatorProfile]"
+      },
       "ApiResponse_GameAnalyticsResp_": {
         "properties": {
           "data": {
@@ -4083,6 +4598,18 @@
         ],
         "title": "ApiResponse[PasswordResetResp]"
       },
+      "ApiResponse_PublicGameMeta_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PublicGameMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PublicGameMeta]"
+      },
       "ApiResponse_PublishApproveResp_": {
         "properties": {
           "data": {
@@ -4118,6 +4645,18 @@
           "data"
         ],
         "title": "ApiResponse[PublishSubmitResp]"
+      },
+      "ApiResponse_ReactionToggleResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReactionToggleResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ReactionToggleResp]"
       },
       "ApiResponse_Ready_": {
         "properties": {
@@ -4226,6 +4765,18 @@
           "data"
         ],
         "title": "ApiResponse[UsageResp]"
+      },
+      "ApiResponse_UserProfile_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UserProfile"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[UserProfile]"
       },
       "ApiResponse_VerifyEmailResp_": {
         "properties": {
@@ -4470,6 +5021,135 @@
         ],
         "title": "AuditLogItem"
       },
+      "CreatorBrief": {
+        "properties": {
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "title": "CreatorBrief"
+      },
+      "CreatorGameItem": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "play_count": {
+            "type": "integer",
+            "title": "Play Count"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "title",
+          "slug",
+          "play_count",
+          "published_at"
+        ],
+        "title": "CreatorGameItem"
+      },
+      "CreatorProfile": {
+        "properties": {
+          "handle": {
+            "type": "string",
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "total_plays": {
+            "type": "integer",
+            "title": "Total Plays"
+          },
+          "latest_published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Published At"
+          },
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorGameItem"
+            },
+            "type": "array",
+            "title": "Games"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle",
+          "display_name",
+          "total_plays",
+          "latest_published_at",
+          "games"
+        ],
+        "title": "CreatorProfile"
+      },
+      "EntryPhase": {
+        "type": "string",
+        "enum": [
+          "plan",
+          "code"
+        ],
+        "title": "EntryPhase"
+      },
       "ErrorDetail": {
         "properties": {
           "code": {
@@ -4512,6 +5192,45 @@
         ],
         "title": "ErrorResponse",
         "description": "统一错误响应：{\"error\": {code, message, detail}}"
+      },
+      "FavoriteGameItem": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GameStatus"
+          },
+          "play_count": {
+            "type": "integer",
+            "title": "Play Count"
+          },
+          "favorited_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Favorited At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "title",
+          "slug",
+          "status",
+          "play_count",
+          "favorited_at"
+        ],
+        "title": "FavoriteGameItem"
       },
       "GameAnalyticsResp": {
         "properties": {
@@ -5432,6 +6151,37 @@
         ],
         "title": "PaginatedData[AuditLogItem]"
       },
+      "PaginatedData_FavoriteGameItem_": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FavoriteGameItem"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "PaginatedData[FavoriteGameItem]"
+      },
       "PaginatedData_GameListItem_": {
         "properties": {
           "data": {
@@ -5463,11 +6213,11 @@
         ],
         "title": "PaginatedData[GameListItem]"
       },
-      "PaginatedData_PublicGameItem_": {
+      "PaginatedData_PublicGameMeta_": {
         "properties": {
           "data": {
             "items": {
-              "$ref": "#/components/schemas/PublicGameItem"
+              "$ref": "#/components/schemas/PublicGameMeta"
             },
             "type": "array",
             "title": "Data"
@@ -5492,7 +6242,7 @@
           "page",
           "size"
         ],
-        "title": "PaginatedData[PublicGameItem]"
+        "title": "PaginatedData[PublicGameMeta]"
       },
       "PaginatedData_UsageBreakdownItem_": {
         "properties": {
@@ -5636,7 +6386,46 @@
         "type": "object",
         "title": "PasswordResetResp"
       },
-      "PublicGameItem": {
+      "ProfilePatch": {
+        "properties": {
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "profile_public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Public"
+          }
+        },
+        "type": "object",
+        "title": "ProfilePatch"
+      },
+      "PublicGameMeta": {
         "properties": {
           "game_id": {
             "type": "string",
@@ -5677,6 +6466,26 @@
           "play_count": {
             "type": "integer",
             "title": "Play Count"
+          },
+          "like_count": {
+            "type": "integer",
+            "title": "Like Count",
+            "default": 0
+          },
+          "favorite_count": {
+            "type": "integer",
+            "title": "Favorite Count",
+            "default": 0
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -5687,7 +6496,7 @@
           "published_at",
           "play_count"
         ],
-        "title": "PublicGameItem"
+        "title": "PublicGameMeta"
       },
       "PublishApproveResp": {
         "properties": {
@@ -5871,6 +6680,35 @@
           "remaining"
         ],
         "title": "QuotaInfo"
+      },
+      "ReactionToggleResp": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "like_count": {
+            "type": "integer",
+            "title": "Like Count"
+          },
+          "favorite_count": {
+            "type": "integer",
+            "title": "Favorite Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "active",
+          "like_count",
+          "favorite_count"
+        ],
+        "title": "ReactionToggleResp"
       },
       "Ready": {
         "properties": {
@@ -6102,6 +6940,9 @@
           "phase": {
             "$ref": "#/components/schemas/RunPhase"
           },
+          "entry_phase": {
+            "$ref": "#/components/schemas/EntryPhase"
+          },
           "ws_url": {
             "type": "string",
             "title": "Ws Url"
@@ -6113,6 +6954,7 @@
           "game_id",
           "status",
           "phase",
+          "entry_phase",
           "ws_url"
         ],
         "title": "RunResp"
@@ -6145,6 +6987,9 @@
           "phase": {
             "$ref": "#/components/schemas/RunPhase"
           },
+          "entry_phase": {
+            "$ref": "#/components/schemas/EntryPhase"
+          },
           "ws_url": {
             "type": "string",
             "title": "Ws Url"
@@ -6166,6 +7011,7 @@
           "game_id",
           "status",
           "phase",
+          "entry_phase",
           "ws_url"
         ],
         "title": "RunStatusResp"
@@ -6376,6 +7222,52 @@
           "quota"
         ],
         "title": "UsageResp"
+      },
+      "UserProfile": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handle"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "profile_public": {
+            "type": "boolean",
+            "title": "Profile Public",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email"
+        ],
+        "title": "UserProfile"
       },
       "UserPublic": {
         "properties": {

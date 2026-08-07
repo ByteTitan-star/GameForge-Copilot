@@ -3,13 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
+import { useAuthStore } from '@/stores/auth-store'
 
 export function RegisterPage() {
   const t = useT()
   const navigate = useNavigate()
+  const setSession = useAuthStore((s) => s.setSession)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -25,8 +28,15 @@ export function RegisterPage() {
     }
     setLoading(true)
     try {
-      await authApi.register(email.trim(), password)
-      navigate('/verify-email', { state: { email: email.trim() } })
+      const trimmedEmail = email.trim()
+      await authApi.register(trimmedEmail, password)
+      const session = await authApi.login(trimmedEmail, password)
+      setSession({
+        user: session.user,
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      })
+      navigate('/verify-email', { replace: true, state: { email: trimmedEmail } })
     } catch (err) {
       setError(formatApiError(err, '注册失败'))
     } finally {
@@ -35,7 +45,7 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthShell title={t('register')} subtitle="注册后请验证邮箱，再配置 LLM 开始生成">
+    <AuthShell title={t('register')} subtitle={t('registerSubtitle')}>
       <form className="space-y-4" onSubmit={onSubmit} autoComplete="off">
         <Input
           name="email"
@@ -80,6 +90,7 @@ export function RegisterPage() {
             {t('login')}
           </Link>
         </p>
+        <OAuthButtons className="mt-4 border-t border-white/10 pt-4" />
       </form>
     </AuthShell>
   )

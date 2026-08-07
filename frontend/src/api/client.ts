@@ -21,11 +21,54 @@ function buildHeaders(options: RequestOptions): Record<string, string> {
 
 async function parseError(res: Response): Promise<never> {
   const json = (await res.json().catch(() => null)) as ApiErrorBody | null
-  const errBody =
+  let errBody =
     json && 'error' in json && json.error
       ? json.error
       : { code: 'UNKNOWN', message: res.statusText || 'Request failed' }
+  if (errBody.code === 'UNKNOWN' && res.status >= 500) {
+    errBody = {
+      code: 'UNKNOWN',
+      message:
+        `后端错误 HTTP ${res.status}；若刚拉代码请在 backend/ 执行 uv run alembic upgrade head`,
+    }
+  }
   throw new ApiError(res.status, errBody)
+}
+
+function networkErrorMessage(cause: unknown): string {
+  const msg = cause instanceof Error ? cause.message : String(cause)
+  const lower = msg.toLowerCase()
+  if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) {
+    return (
+      '无法连接后端：请确认 API 已在 http://127.0.0.1:8000 启动；' +
+      '若刚拉代码，请在 backend/ 执行 uv run alembic upgrade head'
+    )
+  }
+  return msg || '网络请求失败'
+}
+
+async function request<T>(path: string, options: RequestOptions, parse: (res: Response) => Promise<T>): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${env.apiBaseUrl}${path}`, {
+      method: options.method ?? 'GET',
+      headers: buildHeaders(options),
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
+    })
+  } catch (cause) {
+    throw new TypeError(networkErrorMessage(cause))
+  }
+
+  if (res.status === 401 && options.token) {
+    const next = await maybeRefresh(options)
+    if (next) {
+      return request(path, { ...options, token: next, _retried: true }, parse)
+    }
+  }
+
+  if (!res.ok) await parseError(res)
+  return parse(res)
 }
 
 async function maybeRefresh(options: RequestOptions): Promise<string | null> {
@@ -51,73 +94,39 @@ async function maybeRefresh(options: RequestOptions): Promise<string | null> {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const res = await fetch(`${env.apiBaseUrl}${path}`, {
-    method: options.method ?? 'GET',
-    headers: buildHeaders(options),
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
-  })
-
-  if (res.status === 401 && options.token) {
-    const next = await maybeRefresh(options)
-    if (next) {
-      return apiRequest<T>(path, { ...options, token: next, _retried: true })
+  return request(path, options, async (res) => {
+    const json = (await res.json().catch(() => null)) as { data: T } | null
+    if (!json || !('data' in json)) {
+      throw new ApiError(500, { code: 'UNKNOWN', message: 'Invalid response shape' })
     }
-  }
-
-  if (!res.ok) await parseError(res)
-
-  const json = (await res.json().catch(() => null)) as { data: T } | null
-  if (!json || !('data' in json)) {
-    throw new ApiError(500, { code: 'UNKNOWN', message: 'Invalid response shape' })
-  }
-  return json.data
+    return json.data
+  })
 }
 
-/** 204 / 空体成功（如 logout） */
 export async function apiRequestNoContent(path: string, options: RequestOptions = {}): Promise<void> {
-  const res = await fetch(`${env.apiBaseUrl}${path}`, {
-    method: options.method ?? 'POST',
-    headers: buildHeaders(options),
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
+  await request(path, options, async (res) => {
+    if (res.status === 204) return
+    const json = (await res.json().catch(() => null)) as { data?: unknown } | null
+    if (json && 'data' in json) return
+    throw new ApiError(500, { code: 'UNKNOWN', message: 'Invalid response shape' })
   })
-  if (res.status === 204) return
-  if (res.status === 401 && options.token) {
-    const next = await maybeRefresh(options)
-    if (next) {
-      return apiRequestNoContent(path, { ...options, token: next, _retried: true })
-    }
-  }
-  if (!res.ok) await parseError(res)
 }
 
 export async function apiRequestList<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<ApiListSuccess<T>> {
-  const res = await fetch(`${env.apiBaseUrl}${path}`, {
-    method: options.method ?? 'GET',
-    headers: buildHeaders(options),
-    signal: options.signal,
-  })
-  if (res.status === 401 && options.token) {
-    const next = await maybeRefresh(options)
-    if (next) {
-      return apiRequestList<T>(path, { ...options, token: next, _retried: true })
+  return request(path, options, async (res) => {
+    const json = (await res.json().catch(() => null)) as ApiListSuccess<T> | { data: T[] } | null
+    if (!json || !('data' in json) || !Array.isArray(json.data)) {
+      throw new ApiError(500, { code: 'UNKNOWN', message: 'Invalid list response shape' })
     }
-  }
-  if (!res.ok) await parseError(res)
-
-  const json = (await res.json().catch(() => null)) as ApiListSuccess<T> | { data: T[] } | null
-  if (!json || !('data' in json) || !Array.isArray(json.data)) {
-    throw new ApiError(500, { code: 'UNKNOWN', message: 'Invalid list response shape' })
-  }
-  const data = json.data
-  return {
-    data,
-    total: 'total' in json && json.total != null ? Number(json.total) : data.length,
-    page: 'page' in json && json.page != null ? Number(json.page) : 1,
-    size: 'size' in json && json.size != null ? Number(json.size) : data.length,
-  }
+    const data = json.data
+    return {
+      data,
+      total: 'total' in json && json.total != null ? Number(json.total) : data.length,
+      page: 'page' in json && json.page != null ? Number(json.page) : 1,
+      size: 'size' in json && json.size != null ? Number(json.size) : data.length,
+    }
+  })
 }

@@ -11,6 +11,18 @@ import type {
   UsageSummary,
 } from './types'
 
+export type LlmConfigTestRequest = {
+  provider: LLMProvider | string
+  model: string
+  apikey: string
+  base_url?: string | null
+}
+
+export type LlmConfigDryTestResponse = {
+  tested_ok: boolean
+  error?: string | null
+}
+
 export const meApi = {
   listLlmConfigs(accessToken: string) {
     return apiRequest<LlmConfig[]>('/me/llm-configs', { token: accessToken })
@@ -49,6 +61,14 @@ export const meApi = {
     return apiRequest<LlmConfigTestResponse>(`/me/llm-configs/${configId}/test`, {
       method: 'POST',
       token: accessToken,
+    })
+  },
+
+  testLlmConfigDraft(body: LlmConfigTestRequest, accessToken: string) {
+    return apiRequest<LlmConfigDryTestResponse>('/me/llm-configs/test', {
+      method: 'POST',
+      token: accessToken,
+      body,
     })
   },
 
