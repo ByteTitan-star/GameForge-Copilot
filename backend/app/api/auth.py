@@ -27,6 +27,8 @@ from app.schemas.auth import (
     TokenResp,
     VerifyEmailReq,
     VerifyEmailResp,
+    ResendVerificationReq,
+    ResendVerificationResp,
 )
 from app.schemas.common import UserPublic
 
@@ -52,8 +54,8 @@ async def register(
         r, f"rl:register:{request.client.host if request.client else 'na'}",
         settings.default_rate_limit_per_min, 60,
     )
-    user, token = await services.register_user(db, req.email, req.password)
-    await email_queue.enqueue_verification(user.email, token)
+    user, code = await services.register_user(db, req.email, req.password)
+    await email_queue.enqueue_verification(user.email, code)
     return ApiResponse(data=RegisterResp(user_id=user.id, email=user.email))
 
 
@@ -91,8 +93,29 @@ async def refresh(req: RefreshReq, db: DbSession, r: RedisClient) -> ApiResponse
 
 @router.post("/verify-email", response_model=ApiResponse[VerifyEmailResp], responses=ERR_400)
 async def verify_email(req: VerifyEmailReq, db: DbSession) -> ApiResponse[VerifyEmailResp]:
-    user = await services.verify_email(db, req.token)
+    user = await services.verify_email(db, req.email, req.code)
     return ApiResponse(data=VerifyEmailResp(user_id=user.id))
+
+
+@router.post(
+    "/resend-verification",
+    response_model=ApiResponse[ResendVerificationResp],
+    responses=ERR_429,
+)
+async def resend_verification(
+    req: ResendVerificationReq, request: Request, db: DbSession, r: RedisClient
+) -> ApiResponse[ResendVerificationResp]:
+    """重发 6 位邮箱验证码；防枚举恒返回 sent=true。"""
+    await check_rate_limit(
+        r,
+        f"rl:resend-verify:{request.client.host if request.client else 'na'}:{req.email}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
+    code = await services.resend_verification(db, req.email)
+    if code is not None:
+        await email_queue.enqueue_verification(req.email, code)
+    return ApiResponse(data=ResendVerificationResp())
 
 
 @router.post("/password/reset", response_model=ApiResponse[PasswordResetResp])

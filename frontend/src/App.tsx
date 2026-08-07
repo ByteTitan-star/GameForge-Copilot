@@ -1,5 +1,6 @@
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ThemeBootstrap } from '@/components/theme/ThemeBootstrap'
 import { AppRoutes } from '@/routes'
 
 const queryClient = new QueryClient({
@@ -15,6 +16,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeBootstrap />
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>

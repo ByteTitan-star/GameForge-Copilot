@@ -60,7 +60,9 @@ async def test_create_run_non_owner_404(
         "/api/v1/auth/register", json={"email": "b@b.com", "password": "password123"}
     )
     vtoken = sent["verify:b@b.com"]
-    r = await client.post("/api/v1/auth/verify-email", json={"token": vtoken})
+    r = await client.post(
+        "/api/v1/auth/verify-email", json={"email": "b@b.com", "code": vtoken}
+    )
     assert r.status_code == 200, r.text
     r = await client.post(
         "/api/v1/auth/login", json={"email": "b@b.com", "password": "password123"}

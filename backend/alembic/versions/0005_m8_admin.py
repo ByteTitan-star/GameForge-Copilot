@@ -37,6 +37,7 @@ def upgrade() -> None:
         sa.Column(
             "updated_by", sa.Uuid(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True
         ),
+        _ts("created_at"),
         _ts("updated_at"),
     )
 

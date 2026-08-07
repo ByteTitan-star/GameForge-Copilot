@@ -11,9 +11,9 @@ from app.messaging.tasks import (
 )
 
 
-async def enqueue_verification(email: str, token: str) -> None:
+async def enqueue_verification(email: str, code: str) -> None:
     await get_task_publisher().publish(
-        TASK_SEND_VERIFICATION, {"email": email, "token": token}
+        TASK_SEND_VERIFICATION, {"email": email, "code": code}
     )
 
 

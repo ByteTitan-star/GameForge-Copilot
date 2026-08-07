@@ -8,30 +8,32 @@ import type { PublishQueueItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { UsageChart } from '@/components/usage/UsageChart'
 import { useAuthStore } from '@/stores/auth-store'
+import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 
 type Tab = 'queue' | 'published' | 'users' | 'usage' | 'audit' | 'settings'
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: 'queue', label: '审批队列' },
-  { id: 'published', label: '已发布' },
-  { id: 'users', label: '用户管理' },
-  { id: 'usage', label: '系统用量' },
-  { id: 'audit', label: '审计日志' },
-  { id: 'settings', label: '全局设置' },
-]
-
 export function AdminPage() {
+  const t = useT()
   const token = useAuthStore((s) => s.access_token)
   const [tab, setTab] = useState<Tab>('queue')
   const [toast, setToast] = useState<string | null>(null)
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'queue', label: t('adminTabQueue') },
+    { id: 'published', label: t('adminTabPublished') },
+    { id: 'users', label: t('adminTabUsers') },
+    { id: 'usage', label: t('adminTabUsage') },
+    { id: 'audit', label: t('adminTabAudit') },
+    { id: 'settings', label: t('adminTabSettings') },
+  ]
 
   return (
     <div className="space-y-5">
       <div>
         <p className="font-mono text-[10px] tracking-[0.16em] text-white/35 uppercase">Admin</p>
-        <h1 className="text-2xl tracking-tight text-white/95 md:text-3xl">管理后台</h1>
-        <p className="mt-1 text-sm text-white/40">审批队列 / 用户 / 系统用量 / 审计 / 全局设置</p>
+        <h1 className="text-2xl tracking-tight text-white/95 md:text-3xl">{t('admin')}</h1>
+        <p className="mt-1 text-sm text-white/40">{t('adminSubtitle')}</p>
       </div>
 
       <div className="flex flex-wrap gap-1.5">

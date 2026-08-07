@@ -10,6 +10,7 @@ import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { ForgePage } from '@/pages/forge/ForgePage'
 import { GamesPage } from '@/pages/games/GamesPage'
 import { LandingPage } from '@/pages/LandingPage'
+import { RootRedirect } from '@/components/layout/RootRedirect'
 import { DraftPlayPage } from '@/pages/play/DraftPlayPage'
 import { PlayPage } from '@/pages/play/PlayPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
@@ -18,7 +19,8 @@ import { ToonHubHero } from '@/pages/preview/ToonHubHero'
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="/home" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -41,7 +43,7 @@ export function AppRoutes() {
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   )
 }

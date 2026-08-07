@@ -39,7 +39,7 @@ async def dispatch_task(task: str, payload: dict) -> None:
     ctx = worker_ctx()
     match task:
         case _ if task == TASK_SEND_VERIFICATION:
-            await send_verification_email(ctx, payload["email"], payload["token"])
+            await send_verification_email(ctx, payload["email"], payload["code"])
         case _ if task == TASK_SEND_RESET:
             await send_reset_email(ctx, payload["email"], payload["token"])
         case _ if task == TASK_SEND_NOTIFICATION:

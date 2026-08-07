@@ -1,6 +1,6 @@
 # docs/assets
 
-README 用的产品截图。由本地前端（`VITE_USE_MOCK=true`）截取，勿放入密钥。
+README 用的产品截图。由本地 `pnpm dev` 联调真实后端截取，勿放入密钥。
 
 | 文件 | 页面 |
 |---|---|

@@ -3,8 +3,14 @@ import { ApiError, isApiError } from './errors'
 
 /** 将契约错误码映射为可行动引导文案 */
 export function formatApiError(err: unknown, fallback = '请求失败'): string {
-  if (!isApiError(err)) return fallback
-  return guideForCode(err.code) ?? (err.message || fallback)
+  if (isApiError(err)) {
+    return guideForCode(err.code) ?? (err.message || fallback)
+  }
+  if (err instanceof TypeError) {
+    return '无法连接后端：请确认 API 已启动，且 backend/.env 的 CORS_ORIGINS 包含当前页面地址'
+  }
+  if (err instanceof Error && err.message) return err.message
+  return fallback
 }
 
 export function guideForCode(code: string): string | null {

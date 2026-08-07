@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-me-to-a-32-byte-random-string"
     jwt_access_ttl: int = 900  # access token 有效期（秒），15 分钟
     refresh_ttl: int = 2_592_000  # refresh token 有效期（秒），30 天
-    verify_email_ttl: int = 86_400  # 邮箱验证 token 有效期（秒），24 小时
+    verify_email_ttl: int = 600  # 邮箱验证码有效期（秒），默认 10 分钟
     password_reset_ttl: int = 3600  # 密码重置 token 有效期（秒），1 小时
     llm_apikey_encryption_key: str = ""
 

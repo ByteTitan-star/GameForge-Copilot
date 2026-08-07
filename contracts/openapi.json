@@ -273,6 +273,58 @@
         }
       }
     },
+    "/api/v1/auth/resend-verification": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Resend Verification",
+        "description": "重发 6 位邮箱验证码；防枚举恒返回 sent=true。",
+        "operationId": "resend_verification_api_v1_auth_resend_verification_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerificationReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ResendVerificationResp_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/password/reset": {
       "post": {
         "tags": [
@@ -3136,6 +3188,18 @@
         ],
         "title": "ApiResponse[RegisterResp]"
       },
+      "ApiResponse_ResendVerificationResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResendVerificationResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ResendVerificationResp]"
+      },
       "ApiResponse_RunControlResp_": {
         "properties": {
           "data": {
@@ -4565,6 +4629,31 @@
         ],
         "title": "RegisterResp"
       },
+      "ResendVerificationReq": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ResendVerificationReq"
+      },
+      "ResendVerificationResp": {
+        "properties": {
+          "sent": {
+            "type": "boolean",
+            "title": "Sent",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "ResendVerificationResp"
+      },
       "Role": {
         "type": "string",
         "enum": [
@@ -4953,14 +5042,23 @@
       },
       "VerifyEmailReq": {
         "properties": {
-          "token": {
+          "email": {
             "type": "string",
-            "title": "Token"
+            "format": "email",
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^\\d{6}$",
+            "title": "Code"
           }
         },
         "type": "object",
         "required": [
-          "token"
+          "email",
+          "code"
         ],
         "title": "VerifyEmailReq"
       },

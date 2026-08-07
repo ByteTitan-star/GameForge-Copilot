@@ -88,7 +88,7 @@ export function ForgotPasswordPage() {
       {step === 'confirm' ? (
         <form className="space-y-4" onSubmit={onConfirm}>
           <p className="text-xs text-white/55">
-            若已配置 SMTP 会收到邮件；本地开发请到 Worker 终端查看 `[dev-email]` 重置链接或令牌。
+            已配置 SMTP 会收到邮件；否则在 Worker 终端查看 `[dev-email]` 重置令牌。
           </p>
           <Input
             name="token"

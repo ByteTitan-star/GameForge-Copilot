@@ -2,12 +2,17 @@ import { useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
+import { Role } from '@/api/enums'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
+import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/stores/auth-store'
 import { LlmConfigPanel } from './LlmConfigPanel'
 import { UsagePanel } from './UsagePanel'
+import { ThemePanel } from '@/components/theme/ThemePanel'
+
+type SettingsTab = 'account' | 'appearance' | 'llm'
 
 export function SettingsPage() {
   const t = useT()
@@ -15,6 +20,7 @@ export function SettingsPage() {
   const token = useAuthStore((s) => s.access_token)
   const location = useLocation()
   const state = location.state as { needVerify?: boolean; justVerified?: boolean } | null
+  const [tab, setTab] = useState<SettingsTab>('account')
 
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -28,137 +34,170 @@ export function SettingsPage() {
     setPwdError('')
     setPwdOk('')
     if (!token) {
-      setPwdError('请先登录')
+      setPwdError(t('loginRequired'))
       return
     }
     if (newPassword.length < 8) {
-      setPwdError('新密码至少 8 位')
+      setPwdError(t('pwdMinLength'))
       return
     }
     if (newPassword !== confirmPassword) {
-      setPwdError('两次输入的新密码不一致')
+      setPwdError(t('pwdMismatch'))
       return
     }
     setPwdLoading(true)
     try {
       await authApi.changePassword(oldPassword, newPassword, token)
-      setPwdOk('密码已更新')
+      setPwdOk(t('pwdUpdated'))
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPwdError(formatApiError(err, '修改失败'))
+      setPwdError(formatApiError(err, t('changePwdFailed')))
     } finally {
       setPwdLoading(false)
     }
   }
 
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'account', label: t('tabAccount') },
+    { id: 'appearance', label: t('themeTab') },
+    { id: 'llm', label: t('tabLlm') },
+  ]
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-mono text-[10px] tracking-[0.16em] text-white/35 uppercase">Account</p>
-        <h1 className="text-2xl tracking-tight text-white/95 md:text-3xl">{t('settings')}</h1>
-        <p className="mt-1 text-sm text-white/40">LLM 配置、用量与账号</p>
-      </div>
+      <header>
+        <h1 className="gf-page-title">{t('settings')}</h1>
+        <p className="gf-page-subtitle mt-1">{t('settingsSubtitle')}</p>
+      </header>
 
       {state?.needVerify ? (
-        <p role="status" className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          邮箱尚未验证：请先验证邮箱并配置 LLM，再开始生成游戏。
+        <p role="status" className="gf-banner-warn rounded-xl px-4 py-3 text-sm">
+          {t('needVerifyBanner')}
         </p>
       ) : null}
       {state?.justVerified ? (
-        <p role="status" className="rounded-xl border border-teal-400/25 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">
-          邮箱已验证。接下来配置 LLM 即可开始创作。
+        <p role="status" className="gf-banner-info rounded-xl px-4 py-3 text-sm">
+          {t('justVerifiedBanner')}
         </p>
       ) : null}
 
-      <section className="rounded-2xl border border-white/[0.08] bg-[#12151a] p-5">
-        <h2 className="text-lg text-white/90">账号</h2>
-        <dl className="mt-3 space-y-2 text-sm text-white/45">
-          {[
-            ['邮箱', user?.email],
-            ['角色', user?.role],
-            ['邮箱验证', user?.email_verified ? '已验证' : '未验证'],
-          ].map(([k, v]) => (
-            <div
-              key={String(k)}
-              className="flex justify-between gap-4 rounded-xl bg-black/25 px-3 py-2 ring-1 ring-white/[0.04]"
-            >
-              <dt>{k}</dt>
-              <dd className="text-white/85">{v}</dd>
-            </div>
-          ))}
-        </dl>
-        {!user?.email_verified ? (
-          <div className="mt-4">
-            <Link to="/verify-email">
-              <Button className="!rounded-lg !bg-teal-400 !text-black hover:!bg-teal-300">去验证邮箱</Button>
-            </Link>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="rounded-2xl border border-white/[0.08] bg-[#12151a] p-5">
-        <h2 className="text-lg text-white/90">{t('changePassword')}</h2>
-        <p className="mt-1 text-xs text-white/35">{t('changePasswordHint')}</p>
-        <form className="mt-4 max-w-md space-y-3" onSubmit={onChangePassword}>
-          <Input
-            name="old_password"
-            label={t('oldPassword')}
-            type="password"
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-          <Input
-            name="new_password"
-            label={t('newPassword')}
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-          <Input
-            name="confirm_password"
-            label={t('confirmPassword')}
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-          {pwdError ? (
-            <p role="alert" className="text-sm text-red-300">
-              {pwdError}
-            </p>
-          ) : null}
-          {pwdOk ? (
-            <p role="status" className="text-sm text-teal-200">
-              {pwdOk}
-            </p>
-          ) : null}
-          <Button
-            type="submit"
-            className="!rounded-lg !bg-teal-400 !text-black hover:!bg-teal-300"
-            disabled={pwdLoading}
+      <div className="gf-border-subtle flex gap-1 border-b">
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={cn(
+              'cursor-pointer border-b-2 px-4 py-2.5 text-sm font-medium transition -mb-px',
+              tab === id
+                ? 'gf-tab-active'
+                : 'border-transparent gf-page-muted hover:text-[var(--gf-text)]',
+            )}
           >
-            {pwdLoading ? t('savingPassword') : t('changePassword')}
-          </Button>
-        </form>
-        <p className="mt-3 text-xs text-white/35">
-          忘记旧密码？{' '}
-          <Link to="/forgot-password" className="text-white/70 underline-offset-2 hover:underline">
-            {t('forgot')}
-          </Link>
-        </p>
-      </section>
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <LlmConfigPanel />
-      <UsagePanel />
+      {tab === 'account' ? (
+        <div className="space-y-6">
+          <section className="gf-glass rounded-2xl p-5">
+            <h2 className="gf-page-body text-lg">{t('accountInfo')}</h2>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="gf-border-subtle flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/[0.02] px-4 py-3 ring-1 ring-[var(--gf-border)]">
+                <dt className="gf-page-muted">{t('email')}</dt>
+                <dd className="gf-page-body flex items-center gap-2">
+                  {user?.email}
+                  {user?.email_verified ? (
+                    <span className="rounded-md bg-emerald-400/15 px-2 py-0.5 text-[11px] text-emerald-300 ring-1 ring-emerald-400/25">
+                      {t('verified')}
+                    </span>
+                  ) : (
+                    <span className="gf-badge-warn rounded-md px-2 py-0.5 text-[11px]">
+                      {t('unverified')}
+                    </span>
+                  )}
+                </dd>
+              </div>
+              <div className="gf-border-subtle flex justify-between gap-4 rounded-xl bg-black/[0.02] px-4 py-3 ring-1 ring-[var(--gf-border)]">
+                <dt className="gf-page-muted">{t('roleLabel')}</dt>
+                <dd className="gf-page-body">{user?.role === Role.admin ? t('roleAdmin') : t('roleUser')}</dd>
+              </div>
+            </dl>
+            {!user?.email_verified ? (
+              <div className="mt-4">
+                <Link to="/verify-email">
+                  <Button className="gf-btn-primary !rounded-xl !border-0 !text-sm">{t('goVerifyEmail')}</Button>
+                </Link>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="gf-glass rounded-2xl p-5">
+            <h2 className="gf-page-body text-lg">{t('changePassword')}</h2>
+            <p className="gf-page-muted mt-1 text-xs">{t('changePasswordHint')}</p>
+            <form className="mt-4 max-w-md space-y-3" onSubmit={onChangePassword}>
+              <Input
+                name="old_password"
+                label={t('oldPassword')}
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+              <Input
+                name="new_password"
+                label={t('newPassword')}
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+              <Input
+                name="confirm_password"
+                label={t('confirmPassword')}
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+              {pwdError ? (
+                <p role="alert" className="text-sm text-red-300">
+                  {pwdError}
+                </p>
+              ) : null}
+              {pwdOk ? (
+                <p role="status" className="text-sm text-cyan-200">
+                  {pwdOk}
+                </p>
+              ) : null}
+              <Button type="submit" className="gf-btn-primary !rounded-xl !border-0" disabled={pwdLoading}>
+                {pwdLoading ? t('savingPassword') : t('changePassword')}
+              </Button>
+            </form>
+            <p className="gf-page-muted mt-3 text-xs">
+              {t('forgotOldPwd')}{' '}
+              <Link to="/forgot-password" className="gf-text-accent opacity-80 underline-offset-2 hover:underline">
+                {t('forgot')}
+              </Link>
+            </p>
+          </section>
+        </div>
+      ) : tab === 'appearance' ? (
+        <ThemePanel />
+      ) : (
+        <div className="space-y-6">
+          <LlmConfigPanel />
+          <UsagePanel />
+        </div>
+      )}
     </div>
   )
 }

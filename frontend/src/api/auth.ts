@@ -39,10 +39,17 @@ export const authApi = {
     })
   },
 
-  verifyEmail(token: string) {
+  verifyEmail(email: string, code: string) {
     return apiRequest<VerifyEmailResponse>('/auth/verify-email', {
       method: 'POST',
-      body: { token },
+      body: { email, code },
+    })
+  },
+
+  resendVerification(email: string) {
+    return apiRequest<{ sent: boolean }>('/auth/resend-verification', {
+      method: 'POST',
+      body: { email },
     })
   },
 

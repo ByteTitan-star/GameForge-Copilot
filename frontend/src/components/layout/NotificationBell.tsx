@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Loader2 } from 'lucide-react'
 import { meApi } from '@/api/me'
+import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/cn'
 
 export function NotificationBell() {
+  const t = useT()
   const token = useAuthStore((s) => s.access_token)
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -31,8 +33,8 @@ export function NotificationBell() {
     <div className="relative">
       <button
         type="button"
-        title="通知"
-        aria-label="通知"
+        title={t('notifications')}
+        aria-label={t('notifications')}
         onClick={() => setOpen((v) => !v)}
         className="relative grid h-9 w-9 cursor-pointer place-items-center rounded-xl text-white/50 transition hover:bg-white/[0.08] hover:text-white"
       >
@@ -48,20 +50,20 @@ export function NotificationBell() {
         <>
           <button
             type="button"
-            aria-label="关闭通知"
+            aria-label={t('closeNotifications')}
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
           <div className="absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 rounded-xl border border-white/10 bg-[#161a20] p-2 shadow-2xl">
             <p className="px-2 py-1 font-mono text-[10px] tracking-wider text-white/40 uppercase">
-              站内通知
+              {t('inboxTitle')}
             </p>
             {inbox.isLoading ? (
               <p className="flex items-center gap-2 px-2 py-4 text-xs text-white/40">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> 加载中…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('loading')}
               </p>
             ) : (inbox.data ?? []).length === 0 ? (
-              <p className="px-2 py-4 text-xs text-white/35">暂无通知</p>
+              <p className="px-2 py-4 text-xs text-white/35">{t('noNotifications')}</p>
             ) : (
               <ul className="max-h-64 space-y-1 overflow-y-auto">
                 {(inbox.data ?? []).slice(0, 20).map((n) => (

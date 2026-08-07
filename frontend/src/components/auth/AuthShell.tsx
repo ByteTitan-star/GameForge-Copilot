@@ -37,7 +37,7 @@ export function AuthShell({ children, title, subtitle }: Props) {
       <div className="relative z-10 flex min-h-screen flex-col px-5 pb-12 pt-6 sm:px-8 md:px-12">
         <header className="flex items-center justify-between gap-4">
           <Link
-            to="/"
+            to="/home"
             className="liquid-glass rounded-xl px-4 py-2 text-lg font-semibold tracking-tight transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
           >
             {t('brand')}

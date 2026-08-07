@@ -1,68 +1,51 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ChevronRight, MessageSquareText, Bot, Gamepad2, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ChevronRight, LogOut, MessageSquareText, Bot, Gamepad2, ShieldCheck } from 'lucide-react'
 import { FadeIn } from '@/components/ui/fade-in'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/i18n/use-t'
+import { useLocaleStore } from '@/stores/locale-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/cn'
 import heroArt from '@/assets/hero.png'
 
-/** 保留动态视频底座；下方再叠能力 / Cases（在原版上增强，而非替换） */
 const HERO_VIDEO =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4'
 
-const services = ['/ 用文字讲规则', '/ 自动写出页面', '/ 浏览器里先玩', '/ 想公开再提交']
-
-const features = [
-  {
-    icon: MessageSquareText,
-    title: '一边说一边看进度',
-    body: '左边打字描述，右边看做到哪一步，不用换软件。',
-  },
-  {
-    icon: Bot,
-    title: '先看方案再往下做',
-    body: '会先给你玩法说明；你点同意，才继续画界面、写程序。',
-  },
-  {
-    icon: Gamepad2,
-    title: '生成完就能点开玩',
-    body: '不用下载安装；不满意，接着打字改。',
-  },
-  {
-    icon: ShieldCheck,
-    title: '用自己的模型账号',
-    body: '在设置里填密钥；花了多少字数，页面上能看见。',
-  },
-]
-
-const cases = [
-  {
-    title: '霓虹贪吃蛇',
-    tag: 'Arcade · Draft',
-    blurb: '方向键吃豆、撞墙重来；做完接着改难度和配色。',
-  },
-  {
-    title: '像素跑酷',
-    tag: 'Runner · Published',
-    blurb: '跳障碍、换皮肤；做好后有一个链接，发给别人也能玩。',
-  },
-  {
-    title: '塔防雏形',
-    tag: 'Strategy · Forge',
-    blurb: '先确认路线和怪物波次，再生成；数值不对就改完重跑。',
-  },
-]
-
 export function LandingPage() {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const token = useAuthStore((s) => s.access_token)
+  const logout = useAuthStore((s) => s.logout)
   const ctaTo = token ? '/forge' : '/register'
+
+  const services = useMemo(
+    () => [t('landingService1'), t('landingService2'), t('landingService3'), t('landingService4')],
+    [locale],
+  )
+
+  const features = useMemo(
+    () => [
+      { icon: MessageSquareText, title: t('landingFeature1Title'), body: t('landingFeature1Body') },
+      { icon: Bot, title: t('landingFeature2Title'), body: t('landingFeature2Body') },
+      { icon: Gamepad2, title: t('landingFeature3Title'), body: t('landingFeature3Body') },
+      { icon: ShieldCheck, title: t('landingFeature4Title'), body: t('landingFeature4Body') },
+    ],
+    [locale],
+  )
+
+  const cases = useMemo(
+    () => [
+      { title: t('landingCase1Title'), tag: t('landingCase1Tag'), blurb: t('landingCase1Blurb') },
+      { title: t('landingCase2Title'), tag: t('landingCase2Tag'), blurb: t('landingCase2Blurb') },
+      { title: t('landingCase3Title'), tag: t('landingCase3Tag'), blurb: t('landingCase3Blurb') },
+    ],
+    [locale],
+  )
 
   return (
     <div className="relative min-h-screen bg-[#0a0a0a] text-white">
-      {/* 动态层：全页固定视频（原版核心） */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
         <video
           className="h-full w-full object-cover"
@@ -73,25 +56,61 @@ export function LandingPage() {
           playsInline
           poster={heroArt}
         />
-        {/* 仅底部渐强，保证下半屏文字可读，不盖死整页 */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/75" />
       </div>
 
       <div className="relative z-10">
-        {/* ===== Hero：沿用原版结构，加强交互 ===== */}
         <section className="flex min-h-[100svh] min-h-screen flex-col px-5 pb-12 pt-6 sm:px-8 md:px-12">
-          <header className="flex items-center justify-between border-b border-white/15 pb-4">
-            <span className="text-lg font-medium tracking-tight sm:text-xl">{t('brand')}</span>
-            <div className="flex items-center gap-3">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/15 pb-4">
+            <Link
+              to="/home"
+              className="text-lg font-medium tracking-tight transition-opacity hover:opacity-90 sm:text-xl"
+            >
+              {t('brand')}
+            </Link>
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
               {token ? (
-                <Link to="/games">
-                  <Button
-                    variant="secondary"
-                    className="rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
+                <>
+                  <Link
+                    to="/games"
+                    className="hidden cursor-pointer text-sm text-white/80 transition-colors hover:text-white sm:inline"
                   >
                     {t('games')}
+                  </Link>
+                  <Link to="/games">
+                    <Button
+                      variant="secondary"
+                      className="rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98] sm:hidden"
+                    >
+                      {t('games')}
+                    </Button>
+                  </Link>
+                  <Link to="/forge">
+                    <Button
+                      variant="secondary"
+                      className="hidden rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98] sm:inline-flex"
+                    >
+                      {t('forge')}
+                    </Button>
+                  </Link>
+                  <Link to="/settings">
+                    <Button
+                      variant="secondary"
+                      className="hidden rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98] md:inline-flex"
+                    >
+                      {t('settings')}
+                    </Button>
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="inline-flex items-center gap-1.5 rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
+                    onClick={() => void logout()}
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    {t('logout')}
                   </Button>
-                </Link>
+                </>
               ) : (
                 <>
                   <Link
@@ -126,12 +145,9 @@ export function LandingPage() {
                   ))}
                 </ul>
                 <FadeIn delayMs={300} className="max-w-xs sm:text-right">
-                  <p className="text-lg leading-relaxed text-white drop-shadow-md sm:text-xl">
-                    {t('tagline')}
-                  </p>
+                  <p className="text-lg leading-relaxed text-white drop-shadow-md sm:text-xl">{t('tagline')}</p>
                 </FadeIn>
               </div>
-              {/* 本地资产：增加一点原创辨识，不替代视频 */}
               <FadeIn delayMs={220} className="hidden shrink-0 lg:block">
                 <img
                   src={heroArt}
@@ -145,14 +161,16 @@ export function LandingPage() {
               <div>
                 <FadeIn delayMs={150}>
                   <div className="mb-5 border-l-2 border-white bg-white/15 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] backdrop-blur-md transition-colors duration-200 hover:bg-white/25">
-                    说完就能玩
+                    {t('landingBadge')}
                   </div>
                 </FadeIn>
                 <FadeIn delayMs={280}>
                   <h1 className="text-5xl font-normal leading-[1.05] tracking-tight text-white drop-shadow-lg sm:text-6xl lg:text-7xl">
-                    Say it. Play it.
+                    {t('landingHero1')}
                     <br />
-                    Fix it.
+                    {t('landingHero2')}
+                    <br />
+                    {t('landingHero3')}
                   </h1>
                 </FadeIn>
               </div>
@@ -168,7 +186,7 @@ export function LandingPage() {
                     variant="secondary"
                     className="rounded-full px-6 py-3 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
                   >
-                    看 Cases
+                    {t('viewCases')}
                   </Button>
                 </a>
               </FadeIn>
@@ -176,18 +194,15 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ===== 增强区：仍压在动态视频上，用玻璃层 ===== */}
         <section
           id="features"
           className="border-t border-white/15 bg-black/35 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12"
         >
           <div className="mx-auto max-w-6xl">
             <FadeIn>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">
-                What you get
-              </p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">{t('whatYouGet')}</p>
               <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
-                你能直接做这些事
+                {t('featuresTitle')}
               </h2>
             </FadeIn>
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -215,16 +230,14 @@ export function LandingPage() {
             <FadeIn>
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">
-                    Cases
-                  </p>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">Cases</p>
                   <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
-                    别人已经这样试过
+                    {t('casesTitle')}
                   </h2>
                 </div>
                 <Link to={ctaTo}>
                   <MagneticButton className="!rounded-full !px-5 !py-2.5 text-xs sm:text-sm">
-                    我也做一个
+                    {t('makeOneToo')}
                     <ArrowRight className="h-4 w-4" />
                   </MagneticButton>
                 </Link>
@@ -234,16 +247,14 @@ export function LandingPage() {
               {cases.map((c, i) => (
                 <FadeIn key={c.title} delayMs={60 + i * 90}>
                   <article className="flex h-full flex-col rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.16]">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">
-                      {c.tag}
-                    </p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{c.tag}</p>
                     <h3 className="mt-3 text-xl font-medium">{c.title}</h3>
                     <p className="mt-2 flex-1 text-sm leading-relaxed text-white/70">{c.blurb}</p>
                     <Link
                       to={token ? '/games' : '/register'}
                       className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm text-white transition-all duration-200 hover:gap-2"
                     >
-                      去试试类似的 <ArrowRight className="h-3.5 w-3.5" />
+                      {t('trySimilar')} <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </article>
                 </FadeIn>
@@ -255,12 +266,8 @@ export function LandingPage() {
         <footer className="border-t border-white/15 bg-black/50 px-5 py-12 backdrop-blur-md sm:px-8 md:px-12">
           <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div>
-              <h2 className="text-2xl font-normal tracking-tight drop-shadow-md">
-                想做一个自己的小游戏了吗？
-              </h2>
-              <p className="mt-2 text-sm text-white/65">
-                注册、验证邮箱、填上模型密钥，就可以开始说第一个想法。
-              </p>
+              <h2 className="text-2xl font-normal tracking-tight drop-shadow-md">{t('footerTitle')}</h2>
+              <p className="mt-2 text-sm text-white/65">{t('footerSubtitle')}</p>
             </div>
             <Link to={ctaTo}>
               <MagneticButton className="!rounded-full">

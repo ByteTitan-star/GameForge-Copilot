@@ -1,18 +1,21 @@
 import { GameStatus } from '@/api/enums'
+import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
+import type { MessageKey } from '@/i18n/messages'
 
 type Props = { status: GameStatus; className?: string }
 
-const label: Record<GameStatus, string> = {
-  [GameStatus.draft]: 'Draft',
-  [GameStatus.submitted]: 'Pending',
-  [GameStatus.reviewing]: 'Pending',
-  [GameStatus.published]: 'Published',
-  [GameStatus.rejected]: 'Rejected',
-  [GameStatus.taken_down]: 'Taken down',
+const statusKey: Record<GameStatus, MessageKey> = {
+  [GameStatus.draft]: 'statusDraft',
+  [GameStatus.submitted]: 'statusPending',
+  [GameStatus.reviewing]: 'statusPending',
+  [GameStatus.published]: 'statusPublished',
+  [GameStatus.rejected]: 'statusRejected',
+  [GameStatus.taken_down]: 'statusTakenDown',
 }
 
 export function StatusBadge({ status, className }: Props) {
+  const t = useT()
   const pending = status === GameStatus.submitted || status === GameStatus.reviewing
   const published = status === GameStatus.published
   const rejected = status === GameStatus.rejected || status === GameStatus.taken_down
@@ -29,7 +32,7 @@ export function StatusBadge({ status, className }: Props) {
         className,
       )}
     >
-      {label[status]}
+      {t(statusKey[status])}
     </span>
   )
 }

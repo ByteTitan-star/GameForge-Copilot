@@ -36,11 +36,12 @@ export function RegisterPage() {
 
   return (
     <AuthShell title={t('register')} subtitle="注册后请验证邮箱，再配置 LLM 开始生成">
-      <form className="space-y-4" onSubmit={onSubmit}>
+      <form className="space-y-4" onSubmit={onSubmit} autoComplete="off">
         <Input
           name="email"
           label={t('email')}
           type="email"
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -49,6 +50,7 @@ export function RegisterPage() {
           name="password"
           label={t('password')}
           type="password"
+          autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -58,6 +60,7 @@ export function RegisterPage() {
           name="confirm"
           label={t('confirmPassword')}
           type="password"
+          autoComplete="new-password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           required

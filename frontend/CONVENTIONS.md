@@ -45,11 +45,8 @@ pnpm build
 pnpm lint
 ```
 
-## Mock 账号
+## 联调验收账号
 
-| 邮箱 | 密码 | 说明 |
-|------|------|------|
-| demo@gameforge.dev | password123 | 已验证 user |
-| unverified@gameforge.dev | password123 | 未验证 |
-| admin@gameforge.dev | password123 | admin |
-| fail@test.com | * | 登录必失败 |
+认证走真实 API：自行注册，在 Worker 终端 `[dev-email]` 取验证链接。
+
+若后端已 seed 测试账号，见 `backend` 测试 fixture 或问后端同学；前端不再内置 Mock 账号表。

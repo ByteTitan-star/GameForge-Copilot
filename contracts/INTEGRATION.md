@@ -10,8 +10,7 @@
 > QUOTA/EMAIL 错误引导文案。
 > **2026-08-07 续**：`POST /auth/password/change` 已出契约；Setting 页内改密表单；AdminUserItem 回显
 > `daily_token_limit`；`/forgot-password` 与 `/reset-password` 双路由可用。
-> **2026-08-07 前端去 Mock**：已删除 MSW / `VITE_USE_MOCK` / mock-play；前端默认直连 `VITE_API_BASE_URL`。
-> 联调：`frontend/.env` + `pnpm dev`；冒烟 `pnpm smoke:real`。
+> **2026-08-07 前端去 Mock**：已删除 MSW；默认直连 `VITE_API_BASE_URL`。冒烟：`pnpm smoke:real`。
 
 ## M1 认证
 
@@ -61,13 +60,13 @@
 | POST /runs/{run_id}/pause | mock→可 real | Forge 顶栏 |
 | POST /runs/{run_id}/resume | mock→可 real | Forge 顶栏 |
 | POST /runs/{run_id}/cancel | mock→可 real | Forge 顶栏 |
-| WS /ws/runs/{run_id} | mock→可 real | `src/ws/client.ts`；Mock 仍用 `ws/mock.ts` |
+| WS /ws/runs/{run_id} | mock→可 real | `src/ws/client.ts` |
 
 ## M5 沙箱与托管
 
 | 端点 | 状态 | 备注 |
 |---|---|---|
-| GET /play/{slug} | mock→可 real | 长 Cache-Control；Mock 用 mock-play.html |
+| GET /play/{slug} | mock→可 real | 长 Cache-Control |
 | GET /draft/{game_id}/{version} | mock→可 real | 私有短缓存；GamePlayer Bearer→blob |
 
 ## M6 全生成链

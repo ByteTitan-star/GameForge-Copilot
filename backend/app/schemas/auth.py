@@ -39,7 +39,16 @@ class TokenResp(BaseModel):
 
 
 class VerifyEmailReq(BaseModel):
-    token: str
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class ResendVerificationReq(BaseModel):
+    email: EmailStr
+
+
+class ResendVerificationResp(BaseModel):
+    sent: bool = True
 
 
 class VerifyEmailResp(BaseModel):

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search, Sparkles } from 'lucide-react'
+import { Plus, Search, Sparkles } from 'lucide-react'
 import { gamesApi } from '@/api/games'
 import { GameStatus } from '@/api/enums'
 import { formatApiError } from '@/api/error-message'
@@ -13,24 +13,15 @@ import { cn } from '@/lib/cn'
 import { isTrialUser } from '@/lib/trial'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { GameCard } from './GameCard'
-import { ParticleField } from './ParticleField'
 
-const filters = [
-  { id: 'all', label: '全部' },
-  { id: 'draft', label: '草稿' },
-  { id: 'published', label: '已发布' },
-  { id: 'pipeline', label: '审批中' },
-] as const
+import type { MessageKey } from '@/i18n/messages'
 
-const listVariants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.05 } },
-}
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } },
-  exit: { opacity: 0, scale: 0.85, transition: { duration: 0.28 } },
+const filterIds = ['all', 'draft', 'published', 'pipeline'] as const
+const filterLabelKey: Record<(typeof filterIds)[number], MessageKey> = {
+  all: 'filterAll',
+  draft: 'filterDraft',
+  published: 'filterPublished',
+  pipeline: 'filterPipeline',
 }
 
 export function GameDashboard() {
@@ -39,7 +30,7 @@ export function GameDashboard() {
   const token = useAuthStore((s) => s.access_token)
   const user = useAuthStore((s) => s.user)
   const trial = isTrialUser(user)
-  const [filter, setFilter] = useState<(typeof filters)[number]['id']>('all')
+  const [filter, setFilter] = useState<(typeof filterIds)[number]>('all')
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GameSummary | null>(null)
@@ -53,12 +44,15 @@ export function GameDashboard() {
 
   const rows = query.data?.data ?? []
 
-  const stats = useMemo(() => {
-    const pending = rows.filter(
+  const counts = useMemo(() => {
+    const draft = rows.filter(
+      (g) => g.status === GameStatus.draft || g.status === GameStatus.rejected,
+    ).length
+    const published = rows.filter((g) => g.status === GameStatus.published).length
+    const pipeline = rows.filter(
       (g) => g.status === GameStatus.submitted || g.status === GameStatus.reviewing,
     ).length
-    const plays = rows.reduce((acc, g) => acc + g.current_version * 17 + (g.slug ? 40 : 0), 0)
-    return { total: rows.length, pending, plays }
+    return { all: rows.length, draft, published, pipeline }
   }, [rows])
 
   const list = useMemo(() => {
@@ -78,11 +72,11 @@ export function GameDashboard() {
       setDeleteTarget(null)
       setExitingId(null)
       await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
-      setToast('已删除')
+      setToast(t('deleted'))
     },
     onError: (e) => {
       setExitingId(null)
-      setToast(formatApiError(e, '删除失败'))
+      setToast(formatApiError(e, t('deleteFailed')))
     },
   })
 
@@ -91,21 +85,21 @@ export function GameDashboard() {
       gamesApi.patch(gameId, { title }, token!),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
-      setToast('已重命名')
+      setToast(t('renamed'))
     },
     onError: (e) => {
-      setToast(formatApiError(e, '重命名失败'))
+      setToast(formatApiError(e, t('renameFailed')))
       throw e
     },
   })
 
   async function publishGame(g: GameSummary, note: string) {
     try {
-      await gamesApi.submitPublish(g.game_id, g.current_version, note || '申请上架', token!)
+      await gamesApi.submitPublish(g.game_id, g.current_version, note || t('defaultPublishNote'), token!)
       await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
-      setToast('已提交发布审批')
+      setToast(t('publishSubmitted'))
     } catch (e) {
-      setToast(formatApiError(e, '提交失败'))
+      setToast(formatApiError(e, t('submitFailed')))
       throw e
     }
   }
@@ -119,121 +113,113 @@ export function GameDashboard() {
     const id = deleteTarget.game_id
     setDeleteTarget(null)
     setExitingId(id)
-    window.setTimeout(() => {
-      removeMu.mutate(id)
-    }, 320)
+    window.setTimeout(() => removeMu.mutate(id), 320)
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-0px)] text-white">
-      <ParticleField />
-
-      <div className="relative z-10 space-y-6">
-        <header className="space-y-1">
-          <p className="font-mono text-[10px] tracking-[0.18em] text-white/35 uppercase">Dashboard</p>
-          <h1 className="text-2xl tracking-tight text-white md:text-3xl">我的游戏工坊</h1>
-          <p className="text-sm text-white/40">瀑布流卡片 · 赛博紫 / 霓虹青 · 真实 API</p>
-        </header>
-
-        <motion.div
-          className="grid gap-3 sm:grid-cols-3"
-          initial={{ opacity: 0, x: -24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {[
-            { k: '总游戏数', v: stats.total, accent: 'from-purple-500/30 to-transparent' },
-            { k: '待审批', v: stats.pending, accent: 'from-amber-500/25 to-transparent' },
-            { k: '今日试玩', v: stats.plays, accent: 'from-cyan-400/25 to-transparent' },
-          ].map((s) => (
-            <div
-              key={s.k}
-              className={cn(
-                'rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 backdrop-blur-md',
-                'bg-gradient-to-br',
-                s.accent,
-              )}
-            >
-              <p className="font-mono text-[10px] tracking-wider text-white/40 uppercase">{s.k}</p>
-              <p className="mt-2 bg-gradient-to-r from-purple-300 to-cyan-300 bg-clip-text text-3xl font-semibold text-transparent">
-                {s.v}
-              </p>
-            </div>
-          ))}
-        </motion.div>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <label className="relative block w-full lg:w-[60%]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="gf-page-title">{t('games')}</h1>
+          <p className="gf-page-subtitle mt-1">{t('gamesSubtitle')}</p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="relative block sm:w-72">
+            <Search className="gf-page-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="搜索标题…"
-              className="h-11 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
+              placeholder={t('searchGamesPlaceholder')}
+              className="gf-input h-11 w-full rounded-xl pl-9 pr-3 text-sm"
             />
           </label>
           {trial ? null : (
-            <Link
-              to="/forge"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-cyan-400 px-5 text-sm font-semibold text-black shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:brightness-110"
-            >
-              <Sparkles className="h-4 w-4" />
-              开始做游戏
+            <Link to="/forge" className="gf-btn-primary inline-flex h-11 items-center justify-center gap-2 px-5 text-sm">
+              <Plus className="h-4 w-4" />
+              {t('createGame')}
             </Link>
           )}
         </div>
+      </header>
 
-        {trial ? (
-          <p role="status" className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
-            {t('trialGamesHint')}
-          </p>
-        ) : null}
+      {trial ? (
+        <p role="status" className="gf-banner-warn rounded-xl px-3 py-2 text-sm">
+          {t('trialGamesHint')}
+        </p>
+      ) : null}
 
-        <div className="flex flex-wrap gap-1.5">
-          {filters.map((f) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {filterIds.map((id) => {
+          const count = counts[id]
+          return (
             <button
-              key={f.id}
+              key={id}
               type="button"
-              onClick={() => setFilter(f.id)}
+              onClick={() => setFilter(id)}
               className={cn(
-                'cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                filter === f.id
-                  ? 'bg-gradient-to-r from-purple-500/30 to-cyan-400/25 text-white ring-1 ring-cyan-400/30'
-                  : 'text-white/45 hover:bg-white/[0.05] hover:text-white/80',
+                'cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition',
+                filter === id
+                  ? 'gf-filter-active'
+                  : 'gf-chip gf-interactive hover:bg-black/[0.03]',
               )}
             >
-              {f.label}
+              {t(filterLabelKey[id])}
+              <span className="ml-1.5 font-mono text-[10px] opacity-70">{count}</span>
             </button>
-          ))}
+          )
+        })}
+      </div>
+
+      {toast ? (
+        <div className="gf-banner-info flex items-center justify-between rounded-xl px-3 py-2 text-sm">
+          <span>{toast}</span>
+          <button type="button" className="gf-page-muted cursor-pointer" onClick={() => setToast(null)}>
+            {t('close')}
+          </button>
         </div>
+      ) : null}
 
-        {toast ? (
-          <div className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm text-cyan-50">
-            <span>{toast}</span>
-            <button type="button" className="cursor-pointer text-white/50" onClick={() => setToast(null)}>
-              关闭
-            </button>
+      {query.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
+      {query.isError ? (
+        <p role="alert" className="text-sm text-rose-300">
+          {t('loadFailed')}
+        </p>
+      ) : null}
+
+      {!query.isLoading && list.length === 0 ? (
+        <div className="gf-glass flex flex-col items-center rounded-2xl px-6 py-20 text-center">
+          <div className="relative">
+            <div className="gf-empty-glow absolute inset-0 scale-150 rounded-full blur-3xl" aria-hidden />
+            <div className="gf-empty-icon-wrap relative grid h-20 w-20 place-items-center rounded-2xl border">
+              <Sparkles className="gf-text-accent h-9 w-9" />
+            </div>
           </div>
-        ) : null}
-
-        {query.isLoading ? <p className="text-sm text-white/40">加载中…</p> : null}
-        {query.isError ? (
-          <p role="alert" className="text-sm text-rose-300">
-            加载失败
-          </p>
-        ) : null}
-
+          <h2 className="gf-page-body mt-8 text-xl font-medium">{t('noGames')}</h2>
+          <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
+          {trial ? null : (
+            <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
+              <Plus className="h-4 w-4" />
+              {t('createFirstGame')}
+            </Link>
+          )}
+        </div>
+      ) : (
         <motion.div
-          className="columns-1 gap-4 sm:columns-2 xl:columns-3"
-          variants={listVariants}
-          initial="hidden"
-          animate="show"
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
         >
           <AnimatePresence mode="popLayout">
             {list
               .filter((g) => g.game_id !== exitingId)
               .map((g) => (
-                <motion.div key={g.game_id} variants={itemVariants} layout exit="exit">
+                <motion.div
+                  key={g.game_id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                >
                   <GameCard
                     game={g}
                     readOnly={trial}
@@ -245,22 +231,7 @@ export function GameDashboard() {
               ))}
           </AnimatePresence>
         </motion.div>
-
-        {!query.isLoading && list.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
-            <p className="text-lg text-white/85">还没有游戏</p>
-            <p className="mt-2 text-sm text-white/40">去工坊说清楚规则，马上就能做一款。</p>
-            {trial ? null : (
-              <Link
-                to="/forge"
-                className="mt-6 inline-flex rounded-xl bg-gradient-to-r from-purple-500 to-cyan-400 px-5 py-2.5 text-sm font-semibold text-black"
-              >
-                开始做游戏
-              </Link>
-            )}
-          </div>
-        ) : null}
-      </div>
+      )}
 
       <DeleteConfirmModal
         open={Boolean(deleteTarget)}

@@ -60,8 +60,8 @@ async def _get_test_redis() -> AsyncIterator[fakeredis.aioredis.FakeRedis]:
     yield _fake
 
 
-async def _capture_verify(email: str, token: str) -> None:
-    _sent[f"verify:{email}"] = token
+async def _capture_verify(email: str, code: str) -> None:
+    _sent[f"verify:{email}"] = code
 
 
 async def _capture_reset(email: str, token: str) -> None:
@@ -176,7 +176,10 @@ async def verified_client() -> AsyncIterator[httpx.AsyncClient]:
             "/api/v1/auth/register", json={"email": "v@b.com", "password": "password123"}
         )
         token = _sent["verify:v@b.com"]
-        resp = await client.post("/api/v1/auth/verify-email", json={"token": token})
+        resp = await client.post(
+            "/api/v1/auth/verify-email",
+            json={"email": "v@b.com", "code": token},
+        )
         assert resp.status_code == 200, resp.text
         resp = await client.post(
             "/api/v1/auth/login", json={"email": "v@b.com", "password": "password123"}

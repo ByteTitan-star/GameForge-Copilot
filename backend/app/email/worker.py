@@ -27,18 +27,20 @@ async def _send(email: str, subject: str, body: str) -> None:
     )
 
 
-def _verify_link(token: str) -> str:
-    return f"{settings.frontend_base_url}/verify-email?token={token}"
-
-
 def _reset_link(token: str) -> str:
     return f"{settings.frontend_base_url}/reset-password?token={token}"
 
 
-async def send_verification_email(ctx: dict, email: str, token: str) -> None:
+async def send_verification_email(ctx: dict, email: str, code: str) -> None:
     _ = ctx
-    body = f"点击链接完成验证：\n{_verify_link(token)}"
-    await _send(email, "验证你的 GameForge 邮箱", body)
+    ttl_min = max(1, settings.verify_email_ttl // 60)
+    body = (
+        f"您的 GameForge 邮箱验证码：{code}\n\n"
+        f"请在 {ttl_min} 分钟内于验证页输入此 6 位数字完成验证。\n"
+        f"验证页：{settings.frontend_base_url}/verify-email\n\n"
+        f"如非本人操作，请忽略此邮件。"
+    )
+    await _send(email, "GameForge 邮箱验证码", body)
 
 
 async def send_reset_email(ctx: dict, email: str, token: str) -> None:

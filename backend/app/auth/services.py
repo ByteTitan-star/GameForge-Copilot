@@ -2,6 +2,7 @@
 
 import hashlib
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as redis
@@ -37,8 +38,43 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _gen_verification_code() -> str:
+    """6 位数字验证码（000000–999999，首位可为 0）。"""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
 def _gen_token() -> str:
+    """密码重置等高熵链接 token。"""
     return secrets.token_urlsafe(32)
+
+
+async def _invalidate_pending_verifications(db: AsyncSession, user_id: uuid.UUID) -> None:
+    rows = (
+        await db.scalars(
+            select(EmailVerification).where(
+                EmailVerification.user_id == user_id,
+                EmailVerification.used_at.is_(None),
+            )
+        )
+    ).all()
+    now = _utcnow()
+    for row in rows:
+        row.used_at = now
+    if rows:
+        await db.commit()
+
+
+async def _issue_verification_code(db: AsyncSession, user_id: uuid.UUID) -> str:
+    code = _gen_verification_code()
+    db.add(
+        EmailVerification(
+            user_id=user_id,
+            token_hash=_hash_token(code),
+            expires_at=_utcnow() + timedelta(seconds=settings.verify_email_ttl),
+        )
+    )
+    await db.commit()
+    return code
 
 
 async def register_user(db: AsyncSession, email: str, password: str) -> tuple[User, str]:
@@ -51,23 +87,36 @@ async def register_user(db: AsyncSession, email: str, password: str) -> tuple[Us
         raise AppError(ErrorCode.EMAIL_TAKEN, "邮箱已注册") from e
     await db.refresh(user)
 
-    token = _gen_token()
-    db.add(
-        EmailVerification(
-            user_id=user.id,
-            token_hash=_hash_token(token),
-            expires_at=datetime.now(UTC) + timedelta(seconds=settings.verify_email_ttl),
+    code = await _issue_verification_code(db, user.id)
+    return user, code
+
+
+async def resend_verification(db: AsyncSession, email: str) -> str | None:
+    """未验证用户重发验证码；已验证/不存在返回 None（防枚举）。"""
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None or user.email_verified:
+        return None
+    await _invalidate_pending_verifications(db, user.id)
+    return await _issue_verification_code(db, user.id)
+
+
+async def verify_email(db: AsyncSession, email: str, code: str) -> User:
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "验证码无效或已过期")
+    if user.email_verified:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "邮箱已验证")
+    row = await db.scalar(
+        select(EmailVerification).where(
+            EmailVerification.user_id == user.id,
+            EmailVerification.token_hash == _hash_token(code),
         )
     )
-    await db.commit()
-    return user, token
-
-
-async def verify_email(db: AsyncSession, token: str) -> User:
-    row = await _consume_token(db, EmailVerification, token)
-    user = await db.get(User, row.user_id)
-    if user is None:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "token 无效")
+    if row is None or row.used_at is not None:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "验证码无效或已过期")
+    if _utcnow() > _aware(row.expires_at):
+        raise AppError(ErrorCode.VALIDATION_ERROR, "验证码已过期")
+    row.used_at = _utcnow()
     user.email_verified = True
     await db.commit()
     return user

@@ -17,4 +17,8 @@ describe('formatApiError', () => {
       formatApiError(new ApiError(500, { code: 'OTHER', message: '沙箱炸了' })),
     ).toBe('沙箱炸了')
   })
+
+  it('网络/CORS 失败给出连接提示', () => {
+    expect(formatApiError(new TypeError('Failed to fetch'), '注册失败')).toMatch(/无法连接后端/)
+  })
 })

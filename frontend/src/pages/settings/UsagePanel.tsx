@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { meApi } from '@/api/me'
 import { UsageChart } from '@/components/usage/UsageChart'
+import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 
 function fmt(n: number) {
@@ -10,6 +11,7 @@ function fmt(n: number) {
 }
 
 export function UsagePanel() {
+  const t = useT()
   const token = useAuthStore((s) => s.access_token)
   const q = useQuery({
     queryKey: ['me-usage'],
@@ -20,41 +22,43 @@ export function UsagePanel() {
   const d = q.data
   const chartData = d
     ? [
-        { name: '今日', input: d.today.input_tokens, output: d.today.output_tokens },
-        { name: '本月', input: d.month.input_tokens, output: d.month.output_tokens },
-        { name: '累计', input: d.total.input_tokens, output: d.total.output_tokens },
+        { name: t('usageToday'), input: d.today.input_tokens, output: d.today.output_tokens },
+        { name: t('usageMonth'), input: d.month.input_tokens, output: d.month.output_tokens },
+        { name: t('usageTotal'), input: d.total.input_tokens, output: d.total.output_tokens },
       ]
     : []
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/[0.08] bg-[#12151a] p-5">
+    <section className="gf-glass space-y-4 rounded-2xl p-5">
       <div>
-        <h2 className="text-lg text-white/90">用量看板</h2>
-        <p className="mt-1 text-sm text-white/40">真实 token 用量（`/me/usage`）</p>
+        <h2 className="gf-page-body text-lg">{t('usageTitle')}</h2>
+        <p className="mt-1 gf-page-muted text-sm">{t('usageSubtitle')}</p>
       </div>
 
-      {q.isLoading ? <p className="text-sm text-white/40">加载中…</p> : null}
-      {q.isError ? <p className="text-sm text-red-300">用量加载失败</p> : null}
+      {q.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
+      {q.isError ? <p className="text-sm text-red-600">{t('usageLoadFailed')}</p> : null}
 
       {d ? (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
-              ['今日调用', String(d.today.calls)],
-              ['本月调用', String(d.month.calls)],
-              ['日配额已用', fmt(d.quota.daily_used)],
-              ['日配额剩余', fmt(d.quota.remaining)],
+              [t('usageTodayCalls'), String(d.today.calls)],
+              [t('usageMonthCalls'), String(d.month.calls)],
+              [t('usageDailyUsed'), fmt(d.quota.daily_used)],
+              [t('usageDailyRemaining'), fmt(d.quota.remaining)],
             ].map(([k, v]) => (
-              <div key={k} className="rounded-xl bg-black/25 p-3 ring-1 ring-white/[0.04]">
+              <div key={k} className="rounded-xl bg-black/[0.02] p-3 ring-1 ring-[var(--gf-border)]">
                 <p className="font-mono text-[10px] tracking-wider text-white/35 uppercase">{k}</p>
-                <p className="mt-1 text-xl text-teal-200/90">{v}</p>
+                <p className="mt-1 text-xl gf-text-accent">{v}</p>
               </div>
             ))}
           </div>
           <UsageChart data={chartData} />
-          <p className="font-mono text-[11px] text-white/30">
-            日限额 {fmt(d.quota.daily_token_limit)} · 今日 in/out{' '}
-            {fmt(d.today.input_tokens)}/{fmt(d.today.output_tokens)}
+          <p className="font-mono text-[11px] gf-page-muted">
+            {t('usageDailyLimitLine')
+              .replace('{limit}', fmt(d.quota.daily_token_limit))
+              .replace('{in}', fmt(d.today.input_tokens))
+              .replace('{out}', fmt(d.today.output_tokens))}
           </p>
         </>
       ) : null}

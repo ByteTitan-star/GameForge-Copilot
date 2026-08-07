@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
@@ -12,39 +12,47 @@ export function VerifyEmailPage() {
   const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
-  const [params] = useSearchParams()
-  const emailFromState = (location.state as { email?: string } | null)?.email
-  const tokenFromLink = params.get('token') ?? ''
+  const emailFromState = (location.state as { email?: string } | null)?.email ?? ''
   const patchUser = useAuthStore((s) => s.patchUser)
-  const [token, setToken] = useState(tokenFromLink)
+  const [email, setEmail] = useState(emailFromState)
+  const [code, setCode] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
-  const [autoTried, setAutoTried] = useState(false)
+  const [resending, setResending] = useState(false)
 
-  async function verify(value: string) {
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
     setError('')
+    setInfo('')
     setLoading(true)
     try {
-      await authApi.verifyEmail(value.trim())
+      await authApi.verifyEmail(email.trim(), code.trim())
       patchUser({ email_verified: true })
       navigate('/settings', { replace: true, state: { justVerified: true } })
     } catch (err) {
-      setError(formatApiError(err, '验证失败'))
+      setError(formatApiError(err, t('verifyFailed')))
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (!tokenFromLink || autoTried) return
-    setAutoTried(true)
-    void verify(tokenFromLink)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenFromLink, autoTried])
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    await verify(token)
+  async function onResend() {
+    if (!email.trim()) {
+      setError(t('verifyEmailRequired'))
+      return
+    }
+    setError('')
+    setInfo('')
+    setResending(true)
+    try {
+      await authApi.resendVerification(email.trim())
+      setInfo(t('verifyCodeResent'))
+    } catch (err) {
+      setError(formatApiError(err, t('verifyResendFailed')))
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
@@ -52,16 +60,29 @@ export function VerifyEmailPage() {
       title={t('verifyTitle')}
       subtitle={
         emailFromState
-          ? `验证邮件已发送至 ${emailFromState}；本地开发请到 Worker 终端查看 [dev-email] 链接。`
-          : '请输入邮件中的验证令牌；若从邮件链接进入将自动提交。'
+          ? t('verifySentTo').replace('{email}', emailFromState)
+          : t('verifyCodeHint')
       }
     >
       <form className="space-y-4" onSubmit={onSubmit}>
         <Input
-          name="token"
+          name="email"
+          label={t('email')}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+        />
+        <Input
+          name="code"
           label={t('verifyCode')}
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          inputMode="numeric"
+          pattern="\d{6}"
+          maxLength={6}
+          placeholder="123456"
           required
         />
         {error ? (
@@ -69,9 +90,22 @@ export function VerifyEmailPage() {
             {error}
           </p>
         ) : null}
-        <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
+        {info ? (
+          <p role="status" className="text-sm text-cyan-200/90">
+            {info}
+          </p>
+        ) : null}
+        <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading || code.length !== 6}>
           {loading ? '…' : t('verifySubmit')}
         </MagneticButton>
+        <button
+          type="button"
+          className="w-full cursor-pointer text-center text-xs text-white/65 underline-offset-2 hover:underline disabled:opacity-50"
+          disabled={resending || !email.trim()}
+          onClick={() => void onResend()}
+        >
+          {resending ? t('loading') : t('verifyResend')}
+        </button>
         <p className="text-center text-xs text-white/65">
           <Link to="/login" className="underline-offset-2 hover:underline">
             {t('login')}

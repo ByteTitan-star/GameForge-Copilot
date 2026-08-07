@@ -19,7 +19,8 @@
 - MODIFIED: `GET /me/llm-configs/models` — Redis 缓存（`models_cache_ttl_s`）
 - ADDED: `POST /auth/password/change` — 登录态改密（Bearer + `old_password`/`new_password`）；旧密码错 → 401
 - MODIFIED: `AdminUserItem` — 新增 `daily_token_limit`（用户级覆盖回显，null=全局默认）
-- MODIFIED: `GET /ready` — 响应新增 `rabbitmq: bool`（RabbitMQ 连通；`MESSAGING_BACKEND=memory` 时为 true）
+- MODIFIED: `POST /auth/verify-email` — 请求体改为 `{ email, code }`（6 位数字验证码）；不再使用邮件链接 token
+- ADDED: `POST /auth/resend-verification` — 重发邮箱验证码（防枚举恒 `sent: true`）
 - NOTE: 异步任务由 arq/Redis 迁至 RabbitMQ（`app.messaging.worker`）；WS 事件 topic 同 RabbitMQ；Redis 仍负责用量/限流/token/检查点
 - ADDED: `GET /me/llm-configs/models?provider=` — 按 provider 拉 `/models`，失败回退白名单（docs/05）
 - MODIFIED: `PATCH /admin/users/{id}` — 支持 `daily_token_limit`（用户级配额覆盖，Redis `quota:user:{uid}`；显式 null 清除）

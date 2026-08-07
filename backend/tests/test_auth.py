@@ -22,9 +22,12 @@ async def test_register_verify_login_refresh_logout(
     resp = await _register(client)
     token = sent[f"verify:{EMAIL}"]
     assert token
+    assert len(token) == 6
 
     # 2. 验证邮箱
-    resp = await client.post("/api/v1/auth/verify-email", json={"token": token})
+    resp = await client.post(
+        "/api/v1/auth/verify-email", json={"email": EMAIL, "code": token}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["email_verified"] is True
 
@@ -78,7 +81,9 @@ async def test_login_wrong_password_401(client: httpx.AsyncClient, sent: dict[st
 
 
 async def test_verify_bad_token_400(client: httpx.AsyncClient) -> None:
-    resp = await client.post("/api/v1/auth/verify-email", json={"token": "nope"})
+    resp = await client.post(
+        "/api/v1/auth/verify-email", json={"email": "a@b.com", "code": "000000"}
+    )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
 

@@ -61,16 +61,16 @@ export function LlmConfigPanel() {
     onSuccess: () => {
       setApikey('')
       setBaseUrl('')
-      setMsg('已保存并连通测试通过')
+      setMsg(t('llmSavedOk'))
       void qc.invalidateQueries({ queryKey: ['llm-configs'] })
     },
-    onError: (e) => setMsg(formatApiError(e, '保存失败')),
+    onError: (e) => setMsg(formatApiError(e, t('llmSaveFailed'))),
   })
 
   const testMu = useMutation({
     mutationFn: (id: string) => meApi.testLlmConfig(id, token!),
-    onSuccess: (r) => setMsg(r.tested_ok ? '连通测试通过' : r.error ?? '连通失败'),
-    onError: (e) => setMsg(formatApiError(e, '测试失败')),
+    onSuccess: (r) => setMsg(r.tested_ok ? t('llmTestOk') : r.error ?? t('llmTestFail')),
+    onError: (e) => setMsg(formatApiError(e, t('llmTestFailed'))),
   })
 
   const defaultMu = useMutation({
@@ -81,21 +81,21 @@ export function LlmConfigPanel() {
   const delMu = useMutation({
     mutationFn: (id: string) => meApi.deleteLlmConfig(id, token!),
     onSuccess: () => {
-      setMsg('已删除')
+      setMsg(t('llmDeleted'))
       void qc.invalidateQueries({ queryKey: ['llm-configs'] })
     },
-    onError: (e) => setMsg(formatApiError(e, '删除失败')),
+    onError: (e) => setMsg(formatApiError(e, t('llmDeleteFailed'))),
   })
 
   return (
-    <section className="space-y-4 rounded-2xl border border-white/[0.08] bg-[#12151a] p-5">
+    <section className="gf-glass space-y-4 rounded-2xl p-5">
       <div>
-        <h2 className="text-lg text-white/90">LLM 配置</h2>
-        <p className="mt-1 text-sm text-white/40">用户自带 apikey；保存前做连通测试，前端只展示掩码。</p>
+        <h2 className="gf-page-body text-lg">{t('llmTitle')}</h2>
+        <p className="mt-1 gf-page-muted text-sm">{t('llmSubtitle')}</p>
       </div>
 
       {trial ? (
-        <p role="status" className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+        <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {t('trialLlmLocked')}
         </p>
       ) : null}
@@ -104,12 +104,12 @@ export function LlmConfigPanel() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1.5 text-sm">
-          <span className="font-mono text-[10px] text-white/40 uppercase">Provider</span>
+          <span className="font-mono text-[10px] gf-page-muted uppercase">Provider</span>
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value as LLMProvider)}
             disabled={trial}
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none disabled:opacity-50"
+            className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           >
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -119,13 +119,13 @@ export function LlmConfigPanel() {
           </select>
         </label>
         <label className="space-y-1.5 text-sm">
-          <span className="font-mono text-[10px] text-white/40 uppercase">Model</span>
+          <span className="font-mono text-[10px] gf-page-muted uppercase">Model</span>
           <input
             list="llm-model-options"
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={trial}
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none disabled:opacity-50"
+            className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           />
           <datalist id="llm-model-options">
             {(models.data ?? []).map((m) => (
@@ -133,28 +133,28 @@ export function LlmConfigPanel() {
             ))}
           </datalist>
           {models.isFetching ? (
-            <span className="font-mono text-[10px] text-white/30">拉取模型列表…</span>
+            <span className="font-mono text-[10px] gf-page-muted">{t('llmFetchingModels')}</span>
           ) : null}
         </label>
         <label className="space-y-1.5 text-sm md:col-span-2">
-          <span className="font-mono text-[10px] text-white/40 uppercase">API Key</span>
+          <span className="font-mono text-[10px] gf-page-muted uppercase">API Key</span>
           <input
             type="password"
             value={apikey}
             onChange={(e) => setApikey(e.target.value)}
             placeholder="sk-..."
             disabled={trial}
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none disabled:opacity-50"
+            className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
           />
         </label>
         {provider === LLMProvider.openai_compat ? (
           <label className="space-y-1.5 text-sm md:col-span-2">
-            <span className="font-mono text-[10px] text-white/40 uppercase">Base URL</span>
+            <span className="font-mono text-[10px] gf-page-muted uppercase">Base URL</span>
             <input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.example.com/v1"
-              className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none disabled:opacity-50"
+              className="h-10 w-full rounded-xl gf-input px-3 disabled:opacity-50"
               required
               disabled={trial}
             />
@@ -162,14 +162,14 @@ export function LlmConfigPanel() {
         ) : null}
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-white/60">
+      <label className="flex items-center gap-2 text-sm gf-page-muted">
         <input
           type="checkbox"
           checked={isDefault}
           onChange={(e) => setIsDefault(e.target.checked)}
           disabled={trial}
         />
-        设为默认
+        {t('llmSetDefault')}
       </label>
 
       <Button
@@ -183,7 +183,7 @@ export function LlmConfigPanel() {
         onClick={() => createMu.mutate()}
       >
         {createMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        保存并测试
+        {t('llmSaveAndTest')}
       </Button>
 
       <ul className="space-y-2">
@@ -193,35 +193,35 @@ export function LlmConfigPanel() {
             className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/[0.04]"
           >
             <div>
-              <p className="text-sm text-white/90">
+              <p className="text-sm gf-page-body">
                 {c.provider} · {c.model}
                 {c.is_default ? (
                   <span className="ml-2 font-mono text-[10px] text-teal-300">DEFAULT</span>
                 ) : null}
               </p>
-              <p className="mt-0.5 font-mono text-xs text-white/40">{c.apikey_masked}</p>
+              <p className="mt-0.5 font-mono text-xs gf-page-muted">{c.apikey_masked}</p>
               {c.base_url ? (
-                <p className="mt-0.5 font-mono text-[10px] text-white/30">{c.base_url}</p>
+                <p className="mt-0.5 font-mono text-[10px] gf-page-muted">{c.base_url}</p>
               ) : null}
             </div>
             <div className="flex gap-1.5">
               <Button
                 variant="ghost"
-                className="!rounded-lg !px-2 !py-1.5 text-xs text-white/60"
+                className="!rounded-lg !px-2 !py-1.5 text-xs gf-page-muted"
                 disabled={trial}
                 onClick={() => testMu.mutate(c.config_id)}
               >
-                测试
+                {t('llmTest')}
               </Button>
               {!c.is_default ? (
                 <Button
                   variant="ghost"
-                  className="!rounded-lg !px-2 !py-1.5 text-xs text-white/60"
+                  className="!rounded-lg !px-2 !py-1.5 text-xs gf-page-muted"
                   disabled={trial}
                   onClick={() => defaultMu.mutate(c.config_id)}
                 >
                   <Star className="h-3.5 w-3.5" />
-                  默认
+                  {t('llmDefault')}
                 </Button>
               ) : null}
               {!c.is_default ? (

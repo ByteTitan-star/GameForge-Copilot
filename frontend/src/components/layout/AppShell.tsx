@@ -1,115 +1,120 @@
+import { useState } from 'react'
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Gamepad2, Hammer, Languages, Settings, Shield } from 'lucide-react'
+import { Gamepad2, Hammer, Languages, Palette, Settings, Shield } from 'lucide-react'
 import { Role } from '@/api/enums'
 import { isTrialUser } from '@/lib/trial'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/stores/auth-store'
 import { useLocaleStore } from '@/stores/locale-store'
+import { ThemeBackground } from '@/components/theme/ThemeBackground'
+import { ThemePanelModal } from '@/components/theme/ThemePanelModal'
 import { NotificationBell } from './NotificationBell'
+import { UserMenu } from './UserMenu'
 
-const iconLink = ({ isActive }: { isActive: boolean }) =>
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'grid h-10 w-10 place-items-center rounded-xl transition-all duration-200',
-    isActive
-      ? 'bg-[#ff705c]/15 text-[#ff8a79] shadow-[0_0_16px_rgba(255,112,92,0.08)]'
-      : 'text-white/45 hover:bg-white/[0.06] hover:text-white/90',
+    'gf-interactive flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium',
+    isActive ? 'gf-nav-link-active' : 'gf-nav-link',
   )
 
 export function AppShell() {
   const t = useT()
   const location = useLocation()
-  const forgeMode = location.pathname.startsWith('/forge')
+  const isForge = location.pathname.startsWith('/forge')
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const trial = isTrialUser(user)
-  const initial = (user?.email?.[0] ?? 'G').toUpperCase()
+  const [themeOpen, setThemeOpen] = useState(false)
+
+  const navItems = [
+    { to: '/games', icon: Gamepad2, label: t('games') },
+    { to: '/forge', icon: Hammer, label: t('forge') },
+    { to: '/settings', icon: Settings, label: t('settings') },
+  ] as const
 
   return (
-    <div className={cn('flex min-h-screen', forgeMode ? 'bg-[#e7ebee] text-[#1d2329]' : 'bg-[#0B0E14] text-white')}>
-      <aside className="sticky top-0 z-40 flex h-screen w-[60px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-[#131821]/90 py-4 backdrop-blur-xl">
+    <div className="gf-workshop relative flex min-h-screen overflow-hidden">
+      <ThemeBackground />
+      <aside className="gf-sidebar sticky top-0 z-40 flex h-screen w-[220px] shrink-0 flex-col border-r px-3 py-4 backdrop-blur-xl lg:w-[240px]">
         <Link
-          to="/"
-          title="GameForge"
-          className="grid h-10 w-10 place-items-center rounded-xl bg-[#ff705c] text-[11px] font-black tracking-tighter text-[#24110e] shadow-[0_0_20px_rgba(255,112,92,0.18)]"
+          to="/games"
+          className="gf-interactive flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]"
         >
-          GF
+          <span className="gf-logo-badge gf-interactive grid h-9 w-9 place-items-center rounded-xl text-sm font-black">
+            GF
+          </span>
+          <span>
+            <span className="gf-page-body block text-sm font-semibold tracking-tight">GameForge</span>
+            <span className="gf-page-muted block text-[10px]">游戏工坊</span>
+          </span>
         </Link>
 
-        <nav className="mt-8 flex flex-1 flex-col items-center gap-2">
-          <NavLink to="/games" className={iconLink} title={t('dashboard')}>
-            <Gamepad2 className="h-4 w-4" />
-          </NavLink>
-          <NavLink to="/forge" className={iconLink} title={t('forge')}>
-            <Hammer className="h-4 w-4" />
-          </NavLink>
-          <NavLink to="/settings" className={iconLink} title={t('settings')}>
-            <Settings className="h-4 w-4" />
-          </NavLink>
+        <nav className="mt-8 flex flex-1 flex-col gap-1">
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <NavLink key={to} to={to} className={navLinkClass} end={to === '/games'}>
+              <Icon className="h-4 w-4 shrink-0 opacity-80" />
+              {label}
+            </NavLink>
+          ))}
           {user?.role === Role.admin ? (
-            <NavLink to="/admin" className={iconLink} title={t('admin')}>
-              <Shield className="h-4 w-4" />
+            <NavLink to="/admin" className={navLinkClass}>
+              <Shield className="h-4 w-4 shrink-0 opacity-80" />
+              {t('admin')}
             </NavLink>
           ) : null}
         </nav>
 
-        <div className="mt-auto flex flex-col items-center gap-3">
-          <NotificationBell />
-          <div
-            className="flex items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1"
-            title={t('liveApiTitle')}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-            <span className="font-mono text-[9px] tracking-wider text-white/45 uppercase">
-              {t('liveApi')}
-            </span>
+        <div className="gf-border-subtle mt-auto space-y-3 border-t pt-4">
+          <div className="flex items-center justify-between px-1">
+            <NotificationBell />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                title={t('themeTitle')}
+                aria-label={t('themeTitle')}
+                onClick={() => setThemeOpen(true)}
+                className="gf-interactive gf-text-accent grid h-9 w-9 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04]"
+              >
+                <Palette className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
+                aria-label={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
+                onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
+                className="gf-interactive gf-page-muted grid h-9 w-9 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04] hover:text-[var(--gf-text)]"
+              >
+                <Languages className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-
-          <button
-            type="button"
-            title={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
-            aria-label={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
-            onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
-            className="grid h-9 w-9 cursor-pointer place-items-center rounded-xl text-white/50 transition hover:bg-white/[0.08] hover:text-white"
-          >
-            <Languages className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            title={`${user?.email ?? ''} · ${t('logout')}`}
-            onClick={() => void logout()}
-            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-[#5271ff]/20 text-xs font-semibold text-[#aebcff] ring-1 ring-white/15 transition hover:bg-[#5271ff]/30"
-          >
-            {initial}
-          </button>
+          <UserMenu />
         </div>
       </aside>
 
-      <div className="relative min-w-0 flex-1">
-        <div
-          aria-hidden
-          className={cn('pointer-events-none absolute inset-y-0 left-0 w-px', forgeMode ? 'bg-black/[0.08]' : 'bg-white/[0.08]')}
-        />
+      <div className="relative z-[1] flex min-h-screen min-w-0 flex-1 flex-col">
         {trial ? (
           <div
             role="status"
-            className={cn(
-              'sticky top-0 z-30 border-b px-4 py-2 text-center text-xs leading-relaxed md:px-8',
-              forgeMode
-                ? 'border-amber-500/25 bg-amber-50 text-amber-900'
-                : 'border-amber-400/25 bg-amber-400/10 text-amber-100',
-            )}
+            className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs leading-relaxed text-amber-900 md:px-8"
           >
             {t('trialBanner')}
           </div>
         ) : null}
-        <main className="relative mx-auto w-full max-w-[1600px] px-4 py-5 md:px-8 md:py-7">
+
+        <main
+          className={cn(
+            'gf-main-canvas relative min-h-0 flex-1',
+            isForge ? 'flex flex-col p-3 md:p-4' : 'mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8',
+          )}
+        >
           <Outlet />
         </main>
       </div>
+
+      <ThemePanelModal open={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Real API smoke — 路径 B 联调自检。
+ * API 冒烟 — 联调自检。
  * 用法：API=http://127.0.0.1:8000/api/v1 node scripts/real-smoke.mjs
  */
 const API = (process.env.API ?? 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
@@ -48,7 +48,7 @@ async function main() {
     ok('GET /healthz')
   } catch (e) {
     fail('GET /healthz', e)
-    console.error('\n后端未启动？见 README 路径 B')
+    console.error('\n后端未启动？见 README「联调启动」')
     process.exit(1)
   }
 
