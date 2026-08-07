@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useLocaleStore } from '@/stores/locale-store'
 import { useT } from '@/i18n/use-t'
-import { env } from '@/lib/env'
 import { cn } from '@/lib/cn'
 import { FadeIn } from '@/components/ui/fade-in'
 import heroArt from '@/assets/hero.png'
@@ -62,12 +61,6 @@ export function AuthShell({ children, title, subtitle }: Props) {
             ))}
           </div>
         </header>
-
-        {env.useMock ? (
-          <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.15em] text-white/55 drop-shadow-md">
-            {t('mockBanner')}
-          </p>
-        ) : null}
 
         <main className="flex flex-1 flex-col justify-end pt-16 md:justify-center md:pt-10">
           <div className="mx-auto w-full max-w-md">

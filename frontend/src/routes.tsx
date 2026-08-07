@@ -23,6 +23,8 @@ export function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      {/* 邮件模板链接：frontend_base_url/reset-password?token=… */}
+      <Route path="/reset-password" element={<ForgotPasswordPage />} />
       <Route path="/play/:slug" element={<PlayPage />} />
       <Route path="/draft/:gameId/:version" element={<DraftPlayPage />} />
       <Route path="/preview/toonhub" element={<ToonHubHero />} />

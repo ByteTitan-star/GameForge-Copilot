@@ -1,13 +1,13 @@
-import { apiRequest } from './client'
+import { apiRequest, apiRequestNoContent } from './client'
 import type {
   LoginResponse,
-  LogoutResponse,
+  PasswordChangeResponse,
   PasswordResetConfirmResponse,
   PasswordResetResponse,
   RefreshResponse,
   RegisterResponse,
   VerifyEmailResponse,
-} from './types.gen'
+} from './types'
 
 export const authApi = {
   login(email: string, password: string) {
@@ -31,10 +31,11 @@ export const authApi = {
     })
   },
 
-  logout(refresh_token: string) {
-    return apiRequest<LogoutResponse>('/auth/logout', {
+  /** OpenAPI：204 无体；M0 桩无 requestBody，body 可选兼容 docs/10 */
+  logout(refresh_token?: string) {
+    return apiRequestNoContent('/auth/logout', {
       method: 'POST',
-      body: { refresh_token },
+      body: refresh_token ? { refresh_token } : undefined,
     })
   },
 
@@ -56,6 +57,15 @@ export const authApi = {
     return apiRequest<PasswordResetConfirmResponse>('/auth/password/reset/confirm', {
       method: 'POST',
       body: { token, new_password },
+    })
+  },
+
+  /** 登录态改密（Bearer） */
+  changePassword(old_password: string, new_password: string, accessToken: string) {
+    return apiRequest<PasswordChangeResponse>('/auth/password/change', {
+      method: 'POST',
+      body: { old_password, new_password },
+      token: accessToken,
     })
   },
 }

@@ -32,3 +32,6 @@ htmlcov/
 
 .promptrail/
 **/.promptrail/
+
+# 产物托管本地目录
+.hosting/

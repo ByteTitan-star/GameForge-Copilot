@@ -1,12 +1,12 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     USER = "user"
     ADMIN = "admin"
 
 
-class GameStatus(str, Enum):
+class GameStatus(StrEnum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
     REVIEWING = "reviewing"
@@ -15,14 +15,14 @@ class GameStatus(str, Enum):
     TAKEN_DOWN = "taken_down"
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     RUNNING = "running"
     PAUSED = "paused"
     DONE = "done"
     FAILED = "failed"
 
 
-class RunPhase(str, Enum):
+class RunPhase(StrEnum):
     PLAN = "plan"
     ART = "art"
     CODE = "code"
@@ -30,20 +30,20 @@ class RunPhase(str, Enum):
     DONE = "done"
 
 
-class PublishStatus(str, Enum):
+class PublishStatus(StrEnum):
     SUBMITTED = "submitted"
     REVIEWING = "reviewing"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OPENAI_COMPAT = "openai_compat"
 
 
-class WSEventType(str, Enum):
+class WSEventType(StrEnum):
     PHASE_START = "phase_start"
     LLM_CALL = "llm_call"
     TOOL_CALL = "tool_call"

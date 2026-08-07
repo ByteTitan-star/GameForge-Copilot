@@ -30,7 +30,7 @@ export function UsagePanel() {
     <section className="space-y-4 rounded-2xl border border-white/[0.08] bg-[#12151a] p-5">
       <div>
         <h2 className="text-lg text-white/90">用量看板</h2>
-        <p className="mt-1 text-sm text-white/40">真实 token 用量（mock 数据对齐 `/me/usage` schema）</p>
+        <p className="mt-1 text-sm text-white/40">真实 token 用量（`/me/usage`）</p>
       </div>
 
       {q.isLoading ? <p className="text-sm text-white/40">加载中…</p> : null}

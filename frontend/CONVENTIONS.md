@@ -14,7 +14,7 @@
 
 ```
 src/
-  api/           # 契约枚举、手写 types、client、mock、按域 API
+  api/           # 契约枚举、types、client、按域 API
   components/    # ui / layout / auth / game
   pages/         # 路由页面
   stores/        # 本地态
@@ -27,8 +27,8 @@ src/
 
 - 字段 **snake_case**，与 `docs/10-contract-and-parallel-dev.md` 一致。
 - 枚举只改 `src/api/enums.ts`。
-- `VITE_USE_MOCK=true`（默认）走 `src/api/mock/`；后端就绪后 `false` + `VITE_API_BASE_URL`。
-- OpenAPI 就绪后：`pnpm exec openapi-typescript <url> -o src/api/types.gen.ts`，逐步替换 `types.ts`。
+- 前端只连真实 API：`VITE_API_BASE_URL`（默认 `http://127.0.0.1:8000/api/v1`）。
+- OpenAPI 就绪后：`pnpm gen:api`，逐步对齐 `types.gen.ts`。
 
 ## UI 规范
 

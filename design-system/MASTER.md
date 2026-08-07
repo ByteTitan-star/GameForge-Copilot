@@ -1,7 +1,7 @@
 # Design System Master — GameForge-Copilot
 
 > **LOGIC:** 做具体页面时先读 `design-system/pages/[page].md`；有则覆盖本文件，无则严格遵循本文件。  
-> **产品主题（不可变）：** Web 端「用对话从 0 到 1 开发并发布小游戏」。一切视觉服务于游戏创作工具，不是通用 AI SaaS、不是 DeFi、不是投资站。
+> **产品主题（不可变）：** Web 端「说清楚规则 → 浏览器里玩 → 改到满意再公开」。一切视觉服务于游戏创作工具，不是通用 AI SaaS、不是 DeFi、不是投资站。
 
 **Stack（与 `docs/08-frontend.md` 对齐）：** React + Vite + TypeScript + Tailwind + shadcn/ui + lucide-react；本地态 Zustand，服务端态 TanStack Query。
 

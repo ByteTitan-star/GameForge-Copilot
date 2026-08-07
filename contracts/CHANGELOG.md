@@ -10,6 +10,55 @@
 
 <!-- 后端改契约后在此追加，commit 时归入下一条日期标题 -->
 
+- ADDED: `PATCH /games/{id}` — 草稿重命名（`GamePatch.title`）；响应 `GameResp` 含 `title` (docs/01)
+- ADDED: `POST /runs/{id}/pause|resume|cancel` — 长任务中断/续跑/取消；HITL 后 run.status=`paused` (docs/01)
+- ADDED: `GET /me/notifications`、`POST /me/notifications/{id}/read` — 站内通知收件箱 (docs/04)
+- ADDED: `GET /admin/audit-logs` — 管理员操作审计分页 (docs/01 §8)
+- ADDED: `GET /admin/games` — 管理员已发布/审批中游戏列表（不含草稿）(docs/01 §8)
+- MODIFIED: `AdminSettings` — 新增 `default_monthly_token_limit`；配额日/月双限 + LLM 调用限流
+- MODIFIED: `GET /me/llm-configs/models` — Redis 缓存（`models_cache_ttl_s`）
+- ADDED: `POST /auth/password/change` — 登录态改密（Bearer + `old_password`/`new_password`）；旧密码错 → 401
+- MODIFIED: `AdminUserItem` — 新增 `daily_token_limit`（用户级覆盖回显，null=全局默认）
+- MODIFIED: `GET /ready` — 响应新增 `rabbitmq: bool`（RabbitMQ 连通；`MESSAGING_BACKEND=memory` 时为 true）
+- NOTE: 异步任务由 arq/Redis 迁至 RabbitMQ（`app.messaging.worker`）；WS 事件 topic 同 RabbitMQ；Redis 仍负责用量/限流/token/检查点
+- ADDED: `GET /me/llm-configs/models?provider=` — 按 provider 拉 `/models`，失败回退白名单（docs/05）
+- MODIFIED: `PATCH /admin/users/{id}` — 支持 `daily_token_limit`（用户级配额覆盖，Redis `quota:user:{uid}`；显式 null 清除）
+- MODIFIED: `POST /games` / `POST /games/{id}/runs` — 草稿数上限、并发 run 上限、版本保留上限；超限 429
+- MODIFIED: 审批 approve/reject/take_down — 异步通知邮件 + 站内通知（docs/04 §通知）
+- MODIFIED: 生成主链改用 LangGraph StateGraph（docs/02）；`SANDBOX_BACKEND=docker|local` 可选 DockerSandbox；code/qa 重试 + 沙箱/QA HITL
+- NOTE: langfuse 经 `LANGFUSE_*` 环境变量启用；未配置时 trace 为空操作
+- NOTE: `/play` 长缓存、`/draft` 私有短缓存（Cache-Control）
+
 ## 2026-08-06
 
+- MODIFIED: `POST /me/llm-configs` 请求体 + `LLMConfigResp` 新增 `base_url` 字段（`openai_compat` 必填）；连通测试与 `complete()` 对 compat 使用 base_url，无 base_url → 测试失败（code-review #9） (M2/修复)
+- MODIFIED: `/play/{slug}`、`/draft/{game_id}/{version}` 的 CSP 放开 `script-src/style-src 'unsafe-inline'`——LLM 生成单文件 HTML 内联脚本，iframe `sandbox=allow-scripts`（不加 allow-same-origin）已隔离 origin，inline 不引入同源风险（code-review #1） (M5/修复)
+- ADDED: `GET /admin/users`（分页，admin）、`PATCH /admin/users/{id}`（disable/role，admin，落审计）、`GET /admin/settings`、`PUT /admin/settings`（admin，存 system_settings 表，运行时配额读取覆盖值）— M8 管理后台；新增 403(非 admin)/404(用户不存在)；禁用用户登录/访问 → 403 (M8)
+- ADDED: `users.disabled` 列、`system_settings` 表（迁移 0005）；`/me/usage`、`POST /games/{id}/runs` 的日配额读取 admin 设置覆盖值（env 默认回退） (M8)
+- MODIFIED: `POST /games/{game_id}/publish/submit`、`GET /publish/queue`、`POST /publish/{id}/approve`、`POST /publish/{id}/reject`、`POST /games/{game_id}/take-down` — M0 桩 → M7 真实逻辑（发布审批状态机 docs/04：draft→submitted→reviewing→approved(published)/rejected，slug 在 approve 时分配；admin 操作落 audit_logs）；submit=owner，queue/approve/reject/take_down=admin；新增 401/403/404/409(状态冲突) (M7)
+- MODIFIED: `POST /games/{game_id}/runs/{run_id}/hitl/resolve` — M4 桩 → M6 真实 HITL（校验 plan_confirm 检查点态 → enqueue resume_run 继续 art→done）；需 Bearer + owner；新增 409(非 HITL 态/已结束)；`GET /runs/{run_id}` 的 `current_hitl` 据检查点态返回 `{node:"plan_confirm"}` 或 null (M6)
+- ADDED: 生成主链真实化——`app/forge/graph.py` 固定 DAG `plan→art→code→qa→done`（显式状态机，非 LangGraph，环境约束 + 固定 DAG 非自研 agent loop）；节点调 LLM（`app/llm/provider.complete` + `app/llm/client.call_llm` 解密用户 key + `record_usage`）+ 沙箱构建 + 产物托管 + WS 事件；HITL 在 plan_confirm 中断、Redis 检查点 `run:ckpt:{run_id}` 恢复；arq 新增 `resume_run` 任务 (M6)
+- 注：M6 用显式状态机替代 docs/02 的 LangGraph（环境装不起 langgraph 重依赖；固定 DAG 非自研 agent loop）；LangGraph 替换留待环境支持时。沙箱仍用 M5 本地后端（DockerSandbox 留 ops） (M6)
+- ADDED: `GET /play/{slug}`（公开，仅 published，FileResponse + CSP）、`GET /draft/{game_id}/{version}`（owner only，FileResponse + CSP）— M5 产物托管路由，根路由无 `/api/v1` 前缀；非 published/非 owner → 404 不泄露；产物响应非 JSON（text/html），openapi 标注 (M5)
+- MODIFIED: `GameVersion.artifact_path` — 由桩串改为真实托管路径 `{game_id}/{version}/index.html`；forge runner 接沙箱（`LocalSandbox.execute` 本地后端）+ hosting 写真实产物 (M5)
+- 注：沙箱 `execute_code` 本轮交付抽象 + 本地后端（无容器隔离），真实 docker 沙箱（`gameforge/sandbox` 镜像 + seccomp/无网络）留 M6 (M5)
+- MODIFIED: `POST/GET /games`、`GET/DELETE /games/{game_id}`、`GET /games/{game_id}/versions` — M0 桩 → M4 真实逻辑（Game CRUD + versions + owner 可见性过滤，非 owner 含 admin → 404）；需 Bearer + 邮箱已验证；新增错误响应 401/403(EMAIL_NOT_VERIFIED)/404(GAME_NOT_FOUND)/409(非可删状态) (M4)
+- MODIFIED: `POST /games/{game_id}/runs`、`GET /games/{game_id}/runs`、`GET /runs/{run_id}` — M0 桩 → M4 真实逻辑（发起 run + 配额检查 + 列表 + 状态）；需 Bearer + 已验证；新增 401/403/404/429(QUOTA_EXCEEDED)；`POST /games/{id}/runs/{id}/hitl/resolve` 仍桩（M6） (M4)
+- 注：WS `/ws/runs/{run_id}` 事件流已真实（query token 鉴权 + Redis pubsub 转发），不进 openapi；事件契约见 docs/10 §5 (M4)
+- MODIFIED: `GET /me/usage`、`GET /admin/usage` — M0 桩 → M3 真实逻辑（Redis hash 累计 today/month/total + 月榜 ZSET；/admin/usage 含 top_users）；全部需 Bearer 鉴权，新增错误响应 401(UNAUTHORIZED)/403(FORBIDDEN，/admin/usage 需 admin) (M3)
+- MODIFIED: openapi 新增 `securitySchemes: bearer`（HTTPBearer）— 凡带 current_user/require_admin 的端点（me/*、admin/*、llm-config）openapi 标注需 Bearer (M1-M3 渐进)
+- MODIFIED: `GET/POST /me/llm-configs`、`PATCH/DELETE /me/llm-configs/{config_id}`、`POST /me/llm-configs/{config_id}/test` — M0 桩 → M2 真实逻辑（Fernet 加密 apikey + `/v1/models` 连通测试 + 默认互斥 + ownership 过滤），全部需 Bearer 鉴权（me-scoped）；新增错误响应 400(LLM_CONFIG_INVALID 连通失败)/404(LLM_CONFIG_NOT_FOUND)/409(删除默认配置需先指定新默认) (M2)
+- ADDED: 错误码 `LLM_CONFIG_NOT_FOUND`(404) — docs/10 §3 表新增 (M2)
+- MODIFIED: `POST /auth/register|login|refresh|verify-email|password/reset|password/reset/confirm|logout` — M0 桩 → M1 真实逻辑（argon2/JWT/refresh rotation/邮件队列）；新增错误响应 401(UNAUTHORIZED)/409(EMAIL_TAKEN)/429(RATE_LIMITED)/400(token 无效)，openapi 已标注 (M1)
+- MODIFIED: `POST /auth/logout` — 新增请求体 `{refresh_token}`（登出需撤销 refresh）；响应仍 204 无体 (M1)
 - ADDED: 契约目录骨架（openapi.json 占位 + CHANGELOG + INTEGRATION）— 前端类型生成与 Mock 可起步 (M0)
+- ADDED: M0 契约冻结 — FastAPI 桩路由全量上线，`contracts/openapi.json` 由 `uv run python -m app.export_openapi` 生成真实内容（23 条 HTTP 路径 + 请求/响应 schema），前端可 `pnpm gen:api` 覆盖 `types.gen.ts` (M0)
+  - auth: `POST /auth/register|login|refresh|verify-email|password/reset|password/reset/confirm|logout`（logout 为 204 无响应体）
+  - llm-config: `GET/POST /me/llm-configs`、`PATCH/DELETE /me/llm-configs/{id}`、`POST /me/llm-configs/{id}/test`
+  - games: `POST/GET /games`（GET 分页 `PaginatedData`）、`GET/DELETE /games/{id}`、`GET /games/{id}/versions`
+  - runs: `POST /games/{id}/runs`、`GET /games/{id}/runs`、`GET /runs/{run_id}`、`POST /games/{id}/runs/{run_id}/hitl/resolve`
+  - publish: `POST /games/{id}/publish/submit`、`GET /publish/queue`、`POST /publish/{id}/approve|reject`、`POST /games/{id}/take-down`
+  - usage: `GET /me/usage`、`GET /admin/usage`
+  - 健康检查：`GET /healthz`
+  - WS `/ws/runs/{run_id}` 不进 OpenAPI（浏览器原生 WS 无 schema），事件契约见 docs/10 §5
+- ADDED: docs/10 §4 未列出的两个最小响应 schema — `GameDeleteResp`（DELETE /games/{id}）、logout 用 204 (M0)

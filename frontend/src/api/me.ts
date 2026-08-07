@@ -1,16 +1,25 @@
 import { apiRequest } from './client'
+import type { LLMProvider } from './enums'
 import type {
   LlmConfig,
   LlmConfigCreateRequest,
   LlmConfigDeleteResponse,
   LlmConfigPatchRequest,
   LlmConfigTestResponse,
+  NotificationItem,
+  NotificationReadResponse,
   UsageSummary,
-} from './types.gen'
+} from './types'
 
 export const meApi = {
   listLlmConfigs(accessToken: string) {
     return apiRequest<LlmConfig[]>('/me/llm-configs', { token: accessToken })
+  },
+
+  /** 按 provider 拉可选模型；失败时后端回退白名单 */
+  listModels(accessToken: string, provider: LLMProvider | string = 'anthropic') {
+    const q = `?provider=${encodeURIComponent(provider)}`
+    return apiRequest<string[]>(`/me/llm-configs/models${q}`, { token: accessToken })
   },
 
   createLlmConfig(body: LlmConfigCreateRequest, accessToken: string) {
@@ -45,5 +54,18 @@ export const meApi = {
 
   usage(accessToken: string) {
     return apiRequest<UsageSummary>('/me/usage', { token: accessToken })
+  },
+
+  listNotifications(accessToken: string, unreadOnly = false) {
+    const q = unreadOnly ? '?unread_only=true' : ''
+    return apiRequest<NotificationItem[]>(`/me/notifications${q}`, { token: accessToken })
+  },
+
+  markNotificationRead(notificationId: string, accessToken: string) {
+    return apiRequest<NotificationReadResponse>(`/me/notifications/${notificationId}/read`, {
+      method: 'POST',
+      token: accessToken,
+      body: {},
+    })
   },
 }

@@ -50,3 +50,9 @@ class HitlResolveResp(BaseModel):
     run_id: uuid.UUID
     status: RunStatus
     phase: RunPhase
+
+
+class RunControlResp(BaseModel):
+    run_id: uuid.UUID
+    status: RunStatus
+    phase: RunPhase

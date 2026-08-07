@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -10,13 +10,14 @@ from app.core.response import ErrorDetail, ErrorResponse
 CODE_TO_STATUS: dict[str, int] = {}
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
     EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED"
     RATE_LIMITED = "RATE_LIMITED"
     QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
     LLM_CONFIG_INVALID = "LLM_CONFIG_INVALID"
+    LLM_CONFIG_NOT_FOUND = "LLM_CONFIG_NOT_FOUND"
     GAME_NOT_FOUND = "GAME_NOT_FOUND"
     INVALID_STATE = "INVALID_STATE"
     SANDBOX_FAILED = "SANDBOX_FAILED"
@@ -31,6 +32,7 @@ _CODE_STATUS = {
     ErrorCode.RATE_LIMITED: 429,
     ErrorCode.QUOTA_EXCEEDED: 429,
     ErrorCode.LLM_CONFIG_INVALID: 400,
+    ErrorCode.LLM_CONFIG_NOT_FOUND: 404,
     ErrorCode.GAME_NOT_FOUND: 404,
     ErrorCode.INVALID_STATE: 409,
     ErrorCode.SANDBOX_FAILED: 500,

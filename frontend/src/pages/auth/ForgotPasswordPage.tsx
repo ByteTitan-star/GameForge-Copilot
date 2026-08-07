@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '@/api/auth'
-import { isApiError } from '@/api/errors'
+import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Input } from '@/components/ui/input'
@@ -9,9 +9,13 @@ import { useT } from '@/i18n/use-t'
 
 export function ForgotPasswordPage() {
   const t = useT()
-  const [step, setStep] = useState<'request' | 'confirm' | 'done'>('request')
+  const [params] = useSearchParams()
+  const tokenFromLink = params.get('token') ?? ''
+  const [step, setStep] = useState<'request' | 'confirm' | 'done'>(
+    tokenFromLink ? 'confirm' : 'request',
+  )
   const [email, setEmail] = useState('')
-  const [token, setToken] = useState('654321')
+  const [token, setToken] = useState(tokenFromLink)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -24,7 +28,7 @@ export function ForgotPasswordPage() {
       await authApi.requestPasswordReset(email.trim())
       setStep('confirm')
     } catch (err) {
-      setError(isApiError(err) ? err.message : '请求失败')
+      setError(formatApiError(err, '请求失败'))
     } finally {
       setLoading(false)
     }
@@ -38,7 +42,7 @@ export function ForgotPasswordPage() {
       await authApi.confirmPasswordReset(token.trim(), password)
       setStep('done')
     } catch (err) {
-      setError(isApiError(err) ? err.message : '重置失败')
+      setError(formatApiError(err, '重置失败'))
     } finally {
       setLoading(false)
     }
@@ -83,10 +87,12 @@ export function ForgotPasswordPage() {
 
       {step === 'confirm' ? (
         <form className="space-y-4" onSubmit={onConfirm}>
-          <p className="text-xs text-white/55">Mock：邮件不会真正发送。使用重置码 654321 继续。</p>
+          <p className="text-xs text-white/55">
+            若已配置 SMTP 会收到邮件；本地开发请到 Worker 终端查看 `[dev-email]` 重置链接或令牌。
+          </p>
           <Input
             name="token"
-            label="重置码"
+            label="重置令牌"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             required
@@ -98,7 +104,7 @@ export function ForgotPasswordPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
           />
           {error ? (
             <p role="alert" className="text-sm text-red-300">

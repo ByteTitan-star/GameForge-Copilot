@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authApi } from '@/api/auth'
-import { isApiError } from '@/api/errors'
+import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
+import { TRIAL_EMAIL, TRIAL_PASSWORD } from '@/lib/trial'
 import { useAuthStore } from '@/stores/auth-store'
 
 export function LoginPage() {
@@ -13,11 +15,18 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const setSession = useAuthStore((s) => s.setSession)
-  const [email, setEmail] = useState('demo@gameforge.dev')
-  const [password, setPassword] = useState('password123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  function fillTrialAccount() {
+    setEmail(TRIAL_EMAIL)
+    setPassword(TRIAL_PASSWORD)
+    setRemember(false)
+    setError('')
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -31,12 +40,16 @@ export function LoginPage() {
         refresh_token: data.refresh_token,
       })
       if (!remember) {
-        // 仍写入 persist；后续可拆 ephemeral session
+        // 正式账号「不记住」仍走 persist；试用账号在 setSession 内已跳过落盘
       }
       const from = (location.state as { from?: string } | null)?.from
-      navigate(from && from !== '/login' ? from : '/games', { replace: true })
+      if (!data.user.email_verified) {
+        navigate('/settings', { replace: true, state: { needVerify: true } })
+      } else {
+        navigate(from && from !== '/login' ? from : '/games', { replace: true })
+      }
     } catch (err) {
-      setError(isApiError(err) ? err.message : '登录失败')
+      setError(formatApiError(err, '登录失败'))
     } finally {
       setLoading(false)
     }
@@ -62,7 +75,7 @@ export function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={6}
+          minLength={8}
         />
         <div className="flex items-center justify-between text-xs text-white/70">
           <label className="inline-flex cursor-pointer items-center gap-2">
@@ -86,6 +99,15 @@ export function LoginPage() {
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
           {loading ? t('loggingIn') : t('login')}
         </MagneticButton>
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full !rounded-xl"
+          onClick={fillTrialAccount}
+        >
+          {t('fillTrialPreview')}
+        </Button>
+        <p className="text-center text-[11px] leading-relaxed text-white/50">{t('fillTrialHint')}</p>
         <p className="text-center text-xs text-white/65">
           {t('noAccount')}{' '}
           <Link to="/register" className="font-medium text-white underline-offset-2 hover:underline">

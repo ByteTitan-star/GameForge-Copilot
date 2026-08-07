@@ -1,16 +1,19 @@
 import { apiRequest, apiRequestList } from './client'
 import type {
   CreateGameResponse,
+  GameDeleteResponse,
   GameDetail,
+  GamePatchRequest,
   GameSummary,
   GameVersion,
   HitlResolveRequest,
   HitlResolveResponse,
   PublishSubmitResponse,
+  RunControlResponse,
   RunDetail,
   RunListItem,
   RunSummary,
-} from './types.gen'
+} from './types'
 
 export const gamesApi = {
   list(accessToken: string, status?: string) {
@@ -31,13 +34,26 @@ export const gamesApi = {
   },
 
   remove(gameId: string, accessToken: string) {
-    return apiRequest<{ game_id: string; deleted: boolean }>(`/games/${gameId}`, {
+    return apiRequest<GameDeleteResponse>(`/games/${gameId}`, {
       method: 'DELETE',
       token: accessToken,
     })
   },
 
-  startRun(gameId: string, requirement: string, accessToken: string, llm_config_id: string | null = null) {
+  patch(gameId: string, body: GamePatchRequest, accessToken: string) {
+    return apiRequest<CreateGameResponse>(`/games/${gameId}`, {
+      method: 'PATCH',
+      token: accessToken,
+      body,
+    })
+  },
+
+  startRun(
+    gameId: string,
+    requirement: string,
+    accessToken: string,
+    llm_config_id: string | null = null,
+  ) {
     return apiRequest<RunSummary>(`/games/${gameId}/runs`, {
       method: 'POST',
       token: accessToken,
@@ -55,6 +71,30 @@ export const gamesApi = {
 
   getRun(runId: string, accessToken: string) {
     return apiRequest<RunDetail>(`/runs/${runId}`, { token: accessToken })
+  },
+
+  pauseRun(runId: string, accessToken: string) {
+    return apiRequest<RunControlResponse>(`/runs/${runId}/pause`, {
+      method: 'POST',
+      token: accessToken,
+      body: {},
+    })
+  },
+
+  resumeRun(runId: string, accessToken: string) {
+    return apiRequest<RunControlResponse>(`/runs/${runId}/resume`, {
+      method: 'POST',
+      token: accessToken,
+      body: {},
+    })
+  },
+
+  cancelRun(runId: string, accessToken: string) {
+    return apiRequest<RunControlResponse>(`/runs/${runId}/cancel`, {
+      method: 'POST',
+      token: accessToken,
+      body: {},
+    })
   },
 
   resolveHitl(gameId: string, runId: string, body: HitlResolveRequest, accessToken: string) {

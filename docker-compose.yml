@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gameforge
+      POSTGRES_PASSWORD: gameforge
+      POSTGRES_DB: gameforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gameforge -d gameforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: gameforge
+      RABBITMQ_DEFAULT_PASS: gameforge
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    # aiodocker 需访问 docker.sock；生产 K8s 用 sidecar/ DinD，勿长期 root
+    user: "0:0"
+    env_file:
+      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://gameforge:gameforge@postgres:5432/gameforge
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://gameforge:gameforge@rabbitmq:5672/
+      MESSAGING_BACKEND: rabbitmq
+      SANDBOX_BACKEND: docker
+      SANDBOX_IMAGE: gameforge/sandbox:local
+      HOSTING_ROOT: /data/hosting
+    ports:
+      - "8000:8000"
+    volumes:
+      - hosting:/data/hosting
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    user: "0:0"
+    env_file:
+      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://gameforge:gameforge@postgres:5432/gameforge
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://gameforge:gameforge@rabbitmq:5672/
+      MESSAGING_BACKEND: rabbitmq
+      SANDBOX_BACKEND: docker
+      SANDBOX_IMAGE: gameforge/sandbox:local
+      HOSTING_ROOT: /data/hosting
+    volumes:
+      - hosting:/data/hosting
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  sandbox:
+    image: gameforge/sandbox:local
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.sandbox
+    profiles: ["build-sandbox"]
+
+volumes:
+  pgdata:
+  redisdata:
+  hosting:

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '@/api/auth'
 import type { User } from '@/api/types'
+import { isTrialUser } from '@/lib/trial'
 
 type AuthState = {
   user: User | null
@@ -27,8 +28,17 @@ export const useAuthStore = create<AuthState>()(
       refresh_token: null,
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
-      setSession: ({ user, access_token, refresh_token }) =>
-        set({ user, access_token, refresh_token }),
+      setSession: ({ user, access_token, refresh_token }) => {
+        // 试用会话只留内存：清掉可能残留的持久化登录态
+        if (isTrialUser(user)) {
+          try {
+            localStorage.removeItem('gf-auth')
+          } catch {
+            /* ignore */
+          }
+        }
+        set({ user, access_token, refresh_token })
+      },
       patchUser: (patch) => {
         const user = get().user
         if (!user) return
@@ -46,12 +56,20 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'gf-auth',
-      partialize: (s) => ({
-        user: s.user,
-        access_token: s.access_token,
-        refresh_token: s.refresh_token,
-      }),
+      partialize: (s) => {
+        // 试用账号不写入 localStorage
+        if (isTrialUser(s.user)) return {}
+        return {
+          user: s.user,
+          access_token: s.access_token,
+          refresh_token: s.refresh_token,
+        }
+      },
       onRehydrateStorage: () => (state) => {
+        // 历史误持久化的试用会话：丢弃
+        if (state && isTrialUser(state.user)) {
+          state.clearSession()
+        }
         state?.setHydrated(true)
       },
     },

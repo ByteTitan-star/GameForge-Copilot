@@ -1,8 +1,9 @@
 import { RunPhase, WSEventType } from '@/api/enums'
-import type { HitlWaitPayload, WsEnvelope } from '@/api/types.gen'
-import { mockDb } from '@/mocks/db'
+import type { HitlWaitPayload, WsEnvelope } from '@/api/ws-types'
 import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { ChatMsg } from '@/components/forge/ChatPanel'
+import type { MessageKey } from '@/i18n/messages'
+import { resolveHostingUrl } from '@/lib/hosting'
 
 export type ForgeEventHandlers = {
   setPhase: (p: RunPhase | 'idle' | 'paused') => void
@@ -12,31 +13,56 @@ export type ForgeEventHandlers = {
   setPreviewUrl: (url: string | null) => void
   setSideTab: (t: 'log' | 'play') => void
   appendMessages: (msgs: ChatMsg[]) => void
+  setQuotaHint?: (text: string | null) => void
   gameId: string | undefined
+  t: (key: MessageKey) => string
 }
 
 function mid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function previewFromPayload(
+  payload: Record<string, unknown>,
+  gameId: string | undefined,
+  versionFallback?: unknown,
+): string | null {
+  const fromEvent = payload.preview_url
+  if (typeof fromEvent === 'string' && fromEvent) return resolveHostingUrl(fromEvent)
+  const ver = versionFallback ?? payload.version
+  if (gameId && ver != null) return resolveHostingUrl(`/draft/${gameId}/${ver}`)
+  return null
+}
+
 export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
+  const phaseLabel: Record<RunPhase, string> = {
+    [RunPhase.plan]: h.t('phasePlan'),
+    [RunPhase.art]: h.t('phaseArt'),
+    [RunPhase.code]: h.t('phaseCode'),
+    [RunPhase.qa]: h.t('phaseQa'),
+    [RunPhase.done]: h.t('phaseDone'),
+  }
   switch (ev.type) {
     case WSEventType.phase_start:
       h.setPhase(p.phase as RunPhase)
-      h.pushItem({ label: `phase_start · ${String(p.phase)}`, tone: 'info', at: ev.ts })
+      h.pushItem({
+        label: `${h.t('phaseStarted')} · ${phaseLabel[p.phase as RunPhase] ?? String(p.phase)}`,
+        tone: 'info',
+        at: ev.ts,
+      })
       return
     case WSEventType.llm_call:
       h.pushItem({
-        label: `llm_call · ${String(p.model)}`,
-        detail: `${String(p.provider)} · ${String(p.input_tokens)}→${String(p.output_tokens)} tokens`,
+        label: h.t('modelCall'),
+        detail: `${String(p.model)} · ${String(p.input_tokens)}→${String(p.output_tokens)}`,
         tone: 'muted',
         at: ev.ts,
       })
       return
     case WSEventType.tool_call:
       h.pushItem({
-        label: `tool_call · ${String(p.tool)}`,
+        label: h.t('toolCall'),
         detail: String(p.summary ?? ''),
         tone: p.status === 'ok' ? 'ok' : 'err',
         at: ev.ts,
@@ -48,7 +74,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       h.setPhase('paused')
       h.setBusy(false)
       h.pushItem({
-        label: 'hitl_wait · 等待策划确认',
+        label: h.t('humanReviewWaiting'),
         detail: payload.design_doc.title,
         tone: 'warn',
         at: ev.ts,
@@ -57,17 +83,16 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         {
           id: mid('m'),
           role: 'assistant',
-          content: `策划稿已就绪：《${payload.design_doc.title}》。请在中间面板确认或修改后继续。`,
+          content: `${h.t('confirmDesign')}：${payload.design_doc.title}。${h.t('continueAfterApproval')}。`,
         },
       ])
       return
     }
     case WSEventType.build_done: {
-      const url = `/mock-play.html?game=${encodeURIComponent(h.gameId ?? '')}&v=${encodeURIComponent(String(p.version))}`
-      h.setPreviewUrl(url)
+      const url = previewFromPayload(p, h.gameId, p.version)
+      if (url) h.setPreviewUrl(url)
       h.pushItem({
-        label: `build_done · v${String(p.version)}`,
-        detail: String(p.artifact_path ?? ''),
+        label: `${h.t('buildComplete')} · v${String(p.version)}`,
         tone: 'ok',
         at: ev.ts,
       })
@@ -75,12 +100,27 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     }
     case WSEventType.qa_report:
       h.pushItem({
-        label: p.passed ? 'qa_report · passed' : 'qa_report · failed',
+        label: p.passed ? h.t('qaPassed') : h.t('qaFailed'),
         detail: Array.isArray(p.issues) ? (p.issues as string[]).join(' · ') : String(p.log_excerpt ?? ''),
         tone: p.passed ? 'ok' : 'err',
         at: ev.ts,
       })
       return
+    case WSEventType.usage: {
+      const used = Number(p.today_used ?? 0)
+      const remain = Number(p.remaining ?? 0)
+      const limit = Number(p.daily_limit ?? 0)
+      h.setQuotaHint?.(
+        `${h.t('quotaHint')}: ${used.toLocaleString()} / ${limit.toLocaleString()} · ${h.t('remaining')} ${remain.toLocaleString()}`,
+      )
+      h.pushItem({
+        label: h.t('usageUpdated'),
+        detail: `remaining=${remain}`,
+        tone: 'muted',
+        at: ev.ts,
+      })
+      return
+    }
     case WSEventType.done:
       applyDone(ev, h)
       return
@@ -88,7 +128,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       h.setBusy(false)
       h.setPhase('idle')
       h.pushItem({
-        label: `error · ${String(p.code)}`,
+        label: `${h.t('generationError')} · ${String(p.code)}`,
         detail: String(p.message),
         tone: 'err',
         at: ev.ts,
@@ -106,21 +146,14 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   h.setSideTab('play')
   const ver = Number(p.version ?? 1)
   const gid = String(p.game_id ?? h.gameId ?? '')
-  if (gid) {
-    const g = mockDb.games.find((x) => x.game_id === gid)
-    if (g) {
-      g.current_version = Math.max(g.current_version, ver)
-      g.updated_at = new Date().toISOString()
-    }
-  }
-  const url = `/mock-play.html?game=${encodeURIComponent(gid)}&v=${encodeURIComponent(String(ver))}`
-  h.setPreviewUrl(url)
-  h.pushItem({ label: 'done · 生成完成', detail: url, tone: 'ok', at: ev.ts })
+  const url = previewFromPayload(p, gid || h.gameId, ver)
+  if (url) h.setPreviewUrl(url)
+  h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts })
   h.appendMessages([
     {
       id: mid('m'),
       role: 'assistant',
-      content: `构建完成（v${ver}）。右侧可直接试玩；满意后可到「我的游戏」提交发布。`,
+      content: `${h.t('playReady')}（v${ver}）。${h.t('describeIteration')}`,
     },
   ])
 }

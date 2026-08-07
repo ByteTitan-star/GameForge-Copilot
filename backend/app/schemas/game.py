@@ -11,9 +11,16 @@ class GameCreate(BaseModel):
     requirement: str
 
 
+class GamePatch(BaseModel):
+    """草稿重命名等（docs/01 MVP）。"""
+
+    title: str | None = None
+
+
 class GameResp(BaseModel):
     game_id: uuid.UUID
     owner_id: uuid.UUID
+    title: str
     status: GameStatus
     current_version: int
     created_at: datetime
@@ -44,3 +51,8 @@ class GameDetailResp(BaseModel):
     versions: list[VersionItem]
     created_at: datetime
     updated_at: datetime
+
+
+class GameDeleteResp(BaseModel):
+    game_id: uuid.UUID
+    deleted: bool = True

@@ -16,17 +16,25 @@
 | `gameforge/sandbox` | execute_code 沙箱镜像，后端按 run 拉起、用完销毁，非常驻 |
 | `postgres:16` | 主数据 |
 | `redis:7` | 用量/会话/限流/检查点（AOF 持久化） |
-| `gameforge/worker` | arq 异步 worker（邮件/告警/清理） |
+| `rabbitmq:3-management` | 任务队列 + WS 事件 topic |
+| `gameforge/worker` | RabbitMQ consumer（邮件/生成 run） |
 
 - 沙箱镜像最小化、只读根文件系统、seccomp 限制系统调用。
 - 后端镜像分层：依赖层与代码层分离，缓存友好。
 
 ## 异步任务队列
 
-- 选型 arq（async + Redis，轻量，契合 FastAPI async 栈）。
-- 用途：邮件发送（验证/重置/通知）、配额告警、沙箱清理、产物配额校验。
+- 选型 **RabbitMQ**（`aio-pika` + async consumer，契合 FastAPI async 栈）。
+- 用途：邮件发送（验证/重置/通知）、Forge `execute_run` / `resume_run`、WS 事件 topic（`gameforge.ws`）。
+- **Redis 保留**：用量统计、限流、refresh token、LangGraph 检查点、run pause/cancel 标志——**不能**用 RabbitMQ 替代。
 - 不用 FastAPI BackgroundTasks（进程内、重启即丢，非生产级）。
-- Worker 独立进程，docker compose 起 `gameforge/worker`。
+- Worker 独立进程：`uv run python -m app.messaging.worker`；docker compose 起 `gameforge/worker`。
+- 本地/CI 测试：`MESSAGING_BACKEND=memory`（进程内 bus，无需 RabbitMQ 容器）。
+
+```env
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+MESSAGING_BACKEND=rabbitmq   # memory | rabbitmq
+```
 
 ## 环境变量（非硬编码）
 
@@ -34,6 +42,8 @@
 # 数据库
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+MESSAGING_BACKEND=rabbitmq
 # 加密
 LLM_APIKEY_ENCRYPTION_KEY=           # Fernet key
 JWT_SECRET=                          # access 签名
@@ -81,7 +91,7 @@ CORS_ORIGINS=https://...
 
 | 项 | 措施 |
 |---|---|
-| 健康检查 | `/health`（DB/Redis 连通）+ `/ready` |
+| 健康检查 | `/health` + `/ready`（`db` / `redis` / `rabbitmq` 连通；`memory` 后端时 `rabbitmq=true`） |
 | 日志 | 结构化 JSON 日志，stdout 聚合 |
 | 指标 | Prometheus（请求数/延迟/LLM 调用/token 用量/沙箱执行数）— 进阶 |
 | 链路 | generation_run 全链路 trace 上报 langfuse Cloud，可回看（注意：prompt/生成内容出域） |

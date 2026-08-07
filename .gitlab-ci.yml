@@ -1,0 +1,92 @@
+# GitLab CI（docs/09 §CI）。lint → test → build → migrate(手动 gate) → deploy(手动审批)
+stages:
+  - lint
+  - test
+  - build
+  - migrate
+  - deploy
+
+variables:
+  UV_CACHE_DIR: .uv-cache
+  PIP_CACHE_DIR: .pip-cache
+
+backend:lint:
+  stage: lint
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  script:
+    - cd backend && uv sync --group dev && uv run ruff check .
+  cache:
+    key: backend-uv
+    paths:
+      - backend/.uv-cache
+
+backend:test:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  script:
+    - cd backend && uv sync --group dev && uv run pytest -q
+  cache:
+    key: backend-uv
+    paths:
+      - backend/.uv-cache
+
+frontend:lint:
+  stage: lint
+  image: node:20-bookworm-slim
+  script:
+    - cd frontend && corepack enable && pnpm i --frozen-lockfile && pnpm exec tsc -p tsconfig.json --noEmit
+  allow_failure: true
+
+frontend:test:
+  stage: test
+  image: node:20-bookworm-slim
+  script:
+    - cd frontend && corepack enable && pnpm i --frozen-lockfile && pnpm test
+  allow_failure: true
+
+.docker_build: &docker_build
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  only:
+    - main
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+backend:build:
+  <<: *docker_build
+  script:
+    - docker build -f docker/Dockerfile.backend -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
+
+worker:build:
+  <<: *docker_build
+  script:
+    - docker build -f docker/Dockerfile.worker -t $CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHORT_SHA
+
+sandbox:build:
+  <<: *docker_build
+  script:
+    - docker build -f docker/Dockerfile.sandbox -t $CI_REGISTRY_IMAGE/sandbox:$CI_COMMIT_SHORT_SHA docker
+    - docker push $CI_REGISTRY_IMAGE/sandbox:$CI_COMMIT_SHORT_SHA
+
+backend:migrate:
+  stage: migrate
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  script:
+    - cd backend && uv sync --frozen --no-dev && uv run alembic upgrade head
+  environment:
+    name: staging
+  when: manual
+
+deploy:prod:
+  stage: deploy
+  script:
+    - echo "deploy $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA to prod"
+  environment:
+    name: production
+  when: manual
+  only:
+    - main

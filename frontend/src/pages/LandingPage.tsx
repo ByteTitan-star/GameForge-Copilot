@@ -12,28 +12,28 @@ import heroArt from '@/assets/hero.png'
 const HERO_VIDEO =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260729_102822_0e6c87e8-c141-4744-bf32-ad30db296371.mp4'
 
-const services = ['/ 对话策划', '/ 代码生成', '/ 一键试玩', '/ 发布审批']
+const services = ['/ 用文字讲规则', '/ 自动写出页面', '/ 浏览器里先玩', '/ 想公开再提交']
 
 const features = [
   {
     icon: MessageSquareText,
-    title: '对话即工坊',
-    body: '左侧聊需求，右侧看生成进度，不必在工具间跳转。',
+    title: '一边说一边看进度',
+    body: '左边打字描述，右边看做到哪一步，不用换软件。',
   },
   {
     icon: Bot,
-    title: '多角色链路',
-    body: '策划 → 美术 → 代码 → 质检；关键节点 HITL 确认。',
+    title: '先看方案再往下做',
+    body: '会先给你玩法说明；你点同意，才继续画界面、写程序。',
   },
   {
     icon: Gamepad2,
-    title: '生成即可玩',
-    body: '产物托管后 iframe 沙箱试玩，迭代再跑一轮。',
+    title: '生成完就能点开玩',
+    body: '不用下载安装；不满意，接着打字改。',
   },
   {
     icon: ShieldCheck,
-    title: '自带 Key · 可计量',
-    body: 'LLM apikey 加密存；用量按真实 token usage 记账。',
+    title: '用自己的模型账号',
+    body: '在设置里填密钥；花了多少字数，页面上能看见。',
   },
 ]
 
@@ -41,17 +41,17 @@ const cases = [
   {
     title: '霓虹贪吃蛇',
     tag: 'Arcade · Draft',
-    blurb: '一句话开局：方向键 + 计分，进工坊继续打磨。',
+    blurb: '方向键吃豆、撞墙重来；做完接着改难度和配色。',
   },
   {
     title: '像素跑酷',
     tag: 'Runner · Published',
-    blurb: '障碍节奏与皮肤切换，已有公开 slug 可试玩。',
+    blurb: '跳障碍、换皮肤；做好后有一个链接，发给别人也能玩。',
   },
   {
     title: '塔防雏形',
     tag: 'Strategy · Forge',
-    blurb: '路径与波次先 HITL 确认数值，再出可运行版本。',
+    blurb: '先确认路线和怪物波次，再生成；数值不对就改完重跑。',
   },
 ]
 
@@ -145,14 +145,14 @@ export function LandingPage() {
               <div>
                 <FadeIn delayMs={150}>
                   <div className="mb-5 border-l-2 border-white bg-white/15 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] backdrop-blur-md transition-colors duration-200 hover:bg-white/25">
-                    From prompt to playable
+                    说完就能玩
                   </div>
                 </FadeIn>
                 <FadeIn delayMs={280}>
                   <h1 className="text-5xl font-normal leading-[1.05] tracking-tight text-white drop-shadow-lg sm:text-6xl lg:text-7xl">
-                    Clear. Precise.
+                    Say it. Play it.
                     <br />
-                    Playable.
+                    Fix it.
                   </h1>
                 </FadeIn>
               </div>
@@ -187,7 +187,7 @@ export function LandingPage() {
                 What you get
               </p>
               <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
-                为做小游戏排好的能力
+                你能直接做这些事
               </h2>
             </FadeIn>
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -219,12 +219,12 @@ export function LandingPage() {
                     Cases
                   </p>
                   <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
-                    工坊里长出来的样例路径
+                    别人已经这样试过
                   </h2>
                 </div>
                 <Link to={ctaTo}>
                   <MagneticButton className="!rounded-full !px-5 !py-2.5 text-xs sm:text-sm">
-                    开一个自己的
+                    我也做一个
                     <ArrowRight className="h-4 w-4" />
                   </MagneticButton>
                 </Link>
@@ -243,7 +243,7 @@ export function LandingPage() {
                       to={token ? '/games' : '/register'}
                       className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm text-white transition-all duration-200 hover:gap-2"
                     >
-                      了解路径 <ArrowRight className="h-3.5 w-3.5" />
+                      去试试类似的 <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </article>
                 </FadeIn>
@@ -256,9 +256,11 @@ export function LandingPage() {
           <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-normal tracking-tight drop-shadow-md">
-                准备好锻造下一款小游戏了吗？
+                想做一个自己的小游戏了吗？
               </h2>
-              <p className="mt-2 text-sm text-white/65">注册 → 验证邮箱 → 配置 LLM Key → 进入工坊。</p>
+              <p className="mt-2 text-sm text-white/65">
+                注册、验证邮箱、填上模型密钥，就可以开始说第一个想法。
+              </p>
             </div>
             <Link to={ctaTo}>
               <MagneticButton className="!rounded-full">

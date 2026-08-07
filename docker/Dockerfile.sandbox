@@ -1,0 +1,12 @@
+# gameforge/sandbox：无网络、最小工具链，按 run 拉起用完销毁（docs/09）
+FROM python:3.12-slim
+
+RUN useradd -m -u 10001 sandbox \
+    && mkdir -p /workspace \
+    && chown sandbox:sandbox /workspace
+
+WORKDIR /workspace
+USER sandbox
+
+# 默认校验 index.html 存在；有 build_cmd 时由后端覆盖 Cmd
+CMD ["sh", "-c", "test -f /workspace/index.html"]

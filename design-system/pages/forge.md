@@ -6,31 +6,31 @@
 
 ## 风格基调
 
-**深色命令台（Command Console）**
+**浅色游戏工作室（Light Arcade Studio）**
 
-- 画布 `#0b0d10`，面板 `#12151a`，细白边 `white/8`
-- 强调色：信息青 / 成功绿 / HITL 琥珀；避免紫霓虹与奶油纸风
-- 等宽标签标签（CHAT / PIPELINE / HITL）建立「控制台」语感
-- 动效克制：消息追加、阶段 chip、事件卡淡入即可
+- 工作区 `#E7EBEE`，舞台 `#F4F6F7`，面板 `#F8FAFB`，石墨墨色 `#1D2329`
+- 主操作使用珊瑚红 `#FF705C`；钴蓝仅表示运行/对话，成功绿仅表示可试玩，HITL 使用柔和黄色
+- 深色仅保留在全局侧栏、主要命令按钮和实际游戏画布中，形成清晰的工作区/试玩区分
+- 等宽标签（CHAT / PIPELINE / HITL）继续建立工具感；动效保持克制
 
 ## 布局（Scheme A · 对齐 `docs/08-frontend.md`）
 
-三栏工作台：
+沉浸舞台 + 可收起工作台：
 
-| 栏 | 组件 | 职责 |
+| 区域 | 组件 | 职责 |
 |---|---|---|
-| 左 | `ChatPanel` | 需求多轮对话 + 发送 |
-| 中 | `RunTimeline` + `HitlCard` | 阶段 chip + 事件时间线；`hitl_wait` 时插入确认卡 |
-| 右 | `ForgeSidePanel` | 事件日志 / 试玩（`GamePlayer` sandbox）切换 |
+| 主舞台 | `GamePlayer` / 空状态 | 承载创作入口与生成后的沉浸试玩 |
+| 底部 Dock | Forge composer | 随时输入新需求或修改意见 |
+| 右侧抽屉 | `ChatPanel` / `RunTimeline` / `HitlCard` | 对话、运行进度与策划确认；默认收起，必要时自动展开 |
 
 顶栏：标题、run_id、新游戏、跳转我的游戏；未验证邮箱提示去 Settings。
 
 ## 状态色
 
-- 运行中：青（cyan / teal）
+- 运行中：钴蓝
 - 成功构建：绿
-- 等待确认：琥珀
-- 失败：红 + 文案
+- 等待确认：柔和黄色
+- 失败：珊瑚红 + 文案
 
 ## Mock
 

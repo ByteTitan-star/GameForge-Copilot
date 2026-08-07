@@ -9,6 +9,7 @@ class LLMConfigCreate(BaseModel):
     provider: LLMProvider
     model: str
     apikey: str
+    base_url: str | None = None  # openai_compat 必填
     is_default: bool = False
 
 
@@ -22,6 +23,7 @@ class LLMConfigResp(BaseModel):
     provider: LLMProvider
     model: str
     apikey_masked: str
+    base_url: str | None = None
     is_default: bool
 
 

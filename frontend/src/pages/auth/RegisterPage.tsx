@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/auth'
-import { isApiError } from '@/api/errors'
+import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,7 @@ export function RegisterPage() {
       await authApi.register(email.trim(), password)
       navigate('/verify-email', { state: { email: email.trim() } })
     } catch (err) {
-      setError(isApiError(err) ? err.message : '注册失败')
+      setError(formatApiError(err, '注册失败'))
     } finally {
       setLoading(false)
     }
@@ -52,7 +52,7 @@ export function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={6}
+          minLength={8}
         />
         <Input
           name="confirm"
@@ -61,7 +61,7 @@ export function RegisterPage() {
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           required
-          minLength={6}
+          minLength={8}
         />
         {error ? (
           <p role="alert" className="text-sm text-red-300">

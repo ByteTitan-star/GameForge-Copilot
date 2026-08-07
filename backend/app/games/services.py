@@ -1,0 +1,298 @@
+"""游戏与 run 的 CRUD 业务逻辑：可见性 owner 过滤（docs/06 强制，admin 不可见草稿）。
+
+路由薄，逻辑聚此。run 执行（forge runner）与发布（M7）分离。
+含并发 run 上限、草稿/已发布数上限、版本保留上限（docs/04/05）。
+"""
+
+from datetime import UTC, datetime
+from uuid import UUID
+
+import redis.asyncio as redis
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.admin import services as admin_services
+from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
+from app.enums import GameStatus, RunPhase, RunStatus
+from app.forge import control as run_ctrl
+from app.forge import queue as forge_queue
+from app.forge import state as ckpt
+from app.hosting import store as hosting_store
+from app.models.game import Game
+from app.models.game_version import GameVersion
+from app.models.generation_run import GenerationRun
+from app.models.llm_config import UserLLMConfig
+from app.models.user import User
+from app.schemas.game import GameCreate, GamePatch
+from app.schemas.run import RunCreate
+from app.usage import quota as quota_mod
+from app.usage.store import get_user_usage
+
+_DELETABLE = {GameStatus.DRAFT, GameStatus.REJECTED, GameStatus.TAKEN_DOWN}
+_ACTIVE_RUNS = {RunStatus.RUNNING, RunStatus.PAUSED}
+_RENAMEABLE = {GameStatus.DRAFT, GameStatus.REJECTED, GameStatus.TAKEN_DOWN}
+
+
+def _require_verified(user: User) -> None:
+    if not user.email_verified:
+        raise AppError(ErrorCode.EMAIL_NOT_VERIFIED, "邮箱未验证，无法创建游戏或发起 run")
+
+
+async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    game = await db.scalar(
+        select(Game).where(Game.id == game_id, Game.owner_id == user.id)
+    )
+    if game is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或不可见")
+    return game
+
+
+async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> int:
+    n = await db.scalar(
+        select(func.count())
+        .select_from(Game)
+        .where(Game.owner_id == user_id, Game.status == status.value)
+    )
+    return int(n or 0)
+
+
+async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
+    _require_verified(user)
+    drafts = await _count_games(db, user.id, GameStatus.DRAFT)
+    if drafts >= settings.max_drafts_per_user:
+        raise AppError(
+            ErrorCode.QUOTA_EXCEEDED,
+            f"草稿游戏数已达上限（{settings.max_drafts_per_user}）",
+        )
+    game = Game(
+        owner_id=user.id,
+        title=req.title,
+        requirement=req.requirement,
+        status=GameStatus.DRAFT.value,
+        current_version=0,
+    )
+    db.add(game)
+    await db.commit()
+    await db.refresh(game)
+    return game
+
+
+async def list_games(
+    db: AsyncSession, user: User, status: GameStatus | None, page: int, size: int
+) -> tuple[list[Game], int]:
+    base = select(Game).where(Game.owner_id == user.id)
+    if status is not None:
+        base = base.where(Game.status == status.value)
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    rows = (
+        await db.scalars(
+            base.order_by(Game.updated_at.desc()).limit(size).offset((page - 1) * size)
+        )
+    ).all()
+    return list(rows), int(total or 0)
+
+
+async def get_game_detail(
+    db: AsyncSession, user: User, game_id: UUID
+) -> tuple[Game, list[GameVersion]]:
+    game = await _get_owned_game(db, user, game_id)
+    versions = (
+        await db.scalars(
+            select(GameVersion).where(GameVersion.game_id == game_id).order_by(GameVersion.version)
+        )
+    ).all()
+    return game, list(versions)
+
+
+async def patch_game(db: AsyncSession, user: User, game_id: UUID, req: GamePatch) -> Game:
+    """草稿重命名（docs/01 MVP）。"""
+    game = await _get_owned_game(db, user, game_id)
+    if GameStatus(game.status) not in _RENAMEABLE:
+        raise AppError(ErrorCode.INVALID_STATE, "当前状态不可修改标题")
+    if req.title is not None:
+        title = req.title.strip()
+        if not title:
+            raise AppError(ErrorCode.VALIDATION_ERROR, "标题不能为空")
+        game.title = title
+    await db.commit()
+    await db.refresh(game)
+    return game
+
+
+async def delete_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    game = await _get_owned_game(db, user, game_id)
+    if GameStatus(game.status) not in _DELETABLE:
+        raise AppError(ErrorCode.INVALID_STATE, "当前状态不可删除")
+    await db.delete(game)
+    await db.commit()
+    return game
+
+
+async def list_versions(db: AsyncSession, user: User, game_id: UUID) -> list[GameVersion]:
+    await _get_owned_game(db, user, game_id)
+    rows = (
+        await db.scalars(
+            select(GameVersion).where(GameVersion.game_id == game_id).order_by(GameVersion.version)
+        )
+    ).all()
+    return list(rows)
+
+
+async def prune_old_versions(db: AsyncSession, game: Game) -> None:
+    """保留最近 max_versions_per_game 个版本，删除更旧的 DB 行与产物目录。"""
+    rows = (
+        await db.scalars(
+            select(GameVersion)
+            .where(GameVersion.game_id == game.id)
+            .order_by(GameVersion.version.desc())
+        )
+    ).all()
+    keep = settings.max_versions_per_game
+    if len(rows) <= keep:
+        return
+    for old in rows[keep:]:
+        base = hosting_store.artifact_dir(game.id, old.version)
+        if base.exists():
+            import shutil
+
+            shutil.rmtree(base, ignore_errors=True)
+        await db.delete(old)
+    await db.commit()
+
+
+async def create_run(
+    db: AsyncSession, r: redis.Redis, user: User, game_id: UUID, req: RunCreate
+) -> GenerationRun:
+    _require_verified(user)
+    game = await _get_owned_game(db, user, game_id)
+
+    active = await db.scalar(
+        select(func.count())
+        .select_from(GenerationRun)
+        .where(
+            GenerationRun.user_id == user.id,
+            GenerationRun.status.in_([s.value for s in _ACTIVE_RUNS]),
+        )
+    )
+    if int(active or 0) >= settings.max_concurrent_runs:
+        raise AppError(
+            ErrorCode.RATE_LIMITED,
+            f"同时进行的 run 已达上限（{settings.max_concurrent_runs}）",
+        )
+
+    daily_default, monthly_default, _ = await admin_services.get_effective_limits(db)
+    daily = await quota_mod.get_user_daily_limit(r, user.id, daily_default)
+    usage = await get_user_usage(r, user.id, daily)
+    if usage.quota.remaining <= 0:
+        raise AppError(ErrorCode.QUOTA_EXCEEDED, "今日 token 配额已耗尽")
+    month_used = usage.month.input_tokens + usage.month.output_tokens
+    if month_used >= monthly_default:
+        raise AppError(ErrorCode.QUOTA_EXCEEDED, "本月 token 配额已耗尽")
+    if req.llm_config_id is not None:
+        cfg = await db.scalar(
+            select(UserLLMConfig).where(
+                UserLLMConfig.id == req.llm_config_id, UserLLMConfig.user_id == user.id
+            )
+        )
+        if cfg is None:
+            raise AppError(ErrorCode.LLM_CONFIG_NOT_FOUND, "LLM 配置不存在")
+    run = GenerationRun(
+        game_id=game.id,
+        user_id=user.id,
+        llm_config_id=req.llm_config_id,
+        requirement=req.requirement,
+        status=RunStatus.RUNNING.value,
+        phase=RunPhase.PLAN.value,
+        started_at=datetime.now(UTC),
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+    await forge_queue.enqueue_run(run.id)
+    return run
+
+
+async def list_runs(
+    db: AsyncSession, user: User, game_id: UUID
+) -> list[GenerationRun]:
+    await _get_owned_game(db, user, game_id)
+    rows = (
+        await db.scalars(
+            select(GenerationRun)
+            .where(GenerationRun.game_id == game_id)
+            .order_by(GenerationRun.started_at.desc())
+        )
+    ).all()
+    return list(rows)
+
+
+async def get_run(db: AsyncSession, user: User, run_id: UUID) -> GenerationRun:
+    run = await db.scalar(
+        select(GenerationRun).where(
+            GenerationRun.id == run_id, GenerationRun.user_id == user.id
+        )
+    )
+    if run is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "run 不存在或不可见")
+    return run
+
+
+async def pause_run(
+    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
+) -> GenerationRun:
+    run = await get_run(db, user, run_id)
+    if run.status != RunStatus.RUNNING.value:
+        raise AppError(ErrorCode.INVALID_STATE, "仅 running 可暂停")
+    await run_ctrl.request_pause(r, run_id)
+    run.status = RunStatus.PAUSED.value
+    await db.commit()
+    await db.refresh(run)
+    return run
+
+
+async def resume_run_control(
+    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
+) -> GenerationRun:
+    """用户续跑：从检查点继续（HITL 或主动 pause）。"""
+    run = await get_run(db, user, run_id)
+    if run.status != RunStatus.PAUSED.value:
+        raise AppError(ErrorCode.INVALID_STATE, "仅 paused 可续跑")
+    st = await ckpt.load_state(r, run_id) or {}
+    await run_ctrl.clear_control(r, run_id)
+    run.status = RunStatus.RUNNING.value
+    await db.commit()
+    phase = st.get("phase")
+    if phase in ("plan_confirm", "sandbox_failed", "qa_failed"):
+        await forge_queue.enqueue_resume(run_id, "approve", None)
+    else:
+        # 节点间 pause：带 design 从 art 续
+        await forge_queue.enqueue_resume(run_id, "approve", None)
+    await db.refresh(run)
+    return run
+
+
+async def cancel_run(
+    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
+) -> GenerationRun:
+    run = await get_run(db, user, run_id)
+    if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
+        raise AppError(ErrorCode.INVALID_STATE, "仅进行中的 run 可取消")
+    await run_ctrl.request_cancel(r, run_id)
+    run.status = RunStatus.FAILED.value
+    run.ended_at = datetime.now(UTC)
+    await db.commit()
+    await ckpt.clear_state(r, run_id)
+    await run_ctrl.clear_control(r, run_id)
+    await db.refresh(run)
+    return run
+
+
+async def assert_can_publish(db: AsyncSession, owner_id: UUID) -> None:
+    """审批通过前：已发布数未超上限。"""
+    n = await _count_games(db, owner_id, GameStatus.PUBLISHED)
+    if n >= settings.max_published_per_user:
+        raise AppError(
+            ErrorCode.QUOTA_EXCEEDED,
+            f"已发布游戏数已达上限（{settings.max_published_per_user}）",
+        )

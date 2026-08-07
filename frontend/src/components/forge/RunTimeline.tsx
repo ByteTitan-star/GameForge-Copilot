@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn'
 import { RunPhase } from '@/api/enums'
+import { useT } from '@/i18n/use-t'
 
 export type TimelineItem = {
   id: string
@@ -20,24 +21,32 @@ const PHASES: RunPhase[] = [
 type Props = {
   phase: RunPhase | 'idle' | 'paused'
   items: TimelineItem[]
+  className?: string
 }
 
 const toneClass: Record<TimelineItem['tone'], string> = {
-  info: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100',
-  ok: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100',
-  warn: 'border-amber-400/35 bg-amber-400/10 text-amber-100',
-  err: 'border-red-400/35 bg-red-400/10 text-red-100',
-  muted: 'border-white/10 bg-white/[0.03] text-white/55',
+  info: 'border-[#5271ff]/25 bg-[#5271ff]/[0.08] text-[#3046a8]',
+  ok: 'border-[#1b9a6c]/25 bg-[#1b9a6c]/[0.08] text-[#167052]',
+  warn: 'border-[#d49d12]/30 bg-[#ffcf5a]/15 text-[#785d14]',
+  err: 'border-[#d84d3e]/25 bg-[#ff705c]/10 text-[#8e2f26]',
+  muted: 'border-black/10 bg-black/[0.03] text-[#69737c]',
 }
 
-export function RunTimeline({ phase, items }: Props) {
+export function RunTimeline({ phase, items, className }: Props) {
+  const t = useT()
+  const phaseLabels: Record<RunPhase, string> = {
+    [RunPhase.plan]: t('phasePlan'),
+    [RunPhase.art]: t('phaseArt'),
+    [RunPhase.code]: t('phaseCode'),
+    [RunPhase.qa]: t('phaseQa'),
+    [RunPhase.done]: t('phaseDone'),
+  }
   const activeIdx = PHASES.indexOf(phase as RunPhase)
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#12151a]">
-      <header className="border-b border-white/[0.06] px-4 py-3">
-        <p className="font-mono text-[10px] tracking-[0.16em] text-white/40 uppercase">Pipeline</p>
-        <p className="text-sm text-white/80">阶段时间线</p>
+    <section className={cn('flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white', className)}>
+      <header className="border-b border-black/[0.07] px-4 py-3">
+        <p className="text-sm font-medium text-[#20262d]">{t('generationFlow')}</p>
         <ol className="mt-3 flex flex-wrap gap-1.5">
           {PHASES.map((p, i) => {
             const done = activeIdx > i || phase === RunPhase.done
@@ -47,13 +56,13 @@ export function RunTimeline({ phase, items }: Props) {
                 key={p}
                 className={cn(
                   'rounded-md px-2 py-1 font-mono text-[10px] tracking-wider uppercase ring-1',
-                  done && 'bg-emerald-400/15 text-emerald-200 ring-emerald-400/25',
-                  current && !done && 'bg-cyan-400/15 text-cyan-100 ring-cyan-400/30',
-                  !done && !current && 'bg-white/[0.03] text-white/35 ring-white/10',
-                  phase === 'paused' && p === RunPhase.plan && 'bg-amber-400/15 text-amber-100 ring-amber-400/30',
+                  done && 'bg-[#1b9a6c]/12 text-[#167052] ring-[#1b9a6c]/25',
+                  current && !done && 'bg-[#5271ff]/12 text-[#3046a8] ring-[#5271ff]/25',
+                  !done && !current && 'bg-black/[0.03] text-[#9099a1] ring-black/10',
+                  phase === 'paused' && p === RunPhase.plan && 'bg-[#ffcf5a]/20 text-[#785d14] ring-[#d49d12]/25',
                 )}
               >
-                {p}
+                {phaseLabels[p]}
               </li>
             )
           })}
@@ -62,7 +71,7 @@ export function RunTimeline({ phase, items }: Props) {
 
       <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {items.length === 0 ? (
-          <p className="px-1 py-8 text-center text-sm text-white/35">发送需求后，事件将在此滚动出现</p>
+          <p className="px-1 py-8 text-center text-sm text-[#9099a1]">{t('timelineEmpty')}</p>
         ) : (
           items.map((it) => (
             <article

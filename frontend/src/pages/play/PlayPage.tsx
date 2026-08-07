@@ -1,10 +1,11 @@
 import { useParams } from 'react-router-dom'
 import { GamePlayer } from '@/components/game/GamePlayer'
+import { playArtifactUrl } from '@/lib/hosting'
 
-/** 公开试玩：产物 URL 后续由托管服务提供；mock 用占位页 */
+/** 公开试玩：iframe sandbox 挂载托管产物 */
 export function PlayPage() {
   const { slug } = useParams()
-  const src = `/mock-play.html?slug=${encodeURIComponent(slug ?? '')}`
+  const src = playArtifactUrl(slug ?? '')
 
   return (
     <div className="min-h-screen bg-[#f0f0f0] px-4 py-8 md:px-8">
