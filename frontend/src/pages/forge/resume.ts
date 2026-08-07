@@ -10,8 +10,32 @@ export function pickActiveRun(runs: RunListItem[]): RunListItem | null {
   return running ?? active[0] ?? null
 }
 
-/** getRun 仅返回 current_hitl.node；补齐 HitlCard 所需结构 */
+type HitlWaitDetail = {
+  node: string
+  design_doc?: HitlWaitPayload['design_doc']
+  action_url?: string | null
+}
+
+/** 从 API hitl_wait 或 current_hitl 恢复 HITL 卡片 */
 export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayload | null {
+  const extended = run as RunDetail & { hitl_wait?: HitlWaitDetail | null }
+  if (extended.hitl_wait) {
+    const hw = extended.hitl_wait
+    return {
+      node: hw.node,
+      design_doc:
+        hw.design_doc ??
+        ({
+          title: `${gameTitle} · 待确认策划`,
+          gameplay: '（重连恢复）请确认或修改策划后继续生成。',
+          controls: '',
+          levels: [],
+        } as HitlWaitPayload['design_doc']),
+      action_url:
+        hw.action_url ??
+        `/api/v1/games/${run.game_id}/runs/${run.run_id}/hitl/resolve`,
+    }
+  }
   if (!run.current_hitl) return null
   return {
     node: run.current_hitl.node,
@@ -28,4 +52,26 @@ export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayl
 export function previewFromGameDetail(game: Pick<GameDetail, 'game_id' | 'current_version'>): string | null {
   if (game.current_version < 1) return null
   return draftArtifactUrl(game.game_id, game.current_version)
+}
+
+export function syncUiFromRun(
+  run: RunDetail,
+  gameTitle: string,
+): {
+  hitl: HitlWaitPayload | null
+  phase: RunDetail['phase'] | 'paused'
+  busy: boolean
+  runStatus: RunDetail['status']
+} {
+  const hitl = buildResumeHitl(run, gameTitle)
+  const runStatus = run.status
+  if (hitl) {
+    return { hitl, phase: 'paused', busy: false, runStatus }
+  }
+  return {
+    hitl: null,
+    phase: run.phase,
+    busy: run.status === 'running',
+    runStatus,
+  }
 }

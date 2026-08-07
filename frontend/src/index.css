@@ -167,6 +167,15 @@ body {
   color: var(--gf-text);
 }
 
+.gf-main-canvas--forge {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.gf-main-canvas--forge:has(.gf-forge-hero--stage-open) {
+  overflow: hidden;
+}
+
 .gf-sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -655,17 +664,24 @@ body {
 .gf-forge-hero {
   position: relative;
   isolation: isolate;
-  min-height: 0;
-  flex: 1;
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
-  overflow: hidden;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
   border-radius: 1.25rem;
   border: 1px solid var(--gf-border);
   background: var(--gf-surface);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 12px 40px rgba(15, 23, 42, 0.06);
+}
+
+.gf-forge-hero--stage-open {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .gf-forge-grid-bg {
@@ -722,11 +738,16 @@ body {
 .gf-forge-split {
   position: relative;
   z-index: 1;
-  min-height: 0;
-  flex: 1;
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
+  min-height: 0;
   padding: 0.75rem;
+}
+
+.gf-forge-hero--stage-open .gf-forge-split {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 @media (min-width: 768px) {
@@ -736,15 +757,19 @@ body {
 }
 
 .gf-forge-split:not(.gf-forge-split--stage-open) .gf-forge-panel-left {
-  flex: 1;
+  flex: 0 0 auto;
   width: auto;
+  height: auto;
   max-width: none;
+  overflow: visible;
 }
 
 .gf-forge-split:not(.gf-forge-split--stage-open) .gf-forge-workspace-scroll {
+  flex: none;
   width: 100%;
   max-width: 960px;
   margin-inline: auto;
+  overflow: visible;
 }
 
 .gf-forge-split--stage-open {
@@ -758,6 +783,15 @@ body {
   min-width: 340px;
   max-width: 78%;
   flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gf-forge-split--stage-open .gf-forge-workspace-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .gf-forge-split-handle {
@@ -789,10 +823,6 @@ body {
 }
 
 .gf-forge-workspace-scroll {
-  min-height: 0;
-  flex: 1;
-  overflow-x: hidden;
-  overflow-y: auto;
   overscroll-behavior: contain;
 }
 
@@ -832,9 +862,7 @@ body.gf-forge-resizing * {
 
 .gf-forge-panel-left {
   display: flex;
-  min-height: 0;
   flex-direction: column;
-  overflow: hidden;
   border: 1px solid var(--gf-border);
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.82);

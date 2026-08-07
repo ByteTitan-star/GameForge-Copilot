@@ -13,18 +13,22 @@ from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, RunPhase, RunStatus
 from app.forge import queue as forge_queue
 from app.forge import state as ckpt
+from app.forge.event_log import list_events
 from app.games import services
 from app.models.generation_run import GenerationRun
+from app.schemas.active_run import ActiveRunItem
 from app.schemas.run import (
     HitlResolveReq,
     HitlResolveResp,
     HitlState,
+    HitlWaitDetail,
     RunControlResp,
     RunCreate,
     RunListItem,
     RunResp,
     RunStatusResp,
 )
+from app.schemas.ws import WSEvent
 
 router = APIRouter(tags=["runs"])
 
@@ -86,14 +90,51 @@ async def list_runs(
 _HITL_PHASES = {"plan_confirm", "sandbox_failed", "qa_failed"}
 
 
+def _hitl_from_state(
+    run: GenerationRun, state: dict | None
+) -> tuple[HitlState | None, HitlWaitDetail | None]:
+    if not state:
+        return None, None
+    phase = state.get("phase")
+    if phase not in _HITL_PHASES:
+        return None, None
+    current = HitlState(node=str(phase))
+    detail = HitlWaitDetail(
+        node=str(phase),
+        design_doc=state.get("design_doc"),
+        action_url=f"/api/v1/games/{run.game_id}/runs/{run.id}/hitl/resolve",
+    )
+    return current, detail
+
+
+@router.get("/me/runs/active", response_model=ApiResponse[list[ActiveRunItem]])
+async def list_active_runs(user: CurrentUser, db: DbSession) -> ApiResponse[list[ActiveRunItem]]:
+    """跨游戏进行中的 run，供刷新/跳转后找回任务。"""
+    rows = await services.list_user_active_runs(db, user)
+    return ApiResponse(
+        data=[
+            ActiveRunItem(
+                run_id=run.id,
+                game_id=run.game_id,
+                game_title=game.title,
+                status=RunStatus(run.status),
+                phase=RunPhase(run.phase),
+                entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
+                started_at=run.started_at,
+                ws_url=_WS.format(run_id=run.id),
+            )
+            for run, game in rows
+        ]
+    )
+
+
 @router.get("/runs/{run_id}", response_model=ApiResponse[RunStatusResp], responses=ERR_404)
 async def get_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunStatusResp]:
     run = await services.get_run(db, user, run_id)
     state = await ckpt.load_state(r, run_id)
-    phase = state.get("phase") if state else None
-    current_hitl = HitlState(node=phase) if phase in _HITL_PHASES else None
+    current_hitl, hitl_wait = _hitl_from_state(run, state)
     return ApiResponse(
         data=RunStatusResp(
             run_id=run.id,
@@ -103,8 +144,20 @@ async def get_run(
             entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
             ws_url=_WS.format(run_id=run.id),
             current_hitl=current_hitl,
+            hitl_wait=hitl_wait,
         )
     )
+
+
+@router.get("/runs/{run_id}/events", response_model=ApiResponse[list[WSEvent]], responses=ERR_404)
+async def get_run_events(
+    run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
+) -> ApiResponse[list[WSEvent]]:
+    """WS 事件历史（Redis 缓冲），HTTP 回退 replay。"""
+    await services.get_run(db, user, run_id)
+    raw = await list_events(r, run_id)
+    events = [WSEvent.model_validate_json(line) for line in raw]
+    return ApiResponse(data=events)
 
 
 @router.post(

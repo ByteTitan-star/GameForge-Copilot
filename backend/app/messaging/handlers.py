@@ -12,6 +12,7 @@ from app.email.worker import (
     send_reset_email,
     send_verification_email,
 )
+from app.forge.event_log import bind_event_redis
 from app.forge.runner import execute_run, resume_run
 from app.messaging.tasks import (
     TASK_EXECUTE_RUN,
@@ -38,6 +39,7 @@ def worker_ctx() -> dict:
 
 async def dispatch_task(task: str, payload: dict) -> None:
     ctx = worker_ctx()
+    bind_event_redis(ctx["redis"])
     match task:
         case _ if task == TASK_SEND_VERIFICATION:
             await send_verification_email(ctx, payload["email"], payload["code"])

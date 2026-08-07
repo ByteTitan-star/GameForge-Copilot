@@ -25,6 +25,7 @@ export type ForgeEventHandlers = {
   setCurrentModel?: (model: string | null) => void
   setRunError?: (runId: string, message: string) => void
   setStagePipeline?: (updater: (prev: StagePipelineState) => StagePipelineState) => void
+  onRunFinished?: () => void
   gameId: string | undefined
   runId?: string | null
   t: (key: MessageKey) => string
@@ -154,6 +155,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     case WSEventType.error:
       h.setBusy(false)
       h.setPhase('idle')
+      h.onRunFinished?.()
       if (h.runId) h.setRunError?.(h.runId, String(p.message))
       h.setStagePipeline?.((prev) => markStageFailed(prev, RunPhase.code))
       h.pushItem({
@@ -172,6 +174,7 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
   h.setPhase(RunPhase.done)
   h.setBusy(false)
+  h.onRunFinished?.()
   h.setStagePipeline?.((prev) => markAllDone(prev))
   h.setSideTab('play')
   const ver = Number(p.version ?? 1)

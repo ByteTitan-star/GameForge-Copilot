@@ -22,12 +22,15 @@ type ConnectOptions = {
   onEvent: (ev: WsEnvelope) => void
   onError?: (err: Event) => void
   onClose?: (ev: CloseEvent) => void
-  /** 断线自动重连次数，默认 3；access 过期（4401）不重连 */
+  /** 断线自动重连次数；persistent=true 时忽略上限 */
   maxRetries?: number
+  /** 页面存活期间持续重连（刷新后由 HTTP+新 WS 接管） */
+  persistent?: boolean
 }
 
 export function connectRunWs(options: ConnectOptions): RunWsHandle {
-  const maxRetries = options.maxRetries ?? 3
+  const persistent = options.persistent ?? false
+  const maxRetries = options.maxRetries ?? (persistent ? Number.POSITIVE_INFINITY : 3)
   let retries = 0
   let closed = false
   let socket: WebSocket | null = null
@@ -38,6 +41,10 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
     const url = wsRunUrl(options.runId, options.accessToken)
     socket = new WebSocket(url)
 
+    socket.onopen = () => {
+      retries = 0
+    }
+
     socket.onmessage = (msg) => {
       const ev = parseWsEnvelope(String(msg.data))
       if (ev) options.onEvent(ev)
@@ -46,9 +53,8 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
     socket.onclose = (ev) => {
       options.onClose?.(ev)
       if (closed) return
-      // 4401 鉴权失败 / 4403 无权限：不再重试
       if (ev.code === 4401 || ev.code === 4403) return
-      if (retries >= maxRetries) return
+      if (!persistent && retries >= maxRetries) return
       retries += 1
       retryTimer = window.setTimeout(open, Math.min(1000 * retries, 4000))
     }

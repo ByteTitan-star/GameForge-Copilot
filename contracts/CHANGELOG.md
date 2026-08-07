@@ -8,6 +8,12 @@
 
 ## 未发布（working copy）
 
+## 未发布（working copy）
+
+- ADDED: Run 事件 Redis 缓冲 + WS 连接时 replay；`GET /runs/{id}/events` HTTP 回退
+- ADDED: `GET /me/runs/active` — 跨游戏进行中的 run 列表（刷新/跳转后找回）
+- MODIFIED: `GET /runs/{id}` — 增 `hitl_wait`（从 Redis 检查点恢复完整 design_doc）
+
 <!-- 后端改契约后在此追加，commit 时归入下一条日期标题 -->
 
 - MODIFIED: `GET /templates` — 仅返回 verified 模板；catalog 含 reference_artifact CI playtest (Batch B · B-B1)

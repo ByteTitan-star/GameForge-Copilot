@@ -227,6 +227,18 @@ HTTP 状态码语义化：400 入参错 / 401 未认证 / 403 无权限 / 404 �
 - 响应 `data`：`{ "run_id", "status": "running", "phase": "code" }`
 - 与 `POST /runs/{id}/resume` 区分：resume 用于 HITL/pause；retry 用于失败恢复
 
+### GET /api/v1/me/runs/active （Run 持久化）
+- 需 Bearer；返回当前用户所有 `running|paused` 的 run（跨游戏）
+- 响应 `data[]`：`{ run_id, game_id, game_title, status, phase, entry_phase, started_at, ws_url }`
+
+### GET /api/v1/runs/{run_id}/events （Run 持久化）
+- 需 Bearer + owner；返回 Redis 缓冲的 WS 事件历史（最多 200 条）
+- 响应 `data[]`：同 WS `WSEvent` envelope
+- WS 连接 `/ws/runs/{run_id}` 握手后会先 replay 缓冲事件，再转发实时流
+
+### GET /api/v1/runs/{run_id} （Run 持久化扩展）
+- 响应 `data` 增 `hitl_wait`: `{ node, design_doc, action_url }`（从 Redis 检查点，HITL 态时有值）
+
 ### GET /api/v1/templates （Batch B · R2）
 - 无需登录；仅 `verified=true` 模板
 - 响应 `data[]`：`{ template_id, title, description, tags[], requirement_seed }`

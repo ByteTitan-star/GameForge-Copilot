@@ -338,8 +338,91 @@ docker compose --profile build-sandbox build sandbox
 | `/ready` 某项为 `false` | 确认 ① 三个容器 healthy；检查 `backend/.env` 连接串是否指向 `localhost` |
 | 注册后没有验证码 | Worker 终端是否在跑；查看 `[dev-email]` 输出 |
 | 工坊生成一直不动 | Worker 是否运行；Setting 是否已配可用 LLM；邮箱是否已验证 |
+| Worker 宕机 / 想清空队列或缓存 | 见下方「本地调试工具」；`ENV=development` 时可用 |
+| 刷新页面后 Forge 任务「消失」 | 后端仍在跑；重进工坊会自动恢复 WS + 事件回放（需 API/Worker 已更新） |
 | 官方游戏列表为空 / `/play/official-*` 404 | 是否执行 `uv run python -m scripts.seed_official_games`（migrate 不会自动写入） |
 | `alembic` / `uv` 找不到 | 命令须在 `backend/` 下执行，且已 `uv sync` |
+
+### 本地调试工具（仅 `ENV=development`）
+
+开发环境下 API 提供 **Redis 清理、RabbitMQ 队列 purge、stuck run 重投** 等端点，方便 Worker 崩溃或反复联调时恢复现场。生产环境（`ENV!=development`）一律返回 403。
+
+**前置：** `backend/.env` 中 `ENV=development`，改代码后重启 API。
+
+#### 查看状态
+
+```bash
+# Redis 各 scope 键数量 + 队列深度
+curl http://127.0.0.1:8000/api/v1/dev/runtime/status
+
+# 仅看 RabbitMQ 队列 gameforge.worker
+curl http://127.0.0.1:8000/api/v1/dev/queue/stats
+```
+
+#### Worker 宕机后恢复 run（推荐）
+
+不清数据，只把任务重新丢进队列：
+
+```bash
+# 1. 重启 Worker
+cd backend && uv run python -m app.messaging.worker
+
+# 2. 重投 stuck run（根据 DB 状态 + Redis 检查点选 execute_run / resume_run）
+curl -X POST http://127.0.0.1:8000/api/v1/dev/runs/{run_id}/requeue
+```
+
+#### 清空消息队列
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/dev/queue/purge?confirm=FLUSH"
+```
+
+#### 清空 Redis（按 scope）
+
+破坏性操作均需 `"confirm":"FLUSH"`。
+
+```bash
+# 清空所有 run 相关：事件回放、检查点、暂停/取消标志、HITL 锁
+curl -X POST http://127.0.0.1:8000/api/v1/dev/redis/flush \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["forge"],"confirm":"FLUSH"}'
+
+# 只清某一个 run
+curl -X POST http://127.0.0.1:8000/api/v1/dev/redis/flush \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["forge"],"run_id":"YOUR-RUN-UUID","confirm":"FLUSH"}'
+
+# 清空除 refresh token 外的常见缓存（用量、限流、quota、analytics 等）
+curl -X POST http://127.0.0.1:8000/api/v1/dev/redis/flush \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["all_ephemeral"],"confirm":"FLUSH"}'
+```
+
+| Redis scope | 清除内容 |
+|---|---|
+| `forge` | `run:events:*` / `run:ckpt:*` / `run:ctrl:*` / `run:hitl:*` |
+| `usage` | 用量统计 |
+| `analytics` | 试玩 PV/UV |
+| `rate_limits` | `rl:*` |
+| `quota` | 配额覆盖与告警 |
+| `dev_helpers` | 验证码、`oauth:state` |
+| `models_cache` | LLM 模型列表缓存 |
+| `refresh_tokens` | 所有 refresh token（**会登出全部用户**） |
+| `all_ephemeral` | 以上除 `refresh_tokens` 外全部 |
+| `pattern` | 自定义，需额外传 `"pattern":"run:events:*"` |
+
+**命令行等价操作（不用 API）：**
+
+```bash
+redis-cli FLUSHDB                                    # 清空当前 Redis DB（最暴力）
+redis-cli --scan --pattern 'run:*' | xargs redis-cli DEL
+rabbitmqctl purge_queue gameforge.worker             # 或管理台 http://127.0.0.1:15672
+```
+
+#### Run 持久化（刷新 / 跳转不丢任务）
+
+- 后端：Redis 环形缓冲 `run:events:{run_id}`，WS 重连时回放；`GET /api/v1/me/runs/active` 列出进行中 run。
+- 前端：sessionStorage 记住 `{gameId, runId}`，回到 Forge 自动重连 WS；顶栏 **ActiveRunBanner** 可一键返回。
 
 ---
 

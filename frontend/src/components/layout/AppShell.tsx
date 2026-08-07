@@ -12,6 +12,7 @@ import { ThemePanelModal } from '@/components/theme/ThemePanelModal'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
+import { ActiveRunBanner } from '@/components/layout/ActiveRunBanner'
 import { isOnboardingDone } from '@/lib/onboarding-storage'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -116,11 +117,13 @@ export function AppShell() {
           </div>
         ) : null}
 
+        {!trial ? <ActiveRunBanner /> : null}
+
         <main
           className={cn(
             'gf-main-canvas relative min-h-0 flex-1',
             isForge
-              ? 'flex flex-col overflow-hidden p-3 md:p-4 lg:p-5'
+              ? 'gf-main-canvas--forge flex flex-col p-3 md:p-4 lg:p-5'
               : 'mx-auto w-full max-w-[1400px] overflow-y-auto px-4 py-6 md:px-8 md:py-8',
           )}
         >

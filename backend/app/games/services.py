@@ -296,6 +296,27 @@ async def list_runs(
     return list(rows)
 
 
+async def list_user_active_runs(
+    db: AsyncSession, user: User, limit: int = 20
+) -> list[tuple[GenerationRun, Game]]:
+    """跨游戏进行中的 run（running / paused），供刷新后找回任务。"""
+    rows = (
+        await db.execute(
+            select(GenerationRun, Game)
+            .join(Game, Game.id == GenerationRun.game_id)
+            .where(
+                GenerationRun.user_id == user.id,
+                GenerationRun.status.in_(
+                    [RunStatus.RUNNING.value, RunStatus.PAUSED.value]
+                ),
+            )
+            .order_by(GenerationRun.started_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [(run, game) for run, game in rows]
+
+
 async def get_run(db: AsyncSession, user: User, run_id: UUID) -> GenerationRun:
     run = await db.scalar(
         select(GenerationRun).where(

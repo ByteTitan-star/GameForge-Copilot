@@ -59,7 +59,9 @@ def _uses_anthropic_native_api(provider: LLMProvider, base_url: str | None) -> b
     return _is_official_base(provider, base_url)
 
 
-def _auth_headers(provider: LLMProvider, apikey: str, base_url: str | None = None) -> dict[str, str]:
+def _auth_headers(
+    provider: LLMProvider, apikey: str, base_url: str | None = None
+) -> dict[str, str]:
     if _uses_anthropic_native_api(provider, base_url):
         return {"x-api-key": apikey, "anthropic-version": "2023-06-01"}
     return {"Authorization": f"Bearer {apikey}"}

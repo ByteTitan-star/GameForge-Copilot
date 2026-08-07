@@ -92,15 +92,18 @@ class RabbitWsBus:
     async def publish(
         self, run_id: uuid.UUID, event_type: WSEventType, payload: dict
     ) -> None:
+        ev = WSEvent(
+            type=event_type, run_id=run_id, ts=datetime.now(UTC), payload=payload
+        )
+        await self.publish_data(run_id, ev.model_dump_json())
+
+    async def publish_data(self, run_id: uuid.UUID, data: str) -> None:
         conn = await get_connection()
         channel = await conn.channel()
         try:
             exchange = await _ws_exchange(channel)
-            ev = WSEvent(
-                type=event_type, run_id=run_id, ts=datetime.now(UTC), payload=payload
-            )
             await exchange.publish(
-                Message(body=ev.model_dump_json().encode()),
+                Message(body=data.encode()),
                 routing_key=f"run.{run_id}",
             )
         finally:
@@ -132,3 +135,29 @@ async def ping_rabbitmq() -> bool:
         return True
     except Exception:  # noqa: BLE001 探针
         return False
+
+
+async def task_queue_stats() -> dict[str, int | str | None]:
+    """Passive queue inspect for dev/debug endpoints."""
+    channel, _exchange = await _task_channel()
+    try:
+        queue = await channel.declare_queue(TASK_QUEUE, durable=True, passive=True)
+        decl = queue.declaration_result
+        return {
+            "queue": TASK_QUEUE,
+            "messages": int(decl.message_count or 0),
+            "consumers": int(decl.consumer_count or 0),
+        }
+    finally:
+        await channel.close()
+
+
+async def purge_task_queue() -> int:
+    """Purge all pending worker tasks (dev/debug only)."""
+    channel, _exchange = await _task_channel()
+    try:
+        queue = await channel.declare_queue(TASK_QUEUE, durable=True)
+        result = await queue.purge()
+        return int(result or 0)
+    finally:
+        await channel.close()

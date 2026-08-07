@@ -665,6 +665,178 @@
         }
       }
     },
+    "/api/v1/dev/runtime/status": {
+      "get": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Runtime Status",
+        "description": "Redis key counts by scope + RabbitMQ queue depth.",
+        "operationId": "runtime_status_api_v1_dev_runtime_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_RuntimeStatusResp_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dev/queue/stats": {
+      "get": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Queue Stats",
+        "operationId": "queue_stats_api_v1_dev_queue_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_QueueStatsResp_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dev/queue/purge": {
+      "post": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Queue Purge",
+        "description": "Purge pending worker tasks (e.g. after worker crash during debug).",
+        "operationId": "queue_purge_api_v1_dev_queue_purge_post",
+        "parameters": [
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Confirm"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_QueuePurgeResp_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dev/redis/flush": {
+      "post": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Redis Flush",
+        "description": "Delete Redis keys by scope. Use run_id with forge scope for a single run.",
+        "operationId": "redis_flush_api_v1_dev_redis_flush_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedisFlushReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_RedisFlushResp_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dev/runs/{run_id}/requeue": {
+      "post": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Requeue Run",
+        "description": "Re-enqueue a stuck run after worker restart.",
+        "operationId": "requeue_run_api_v1_dev_runs__run_id__requeue_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_DevRequeueResp_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/llm-configs": {
       "get": {
         "tags": [
@@ -2250,6 +2422,33 @@
         }
       }
     },
+    "/api/v1/me/runs/active": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Active Runs",
+        "description": "跨游戏进行中的 run，供刷新/跳转后找回任务。",
+        "operationId": "list_active_runs_api_v1_me_runs_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ActiveRunItem__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}": {
       "get": {
         "tags": [
@@ -2281,6 +2480,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_RunStatusResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "run 或游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/events": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run Events",
+        "description": "WS 事件历史（Redis 缓冲），HTTP 回退 replay。",
+        "operationId": "get_run_events_api_v1_runs__run_id__events_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_WSEvent__"
                 }
               }
             }
@@ -4065,6 +4323,54 @@
   },
   "components": {
     "schemas": {
+      "ActiveRunItem": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "game_title": {
+            "type": "string",
+            "title": "Game Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/RunPhase"
+          },
+          "entry_phase": {
+            "$ref": "#/components/schemas/EntryPhase"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "ws_url": {
+            "type": "string",
+            "title": "Ws Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "game_id",
+          "game_title",
+          "status",
+          "phase",
+          "entry_phase",
+          "started_at",
+          "ws_url"
+        ],
+        "title": "ActiveRunItem"
+      },
       "AdminGameFeaturedPatch": {
         "properties": {
           "featured_rank": {
@@ -4394,6 +4700,18 @@
         ],
         "title": "ApiResponse[CreatorProfile]"
       },
+      "ApiResponse_DevRequeueResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevRequeueResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[DevRequeueResp]"
+      },
       "ApiResponse_GameAnalyticsResp_": {
         "properties": {
           "data": {
@@ -4646,6 +4964,30 @@
         ],
         "title": "ApiResponse[PublishSubmitResp]"
       },
+      "ApiResponse_QueuePurgeResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/QueuePurgeResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[QueuePurgeResp]"
+      },
+      "ApiResponse_QueueStatsResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/QueueStatsResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[QueueStatsResp]"
+      },
       "ApiResponse_ReactionToggleResp_": {
         "properties": {
           "data": {
@@ -4669,6 +5011,18 @@
           "data"
         ],
         "title": "ApiResponse[Ready]"
+      },
+      "ApiResponse_RedisFlushResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RedisFlushResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[RedisFlushResp]"
       },
       "ApiResponse_RegisterResp_": {
         "properties": {
@@ -4729,6 +5083,18 @@
           "data"
         ],
         "title": "ApiResponse[RunStatusResp]"
+      },
+      "ApiResponse_RuntimeStatusResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RuntimeStatusResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[RuntimeStatusResp]"
       },
       "ApiResponse_TakeDownResp_": {
         "properties": {
@@ -4819,6 +5185,22 @@
           "data"
         ],
         "title": "ApiResponse[dict[str, str]]"
+      },
+      "ApiResponse_list_ActiveRunItem__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveRunItem"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ActiveRunItem]]"
       },
       "ApiResponse_list_LLMConfigResp__": {
         "properties": {
@@ -4931,6 +5313,22 @@
           "data"
         ],
         "title": "ApiResponse[list[VersionItem]]"
+      },
+      "ApiResponse_list_WSEvent__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WSEvent"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[WSEvent]]"
       },
       "ApiResponse_list_dict__": {
         "properties": {
@@ -5141,6 +5539,41 @@
           "games"
         ],
         "title": "CreatorProfile"
+      },
+      "DevRequeueResp": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "task",
+          "status"
+        ],
+        "title": "DevRequeueResp"
       },
       "EntryPhase": {
         "type": "string",
@@ -5638,6 +6071,45 @@
           "node"
         ],
         "title": "HitlState"
+      },
+      "HitlWaitDetail": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node"
+          },
+          "design_doc": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Doc"
+          },
+          "action_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node"
+        ],
+        "title": "HitlWaitDetail"
       },
       "LLMConfigCreate": {
         "properties": {
@@ -6658,6 +7130,63 @@
         ],
         "title": "PublishSubmitResp"
       },
+      "QueuePurgeResp": {
+        "properties": {
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "queue": {
+            "type": "string",
+            "title": "Queue"
+          },
+          "purged": {
+            "type": "integer",
+            "title": "Purged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "backend",
+          "queue",
+          "purged"
+        ],
+        "title": "QueuePurgeResp"
+      },
+      "QueueStatsResp": {
+        "properties": {
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "queue": {
+            "type": "string",
+            "title": "Queue"
+          },
+          "messages": {
+            "type": "integer",
+            "title": "Messages"
+          },
+          "consumers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "backend",
+          "queue",
+          "messages"
+        ],
+        "title": "QueueStatsResp"
+      },
       "QuotaInfo": {
         "properties": {
           "daily_token_limit": {
@@ -6732,6 +7261,81 @@
           "rabbitmq"
         ],
         "title": "Ready"
+      },
+      "RedisFlushReq": {
+        "properties": {
+          "scopes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "forge",
+                "usage",
+                "analytics",
+                "rate_limits",
+                "quota",
+                "dev_helpers",
+                "models_cache",
+                "refresh_tokens",
+                "all_ephemeral",
+                "pattern"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Scopes"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern",
+            "description": "Required when scopes includes 'pattern', e.g. run:events:*"
+          },
+          "confirm": {
+            "type": "string",
+            "title": "Confirm",
+            "description": "Must be \"FLUSH\" to execute destructive ops"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scopes",
+          "confirm"
+        ],
+        "title": "RedisFlushReq"
+      },
+      "RedisFlushResp": {
+        "properties": {
+          "deleted": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "RedisFlushResp"
       },
       "RefreshReq": {
         "properties": {
@@ -7003,6 +7607,16 @@
                 "type": "null"
               }
             ]
+          },
+          "hitl_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HitlWaitDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -7015,6 +7629,36 @@
           "ws_url"
         ],
         "title": "RunStatusResp"
+      },
+      "RuntimeStatusResp": {
+        "properties": {
+          "env": {
+            "type": "string",
+            "title": "Env"
+          },
+          "messaging_backend": {
+            "type": "string",
+            "title": "Messaging Backend"
+          },
+          "redis": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Redis"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueStatsResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "env",
+          "messaging_backend",
+          "redis",
+          "queue"
+        ],
+        "title": "RuntimeStatusResp"
       },
       "SystemUsage": {
         "properties": {
@@ -7401,6 +8045,52 @@
           "created_at"
         ],
         "title": "VersionItem"
+      },
+      "WSEvent": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/WSEventType"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ts"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "run_id",
+          "ts",
+          "payload"
+        ],
+        "title": "WSEvent",
+        "description": "WS 事件外层；payload 按 type 不同，前端据 type 解析。"
+      },
+      "WSEventType": {
+        "type": "string",
+        "enum": [
+          "phase_start",
+          "llm_call",
+          "tool_call",
+          "build_done",
+          "qa_report",
+          "hitl_wait",
+          "usage",
+          "done",
+          "error"
+        ],
+        "title": "WSEventType"
       }
     },
     "securitySchemes": {

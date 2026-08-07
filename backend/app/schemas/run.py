@@ -32,6 +32,12 @@ class HitlState(BaseModel):
     node: str
 
 
+class HitlWaitDetail(BaseModel):
+    node: str
+    design_doc: dict | str | None = None
+    action_url: str | None = None
+
+
 class RunStatusResp(BaseModel):
     run_id: uuid.UUID
     game_id: uuid.UUID
@@ -40,6 +46,7 @@ class RunStatusResp(BaseModel):
     entry_phase: EntryPhase
     ws_url: str
     current_hitl: HitlState | None = None
+    hitl_wait: HitlWaitDetail | None = None
 
 
 class HitlResolveReq(BaseModel):

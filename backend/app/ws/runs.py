@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.security import decode_access_token
 from app.core import db as db_module
 from app.enums import Role
+from app.forge.event_log import list_events_auto
 from app.messaging.factory import get_ws_bus, use_memory
 from app.models.generation_run import GenerationRun
 from app.models.user import User
@@ -34,6 +35,11 @@ async def _ws_user(db: AsyncSession, token: str | None) -> User | None:
     except (KeyError, ValueError):
         return None
     return await db.get(User, uid)
+
+
+async def _replay_buffered(ws: WebSocket, run_id: uuid.UUID) -> None:
+    for data in await list_events_auto(run_id):
+        await ws.send_text(data)
 
 
 async def _relay_memory(ws: WebSocket, run_id: uuid.UUID) -> None:
@@ -79,6 +85,7 @@ async def run_ws(websocket: WebSocket, run_id: uuid.UUID) -> None:
         return
 
     await websocket.accept()
+    await _replay_buffered(websocket, run_id)
     relay_fn = _relay_memory if use_memory() else _relay_rabbit
     relay = asyncio.create_task(relay_fn(websocket, run_id))
     disc = asyncio.create_task(_await_disconnect(websocket))

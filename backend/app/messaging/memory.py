@@ -36,7 +36,9 @@ class MemoryWsBus:
         ev = WSEvent(
             type=event_type, run_id=run_id, ts=datetime.now(UTC), payload=payload
         )
-        data = ev.model_dump_json()
+        await self.publish_data(run_id, ev.model_dump_json())
+
+    async def publish_data(self, run_id: uuid.UUID, data: str) -> None:
         for q in list(self._queues.get(str(run_id), [])):
             await q.put(data)
 

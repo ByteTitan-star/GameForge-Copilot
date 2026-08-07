@@ -133,6 +133,9 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     email_queue.enqueue_notification = _capture_notify  # type: ignore[assignment]
     forge_queue.enqueue_run = _noop_enqueue  # type: ignore[assignment]
     forge_queue.enqueue_resume = _noop_enqueue_resume  # type: ignore[assignment]
+    from app.forge.event_log import bind_event_redis
+
+    bind_event_redis(_fake)
     # forge.runner 用 db.SessionLocal 打开 session；swap 到测试 sessionmaker
     db_module.SessionLocal = _SessionLocal
     _sent.clear()
@@ -146,6 +149,9 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     settings.messaging_backend = _orig_messaging
     settings.admin_contact_email = _orig_admin_contact
     reset_messaging()
+    from app.forge.event_log import bind_event_redis
+
+    bind_event_redis(None)
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     if _fake is not None:

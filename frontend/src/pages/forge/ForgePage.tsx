@@ -45,8 +45,9 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useLocaleStore } from '@/stores/locale-store'
 import { connectRunWs, type RunWsHandle } from '@/ws/client'
 import { handleForgeWsEvent } from './forge-events'
-import { buildResumeHitl, pickActiveRun, previewFromGameDetail } from './resume'
+import { buildResumeHitl, pickActiveRun, previewFromGameDetail, syncUiFromRun } from './resume'
 import { draftArtifactUrl } from '@/lib/hosting'
+import { clearActiveRun, readActiveRun, saveActiveRun } from '@/lib/active-run-storage'
 import { getTemplateById } from '@/constants/templates'
 import { templatesApi, type GameTemplate } from '@/api/templates'
 import type { RunListItem } from '@/api/types'
@@ -174,6 +175,19 @@ export function ForgePage() {
     return () => window.clearTimeout(timer)
   }, [previewUrl])
 
+  function connectWs(activeGameId: string, activeRunId: string) {
+    if (!token) return
+    const prev = handleRef.current
+    prev?.close()
+    handleRef.current = connectRunWs({
+      runId: activeRunId,
+      accessToken: token!,
+      persistent: true,
+      onEvent: (ev) => handleForgeWsEvent(ev, eventBridge(activeGameId, activeRunId)),
+      onError: () => setErr(t('generationFailed')),
+    })
+  }
+
   // 进入已有游戏：恢复未结束 run + 重连 WS；有版本则挂草稿预览
   useEffect(() => {
     if (!gameId || !token) return
@@ -191,7 +205,6 @@ export function ForgePage() {
           setSideTab('play')
         }
 
-        // 试用账号：只挂预览，不恢复生成 / HITL
         if (isTrialUser(user)) {
           resumedRef.current = gameId!
           return
@@ -199,7 +212,33 @@ export function ForgePage() {
 
         const listed = await gamesApi.listRuns(gameId!, token!)
         if (cancelled) return
-        const active = pickActiveRun(listed.data)
+        let active = pickActiveRun(listed.data)
+
+        if (!active) {
+          const saved = readActiveRun()
+          if (saved?.gameId === gameId) {
+            const savedRun = await gamesApi.getRun(saved.runId, token!)
+            if (savedRun.status === 'done' || savedRun.status === 'failed') {
+              clearActiveRun(saved.runId)
+              if (savedRun.status === 'done') {
+                await detail.refetch()
+                const refreshed = previewFromGameDetail(
+                  (await gamesApi.get(gameId!, token!)) as typeof game,
+                )
+                if (refreshed) setPreviewUrl(refreshed)
+              }
+            } else {
+              active = {
+                run_id: savedRun.run_id,
+                status: savedRun.status,
+                phase: savedRun.phase,
+                started_at: '',
+                ended_at: null,
+              }
+            }
+          }
+        }
+
         if (!active) {
           resumedRef.current = gameId!
           return
@@ -208,32 +247,19 @@ export function ForgePage() {
         const run = await gamesApi.getRun(active.run_id, token!)
         if (cancelled) return
         setRunId(run.run_id)
-        setRunStatus(run.status as RunStatus)
-        const hitlPayload = buildResumeHitl(run, game.title)
-        if (hitlPayload) {
-          setHitl(hitlPayload)
-          setPhase('paused')
-          setBusy(false)
-          setStageOpen(true)
-        } else {
-          setPhase(run.phase)
-          setBusy(run.status === 'running')
-          if (run.status === 'running' || run.status === 'paused') setStageOpen(true)
-        }
+        const ui = syncUiFromRun(run, game.title)
+        setRunStatus(ui.runStatus)
+        setHitl(ui.hitl)
+        setPhase(ui.phase)
+        setBusy(ui.busy)
+        if (ui.busy || ui.hitl) setStageOpen(true)
+        saveActiveRun(gameId!, run.run_id)
         setMessages((m) => [
           ...m,
           { id: mid('m'), role: 'system', content: `${t('runResumed')} · ${run.run_id}` },
         ])
         pushItem({ label: t('runResumed'), detail: run.run_id, tone: 'info' })
-
-        const prev = handleRef.current
-        prev?.close()
-        handleRef.current = connectRunWs({
-          runId: run.run_id,
-          accessToken: token!,
-          onEvent: (ev) => handleForgeWsEvent(ev, eventBridge(gameId!, run.run_id)),
-          onError: () => setErr(t('generationFailed')),
-        })
+        connectWs(gameId!, run.run_id)
         resumedRef.current = gameId!
       } catch {
         resumedRef.current = gameId!
@@ -246,6 +272,31 @@ export function ForgePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 gameId/token/detail 就绪时恢复一次
   }, [gameId, token, detail.data?.game_id])
+
+  // WS 断线时的 HTTP 轮询兜底
+  useEffect(() => {
+    if (!runId || !token || !gameId) return
+    if (runStatus !== RunStatus.running && runStatus !== RunStatus.paused) return
+    const timer = window.setInterval(async () => {
+      try {
+        const run = await gamesApi.getRun(runId, token)
+        if (run.status === 'done' || run.status === 'failed') {
+          clearActiveRun(runId)
+          setRunStatus(run.status)
+          setBusy(false)
+          if (run.status === 'done') {
+            setPhase(RunPhase.done)
+            void detail.refetch()
+          } else {
+            setPhase('idle')
+          }
+        }
+      } catch {
+        /* ignore transient poll errors */
+      }
+    }, 8000)
+    return () => window.clearInterval(timer)
+  }, [runId, token, gameId, runStatus, detail])
 
   function pushItem(partial: Omit<TimelineItem, 'id' | 'at'> & { at?: string }) {
     setItems((prev) =>
@@ -270,6 +321,10 @@ export function ForgePage() {
       setRunError: (rid: string, message: string) => {
         setRunErrors((prev) => ({ ...prev, [rid]: message }))
         setRunStatus(RunStatus.failed)
+        clearActiveRun(rid)
+      },
+      onRunFinished: () => {
+        if (activeRunId) clearActiveRun(activeRunId)
       },
       setStagePipeline,
       gameId: activeGameId,
@@ -309,6 +364,7 @@ export function ForgePage() {
       setRunId(run.run_id)
       setRunStatus(RunStatus.running)
       setPhase(RunPhase.plan)
+      saveActiveRun(gid, run.run_id)
       setMessages((m) => [
         ...m,
         { id: mid('m'), role: 'system', content: `${t('runStarting')} · ${run.run_id}` },
@@ -318,6 +374,7 @@ export function ForgePage() {
       handleRef.current = connectRunWs({
         runId: run.run_id,
         accessToken: token,
+        persistent: true,
         onEvent,
         onError: () => setErr(t('generationFailed')),
       })
@@ -365,14 +422,10 @@ export function ForgePage() {
       pushItem({ label: t('failureRetry'), detail: runId, tone: 'info' })
       if (
         !handleRef.current &&
+        gameId &&
         (resp.status === RunStatus.running || resp.status === RunStatus.paused)
       ) {
-        handleRef.current = connectRunWs({
-          runId,
-          accessToken: token,
-          onEvent: (ev) => handleForgeWsEvent(ev, eventBridge(gameId, runId)),
-          onError: () => setErr(t('generationFailed')),
-        })
+        connectWs(gameId, runId)
       }
     } catch (e) {
       setErr(formatApiError(e, t('generationFailed')))
@@ -484,13 +537,8 @@ export function ForgePage() {
       setPhase(resp.phase)
       setBusy(true)
       pushItem({ label: t('runResumed'), detail: runId, tone: 'info' })
-      if (!handleRef.current) {
-        handleRef.current = connectRunWs({
-          runId,
-          accessToken: token,
-          onEvent: (ev) => handleForgeWsEvent(ev, eventBridge(gameId, runId)),
-          onError: () => setErr(t('generationFailed')),
-        })
+      if (!handleRef.current && gameId) {
+        connectWs(gameId, runId)
       }
     } catch (e) {
       setErr(formatApiError(e, t('resumeFailed')))
@@ -583,12 +631,7 @@ export function ForgePage() {
         setBusy(detail.status === 'running')
       }
       if (detail.status === 'running' || detail.status === 'paused') {
-        handleRef.current = connectRunWs({
-          runId: detail.run_id,
-          accessToken: token,
-          onEvent: (ev) => handleForgeWsEvent(ev, eventBridge(gameId, detail.run_id)),
-          onError: () => setErr(t('generationFailed')),
-        })
+        connectWs(gameId, detail.run_id)
       }
       setRightTab('preview')
       setStageOpen(true)
@@ -602,7 +645,7 @@ export function ForgePage() {
   const stageStatus = previewUrl ? t('forgeStageStatusReady') : busy ? t('buildingPlayable') : t('ready')
 
   return (
-    <div className="gf-forge-hero">
+    <div className={cn('gf-forge-hero', stageOpen && 'gf-forge-hero--stage-open')}>
       <div className="gf-forge-grid-bg" aria-hidden />
 
       <header className="gf-forge-toolbar flex shrink-0 flex-wrap items-center justify-between gap-3">

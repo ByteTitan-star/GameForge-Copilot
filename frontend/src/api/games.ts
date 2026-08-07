@@ -133,4 +133,20 @@ export const gamesApi = {
       body: {},
     })
   },
+
+  /** 跨游戏进行中的 run（刷新/跳转后找回） */
+  listActiveRuns(accessToken: string) {
+    return apiRequestList<ActiveRunItem>('/me/runs/active', { token: accessToken })
+  },
+}
+
+export type ActiveRunItem = {
+  run_id: string
+  game_id: string
+  game_title: string
+  status: string
+  phase: string
+  entry_phase: string
+  started_at: string
+  ws_url: string
 }
