@@ -12,6 +12,8 @@ import { useT } from '@/i18n/use-t'
 type Props = {
   runPhase: RunPhase | 'idle' | 'paused'
   stages: StagePipelineState
+  /** 列数：默认 2（左栏纵向）；4 用于底部日志带的单行紧凑展示（窄屏回退 2 列） */
+  columns?: 2 | 4
   className?: string
 }
 
@@ -22,13 +24,14 @@ const phaseTitleKeys = {
   [RunPhase.qa]: 'phaseQa',
 } as const
 
-export function StagePipeline({ runPhase, stages, className }: Props) {
+export function StagePipeline({ runPhase, stages, columns = 2, className }: Props) {
   const t = useT()
+  const gridCols = columns === 4 ? 'grid-cols-2 md:grid-cols-4' : 'sm:grid-cols-2'
 
   return (
     <section className={cn('space-y-2', className)} aria-label={t('generationFlow')}>
       <p className="font-mono text-[10px] tracking-[0.14em] gf-page-muted uppercase">{t('stagePipelineTitle')}</p>
-      <ol className="grid gap-2 sm:grid-cols-2">
+      <ol className={cn('grid gap-2', gridCols)}>
         {PIPELINE_PHASES.map((phase) => {
           const info = stages[phase]
           const titleKey = phaseTitleKeys[phase as keyof typeof phaseTitleKeys]

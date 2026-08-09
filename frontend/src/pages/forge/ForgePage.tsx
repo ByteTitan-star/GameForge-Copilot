@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bug,
   Box,
@@ -19,15 +19,14 @@ import { RunPhase, RunStatus } from '@/api/enums'
 import { formatApiError } from '@/api/error-message'
 import type { HitlWaitPayload } from '@/api/ws-types'
 import { ChatPanel, type ChatMsg } from '@/components/forge/ChatPanel'
-import { FailureRecoveryBar } from '@/components/forge/FailureRecoveryBar'
 import { ForgeAiStatusBar } from '@/components/forge/ForgeAiStatusBar'
+import { ForgeLogDock } from '@/components/forge/ForgeLogDock'
 import { ForgeQuickTemplates } from '@/components/forge/ForgeQuickTemplates'
 import { ForgeSplitLayout } from '@/components/forge/ForgeSplitLayout'
 import { HitlCard } from '@/components/forge/HitlCard'
 import { LlmConfigSelect } from '@/components/forge/LlmConfigSelect'
 import { RunHistoryPanel } from '@/components/forge/RunHistoryPanel'
-import { RunTimeline, type TimelineItem } from '@/components/forge/RunTimeline'
-import { StagePipeline } from '@/components/forge/StagePipeline'
+import type { TimelineItem } from '@/components/forge/RunTimeline'
 import { TemplatePicker } from '@/components/forge/TemplatePicker'
 import { VersionTimeline } from '@/components/forge/VersionTimeline'
 import { GamePlayer } from '@/components/game/GamePlayer'
@@ -62,6 +61,7 @@ export function ForgePage() {
   const { gameId: routeGameId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const token = useAuthStore((s) => s.access_token)
   const user = useAuthStore((s) => s.user)
   const trial = isTrialUser(user)
@@ -97,11 +97,12 @@ export function ForgePage() {
   const [reconnectingRunId, setReconnectingRunId] = useState<string | null>(null)
   const [flashRing, setFlashRing] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
+  const [logDockOpen, setLogDockOpen] = useState(true)
   const [stagePipeline, setStagePipeline] = useState<StagePipelineState>(emptyStagePipeline)
   const [retryBusy, setRetryBusy] = useState(false)
   const handleRef = useRef<RunWsHandle | null>(null)
   const resumedRef = useRef<string | null>(null)
-  const stageRef = useRef<HTMLElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const prevPreviewRef = useRef<string | null>(null)
 
   const detail = useQuery({
@@ -216,7 +217,7 @@ export function ForgePage() {
 
         if (!active) {
           const saved = readActiveRun()
-          if (saved?.gameId === gameId) {
+          if (saved && saved.gameId === gameId) {
             const savedRun = await gamesApi.getRun(saved.runId, token!)
             if (savedRun.status === 'done' || savedRun.status === 'failed') {
               clearActiveRun(saved.runId)
@@ -254,10 +255,6 @@ export function ForgePage() {
         setBusy(ui.busy)
         if (ui.busy || ui.hitl) setStageOpen(true)
         saveActiveRun(gameId!, run.run_id)
-        setMessages((m) => [
-          ...m,
-          { id: mid('m'), role: 'system', content: `${t('runResumed')} · ${run.run_id}` },
-        ])
         pushItem({ label: t('runResumed'), detail: run.run_id, tone: 'info' })
         connectWs(gameId!, run.run_id)
         resumedRef.current = gameId!
@@ -340,10 +337,6 @@ export function ForgePage() {
 
   async function startGeneration(requirement: string) {
     if (!token || !user) return
-    if (!user.email_verified) {
-      setErr(t('emailRunError'))
-      return
-    }
     setErr(null)
     setBusy(true)
     setHitl(null)
@@ -365,10 +358,7 @@ export function ForgePage() {
       setRunStatus(RunStatus.running)
       setPhase(RunPhase.plan)
       saveActiveRun(gid, run.run_id)
-      setMessages((m) => [
-        ...m,
-        { id: mid('m'), role: 'system', content: `${t('runStarting')} · ${run.run_id}` },
-      ])
+      pushItem({ label: t('runStarting'), detail: run.run_id, tone: 'info' })
       const onEvent = (ev: Parameters<typeof handleForgeWsEvent>[0]) =>
         handleForgeWsEvent(ev, eventBridge(gid, run.run_id))
       handleRef.current = connectRunWs({
@@ -554,9 +544,18 @@ export function ForgePage() {
       setPhase('idle')
       setHitl(null)
       closeHandle()
+      clearActiveRun(runId) // 清本地 active-run，避免刷新后被 resume 兜底重新拉起已取消的 run
+      void qc.invalidateQueries({ queryKey: ['active-runs'] }) // 立即刷新全局 ActiveRunBanner
       pushItem({ label: t('runCancelled'), detail: runId, tone: 'err' })
     } catch (e) {
       setErr(formatApiError(e, t('cancelFailed')))
+      // 取消失败：同步后端真实状态，避免 UI 误显示为「已取消」而 run 实际仍在跑
+      try {
+        const run = await gamesApi.getRun(runId, token)
+        setRunStatus(run.status as RunStatus)
+      } catch {
+        /* 忽略二次失败：保留上方的取消失败提示即可 */
+      }
     }
   }
 
@@ -583,10 +582,7 @@ export function ForgePage() {
       await gamesApi.submitPublish(gameId, publishVersion, note || t('publishFromForge'), token)
       await detail.refetch()
       setPublishOpen(false)
-      setMessages((m) => [
-        ...m,
-        { id: mid('m'), role: 'system', content: t('publishSubmittedMsg') },
-      ])
+      pushItem({ label: t('publishSubmittedMsg'), tone: 'ok' })
     } catch (e) {
       setErr(formatApiError(e, t('submitPublishFailed')))
     } finally {
@@ -667,14 +663,6 @@ export function ForgePage() {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          {!user?.email_verified ? (
-            <Link
-              to="/settings"
-              className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 ring-1 ring-amber-200"
-            >
-              {t('emailUnverified')}
-            </Link>
-          ) : null}
           {quotaHint ? (
             <span className="hidden font-mono text-[10px] gf-page-muted md:inline">{quotaHint}</span>
           ) : null}
@@ -772,44 +760,13 @@ export function ForgePage() {
                 placeholder={previewUrl ? t('describeIteration') : t('describeNewGame')}
               />
 
-              {(items.length > 0 || hitl || busy || phase !== 'idle' || showFailureRecovery) ? (
-                <div className="gf-forge-panel-meta space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-mono text-[10px] tracking-[0.14em] text-[var(--gf-text-muted)] uppercase">
-                      {t('generationFlow')}
-                    </p>
-                    {currentModel ? (
-                      <p className="font-mono text-[10px] text-[var(--gf-text-muted)]">
-                        {t('currentModel')}: {currentModel}
-                      </p>
-                    ) : null}
-                  </div>
-                  {(busy || phase !== 'idle' || items.length > 0) ? (
-                    <StagePipeline runPhase={phase} stages={stagePipeline} />
-                  ) : null}
-                  <RunTimeline
-                    phase={phase}
-                    items={items}
-                    className="!rounded-xl border !border-[var(--gf-border)] !bg-white/70"
-                  />
-                  {showFailureRecovery && runId ? (
-                    <FailureRecoveryBar
-                      runId={runId}
-                      errorSummary={failureSummary}
-                      onRevise={onReviseRequirement}
-                      onRetry={() => void retryFailedRun()}
-                      busy={retryBusy || busy}
-                    />
-                  ) : null}
-                  {hitl ? (
-                    <HitlCard
-                      payload={hitl}
-                      onApprove={onApproveHitl}
-                      onReject={onRejectHitl}
-                      busy={busy || trial}
-                    />
-                  ) : null}
-                </div>
+              {hitl ? (
+                <HitlCard
+                  payload={hitl}
+                  onApprove={onApproveHitl}
+                  onReject={onRejectHitl}
+                  busy={busy || trial}
+                />
               ) : null}
 
               {!trial ? (
@@ -956,6 +913,28 @@ export function ForgePage() {
           </>
         }
       />
+
+      {(items.length > 0 || busy || phase !== 'idle' || showFailureRecovery) ? (
+        <ForgeLogDock
+          open={logDockOpen}
+          onToggle={() => setLogDockOpen((v) => !v)}
+          runPhase={phase}
+          stages={stagePipeline}
+          items={items}
+          currentModel={currentModel}
+          failureRecovery={
+            showFailureRecovery && runId
+              ? {
+                  runId,
+                  errorSummary: failureSummary,
+                  onRevise: onReviseRequirement,
+                  onRetry: () => void retryFailedRun(),
+                  busy: retryBusy || busy,
+                }
+              : null
+          }
+        />
+      ) : null}
 
       <PublishNoteModal
         open={publishOpen}
