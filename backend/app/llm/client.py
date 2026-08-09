@@ -14,6 +14,7 @@ from app.admin import services as admin_services
 from app.auth.ratelimit import check_rate_limit
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
+from app.core.langfuse import observe_generation
 from app.core.metrics import LLM_CALLS, LLM_TOKENS
 from app.enums import LLMProvider, Role
 from app.llm import crypto, provider
@@ -91,6 +92,45 @@ async def _maybe_system_alert(db: AsyncSession, r: redis.Redis) -> None:
         )
 
 
+async def _invoke_llm(
+    prov: LLMProvider,
+    apikey: str,
+    model: str,
+    system: str,
+    user_msg: str,
+    base_url: str | None,
+    trace_meta: dict[str, str],
+) -> tuple[str, provider.Usage]:
+    """执行 provider.complete 并挂 langfuse generation 观测。
+
+    失败时把 generation 标 level=ERROR 后 re-raise（错误计数交回 call_llm 统一处理）。
+    """
+    with observe_generation(
+        model=model,
+        provider=prov.value,
+        system=system,
+        user_msg=user_msg,
+        metadata=trace_meta,
+    ) as gen:
+        try:
+            content, usage = await provider.complete(
+                prov, apikey, model, system, user_msg, base_url=base_url
+            )
+        except Exception:
+            if gen is not None:
+                gen.update(level="ERROR", status_message="llm call failed")
+            raise
+        if gen is not None:
+            gen.update(
+                output=content,
+                usage_details={
+                    "input": usage.input_tokens,
+                    "output": usage.output_tokens,
+                },
+            )
+    return content, usage
+
+
 async def call_llm(
     db: AsyncSession,
     r: redis.Redis,
@@ -108,14 +148,14 @@ async def call_llm(
     cfg = await _get_config(db, user_id, config_id)
     apikey = crypto.decrypt_apikey(cfg.apikey_enc)
     prov = LLMProvider(cfg.provider)
+    trace_meta: dict[str, str] = {"user_id": str(user_id)}
+    if game_id is not None:
+        trace_meta["game_id"] = str(game_id)
+    if run_id is not None:
+        trace_meta["run_id"] = str(run_id)
     try:
-        content, usage = await provider.complete(
-            prov,
-            apikey,
-            cfg.model,
-            system,
-            user_msg,
-            base_url=cfg.base_url,
+        content, usage = await _invoke_llm(
+            prov, apikey, cfg.model, system, user_msg, cfg.base_url, trace_meta
         )
     except Exception:
         LLM_CALLS.labels(prov.value, "error").inc()

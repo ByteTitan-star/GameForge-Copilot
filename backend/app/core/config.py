@@ -69,7 +69,15 @@ class Settings(BaseSettings):
     # langfuse（SaaS Cloud，trace 上报）
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
-    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_base_url: str = "https://us.cloud.langfuse.com"
+
+    # LLM HTTP 调用（complete() 的超时与 max_tokens）
+    # 读超时：推理模型（qwen3-max/deepseek-r1 等）生整段代码可达数分钟，必须给足
+    llm_request_timeout: int = 300
+    # 建连/写/连接池超时（秒）；服务端不可达时应快速失败而非长等
+    llm_connect_timeout: int = 30
+    # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
+    llm_max_tokens: int = 8192
 
     # 全局
     env: str = "development"

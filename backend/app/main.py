@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +23,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
+from app.core.langfuse import flush_langfuse, init_langfuse
 from app.core.logging import setup_logging
 from app.core.metrics import register_metrics
 from app.hosting import routes as hosting_routes
@@ -29,12 +33,24 @@ setup_logging(settings.log_level, service="backend", log_dir=settings.log_dir)
 
 API_V1 = "/api/v1"
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """启动注册 langfuse 单例；停机 flush 缓冲 trace（docs/02 §可观测）。"""
+    init_langfuse()
+    try:
+        yield
+    finally:
+        flush_langfuse()
+
+
 app = FastAPI(
     title="GameForge-Copilot",
     version="0.1.0",
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
