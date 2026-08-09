@@ -1237,16 +1237,6 @@
               }
             }
           },
-          "403": {
-            "description": "邮箱未验证",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1543,16 +1533,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_GameResp_"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "邮箱未验证",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2325,16 +2305,6 @@
           },
           "404": {
             "description": "run 或游戏不存在或不可见",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "邮箱未验证",
             "content": {
               "application/json": {
                 "schema": {
@@ -7385,7 +7355,7 @@
           "email_verified": {
             "type": "boolean",
             "title": "Email Verified",
-            "default": false
+            "default": true
           }
         },
         "type": "object",

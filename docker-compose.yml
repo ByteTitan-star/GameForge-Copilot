@@ -8,8 +8,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
+      - pgdata:/var/lib/postgresql/data   # 数据库数据
+    healthcheck:    # 健康检查
       test: ["CMD-SHELL", "pg_isready -U gameforge -d gameforge"]
       interval: 5s
       timeout: 3s
@@ -21,8 +21,8 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redisdata:/data
-    healthcheck:
+      - redisdata:/data    # 缓存数据
+    healthcheck:    # 健康检查  
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
@@ -63,13 +63,13 @@ services:
     volumes:
       - hosting:/data/hosting
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
+    depends_on:   # 依赖检查
       postgres:
-        condition: service_healthy
+        condition: service_healthy    # 数据库健康
       redis:
-        condition: service_healthy
+        condition: service_healthy    # 缓存健康
       rabbitmq:
-        condition: service_healthy
+        condition: service_healthy    # 消息队列健康
 
   worker:
     build:
@@ -105,6 +105,6 @@ services:
     profiles: ["build-sandbox"]
 
 volumes:
-  pgdata:
-  redisdata:
-  hosting:
+  pgdata:       # 数据库数据
+  redisdata:    # 缓存数据
+  hosting:      # 沙盒数据
