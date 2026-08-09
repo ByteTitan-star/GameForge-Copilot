@@ -33,7 +33,6 @@ from app.schemas.ws import WSEvent
 router = APIRouter(tags=["runs"])
 
 ERR_404 = {404: {"model": ErrorResponse, "description": "run 或游戏不存在或不可见"}}
-ERR_403 = {403: {"model": ErrorResponse, "description": "邮箱未验证"}}
 ERR_409 = {409: {"model": ErrorResponse, "description": "状态冲突"}}
 ERR_429 = {429: {"model": ErrorResponse, "description": "配额耗尽"}}
 
@@ -55,7 +54,7 @@ def _to_resp(run: GenerationRun) -> RunResp:
     "/games/{game_id}/runs",
     response_model=ApiResponse[RunResp],
     status_code=201,
-    responses={**ERR_404, **ERR_403, **ERR_429},
+    responses={**ERR_404, **ERR_429},
 )
 async def create_run(
     game_id: UUID, req: RunCreate, user: CurrentUser, db: DbSession, r: RedisClient

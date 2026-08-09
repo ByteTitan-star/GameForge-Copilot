@@ -5,7 +5,7 @@ import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui/Input'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -23,7 +23,7 @@ export function RegisterPage() {
     e.preventDefault()
     setError('')
     if (password !== confirm) {
-      setError('两次密码不一致')
+      setError(t('errPasswordMismatch'))
       return
     }
     setLoading(true)
@@ -36,9 +36,9 @@ export function RegisterPage() {
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       })
-      navigate('/verify-email', { replace: true, state: { email: trimmedEmail } })
+      navigate('/games', { replace: true })
     } catch (err) {
-      setError(formatApiError(err, '注册失败'))
+      setError(formatApiError(err, t('errRegisterFailed')))
     } finally {
       setLoading(false)
     }

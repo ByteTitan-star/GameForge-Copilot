@@ -6,7 +6,7 @@ import { AuthShell } from '@/components/auth/AuthShell'
 import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui/Input'
 import { useT } from '@/i18n/use-t'
 import { TRIAL_EMAIL, TRIAL_PASSWORD } from '@/lib/trial'
 import { useAuthStore } from '@/stores/auth-store'
@@ -18,7 +18,6 @@ export function LoginPage() {
   const authState = location.state as {
     from?: string
     email?: string
-    verified?: boolean
   } | null
   const setSession = useAuthStore((s) => s.setSession)
   const [email, setEmail] = useState(authState?.email ?? '')
@@ -53,16 +52,9 @@ export function LoginPage() {
         // 正式账号「不记住」仍走 persist；试用账号在 setSession 内已跳过落盘
       }
       const from = authState?.from
-      if (!data.user.email_verified) {
-        navigate('/verify-email', {
-          replace: true,
-          state: { email: data.user.email },
-        })
-      } else {
-        navigate(from && from !== '/login' ? from : '/games', { replace: true })
-      }
+      navigate(from && from !== '/login' ? from : '/games', { replace: true })
     } catch (err) {
-      setError(formatApiError(err, '登录失败'))
+      setError(formatApiError(err, t('errLoginFailed')))
     } finally {
       setLoading(false)
     }
@@ -104,11 +96,6 @@ export function LoginPage() {
             {t('forgot')}
           </Link>
         </div>
-        {authState?.verified ? (
-          <p role="status" className="text-sm text-cyan-200/90">
-            {t('loginAfterVerified')}
-          </p>
-        ) : null}
         {error ? (
           <p role="alert" className="text-sm text-red-300">
             {error}

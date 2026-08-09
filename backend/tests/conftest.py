@@ -121,10 +121,15 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     _orig_messaging = settings.messaging_backend
     _orig_admin_contact = settings.admin_contact_email
     _orig_log_dir = settings.log_dir
+    # langfuse：.env 可能带真实 key，测试全程禁用，避免 observe_* 触发云上报
+    _orig_langfuse_pub = settings.langfuse_public_key
+    _orig_langfuse_sec = settings.langfuse_secret_key
     settings.hosting_root = str(tmp_path)
     settings.messaging_backend = "memory"
     settings.admin_contact_email = ""
     settings.log_dir = "-"
+    settings.langfuse_public_key = ""
+    settings.langfuse_secret_key = ""
     reset_messaging()
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -151,6 +156,8 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     settings.messaging_backend = _orig_messaging
     settings.admin_contact_email = _orig_admin_contact
     settings.log_dir = _orig_log_dir
+    settings.langfuse_public_key = _orig_langfuse_pub
+    settings.langfuse_secret_key = _orig_langfuse_sec
     reset_messaging()
     from app.forge.event_log import bind_event_redis
 
@@ -228,17 +235,11 @@ async def auth_client() -> AsyncIterator[httpx.AsyncClient]:
 
 @pytest_asyncio.fixture
 async def verified_client() -> AsyncIterator[httpx.AsyncClient]:
-    """注册→验证邮箱→登录，带 Bearer 头；games/runs 端点需 email_verified。"""
+    """注册（注册即验证）→登录，带 Bearer 头；games/runs 端点用。"""
     async with _new_client() as client:
         await client.post(
             "/api/v1/auth/register", json={"email": "v@b.com", "password": "password123"}
         )
-        token = _sent["verify:v@b.com"]
-        resp = await client.post(
-            "/api/v1/auth/verify-email",
-            json={"email": "v@b.com", "code": token},
-        )
-        assert resp.status_code == 200, resp.text
         resp = await client.post(
             "/api/v1/auth/login", json={"email": "v@b.com", "password": "password123"}
         )

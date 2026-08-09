@@ -6,7 +6,6 @@ import type {
   PasswordResetResponse,
   RefreshResponse,
   RegisterResponse,
-  VerifyEmailResponse,
 } from './types'
 
 export const authApi = {
@@ -36,20 +35,6 @@ export const authApi = {
     return apiRequestNoContent('/auth/logout', {
       method: 'POST',
       body: refresh_token ? { refresh_token } : undefined,
-    })
-  },
-
-  verifyEmail(email: string, code: string) {
-    return apiRequest<VerifyEmailResponse>('/auth/verify-email', {
-      method: 'POST',
-      body: { email, code },
-    })
-  },
-
-  resendVerification(email: string) {
-    return apiRequest<{ sent: boolean }>('/auth/resend-verification', {
-      method: 'POST',
-      body: { email },
     })
   },
 

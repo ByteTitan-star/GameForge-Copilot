@@ -194,9 +194,6 @@ def _copy_artifact(src_game_id: uuid.UUID, dst_game_id: uuid.UUID, version: int)
 
 
 async def fork_official_game(db: AsyncSession, user: User, slug: str) -> Game:
-    from app.games.services import _require_verified
-
-    _require_verified(user)
     if await _count_drafts(db, user.id) >= settings.max_drafts_per_user:
         raise AppError(
             ErrorCode.QUOTA_EXCEEDED,

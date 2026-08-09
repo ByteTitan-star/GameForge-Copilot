@@ -6,32 +6,14 @@ PWD = "password123"
 EMAIL = "a@b.com"
 
 
-async def _register(client: httpx.AsyncClient, email: str = EMAIL) -> str:
-    """注册并返回 verify token（由 conftest 捕获 enqueue）。"""
+async def test_register_login_refresh_logout(client: httpx.AsyncClient) -> None:
+    # 1. 注册（注册即视为已验证，无需验证邮箱步骤）
     resp = await client.post(
-        "/api/v1/auth/register", json={"email": email, "password": PWD}
+        "/api/v1/auth/register", json={"email": EMAIL, "password": PWD}
     )
     assert resp.status_code == 201, resp.text
-    return ""  # token 从 fixture 取
 
-
-async def test_register_verify_login_refresh_logout(
-    client: httpx.AsyncClient, sent: dict[str, str]
-) -> None:
-    # 1. 注册
-    resp = await _register(client)
-    token = sent[f"verify:{EMAIL}"]
-    assert token
-    assert len(token) == 6
-
-    # 2. 验证邮箱
-    resp = await client.post(
-        "/api/v1/auth/verify-email", json={"email": EMAIL, "code": token}
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["data"]["email_verified"] is True
-
-    # 3. 登录（已验证）
+    # 2. 登录（email_verified 恒为 True）
     resp = await client.post(
         "/api/v1/auth/login", json={"email": EMAIL, "password": PWD}
     )
@@ -41,22 +23,22 @@ async def test_register_verify_login_refresh_logout(
     assert body["user"]["email_verified"] is True
     assert body["user"]["role"] == "user"
 
-    # 4. refresh 轮换
+    # 3. refresh 轮换
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 200, resp.text
     new_refresh = resp.json()["data"]["refresh_token"]
     assert new_refresh != refresh
 
-    # 5. 旧 refresh 失效
+    # 4. 旧 refresh 失效
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 401
 
-    # 6. logout
+    # 5. logout
     resp = await client.post("/api/v1/auth/logout", json={"refresh_token": new_refresh})
     assert resp.status_code == 204
     assert resp.text == ""
 
-    # 7. logout 后 refresh 失效
+    # 6. logout 后 refresh 失效
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
     assert resp.status_code == 401
 

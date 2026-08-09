@@ -54,8 +54,7 @@ async def register(
         r, f"rl:register:{request.client.host if request.client else 'na'}",
         settings.default_rate_limit_per_min, 60,
     )
-    user, code = await services.register_user(db, req.email, req.password)
-    await email_queue.enqueue_verification(user.email, code)
+    user = await services.register_user(db, req.email, req.password)
     return ApiResponse(data=RegisterResp(user_id=user.id, email=user.email))
 
 
