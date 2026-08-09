@@ -127,7 +127,7 @@ export function LlmConfigPanel() {
         </p>
       ) : null}
 
-      {msg ? <p className="text-sm text-teal-200/80">{msg}</p> : null}
+      {msg ? <p className="text-sm gf-page-body">{msg}</p> : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1.5 text-sm">
@@ -226,13 +226,13 @@ export function LlmConfigPanel() {
         {(list.data ?? []).map((c) => (
           <li
             key={c.config_id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-3 ring-1 ring-white/[0.04]"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/[0.02] px-3 py-3 ring-1 ring-[var(--gf-border)]"
           >
             <div>
               <p className="text-sm gf-page-body">
                 {c.provider} · {c.model}
                 {c.is_default ? (
-                  <span className="ml-2 font-mono text-[10px] text-teal-300">DEFAULT</span>
+                  <span className="ml-2 font-mono text-[10px] gf-text-accent">DEFAULT</span>
                 ) : null}
               </p>
               <p className="mt-0.5 font-mono text-xs gf-page-muted">{c.apikey_masked}</p>
@@ -263,7 +263,7 @@ export function LlmConfigPanel() {
               {!c.is_default ? (
                 <Button
                   variant="ghost"
-                  className="!rounded-lg !px-2 !py-1.5 text-xs text-red-200/70"
+                  className="!rounded-lg !px-2 !py-1.5 text-xs text-red-600"
                   disabled={trial}
                   onClick={() => delMu.mutate(c.config_id)}
                 >

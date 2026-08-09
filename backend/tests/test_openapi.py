@@ -64,6 +64,6 @@ def test_export_covers_contract_paths() -> None:
 def test_snapshot_matches_committed() -> None:
     """导出快照必须与仓库 contracts/openapi.json 一致，不一致说明忘记刷新快照。"""
     assert CONTRACT_OPENAPI.exists(), "contracts/openapi.json 不存在"
-    committed = json.loads(CONTRACT_OPENAPI.read_text())
+    committed = json.loads(CONTRACT_OPENAPI.read_text(encoding="utf-8"))
     exported = json.loads(export())
     assert exported == committed, "contracts/openapi.json 与 app 导出不一致，请重跑 export_openapi"

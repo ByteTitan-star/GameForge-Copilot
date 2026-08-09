@@ -245,7 +245,6 @@ export function LandingPage() {
             <FadeIn>
               <OfficialGameCards
                 accessToken={token}
-                userEmailVerified={user?.email_verified}
                 trial={user ? isTrialUser(user) : false}
               />
             </FadeIn>

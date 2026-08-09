@@ -24,28 +24,15 @@ async def _make_run(client: httpx.AsyncClient, gid: uuid.UUID) -> uuid.UUID:
     return uuid.UUID(r.json()["data"]["run_id"])
 
 
-async def test_create_run_requires_verified(
-    verified_client: httpx.AsyncClient, auth_client: httpx.AsyncClient
-) -> None:
-    gid = await _make_game(verified_client)
-    r = await auth_client.post(f"/api/v1/games/{gid}/runs", json=RUN_BODY)
-    assert r.status_code == 403
-
-
 async def test_create_run_non_owner_404(
-    verified_client: httpx.AsyncClient, client: httpx.AsyncClient, sent: dict[str, str]
+    verified_client: httpx.AsyncClient, client: httpx.AsyncClient
 ) -> None:
-    """已验证的另一用户对非自己 game 发起 run → 404（不泄露存在）。"""
+    """另一用户对非自己 game 发起 run → 404（不泄露存在）。"""
     gid = await _make_game(verified_client)
-    # 第二个已验证用户 b@b.com
+    # 第二个用户 b@b.com（注册即验证）
     await client.post(
         "/api/v1/auth/register", json={"email": "b@b.com", "password": "password123"}
     )
-    vtoken = sent["verify:b@b.com"]
-    r = await client.post(
-        "/api/v1/auth/verify-email", json={"email": "b@b.com", "code": vtoken}
-    )
-    assert r.status_code == 200, r.text
     r = await client.post(
         "/api/v1/auth/login", json={"email": "b@b.com", "password": "password123"}
     )

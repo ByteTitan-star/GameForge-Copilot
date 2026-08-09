@@ -1,4 +1,4 @@
-"""M4 游戏 CRUD：创建/列表/详情/删除 + 可见性 + 未验证 403。"""
+"""M4 游戏 CRUD：创建/列表/详情/删除 + 可见性。"""
 
 import uuid
 
@@ -14,12 +14,6 @@ async def _create(client: httpx.AsyncClient) -> uuid.UUID:
     r = await client.post("/api/v1/games", json=_BODY)
     assert r.status_code == 201, r.text
     return uuid.UUID(r.json()["data"]["game_id"])
-
-
-async def test_create_requires_verified(auth_client: httpx.AsyncClient) -> None:
-    r = await auth_client.post("/api/v1/games", json=_BODY)
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
 
 
 async def test_crud(verified_client: httpx.AsyncClient) -> None:

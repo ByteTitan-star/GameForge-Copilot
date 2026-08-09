@@ -67,12 +67,12 @@ export function UsagePanel() {
               [t('usageDailyRemaining'), fmt(d.quota.remaining)],
             ].map(([k, v]) => (
               <div key={k} className="rounded-xl bg-black/[0.02] p-3 ring-1 ring-[var(--gf-border)]">
-                <p className="font-mono text-[10px] tracking-wider text-white/35 uppercase">{k}</p>
+                <p className="font-mono text-[10px] tracking-wider gf-page-muted uppercase">{k}</p>
                 <p className="mt-1 text-xl gf-text-accent">{v}</p>
               </div>
             ))}
           </div>
-          <UsageChart data={chartData} />
+          <UsageChart data={chartData} tone="light" />
           <p className="font-mono text-[11px] gf-page-muted">
             {t('usageDailyLimitLine')
               .replace('{limit}', fmt(d.quota.daily_token_limit))
@@ -85,9 +85,12 @@ export function UsagePanel() {
       <div className="border-t border-[var(--gf-border)] pt-4">
         <h3 className="gf-page-body text-base">{t('usageBreakdownTitle')}</h3>
         {breakdownQ.isLoading ? <p className="mt-2 gf-page-muted text-sm">{t('loading')}</p> : null}
+        {breakdownQ.isError ? (
+          <p className="mt-2 text-sm text-red-600">{t('usageLoadFailed')}</p>
+        ) : null}
         {breakdownQ.data ? (
           <div className="mt-3">
-            <UsageBreakdownChart items={breakdownQ.data.items} />
+            <UsageBreakdownChart items={breakdownQ.data.items} tone="light" />
             <p className="mt-2 font-mono text-[11px] gf-page-muted">
               {t('usageBreakdownCost')}: ${breakdownQ.data.total_estimated_cost_usd.toFixed(2)}
             </p>

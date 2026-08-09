@@ -166,3 +166,24 @@ async def test_docker_sandbox_factory(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(get_sandbox(), DockerSandbox)
     monkeypatch.setattr(settings, "sandbox_backend", "local")
     reset_sandbox_for_tests()
+
+
+def test_transport_reset_noise_downgraded() -> None:
+    """Windows _call_connection_lost 的 ConnectionResetError 应被识别为可降级噪音。"""
+    from app.messaging.worker import _is_transport_reset_noise
+
+    assert _is_transport_reset_noise(
+        {
+            "message": "Exception in callback "
+            "_ProactorBasePipeTransport._call_connection_lost(None)",
+            "exception": ConnectionResetError(),
+        }
+    )
+    # 业务层的 ConnectionResetError（非 transport 回调）→ 不是噪音，照常上报
+    assert not _is_transport_reset_noise(
+        {"message": "SMTP send failed", "exception": ConnectionResetError()}
+    )
+    # 其他异常 → 不是噪音
+    assert not _is_transport_reset_noise(
+        {"message": "boom", "exception": RuntimeError()}
+    )

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Copy, Check, Image, Maximize2, Smartphone } from 'lucide-react'
@@ -22,6 +22,7 @@ export function PlayPage() {
   const [copied, setCopied] = useState(false)
   const [landscapeHint, setLandscapeHint] = useState(false)
   const [posterOpen, setPosterOpen] = useState(false)
+  const [showEscHint, setShowEscHint] = useState(false)
   const token = useAuthStore((s) => s.access_token)
 
   const metaQ = useQuery({
@@ -57,10 +58,24 @@ export function PlayPage() {
     }
   }
 
+  // 进入全屏后短暂提示「ESC 退出全屏试玩」
+  useEffect(() => {
+    function onFsChange() {
+      if (document.fullscreenElement) {
+        setShowEscHint(true)
+        window.setTimeout(() => setShowEscHint(false), 3000)
+      } else {
+        setShowEscHint(false)
+      }
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   return (
-    <div className="min-h-[100svh] bg-[#0a0a0a] text-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:py-8">
-        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="flex h-[100svh] flex-col bg-[#0a0a0a] text-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 md:py-8">
+        <header className="mb-6 flex shrink-0 flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
             <Link
               to="/discover"
@@ -113,22 +128,24 @@ export function PlayPage() {
         </header>
 
         {meta?.game_id ? (
-          <ReactionButtons gameId={meta.game_id} accessToken={token} className="mb-4" />
+          <ReactionButtons gameId={meta.game_id} accessToken={token} className="mb-4 shrink-0" />
         ) : null}
 
         {landscapeHint ? (
-          <p className="mb-4 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 md:hidden">
+          <p className="mb-4 shrink-0 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 md:hidden">
             {t('playLandscapeHint')}
           </p>
         ) : null}
 
         <section
           ref={stageRef}
-          className={cn(
-            'relative overflow-hidden rounded-2xl border border-white/10 bg-black',
-            'min-h-[50vh] md:min-h-[70vh]',
-          )}
+          className={cn('relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black')}
         >
+          {showEscHint ? (
+            <div className="absolute left-3 top-3 z-20 rounded-lg bg-black/60 px-3 py-1.5 text-xs text-white/85 backdrop-blur-md">
+              {t('playEscExit')}
+            </div>
+          ) : null}
           <div className="absolute right-3 top-3 z-10 flex gap-2">
             <button
               type="button"
@@ -140,7 +157,7 @@ export function PlayPage() {
               <Maximize2 className="h-4 w-4" />
             </button>
           </div>
-          <GamePlayer src={src} title={title} variant="stage" className="h-full min-h-[50vh] md:min-h-[70vh]" />
+          <GamePlayer src={src} title={title} variant="stage" className="h-full" />
         </section>
       </div>
 
