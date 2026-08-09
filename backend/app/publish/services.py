@@ -167,3 +167,25 @@ async def take_down(
         email=email,
     )
     return game
+
+
+async def republish(
+    db: AsyncSession, admin: User, game_id: uuid.UUID, reason: str
+) -> Game:
+    """重新上架已下架游戏（定时上架到期或管理员手动）；对称于 take_down。"""
+    game = await _get_game(db, game_id)
+    if GameStatus(game.status) != GameStatus.TAKEN_DOWN:
+        raise AppError(ErrorCode.INVALID_STATE, "仅已下架游戏可重新上架")
+    game.status = GameStatus.PUBLISHED.value
+    await _audit(db, admin.id, "republish", str(game_id), {"reason": reason})
+    await db.commit()
+    email = await _owner_email(db, game.owner_id)
+    await notify_services.notify_user(
+        db,
+        game.owner_id,
+        kind="republish",
+        title="你的游戏已重新上架",
+        body=f"《{game.title}》已重新上架：/play/{game.slug}",
+        email=email,
+    )
+    return game
