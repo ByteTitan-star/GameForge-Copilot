@@ -15,7 +15,6 @@ import { isTrialUser } from '@/lib/trial'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { GameCard } from './GameCard'
 import { GameDetailDrawer } from './GameDetailDrawer'
-import { OfficialGameCards } from '@/components/onboarding/OfficialGameCards'
 
 import type { MessageKey } from '@/i18n/messages'
 
@@ -92,6 +91,15 @@ export function GameDashboard() {
       return true
     })
   }, [filter, q, rows, favoritesQ.data])
+
+  const emptyTitleKey: MessageKey =
+    filter === 'favorites'
+      ? 'favoritesEmpty'
+      : filter === 'published'
+        ? 'publishedEmpty'
+        : filter === 'pipeline'
+          ? 'pipelineEmpty'
+          : 'noGames'
 
   const removeMu = useMutation({
     mutationFn: (gameId: string) => gamesApi.remove(gameId, token!),
@@ -223,26 +231,16 @@ export function GameDashboard() {
               <Sparkles className="gf-text-accent h-9 w-9" />
             </div>
           </div>
-          <h2 className="gf-page-body mt-8 text-xl font-medium">
-            {filter === 'favorites' ? t('favoritesEmpty') : t('noGames')}
-          </h2>
+          <h2 className="gf-page-body mt-8 text-xl font-medium">{t(emptyTitleKey)}</h2>
           {filter === 'favorites' ? null : (
             <>
-          <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
-          <OfficialGameCards
-            accessToken={token}
-            userEmailVerified={user?.email_verified}
-            trial={trial}
-            onToast={setToast}
-            compact
-            className="mt-8 w-full max-w-2xl text-left"
-          />
-          {trial ? null : (
-            <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
-              <Plus className="h-4 w-4" />
-              {t('createFirstGame')}
-            </Link>
-          )}
+              <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
+              {trial ? null : (
+                <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
+                  <Plus className="h-4 w-4" />
+                  {t('createFirstGame')}
+                </Link>
+              )}
             </>
           )}
         </div>

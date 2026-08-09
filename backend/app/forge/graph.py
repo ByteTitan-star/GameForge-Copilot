@@ -39,7 +39,6 @@ PLAN_PROMPT = (
     "你是游戏策划，把用户需求转成结构化设计稿。"
     "只输出 JSON，不要 markdown 解释。字段：title, gameplay, controls, levels（字符串数组）。"
 )
-ART_PROMPT = "按设计稿产出美术素材清单（图标/精灵/背景）。输出纯文本。"
 CODE_PROMPT = (
     "按设计稿生成一个自包含的 HTML5 小游戏：单 index.html，无外部依赖，无网络。"
     "只输出 HTML 源码，不要解释。\n\n"
@@ -216,7 +215,6 @@ def _build_graph(ctx: _Ctx) -> Any:
                 design_text = f"{design_text}\n\n用户修改意见：{state['modify_text']}"
                 design_doc = parse_design_doc(design_text, ctx.game.title)
             await _set_phase(ctx, RunPhase.ART)
-            await _llm(ctx, ART_PROMPT, design_text)
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
                 return {
@@ -507,6 +505,23 @@ async def run_generation(
             return
         game = await s.get(Game, run.game_id)
         if game is None:
+            return
+        # 终态守卫：已被取消(FAILED)/完成(DONE)/已置 ended_at 的 run 直接跳过，
+        # 防止 worker 消费到针对该 run 的残留或重投消息时，把一个被取消的 run
+        # 又改回 RUNNING 继续跑（HITL 等待中点「终止」后 worker 仍复活的根因）。
+        # 合法的复活路径（retry_run / dev_requeue / HITL resolve）都会在入队前
+        # 把 status 重置为 RUNNING 并清空 ended_at，故不会误伤。
+        if (
+            run.status in (RunStatus.FAILED.value, RunStatus.DONE.value)
+            or run.ended_at is not None
+        ):
+            log.warning(
+                "skip finalized run_id=%s status=%s ended_at=%s resume=%s",
+                run_id,
+                run.status,
+                run.ended_at,
+                resume,
+            )
             return
         try:
             with observe_run(str(run_id)):

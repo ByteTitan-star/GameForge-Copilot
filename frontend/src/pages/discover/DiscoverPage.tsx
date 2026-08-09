@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { Compass, Loader2 } from 'lucide-react'
 import { publicGamesApi } from '@/api/public-games'
 import { FeaturedGamesStrip } from '@/components/discover/FeaturedGamesStrip'
@@ -16,7 +15,7 @@ export function DiscoverPage() {
   const games = query.data ?? []
 
   return (
-    <div className="relative min-h-screen bg-[#0a0a0a] text-white">
+    <div className="relative min-h-full bg-[#0a0a0a] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,211,238,0.08),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(168,85,247,0.06),transparent_50%)]" />
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:px-8 md:py-12">
@@ -29,12 +28,6 @@ export function DiscoverPage() {
             <h1 className="mt-2 text-3xl font-normal tracking-tight sm:text-4xl">{t('discoverTitle')}</h1>
             <p className="mt-2 max-w-xl text-sm text-white/60">{t('discoverSubtitle')}</p>
           </div>
-          <Link
-            to="/games"
-            className="text-sm text-white/70 underline-offset-2 transition hover:text-white hover:underline"
-          >
-            {t('backToGames')}
-          </Link>
         </header>
 
         <FeaturedGamesStrip variant="dark" className="mb-10" />

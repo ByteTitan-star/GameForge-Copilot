@@ -35,11 +35,6 @@ _ACTIVE_RUNS = {RunStatus.RUNNING, RunStatus.PAUSED}
 _RENAMEABLE = {GameStatus.DRAFT, GameStatus.REJECTED, GameStatus.TAKEN_DOWN}
 
 
-def _require_verified(user: User) -> None:
-    if not user.email_verified:
-        raise AppError(ErrorCode.EMAIL_NOT_VERIFIED, "邮箱未验证，无法创建游戏或发起 run")
-
-
 async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
     game = await db.scalar(
         select(Game).where(Game.id == game_id, Game.owner_id == user.id)
@@ -63,7 +58,6 @@ async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> i
 
 
 async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
-    _require_verified(user)
     title = (req.title or "").strip()
     requirement = (req.requirement or "").strip()
     if req.template_id:
@@ -228,7 +222,6 @@ async def prune_old_versions(db: AsyncSession, game: Game) -> None:
 async def create_run(
     db: AsyncSession, r: redis.Redis, user: User, game_id: UUID, req: RunCreate
 ) -> GenerationRun:
-    _require_verified(user)
     game = await _get_owned_game(db, user, game_id)
 
     active = await db.scalar(
@@ -374,6 +367,7 @@ async def cancel_run(
     await db.commit()
     await ckpt.clear_state(r, run_id)
     await run_ctrl.clear_control(r, run_id)
+    await r.delete(f"run:hitl:{run_id}")  # 清掉 HITL 并发锁，避免残留 resolve 重新触发已取消的 run
     await db.refresh(run)
     return run
 

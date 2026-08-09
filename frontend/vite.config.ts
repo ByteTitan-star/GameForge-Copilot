@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { devLogFilePlugin } from './vite-log-plugin'
+import { devLogFilePlugin } from './vite-log-plugin.ts'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(rootDir, '..')

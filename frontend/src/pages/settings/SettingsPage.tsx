@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { Role } from '@/api/enums'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui/Input'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/stores/auth-store'
@@ -17,15 +17,10 @@ type SettingsTab = 'account' | 'profile' | 'appearance' | 'llm'
 
 export function SettingsPage() {
   const t = useT()
-  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.access_token)
   const location = useLocation()
-  const state = location.state as {
-    needVerify?: boolean
-    justVerified?: boolean
-    tab?: SettingsTab
-  } | null
+  const state = location.state as { tab?: SettingsTab } | null
   const [tab, setTab] = useState<SettingsTab>(state?.tab ?? 'account')
 
   const [oldPassword, setOldPassword] = useState('')
@@ -79,17 +74,6 @@ export function SettingsPage() {
         <p className="gf-page-subtitle mt-1">{t('settingsSubtitle')}</p>
       </header>
 
-      {state?.needVerify ? (
-        <p role="status" className="gf-banner-warn rounded-xl px-4 py-3 text-sm">
-          {t('needVerifyBanner')}
-        </p>
-      ) : null}
-      {state?.justVerified ? (
-        <p role="status" className="gf-banner-info rounded-xl px-4 py-3 text-sm">
-          {t('justVerifiedBanner')}
-        </p>
-      ) : null}
-
       <div className="gf-border-subtle flex gap-1 border-b">
         {tabs.map(({ id, label }) => (
           <button
@@ -115,37 +99,13 @@ export function SettingsPage() {
             <dl className="mt-4 space-y-3 text-sm">
               <div className="gf-border-subtle flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/[0.02] px-4 py-3 ring-1 ring-[var(--gf-border)]">
                 <dt className="gf-page-muted">{t('email')}</dt>
-                <dd className="gf-page-body flex items-center gap-2">
-                  {user?.email}
-                  {user?.email_verified ? (
-                    <span className="rounded-md bg-emerald-400/15 px-2 py-0.5 text-[11px] text-emerald-300 ring-1 ring-emerald-400/25">
-                      {t('verified')}
-                    </span>
-                  ) : (
-                    <span className="gf-badge-warn rounded-md px-2 py-0.5 text-[11px]">
-                      {t('unverified')}
-                    </span>
-                  )}
-                </dd>
+                <dd className="gf-page-body">{user?.email}</dd>
               </div>
               <div className="gf-border-subtle flex justify-between gap-4 rounded-xl bg-black/[0.02] px-4 py-3 ring-1 ring-[var(--gf-border)]">
                 <dt className="gf-page-muted">{t('roleLabel')}</dt>
                 <dd className="gf-page-body">{user?.role === Role.admin ? t('roleAdmin') : t('roleUser')}</dd>
               </div>
             </dl>
-            {!user?.email_verified ? (
-              <div className="mt-4">
-                <Button
-                  type="button"
-                  className="gf-btn-primary !rounded-xl !border-0 !text-sm"
-                  onClick={() =>
-                    navigate('/verify-email', { state: { email: user?.email } })
-                  }
-                >
-                  {t('goVerifyEmail')}
-                </Button>
-              </div>
-            ) : null}
           </section>
 
           <section className="gf-glass rounded-2xl p-5">
@@ -182,12 +142,12 @@ export function SettingsPage() {
                 autoComplete="new-password"
               />
               {pwdError ? (
-                <p role="alert" className="text-sm text-red-300">
+                <p role="alert" className="text-sm text-red-600">
                   {pwdError}
                 </p>
               ) : null}
               {pwdOk ? (
-                <p role="status" className="text-sm text-cyan-200">
+                <p role="status" className="text-sm gf-text-accent">
                   {pwdOk}
                 </p>
               ) : null}

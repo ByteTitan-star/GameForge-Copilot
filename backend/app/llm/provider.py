@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.config import settings
 from app.enums import LLMProvider
 
 _DEFAULT_API_BASE = {
@@ -177,9 +178,11 @@ async def complete(
     user_msg: str,
     base_url: str | None = None,
     *,
-    max_tokens: int = 4096,
+    max_tokens: int | None = None,
 ) -> tuple[str, Usage]:
     """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
+    if max_tokens is None:
+        max_tokens = settings.llm_max_tokens
     headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
     url = _messages_url(provider, base_url)
     if _uses_anthropic_native_api(provider, base_url):
@@ -198,7 +201,14 @@ async def complete(
                 {"role": "user", "content": user_msg},
             ],
         }
-    async with httpx.AsyncClient(timeout=60) as client:
+    # 读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败
+    timeout = httpx.Timeout(
+        connect=settings.llm_connect_timeout,
+        read=settings.llm_request_timeout,
+        write=settings.llm_connect_timeout,
+        pool=settings.llm_connect_timeout,
+    )
+    async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(url, headers=headers, json=body)
     if resp.status_code != 200:
         hint = ""

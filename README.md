@@ -24,31 +24,77 @@
 
 ---
 
-## 复制执行
+## 📋 Windows 完整启动顺序
+
+### 第一步：启动 Docker 基础设施
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+# 在项目根目录执行
 docker compose up -d postgres redis rabbitmq
+```
+
+### 第二步：初始化后端（仅首次）
+```bash
 cd backend
+pip install uv
 uv sync
-uv run alembic upgrade head
-uv run python -m scripts.seed_official_games
-cd ../frontend
-pnpm install
+uv run alembic upgrade head  # 创建数据库表结构，alembic.ini
+uv run python -m scripts.seed_official_games  # 官方试玩 + 试用账号 demo@gameforge.dev
 cd ..
+```
+
+### 第三步：启动后端 API（终端1）
+```bash
 cd backend
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### 第四步：启动 Worker（终端2 - 新开CMD/PowerShell）
+```bash
 cd backend
 uv run python -m app.messaging.worker
+```
+
+### 第五步：启动前端（终端3 - 新开CMD/PowerShell）
+```bash
 cd frontend
+pnpm install  # 仅首次
 pnpm run dev
+```
+
+### 第六步：验证服务
+```bash
+# 检查所有服务是否就绪
 curl http://127.0.0.1:8000/ready
-cd frontend
-pnpm smoke:real
-docker compose up -d postgres redis rabbitmq backend worker
-docker compose exec backend uv run alembic upgrade head
-docker compose exec backend uv run python -m scripts.seed_official_games
+
+# 浏览器访问
+# 前端：http://127.0.0.1:5173
+# 后端API文档：http://127.0.0.1:8000/docs
+# RabbitMQ管理台：http://127.0.0.1:15672  
+# 账号密码都是：gameforge 
+```
+
+---
+
+## ⚠️ Windows 特别注意
+
+| 问题 | 解决方案 |
+|------|---------|
+| **curl 命令不存在** | 用浏览器访问 `http://127.0.0.1:8000/ready` 代替 |
+| **uv 命令找不到** | 安装：`pip install uv` |
+| **pnpm 命令找不到** | 安装：`npm install -g pnpm` |
+| **端口被占用** | 关闭占用进程，或改端口配置 |
+| **Docker Desktop 未启动** | 先打开 Docker Desktop 应用 |
+
+---
+
+## 🛑 停止所有服务
+
+```bash
+# 停止 Docker 容器
+docker compose down
+
+# 停止本地进程（在各自终端按 Ctrl+C）
 ```
 
 ---

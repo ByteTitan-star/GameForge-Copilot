@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import { MOCK_PUBLIC_GAMES, publicGamesApi } from '@/api/public-games'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { publicGamesApi } from '@/api/public-games'
 
 describe('publicGamesApi', () => {
-  it('后端未就绪时返回 Mock 数据', async () => {
-    const games = await publicGamesApi.list()
-    expect(games.length).toBeGreaterThanOrEqual(3)
-    expect(games[0]?.slug).toBe(MOCK_PUBLIC_GAMES[0]?.slug)
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('网络失败时抛错而非返回 Mock', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    await expect(publicGamesApi.list()).rejects.toThrow()
   })
 })

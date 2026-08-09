@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/cn'
+import { useT } from '@/i18n/use-t'
 
 type Props = {
   src: string
@@ -26,6 +27,7 @@ export function GamePlayer({
   const stage = variant === 'stage'
   const [iframeSrc, setIframeSrc] = useState(src)
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   useEffect(() => {
     let revoked: string | null = null
@@ -48,7 +50,7 @@ export function GamePlayer({
         revoked = blobUrl
         if (!cancelled) setIframeSrc(blobUrl)
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '加载失败')
+        if (!cancelled) setError(e instanceof Error ? e.message : t('loadFailed'))
       }
     }
 

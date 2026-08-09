@@ -135,7 +135,7 @@ export function ChatPanel({
             />
             <div className={cn('flex items-center justify-between gap-2', hero ? 'px-2 pb-2' : 'mt-2')}>
               <span className={cn('font-mono text-[10px]', workshop ? 'gf-page-muted' : 'text-[#9099a1]')}>
-                Enter 发送 · Shift+Enter 换行
+                {t('chatSendHint')}
               </span>
               <Button
                 variant="primary"

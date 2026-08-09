@@ -7,7 +7,6 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
-import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { DiscoverPage } from '@/pages/discover/DiscoverPage'
 import { ForgePage } from '@/pages/forge/ForgePage'
 import { GamesPage } from '@/pages/games/GamesPage'
@@ -17,17 +16,14 @@ import { DraftPlayPage } from '@/pages/play/DraftPlayPage'
 import { PlayPage } from '@/pages/play/PlayPage'
 import { CreatorPage } from '@/pages/creator/CreatorPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
-import { ToonHubHero } from '@/pages/preview/ToonHubHero'
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/home" element={<LandingPage />} />
-      <Route path="/discover" element={<DiscoverPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       {/* 邮件模板链接：frontend_base_url/reset-password?token=… */}
       <Route path="/reset-password" element={<ForgotPasswordPage />} />
@@ -35,10 +31,10 @@ export function AppRoutes() {
       <Route path="/play/:slug" element={<PlayPage />} />
       <Route path="/u/:handle" element={<CreatorPage />} />
       <Route path="/draft/:gameId/:version" element={<DraftPlayPage />} />
-      <Route path="/preview/toonhub" element={<ToonHubHero />} />
 
-      <Route element={<RequireAuth />}>
-        <Route element={<AppShell />}>
+      <Route element={<AppShell />}>
+        <Route path="/discover" element={<DiscoverPage />} />
+        <Route element={<RequireAuth />}>
           <Route path="/games" element={<GamesPage />} />
           <Route path="/forge" element={<ForgePage />} />
           <Route path="/forge/:gameId" element={<ForgePage />} />

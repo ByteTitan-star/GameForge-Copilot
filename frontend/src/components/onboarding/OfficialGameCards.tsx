@@ -10,7 +10,6 @@ import { CreatorLink } from '@/components/creator/CreatorLink'
 
 type Props = {
   accessToken?: string | null
-  userEmailVerified?: boolean
   trial?: boolean
   onToast?: (msg: string) => void
   className?: string
@@ -19,7 +18,6 @@ type Props = {
 
 export function OfficialGameCards({
   accessToken,
-  userEmailVerified,
   trial = false,
   onToast,
   className,
@@ -37,11 +35,6 @@ export function OfficialGameCards({
   async function fork(slug: string) {
     if (!accessToken) {
       navigate('/login')
-      return
-    }
-    if (!userEmailVerified) {
-      onToast?.(t('emailRunError'))
-      navigate('/verify-email')
       return
     }
     setForking(slug)

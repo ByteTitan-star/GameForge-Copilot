@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { profileApi } from '@/api/profile'
 import { formatApiError } from '@/api/error-message'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui/Input'
 import { useT } from '@/i18n/use-t'
 
 type Props = {
@@ -105,7 +105,7 @@ export function ProfilePanel({ accessToken }: Props) {
           </p>
         ) : null}
         {ok ? (
-          <p role="status" className="text-sm text-cyan-200">
+          <p role="status" className="text-sm gf-text-accent">
             {ok}
           </p>
         ) : null}

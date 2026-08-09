@@ -4,7 +4,7 @@ import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui/Input'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -31,7 +31,7 @@ export function ForgotPasswordPage() {
       await authApi.requestPasswordReset(email.trim())
       setStep('sent')
     } catch (err) {
-      setError(formatApiError(err, '请求失败'))
+      setError(formatApiError(err, t('errRequestFailed')))
     } finally {
       setLoading(false)
     }
@@ -56,7 +56,7 @@ export function ForgotPasswordPage() {
       }
       setStep('done')
     } catch (err) {
-      setError(formatApiError(err, '重置失败'))
+      setError(formatApiError(err, t('errResetFailed')))
     } finally {
       setLoading(false)
     }

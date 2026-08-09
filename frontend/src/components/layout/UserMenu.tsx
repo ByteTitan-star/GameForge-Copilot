@@ -52,7 +52,7 @@ export function UserMenu() {
         <span className="min-w-0 flex-1">
           <span className="gf-page-body block truncate text-sm">{user.email}</span>
           <span className="gf-page-muted block text-[11px]">
-            {trial ? '试用预览' : user.role === Role.admin ? '管理员' : '普通用户'}
+            {trial ? t('fillTrialPreview') : user.role === Role.admin ? t('roleAdmin') : t('roleUser')}
           </span>
         </span>
         <ChevronUp className={cn('gf-page-muted h-4 w-4 shrink-0 transition', open ? 'rotate-0' : 'rotate-180')} />
@@ -66,12 +66,9 @@ export function UserMenu() {
           <div className="gf-border-subtle border-b px-3 py-2.5">
             <p className="gf-page-body flex items-center gap-2 text-xs font-medium">
               <User className="gf-text-accent h-3.5 w-3.5" />
-              账号信息
+              {t('accountInfo')}
             </p>
             <p className="gf-page-muted mt-1 truncate text-[11px]">{user.email}</p>
-            <p className="gf-page-muted mt-1 text-[11px]">
-              邮箱 {user.email_verified ? '已验证' : '未验证'}
-            </p>
           </div>
           <Link
             to="/home"
