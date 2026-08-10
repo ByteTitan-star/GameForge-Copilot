@@ -1,4 +1,4 @@
-"""进程内 memory 后端：pytest 默认，无需 RabbitMQ 容器。"""
+"""进程内 memory 后端：pytest 默认，无需 RabbitMQ 容器。测试使用"""
 
 from __future__ import annotations
 

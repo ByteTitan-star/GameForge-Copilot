@@ -1,14 +1,20 @@
 import { Bot, Loader2, Sparkles } from "lucide-react";
 import { useT } from "@/i18n/use-t";
 import { cn } from "@/lib/cn";
+import {
+  STATUS_BADGE_CLASS,
+  type ForgeGlobalStatus,
+} from "@/pages/forge/forge-global-status";
 
 type Props = {
-  busy: boolean;
+  status: ForgeGlobalStatus;
   className?: string;
 };
 
-export function ForgeAiStatusBar({ busy, className }: Props) {
+/** 聊天区顶部状态条：消费统一全局状态，展示当前助手行为，不再重复「就绪」 */
+export function ForgeAiStatusBar({ status, className }: Props) {
   const t = useT();
+  const running = status.level === "running";
 
   return (
     <div
@@ -19,7 +25,7 @@ export function ForgeAiStatusBar({ busy, className }: Props) {
       aria-live="polite"
     >
       <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[rgba(var(--gf-primary-rgb),0.1)] ring-1 ring-[rgba(var(--gf-primary-rgb),0.18)]">
-        {busy ? (
+        {running ? (
           <Loader2
             className="gf-text-accent h-4.5 w-4.5 animate-spin motion-reduce:animate-none"
             aria-hidden="true"
@@ -34,9 +40,7 @@ export function ForgeAiStatusBar({ busy, className }: Props) {
         <span
           className={cn(
             "absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[var(--gf-surface)]",
-            busy
-              ? "animate-pulse bg-amber-400 motion-reduce:animate-none"
-              : "bg-emerald-500",
+            STATUS_BADGE_CLASS[status.tone].dot,
           )}
           aria-hidden
         />
@@ -46,7 +50,7 @@ export function ForgeAiStatusBar({ busy, className }: Props) {
           {t("requirementChat")}
         </p>
         <p className="mt-0.5 truncate text-sm font-medium text-[var(--gf-text)]">
-          {busy ? t("forgeAiBuilding") : t("forgeAiReady")}
+          {t(status.labelKey)}
         </p>
       </div>
       <span className="grid h-8 w-8 place-items-center rounded-lg bg-black/[0.03]">

@@ -35,6 +35,11 @@ _ACTIVE_RUNS = {RunStatus.RUNNING, RunStatus.PAUSED}
 _RENAMEABLE = {GameStatus.DRAFT, GameStatus.REJECTED, GameStatus.TAKEN_DOWN}
 
 
+def _require_verified(user: User) -> None:
+    if not user.email_verified:
+        raise AppError(ErrorCode.EMAIL_NOT_VERIFIED, "邮箱未验证，无法创建游戏或发起 run")
+
+
 async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
     game = await db.scalar(
         select(Game).where(Game.id == game_id, Game.owner_id == user.id)
@@ -58,6 +63,7 @@ async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> i
 
 
 async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
+    _require_verified(user)
     title = (req.title or "").strip()
     requirement = (req.requirement or "").strip()
     if req.template_id:
@@ -222,6 +228,7 @@ async def prune_old_versions(db: AsyncSession, game: Game) -> None:
 async def create_run(
     db: AsyncSession, r: redis.Redis, user: User, game_id: UUID, req: RunCreate
 ) -> GenerationRun:
+    _require_verified(user)
     game = await _get_owned_game(db, user, game_id)
 
     active = await db.scalar(
@@ -246,6 +253,22 @@ async def create_run(
     month_used = usage.month.input_tokens + usage.month.output_tokens
     if month_used >= monthly_default:
         raise AppError(ErrorCode.QUOTA_EXCEEDED, "本月 token 配额已耗尽")
+
+    # 默认配置路径：未显式指定 llm_config_id 时必须有 is_default 配置，否则 run 带病入队
+    if req.llm_config_id is None:
+        has_default = await db.scalar(
+            select(UserLLMConfig.id)
+            .where(
+                UserLLMConfig.user_id == user.id,
+                UserLLMConfig.is_default.is_(True),
+            )
+            .limit(1)
+        )
+        if has_default is None:
+            raise AppError(
+                ErrorCode.LLM_CONFIG_INVALID,
+                "尚未配置默认 LLM，请先在「设置 → LLM 配置」中添加并设为默认。",
+            )
     if req.llm_config_id is not None:
         cfg = await db.scalar(
             select(UserLLMConfig).where(

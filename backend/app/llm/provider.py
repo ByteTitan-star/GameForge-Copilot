@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
 
 log = logging.getLogger(__name__)
@@ -280,7 +281,10 @@ async def complete(
                 "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
                 "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
             )
-        raise RuntimeError(f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:200]}{hint}")
+        raise AppError(
+            ErrorCode.LLM_CONFIG_INVALID,
+            f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:120]}{hint}",
+        )
     data = resp.json()
     if _uses_anthropic_native_api(provider, base_url):
         content = "".join(b.get("text", "") for b in data.get("content", []))

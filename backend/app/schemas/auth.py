@@ -13,7 +13,7 @@ class RegisterReq(BaseModel):
 class RegisterResp(BaseModel):
     user_id: uuid.UUID
     email: str
-    email_verified: bool = True
+    email_verified: bool = False
 
 
 class LoginReq(BaseModel):

@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { profileApi } from '@/api/profile'
 import { formatApiError } from '@/api/error-message'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 
 type Props = {

@@ -5,6 +5,7 @@ import {
   Mail,
   MessageSquare,
   RotateCcw,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n/use-t";
@@ -16,6 +17,9 @@ type Props = {
   onRevise: () => void;
   onRetry: () => void;
   busy?: boolean;
+  /** 失败原因分类：llm = LLM 配置缺失/无效（主操作变为「去配置」）；generic = 其他失败 */
+  kind?: "llm" | "generic";
+  onConfigureLlm?: () => void;
   className?: string;
 };
 
@@ -25,11 +29,14 @@ export function FailureRecoveryBar({
   onRevise,
   onRetry,
   busy,
+  kind = "generic",
+  onConfigureLlm,
   className,
 }: Props) {
   const t = useT();
   const supportEmail =
     import.meta.env.VITE_SUPPORT_EMAIL ?? "support@gameforge.local";
+  const isLlm = kind === "llm";
 
   async function copyRunId() {
     try {
@@ -79,30 +86,44 @@ export function FailureRecoveryBar({
         </div>
       </div>
       <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-rose-100 pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          className="!min-h-10 !rounded-lg !px-3 !text-xs !text-rose-800 hover:!bg-rose-50"
-          disabled={busy}
-          onClick={onRevise}
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          {t("failureRevise")}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="!min-h-10 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
-          disabled={busy}
-          onClick={onRetry}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-          ) : (
-            <RotateCcw className="h-3.5 w-3.5" />
-          )}
-          {t("failureRetry")}
-        </Button>
+        {isLlm ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="!min-h-10 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
+            onClick={onConfigureLlm}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            {t("forgeConfigureLlm")}
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              className="!min-h-10 !rounded-lg !px-3 !text-xs !text-rose-800 hover:!bg-rose-50"
+              disabled={busy}
+              onClick={onRevise}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              {t("failureRevise")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="!min-h-10 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
+              disabled={busy}
+              onClick={onRetry}
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              {t("failureRetry")}
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="ghost"

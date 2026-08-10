@@ -78,13 +78,12 @@ async def _issue_verification_code(db: AsyncSession, user_id: uuid.UUID) -> str:
     return code
 
 
-async def register_user(db: AsyncSession, email: str, password: str) -> User:
-    """注册即视为邮箱已验证：本项目无计费、邮箱仅用于通知，无需验证步骤。"""
+async def register_user(db: AsyncSession, email: str, password: str) -> tuple[User, str]:
+    """创建未验证用户并发 6 位邮箱验证码；返回 (user, code)，由调用方入队发邮件。"""
     user = User(
         email=email,
         password_hash=hash_password(password),
         role=Role.USER.value,
-        email_verified=True,
     )
     db.add(user)
     try:
@@ -93,7 +92,8 @@ async def register_user(db: AsyncSession, email: str, password: str) -> User:
         await db.rollback()
         raise AppError(ErrorCode.EMAIL_TAKEN, "邮箱已注册") from e
     await db.refresh(user)
-    return user
+    code = await _issue_verification_code(db, user.id)
+    return user, code
 
 
 async def resend_verification(db: AsyncSession, email: str) -> str | None:

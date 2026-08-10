@@ -10,16 +10,19 @@ import {
   Bug,
   Box,
   ChevronLeft,
+  ExternalLink,
   Loader2,
   Maximize2,
   PanelRightClose,
   PanelRightOpen,
   Pause,
   Play,
+  RefreshCw,
   Square,
   Upload,
 } from "lucide-react";
 import { gamesApi } from "@/api/games";
+import { meApi } from "@/api/me";
 import { RunPhase, RunStatus } from "@/api/enums";
 import { formatApiError } from "@/api/error-message";
 import type { HitlWaitPayload } from "@/api/ws-types";
@@ -31,6 +34,7 @@ import { ForgeSplitLayout } from "@/components/forge/ForgeSplitLayout";
 import { HitlCard } from "@/components/forge/HitlCard";
 import { LlmConfigSelect } from "@/components/forge/LlmConfigSelect";
 import { RunHistoryPanel } from "@/components/forge/RunHistoryPanel";
+import { StagePipeline } from "@/components/forge/StagePipeline";
 import type { TimelineItem } from "@/components/forge/RunTimeline";
 import { TemplatePicker } from "@/components/forge/TemplatePicker";
 import { VersionTimeline } from "@/components/forge/VersionTimeline";
@@ -45,9 +49,11 @@ import {
 } from "@/lib/stage-pipeline-state";
 import { useT } from "@/i18n/use-t";
 import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "@/stores/toast-store";
 import { useLocaleStore } from "@/stores/locale-store";
 import { connectRunWs, type RunWsHandle } from "@/ws/client";
 import { handleForgeWsEvent } from "./forge-events";
+import { deriveForgeStatus, STATUS_BADGE_CLASS } from "./forge-global-status";
 import {
   buildResumeHitl,
   pickActiveRun,
@@ -97,7 +103,6 @@ export function ForgePage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<RunStatus | "idle">("idle");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<number | null>(null);
@@ -115,6 +120,7 @@ export function ForgePage() {
     null,
   );
   const [flashRing, setFlashRing] = useState(false);
+  const [previewNonce, setPreviewNonce] = useState(0);
   const [stageOpen, setStageOpen] = useState(true);
   const [logDockOpen, setLogDockOpen] = useState(false);
   const [stagePipeline, setStagePipeline] =
@@ -131,6 +137,14 @@ export function ForgePage() {
     queryFn: () => gamesApi.get(gameId!, token!),
   });
 
+  // 与设置页 LlmConfigPanel / Header 下拉 LlmConfigSelect 共享同一 query key，
+  // 设置页配置变更后缓存立即失效，回到工坊 hasLlmConfig 即时刷新
+  const configsQ = useQuery({
+    queryKey: ["llm-configs"],
+    queryFn: () => meApi.listLlmConfigs(token!),
+    enabled: Boolean(token),
+  });
+
   const title = useMemo(() => {
     if (detail.data?.title) return detail.data.title;
     if (gameId) return `${t("editGame")} ${gameId}`;
@@ -142,6 +156,23 @@ export function ForgePage() {
     if (vers.length === 0) return detail.data?.current_version ?? 0;
     return Math.max(...vers.map((v) => v.version));
   }, [detail.data?.versions, detail.data?.current_version]);
+
+  const hasLlmConfig = Boolean(configsQ.data && configsQ.data.length > 0);
+  // 全局运行状态：所有展示区域（Header / 聊天 / 试玩 / 日志）的唯一派生源
+  const status = useMemo(
+    () =>
+      deriveForgeStatus({
+        trial,
+        hasLlmConfig,
+        runStatus,
+        busy,
+        hitl,
+        previewUrl,
+        runId,
+        runErrors,
+      }),
+    [trial, hasLlmConfig, runStatus, busy, hitl, previewUrl, runId, runErrors],
+  );
 
   const showFailureRecovery = Boolean(!trial && runId && runStatus === RunStatus.failed);
   const failureSummary = runId ? runErrors[runId] : undefined;
@@ -208,7 +239,7 @@ export function ForgePage() {
       persistent: true,
       onEvent: (ev) =>
         handleForgeWsEvent(ev, eventBridge(activeGameId, activeRunId)),
-      onError: () => setErr(t("generationFailed")),
+      onError: () => toast.error(t("generationFailed")),
     });
   }
 
@@ -370,7 +401,6 @@ export function ForgePage() {
 
   async function startGeneration(requirement: string) {
     if (!token || !user) return;
-    setErr(null);
     setBusy(true);
     setHitl(null);
     setPreviewUrl(null);
@@ -403,13 +433,13 @@ export function ForgePage() {
         accessToken: token,
         persistent: true,
         onEvent,
-        onError: () => setErr(t("generationFailed")),
+        onError: () => toast.error(t("generationFailed")),
       });
     } catch (e) {
       setBusy(false);
       setPhase("idle");
       const msg = formatApiError(e, t("generationFailed"));
-      setErr(msg);
+      toast.error(msg);
       setMessages((m) => [
         ...m,
         {
@@ -425,7 +455,7 @@ export function ForgePage() {
     const text = input.trim();
     if (!text || busy) return;
     if (trial) {
-      setErr(t("trialForgeLocked"));
+      toast.error(t("trialForgeLocked"));
       return;
     }
     setMessages((m) => [...m, { id: mid("m"), role: "user", content: text }]);
@@ -441,7 +471,6 @@ export function ForgePage() {
   async function retryFailedRun() {
     if (!runId || !token || trial) return;
     setRetryBusy(true);
-    setErr(null);
     try {
       const resp = await gamesApi.retryRun(runId, token);
       setRunStatus(resp.status as RunStatus);
@@ -462,7 +491,7 @@ export function ForgePage() {
         connectWs(gameId, runId);
       }
     } catch (e) {
-      setErr(formatApiError(e, t("generationFailed")));
+      toast.error(formatApiError(e, t("generationFailed")));
     } finally {
       setRetryBusy(false);
     }
@@ -470,7 +499,7 @@ export function ForgePage() {
 
   function reportBug() {
     if (trial) {
-      setErr(t("trialForgeLocked"));
+      toast.error(t("trialForgeLocked"));
       return;
     }
     setInput(t("bugPrompt"));
@@ -544,7 +573,7 @@ export function ForgePage() {
       // real：继续复用已连接的 WS，后端 resume 后推事件
     } catch (e) {
       setBusy(false);
-      setErr(formatApiError(e, t("generationFailed")));
+      toast.error(formatApiError(e, t("generationFailed")));
     }
   }
 
@@ -571,7 +600,7 @@ export function ForgePage() {
       setBusy(false);
       pushItem({ label: t("runPaused"), detail: runId, tone: "info" });
     } catch (e) {
-      setErr(formatApiError(e, t("pauseFailed")));
+      toast.error(formatApiError(e, t("pauseFailed")));
     }
   }
 
@@ -587,7 +616,7 @@ export function ForgePage() {
         connectWs(gameId, runId);
       }
     } catch (e) {
-      setErr(formatApiError(e, t("resumeFailed")));
+      toast.error(formatApiError(e, t("resumeFailed")));
     }
   }
 
@@ -604,7 +633,7 @@ export function ForgePage() {
       void qc.invalidateQueries({ queryKey: ["active-runs"] }); // 立即刷新全局 ActiveRunBanner
       pushItem({ label: t("runCancelled"), detail: runId, tone: "err" });
     } catch (e) {
-      setErr(formatApiError(e, t("cancelFailed")));
+      toast.error(formatApiError(e, t("cancelFailed")));
       // 取消失败：同步后端真实状态，避免 UI 误显示为「已取消」而 run 实际仍在跑
       try {
         const run = await gamesApi.getRun(runId, token);
@@ -629,17 +658,16 @@ export function ForgePage() {
 
   async function submitPublish(note: string, version?: number) {
     if (trial) {
-      setErr(t("trialGamesHint"));
+      toast.error(t("trialGamesHint"));
       return;
     }
     if (!gameId || !token || !detail.data) return;
     const publishVersion = version ?? detail.data.current_version;
     if (publishVersion < 1) {
-      setErr(t("generationFailed"));
+      toast.error(t("generationFailed"));
       return;
     }
     setPublishing(true);
-    setErr(null);
     try {
       await gamesApi.submitPublish(
         gameId,
@@ -651,7 +679,7 @@ export function ForgePage() {
       setPublishOpen(false);
       pushItem({ label: t("publishSubmittedMsg"), tone: "ok" });
     } catch (e) {
-      setErr(formatApiError(e, t("submitPublishFailed")));
+      toast.error(formatApiError(e, t("submitPublishFailed")));
     } finally {
       setPublishing(false);
     }
@@ -669,7 +697,6 @@ export function ForgePage() {
   async function reconnectToRun(run: RunListItem) {
     if (!token || !gameId || trial) return;
     setReconnectingRunId(run.run_id);
-    setErr(null);
     closeHandle();
     try {
       const detail = await gamesApi.getRun(run.run_id, token);
@@ -699,17 +726,11 @@ export function ForgePage() {
       setRightTab("preview");
       setStageOpen(true);
     } catch (e) {
-      setErr(formatApiError(e, t("resumeFailed")));
+      toast.error(formatApiError(e, t("resumeFailed")));
     } finally {
       setReconnectingRunId(null);
     }
   }
-
-  const stageStatus = previewUrl
-    ? t("forgeStageStatusReady")
-    : busy
-      ? t("buildingPlayable")
-      : t("ready");
 
   return (
     <div
@@ -738,25 +759,17 @@ export function ForgePage() {
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ring-1",
-                  busy
-                    ? "bg-amber-50 text-amber-700 ring-amber-200"
-                    : previewUrl
-                      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                      : "gf-bg-accent-soft gf-text-accent ring-[rgba(var(--gf-primary-rgb),0.15)]",
+                  STATUS_BADGE_CLASS[status.tone].wrap,
                 )}
               >
                 <span
                   className={cn(
                     "h-1.5 w-1.5 rounded-full",
-                    busy
-                      ? "animate-pulse bg-amber-500 motion-reduce:animate-none"
-                      : previewUrl
-                        ? "bg-emerald-500"
-                        : "bg-[var(--gf-primary)]",
+                    STATUS_BADGE_CLASS[status.tone].dot,
                   )}
                   aria-hidden="true"
                 />
-                {previewUrl ? t("playable") : busy ? t("building") : t("ready")}
+                {t(status.labelKey)}
               </span>
             </div>
             <h1 className="gf-font-display mt-0.5 truncate text-base font-semibold tracking-[-0.01em] text-[var(--gf-text)] md:text-lg">
@@ -865,13 +878,15 @@ export function ForgePage() {
         </div>
       </header>
 
-      {err ? (
-        <p
-          role="alert"
-          className="relative z-[1] mx-3 mt-2 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700 shadow-sm md:mx-4"
-        >
-          {err}
-        </p>
+      {phase !== "idle" || busy || items.length > 0 ? (
+        <div className="relative z-[2] flex shrink-0 items-center border-b border-black/[0.06] bg-white px-4 py-2">
+          <StagePipeline
+            variant="bar"
+            runPhase={phase}
+            stages={stagePipeline}
+            className="flex-1"
+          />
+        </div>
       ) : null}
 
       <ForgeSplitLayout
@@ -879,7 +894,7 @@ export function ForgePage() {
         className="relative z-[1] min-h-0 flex-1 p-3 md:p-4"
         left={
           <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-[var(--gf-surface)] shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
-            <ForgeAiStatusBar busy={busy && !hitl} />
+            <ForgeAiStatusBar status={status} />
             <ChatPanel
               variant="forge-hero"
               scrollMode="panel"
@@ -889,6 +904,7 @@ export function ForgePage() {
               onInputChange={setInput}
               onSend={onSend}
               disabled={busy || trial}
+              sendDisabled={busy || trial || status.blocked || !input.trim()}
               streaming={busy && !hitl}
               showComposer={!trial}
               placeholder={
@@ -896,6 +912,22 @@ export function ForgePage() {
               }
               conversationFooter={
                 <>
+                  {status.blocked && !trial ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs">
+                      <span className="text-rose-800">
+                        {status.blockedReasonKey
+                          ? t(status.blockedReasonKey)
+                          : t("forgeStageBlocked")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        className="!min-h-8 !shrink-0 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
+                        onClick={() => navigate("/settings")}
+                      >
+                        {t("forgeConfigureLlm")}
+                      </Button>
+                    </div>
+                  ) : null}
                   {hitl ? (
                     <HitlCard
                       payload={hitl}
@@ -932,23 +964,23 @@ export function ForgePage() {
           </section>
         }
         right={
-          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/15 bg-[#101218] shadow-[0_18px_50px_rgba(15,23,42,0.16)]">
-            <div className="gf-forge-stage-chrome flex min-h-13 shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-[#151820] px-3 py-2.5">
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+            <div className="gf-forge-stage-chrome flex min-h-13 shrink-0 items-center justify-between gap-3 border-b border-[#E2E8F0] bg-white px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="gf-forge-traffic" aria-hidden>
-                  <span className="bg-white/20" />
-                  <span className="bg-white/20" />
+                  <span className="bg-slate-300" />
+                  <span className="bg-slate-300" />
                   <span
                     className={cn(
                       busy
-                        ? "animate-pulse bg-amber-400 motion-reduce:animate-none"
+                        ? "animate-pulse bg-amber-500 motion-reduce:animate-none"
                         : previewUrl
-                          ? "bg-emerald-400"
-                          : "bg-white/20",
+                          ? "bg-emerald-500"
+                          : "bg-slate-300",
                     )}
                   />
                 </div>
-                <span className="font-mono text-[10px] tracking-[0.12em] text-white/45 uppercase">
+                <span className="font-mono text-[10px] tracking-[0.12em] text-[#94A3B8] uppercase">
                   {t("previewStage")}
                 </span>
               </div>
@@ -969,32 +1001,55 @@ export function ForgePage() {
                     type="button"
                     onClick={() => setRightTab(id)}
                     className={cn(
-                      "min-h-8 cursor-pointer rounded-lg px-2.5 py-1 font-mono text-[10px] tracking-wide uppercase transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-white/30",
+                      "min-h-8 cursor-pointer rounded-lg px-2.5 py-1 font-mono text-[10px] tracking-wide uppercase transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]",
                       rightTab === id
-                        ? "bg-white/10 text-white ring-1 ring-white/10"
-                        : "text-white/45 hover:bg-white/[0.06] hover:text-white/80",
+                        ? "bg-blue-50 text-blue-600 ring-1 ring-blue-100"
+                        : "text-[#94A3B8] hover:bg-black/[0.04] hover:text-[#0F172A]",
                     )}
                   >
                     {label}
                   </button>
                 ))}
                 {rightTab === "preview" && previewUrl ? (
-                  <button
-                    type="button"
-                    title={t("fullscreenPlay")}
-                    aria-label={t("fullscreenPlay")}
-                    onClick={enterFullscreen}
-                    className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-white/30"
-                  >
-                    <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      title={t("forgeStageRefresh")}
+                      aria-label={t("forgeStageRefresh")}
+                      onClick={() => setPreviewNonce((n) => n + 1)}
+                      className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("forgeStageOpenWindow")}
+                      aria-label={t("forgeStageOpenWindow")}
+                      onClick={() =>
+                        previewUrl &&
+                        window.open(previewUrl, "_blank", "noopener,noreferrer")
+                      }
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("fullscreenPlay")}
+                      aria-label={t("fullscreenPlay")}
+                      onClick={enterFullscreen}
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </>
                 ) : null}
                 <button
                   type="button"
                   title={t("forgeHidePreview")}
                   aria-label={t("forgeHidePreview")}
                   onClick={() => setStageOpen(false)}
-                  className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-white/30"
+                  className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
                 >
                   <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -1006,7 +1061,7 @@ export function ForgePage() {
               className={cn(
                 "gf-forge-stage-canvas min-h-0 flex-1",
                 rightTab === "preview"
-                  ? "bg-[#090b10] p-2.5"
+                  ? "bg-[#0B0F17] p-2.5"
                   : "bg-[var(--gf-surface)] p-3",
                 flashRing && rightTab === "preview" && previewUrl
                   ? "gf-forge-flash-ring"
@@ -1016,22 +1071,30 @@ export function ForgePage() {
               {rightTab === "preview" ? (
                 previewUrl ? (
                   <GamePlayer
+                    key={previewNonce}
                     src={previewUrl}
                     title={title}
                     variant="stage"
                     accessToken={token}
                   />
                 ) : (
-                  <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-white/[0.07] bg-[radial-gradient(circle_at_center,rgba(var(--gf-primary-rgb),0.09),transparent_58%)] px-6 text-center">
+                  <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-white/[0.06] bg-[radial-gradient(circle_at_center,rgba(var(--gf-primary-rgb),0.10),transparent_60%)] px-6 text-center">
                     <div className="max-w-sm">
-                      <div className="gf-forge-stage-empty-icon mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.05] shadow-[0_0_36px_rgba(var(--gf-primary-rgb),0.12)]">
+                      <div className="gf-forge-stage-empty-icon mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.05] shadow-[0_0_36px_rgba(var(--gf-primary-rgb),0.14)]">
                         <Box
-                          className="h-6 w-6 text-white/70"
+                          className="h-6 w-6 text-[#F8FAFC]"
                           aria-hidden="true"
                         />
                       </div>
-                      <p className="mt-4 text-balance text-sm leading-relaxed text-white/55">
-                        {busy ? t("buildingPlayable") : t("forgeStageEmpty")}
+                      <p className="mt-4 text-base font-semibold text-[#F8FAFC]">
+                        {t("forgeStageEmptyTitle")}
+                      </p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-[#94A3B8]">
+                        {status.blocked && status.blockedReasonKey
+                          ? t(status.blockedReasonKey)
+                          : busy
+                            ? t("buildingPlayable")
+                            : t("forgeStageEmptyHint")}
                       </p>
                     </div>
                   </div>
@@ -1059,24 +1122,6 @@ export function ForgePage() {
                 />
               ) : null}
             </div>
-
-            <footer className="gf-forge-stage-footer flex min-h-10 shrink-0 items-center justify-between border-t border-white/[0.08] bg-[#151820] px-3 font-mono text-[10px] text-white/45">
-              <span>{stageStatus}</span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    "inline-block h-1.5 w-1.5 rounded-full",
-                    busy
-                      ? "animate-pulse bg-amber-400 motion-reduce:animate-none"
-                      : previewUrl
-                        ? "bg-emerald-400"
-                        : "bg-white/25",
-                  )}
-                  aria-hidden
-                />
-                {previewUrl ? t("playable") : busy ? t("building") : t("ready")}
-              </span>
-            </footer>
           </section>
         }
       />
@@ -1097,6 +1142,10 @@ export function ForgePage() {
                   onRevise: onReviseRequirement,
                   onRetry: () => void retryFailedRun(),
                   busy: retryBusy || busy,
+                  kind: /llm|api[ _]?key|配置无效/i.test(failureSummary ?? "")
+                    ? "llm"
+                    : "generic",
+                  onConfigureLlm: () => navigate("/settings"),
                 }
               : null
           }

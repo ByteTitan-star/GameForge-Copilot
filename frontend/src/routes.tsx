@@ -7,6 +7,7 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { DiscoverPage } from '@/pages/discover/DiscoverPage'
 import { ForgePage } from '@/pages/forge/ForgePage'
 import { GamesPage } from '@/pages/games/GamesPage'
@@ -24,6 +25,7 @@ export function AppRoutes() {
       <Route path="/home" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       {/* 邮件模板链接：frontend_base_url/reset-password?token=… */}
       <Route path="/reset-password" element={<ForgotPasswordPage />} />

@@ -6,10 +6,11 @@ import { AuthShell } from '@/components/auth/AuthShell'
 import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { TRIAL_EMAIL, TRIAL_PASSWORD } from '@/lib/trial'
 import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 
 export function LoginPage() {
   const t = useT()
@@ -23,7 +24,6 @@ export function LoginPage() {
   const [email, setEmail] = useState(authState?.email ?? '')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -34,12 +34,10 @@ export function LoginPage() {
     setEmail(TRIAL_EMAIL)
     setPassword(TRIAL_PASSWORD)
     setRemember(false)
-    setError('')
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       const data = await authApi.login(email.trim(), password)
@@ -54,7 +52,7 @@ export function LoginPage() {
       const from = authState?.from
       navigate(from && from !== '/login' ? from : '/games', { replace: true })
     } catch (err) {
-      setError(formatApiError(err, t('errLoginFailed')))
+      toast.error(formatApiError(err, t('errLoginFailed')))
     } finally {
       setLoading(false)
     }
@@ -64,6 +62,7 @@ export function LoginPage() {
     <AuthShell title={t('login')} subtitle={t('tagline')}>
       <form className="space-y-4" onSubmit={onSubmit}>
         <Input
+          variant="glass"
           name="email"
           label={t('email')}
           type="email"
@@ -73,6 +72,7 @@ export function LoginPage() {
           required
         />
         <Input
+          variant="glass"
           name="password"
           label={t('password')}
           type="password"
@@ -96,11 +96,6 @@ export function LoginPage() {
             {t('forgot')}
           </Link>
         </div>
-        {error ? (
-          <p role="alert" className="text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
           {loading ? t('loggingIn') : t('login')}
         </MagneticButton>

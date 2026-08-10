@@ -743,6 +743,9 @@ body {
      Tailwind 的 lg:grid 工具类导致桌面端分栏比例失效。 */
   flex: 0 0 auto;
   flex-direction: column;
+  /* grid 模式下行高占满：保证收起试玩后 panel-left 撑满垂直空间，
+     不塌缩成内容高度（grid-template-rows 在 flex 模式下无效，无副作用） */
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   padding: 0.75rem;
 }
@@ -758,48 +761,17 @@ body {
   }
 }
 
-.gf-forge-split:not(.gf-forge-split--stage-open) .gf-forge-panel-left {
-  flex: 0 0 auto;
-  width: auto;
-  height: auto;
-  max-width: none;
-  overflow: visible;
-}
-
-.gf-forge-split:not(.gf-forge-split--stage-open) .gf-forge-workspace-scroll {
-  flex: none;
-  width: 100%;
-  max-width: 960px;
-  margin-inline: auto;
-  overflow: visible;
-}
-
 .gf-forge-split--stage-open {
   flex-direction: row;
   align-items: stretch;
   gap: 0;
 }
 
-.gf-forge-split--stage-open .gf-forge-panel-left {
-  width: var(--gf-forge-left-ratio, 66%);
-  min-width: 340px;
-  max-width: 78%;
-  flex-shrink: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.gf-forge-split--stage-open .gf-forge-workspace-scroll {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
+/* 拖拽手柄：6px 宽，hover/focus 高亮。面板间距由此 + gridTemplateColumns 共同决定 */
 .gf-forge-split-handle {
   position: relative;
   z-index: 2;
-  width: 10px;
+  width: 6px;
   flex-shrink: 0;
   cursor: col-resize;
   touch-action: none;
@@ -808,7 +780,7 @@ body {
 .gf-forge-split-handle::before {
   content: "";
   position: absolute;
-  inset: 0.5rem 4px;
+  inset: 0.5rem 2px;
   border-radius: 9999px;
   background: rgba(var(--gf-primary-rgb), 0.08);
   transition: background 0.2s ease;
@@ -819,88 +791,52 @@ body {
   background: rgba(var(--gf-primary-rgb), 0.22);
 }
 
-.gf-forge-split--stage-open .gf-forge-panel-right {
-  min-width: 260px;
-  flex: 1;
-}
-
-.gf-forge-workspace-scroll {
-  overscroll-behavior: contain;
-}
-
 body.gf-forge-resizing,
 body.gf-forge-resizing * {
   cursor: col-resize !important;
   user-select: none !important;
 }
 
+/* 移动端：双栏降级为纵向堆叠，handle 转横向 */
 @media (max-width: 1023px) {
   .gf-forge-split--stage-open {
     flex-direction: column;
   }
 
   .gf-forge-split--stage-open .gf-forge-panel-left {
-    width: auto;
-    max-width: none;
     min-height: 42vh;
     max-height: 52vh;
   }
 
   .gf-forge-split-handle {
     width: auto;
-    height: 10px;
+    height: 6px;
     cursor: row-resize;
   }
 
   .gf-forge-split-handle::before {
-    inset: 4px 0.5rem;
+    inset: 2px 0.5rem;
   }
 
   .gf-forge-split--stage-open .gf-forge-panel-right {
     min-height: 36vh;
-    min-width: 0;
   }
 }
 
+/* 面板容器：仅负责 flex 结构；边框/背景/阴影交给各 <section> 内联 Tailwind，
+   避免与 Grid 轨道宽度打架。panel-left 默认 flex:1，收起试玩后自动占满。 */
 .gf-forge-panel-left {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
-  border: 1px solid var(--gf-border);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  min-height: 0;
 }
 
 .gf-forge-panel-right {
-  position: relative;
   display: flex;
-  min-height: 0;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--gf-border);
-  border-radius: 1rem;
-  background: linear-gradient(
-    180deg,
-    rgba(var(--gf-bg-rgb), 0.35) 0%,
-    rgba(255, 255, 255, 0.96) 100%
-  );
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-}
-
-.gf-forge-panel-scroll {
-  display: flex;
   min-height: 0;
-  flex: 1;
-  flex-direction: column;
   overflow: hidden;
-}
-
-.gf-forge-panel-section {
-  flex-shrink: 0;
-  border-top: 1px solid var(--gf-border);
-  background: rgba(255, 255, 255, 0.88);
-  padding: 1rem 1.25rem;
 }
 
 /* 底部横跨执行日志带：标题栏常驻；body 展开时固定高度，事件流内部滚动 */
@@ -927,10 +863,29 @@ body.gf-forge-resizing * {
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
-  height: 14rem;
   padding-inline: 1.25rem;
   padding-bottom: 0.75rem;
   overflow: hidden;
+}
+
+/* 日志抽屉顶部垂直拖拽条：调整 body 高度 */
+.gf-forge-dock-handle {
+  height: 6px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  touch-action: none;
+  background: rgba(var(--gf-primary-rgb), 0.04);
+  transition: background 0.2s ease;
+}
+
+.gf-forge-dock-handle:hover {
+  background: rgba(var(--gf-primary-rgb), 0.18);
+}
+
+body.gf-forge-dock-resizing,
+body.gf-forge-dock-resizing * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 .gf-forge-log-dock-timeline {
@@ -1104,6 +1059,21 @@ body.gf-forge-resizing * {
 
 .gf-font-display {
   font-family: var(--font-display);
+}
+
+@keyframes gf-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gf-toast-in {
+  animation: gf-toast-in 160ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

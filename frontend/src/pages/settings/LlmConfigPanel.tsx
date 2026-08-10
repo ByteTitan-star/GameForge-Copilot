@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useT } from '@/i18n/use-t'
 import { isTrialUser } from '@/lib/trial'
 import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 
 const providers = [
   { id: LLMProvider.anthropic, label: 'Anthropic' },
@@ -45,7 +46,6 @@ export function LlmConfigPanel() {
   const [apikey, setApikey] = useState('')
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrls[LLMProvider.anthropic])
   const [isDefault, setIsDefault] = useState(true)
-  const [msg, setMsg] = useState<string | null>(null)
 
   const list = useQuery({
     queryKey: ['llm-configs'],
@@ -76,22 +76,24 @@ export function LlmConfigPanel() {
     mutationFn: () => meApi.createLlmConfig({ ...draftBody(), is_default: isDefault }, token!),
     onSuccess: () => {
       setApikey('')
-      setMsg(t('llmSavedOk'))
+      toast.success(t('llmSavedOk'))
       void qc.invalidateQueries({ queryKey: ['llm-configs'] })
     },
-    onError: (e) => setMsg(formatApiError(e, t('llmSaveFailed'))),
+    onError: (e) => toast.error(formatApiError(e, t('llmSaveFailed'))),
   })
 
   const dryTestMu = useMutation({
     mutationFn: () => meApi.testLlmConfigDraft(draftBody(), token!),
-    onSuccess: (r) => setMsg(r.tested_ok ? t('llmTestOk') : r.error ?? t('llmTestFail')),
-    onError: (e) => setMsg(formatApiError(e, t('llmTestFailed'))),
+    onSuccess: (r) =>
+      r.tested_ok ? toast.success(t('llmTestOk')) : toast.error(r.error ?? t('llmTestFail')),
+    onError: (e) => toast.error(formatApiError(e, t('llmTestFailed'))),
   })
 
   const testMu = useMutation({
     mutationFn: (id: string) => meApi.testLlmConfig(id, token!),
-    onSuccess: (r) => setMsg(r.tested_ok ? t('llmTestOk') : r.error ?? t('llmTestFail')),
-    onError: (e) => setMsg(formatApiError(e, t('llmTestFailed'))),
+    onSuccess: (r) =>
+      r.tested_ok ? toast.success(t('llmTestOk')) : toast.error(r.error ?? t('llmTestFail')),
+    onError: (e) => toast.error(formatApiError(e, t('llmTestFailed'))),
   })
 
   const defaultMu = useMutation({
@@ -102,10 +104,10 @@ export function LlmConfigPanel() {
   const delMu = useMutation({
     mutationFn: (id: string) => meApi.deleteLlmConfig(id, token!),
     onSuccess: () => {
-      setMsg(t('llmDeleted'))
+      toast.success(t('llmDeleted'))
       void qc.invalidateQueries({ queryKey: ['llm-configs'] })
     },
-    onError: (e) => setMsg(formatApiError(e, t('llmDeleteFailed'))),
+    onError: (e) => toast.error(formatApiError(e, t('llmDeleteFailed'))),
   })
 
   const onProviderChange = (next: LLMProvider) => {
@@ -127,7 +129,6 @@ export function LlmConfigPanel() {
         </p>
       ) : null}
 
-      {msg ? <p className="text-sm gf-page-body">{msg}</p> : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1.5 text-sm">
