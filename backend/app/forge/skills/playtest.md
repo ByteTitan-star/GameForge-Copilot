@@ -11,8 +11,10 @@
 ## 失败处理
 
 - 试玩结果写入 `qa_report` WS 事件（含 `errors[]`、`console_logs[]`）
-- 在 `qa_max_retries` 内自动回退 `code_node` 修复
-- 重试耗尽后进入 `qa_failed` HITL，由人工决定 approve/reject/modify
+- 在 `qa_max_retries` 内：先由 QA 负责人做根因诊断，再以当前可运行版本为基线
+  回退 `code_node` 做定向修复（而非从零重生成）
+- 重试耗尽后直接判定失败（FAILED，code=`QA_RETRY_EXHAUSTED`），不再进入人工
+  确认 HITL；用户可经 `/retry` 重投，或修改需求后重新发起
 
 ## 实现
 

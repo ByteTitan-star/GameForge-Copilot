@@ -16,7 +16,10 @@ async def main() -> None:
     async with db.SessionLocal() as session:
         n = await seed_official_games(session)
         await ensure_trial_user(session)
-    print(f"seed_official_games: created {n} new official game(s)")
+    print(
+        f"seed_official_games: created {n.created} new, "
+        f"refreshed {n.refreshed} existing official game(s)"
+    )
     print("ensure_trial_user: demo@gameforge.dev ready (password see frontend lib/trial.ts)")
 
 

@@ -4,12 +4,16 @@ docs/05 §连通性测试：保存前发最小 completion，失败不让保存�
 complete() 返回 (content, usage)，usage 取响应真实字段，不估算（docs/05）。
 """
 
+import logging
+import time
 from dataclasses import dataclass
 
 import httpx
 
 from app.core.config import settings
 from app.enums import LLMProvider
+
+log = logging.getLogger(__name__)
 
 _DEFAULT_API_BASE = {
     LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1",
@@ -115,6 +119,35 @@ def _models_list_url(provider: LLMProvider, base_url: str | None) -> str:
     return f"{_api_base(provider, base_url)}/models"
 
 
+def _direct_hosts() -> list[str]:
+    """配置的国内直连 host 子串（逗号分隔）。"""
+    return [h.strip() for h in settings.llm_direct_hosts.split(",") if h.strip()]
+
+
+def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
+    """构造 LLM httpx 客户端，按目标 host 决定是否走系统代理。
+
+    httpx 0.28 在 Windows 上会读注册表代理（即便无 *_PROXY 环境变量），
+    国内 provider（dashscope/deepseek 等）走该代理常因代理无对应出口而超时。
+    命中配置的国内 host → 强制直连（trust_env=False）；其余沿用默认行为
+    （trust_env=True），保留「用代理访问海外 OpenAI/Anthropic」的能力。
+    """
+    host = (_host_from_base_url(url) or "").lower()
+    if any(h in host for h in _direct_hosts()):
+        return httpx.AsyncClient(timeout=timeout, trust_env=False)
+    return httpx.AsyncClient(timeout=timeout)
+
+
+def _is_qwen_thinking_model(model: str) -> bool:
+    """qwen3 系列（DashScope 默认开 thinking 的混合思考模型）。
+
+    仅匹配 qwen3：qwq 等纯推理模型只允许 enable_thinking=true，注入 false 反而触发 400。
+    DashScope 约定「非流式调用必须 enable_thinking=false」，而本模块 complete() 为非流式，
+    故对 qwen3 关闭 thinking 既是性能优化（避免思考链拉长/触发读超时），也是调用合规。
+    """
+    return "qwen3" in (model or "").lower()
+
+
 async def test_connectivity(
     provider: LLMProvider,
     apikey: str,
@@ -155,7 +188,7 @@ async def list_models(
             return list(_MODEL_WHITELIST[provider])
         url = _models_list_url(provider, base_url)
         headers = _auth_headers(provider, apikey, base_url)
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with _build_llm_client(url, httpx.Timeout(10)) as client:
             resp = await client.get(url, headers=headers)
         if resp.status_code == 200:
             ids = [
@@ -201,6 +234,14 @@ async def complete(
                 {"role": "user", "content": user_msg},
             ],
         }
+    # qwen3 默认开 thinking 会拉长代码生成、易触发读超时；DashScope 非流式调用也要求
+    # enable_thinking=false。命中 qwen3 则按配置关闭（仅 OpenAI 兼容路径）。
+    if (
+        not _uses_anthropic_native_api(provider, base_url)
+        and settings.llm_disable_thinking
+        and _is_qwen_thinking_model(model)
+    ):
+        body["enable_thinking"] = False
     # 读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败
     timeout = httpx.Timeout(
         connect=settings.llm_connect_timeout,
@@ -208,8 +249,29 @@ async def complete(
         write=settings.llm_connect_timeout,
         pool=settings.llm_connect_timeout,
     )
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(url, headers=headers, json=body)
+    # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
+    started = time.monotonic()
+    log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
+    try:
+        async with _build_llm_client(url, timeout) as client:
+            resp = await client.post(url, headers=headers, json=body)
+    except httpx.HTTPError:
+        duration = round(time.monotonic() - started, 3)
+        log.exception(
+            "llm http failed",
+            extra={"stage": "http", "model": model, "duration": duration},
+        )
+        raise
+    duration = round(time.monotonic() - started, 3)
+    log.info(
+        "llm http response",
+        extra={
+            "stage": "http",
+            "model": model,
+            "status": resp.status_code,
+            "duration": duration,
+        },
+    )
     if resp.status_code != 200:
         hint = ""
         if resp.status_code == 404:

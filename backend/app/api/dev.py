@@ -11,6 +11,7 @@ from app.core.response import ApiResponse
 from app.dev import runtime as dev_runtime
 from app.schemas.dev_runtime import (
     DevRequeueResp,
+    DevResetResp,
     QueuePurgeResp,
     QueueStatsResp,
     RedisFlushReq,
@@ -89,3 +90,16 @@ async def requeue_run(
     _require_dev()
     data = await dev_runtime.dev_requeue_run(db, r, run_id)
     return ApiResponse(data=DevRequeueResp.model_validate(data))
+
+
+@router.post("/reset")
+async def reset_dev(
+    r: RedisClient,
+    db: DbSession,
+    confirm: str = Query(...),
+) -> ApiResponse[DevResetResp]:
+    """一键清本地 dev 的 forge 运行态：失败所有 active run + 清 forge Redis + 清任务队列。"""
+    _require_dev()
+    _require_flush_confirm(confirm)
+    data = await dev_runtime.reset_dev_state(db, r)
+    return ApiResponse(data=DevResetResp.model_validate(data))

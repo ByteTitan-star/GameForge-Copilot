@@ -837,6 +837,49 @@
         }
       }
     },
+    "/api/v1/dev/reset": {
+      "post": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Reset Dev",
+        "description": "一键清本地 dev 的 forge 运行态：失败所有 active run + 清 forge Redis + 清任务队列。",
+        "operationId": "reset_dev_api_v1_dev_reset_post",
+        "parameters": [
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Confirm"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_DevResetResp_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/llm-configs": {
       "get": {
         "tags": [
@@ -4682,6 +4725,18 @@
         ],
         "title": "ApiResponse[DevRequeueResp]"
       },
+      "ApiResponse_DevResetResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevResetResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[DevResetResp]"
+      },
       "ApiResponse_GameAnalyticsResp_": {
         "properties": {
           "data": {
@@ -5544,6 +5599,40 @@
           "status"
         ],
         "title": "DevRequeueResp"
+      },
+      "DevResetResp": {
+        "properties": {
+          "failed_runs": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Failed Runs"
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count"
+          },
+          "redis_deleted": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Redis Deleted"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueuePurgeResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "failed_runs",
+          "failed_count",
+          "redis_deleted",
+          "queue"
+        ],
+        "title": "DevResetResp"
       },
       "EntryPhase": {
         "type": "string",

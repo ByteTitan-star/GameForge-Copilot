@@ -4,7 +4,7 @@ import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { ChatMsg } from '@/components/forge/ChatPanel'
 import type { MessageKey } from '@/i18n/messages'
 import { resolveHostingUrl } from '@/lib/hosting'
-import { parseDesignDoc, isFailureHitlNode } from '@/lib/hitl-design-doc'
+import { parseDesignDoc } from '@/lib/hitl-design-doc'
 
 import type { StagePipelineState } from '@/lib/stage-pipeline-state'
 import {
@@ -93,10 +93,6 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       h.setHitl(payload)
       h.setPhase('paused')
       h.setBusy(false)
-      if (isFailureHitlNode(payload.node)) {
-        const failPhase = payload.node === 'qa_failed' ? RunPhase.qa : RunPhase.code
-        h.setStagePipeline?.((prev) => markStageFailed(prev, failPhase))
-      }
       const doc = parseDesignDoc(payload.design_doc)
       h.pushItem({
         label: h.t('humanReviewWaiting'),

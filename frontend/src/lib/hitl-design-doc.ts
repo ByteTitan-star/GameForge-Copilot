@@ -5,13 +5,6 @@ export type ParsedDesignDoc = {
   levels: string[]
 }
 
-export type HitlFailureExtra = {
-  error?: string
-  errors: string[]
-  retries?: number
-  issues: string[]
-}
-
 export function parseDesignDoc(raw: unknown, fallbackTitle = ''): ParsedDesignDoc {
   if (typeof raw === 'string') {
     return { title: fallbackTitle, gameplay: raw, controls: '', levels: [] }
@@ -35,30 +28,4 @@ export function parseDesignDoc(raw: unknown, fallbackTitle = ''): ParsedDesignDo
     }
   }
   return { title: fallbackTitle, gameplay: '', controls: '', levels: [] }
-}
-
-export function parseHitlFailure(payload: Record<string, unknown>): HitlFailureExtra {
-  const errors: string[] = []
-  if (typeof payload.error === 'string' && payload.error) errors.push(payload.error)
-  if (Array.isArray(payload.errors)) {
-    for (const e of payload.errors) {
-      if (typeof e === 'string' && e) errors.push(e)
-    }
-  }
-  const issues: string[] = []
-  if (Array.isArray(payload.issues)) {
-    for (const i of payload.issues) {
-      if (typeof i === 'string' && i) issues.push(i)
-    }
-  }
-  return {
-    error: typeof payload.error === 'string' ? payload.error : undefined,
-    errors,
-    retries: typeof payload.retries === 'number' ? payload.retries : undefined,
-    issues,
-  }
-}
-
-export function isFailureHitlNode(node: string): boolean {
-  return node === 'sandbox_failed' || node === 'qa_failed'
 }

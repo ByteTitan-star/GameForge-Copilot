@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     default_monthly_token_limit: int = 10_000_000
     default_rate_limit_per_min: int = 30
     max_concurrent_runs: int = 3  # 每用户同时进行中的 run 上限（docs/05）
+    max_concurrent_tasks: int = 3  # worker 进程内同时处理的任务数（RabbitMQ prefetch_count）
     max_versions_per_game: int = 20  # 版本保留上限（docs/04），超出删最旧
     max_drafts_per_user: int = 20  # 每用户草稿游戏数上限
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
@@ -78,6 +79,19 @@ class Settings(BaseSettings):
     llm_connect_timeout: int = 30
     # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
     llm_max_tokens: int = 8192
+    # 默认「直连（绕过桌面/系统代理）」的国内 LLM host，逗号分隔。
+    # httpx 0.28 在 Windows 上会读注册表代理（即便无 *_PROXY 环境变量），
+    # 国内 provider 走该代理常因代理无对应出口而超时；命中此处则强制直连。
+    # 海外/未知 host 沿用默认（trust_env=True），保留「用代理访问 OpenAI 等」的能力。
+    llm_direct_hosts: str = (
+        "dashscope.aliyuncs.com,api.deepseek.com,api.moonshot.cn,"
+        "open.bigmodel.cn,api.siliconflow.cn,api.minimaxi.com,"
+        "api.baichuan-ai.com,api.lingyiwanwu.com"
+    )
+    # 是否对 qwen3 系列模型关掉 thinking（默认关）。
+    # DashScope 约定「非流式调用必须 enable_thinking=false」，而 complete() 为非流式；
+    # 关后既合规又省时省 token，避免思考链拉长触发读超时。需深度推理置 false（且需切到流式）。
+    llm_disable_thinking: bool = True
 
     # 全局
     env: str = "development"

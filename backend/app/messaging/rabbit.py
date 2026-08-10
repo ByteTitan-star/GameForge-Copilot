@@ -158,6 +158,6 @@ async def purge_task_queue() -> int:
     try:
         queue = await channel.declare_queue(TASK_QUEUE, durable=True)
         result = await queue.purge()
-        return int(result or 0)
+        return int(result.message_count if result is not None else 0)
     finally:
         await channel.close()

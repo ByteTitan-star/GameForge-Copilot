@@ -75,6 +75,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.worker
+    # 水平扩容：多副本竞争消费同一 TASK_QUEUE（RabbitMQ 负载均衡）。
+    # docker compose up -d --scale worker=N 或设 WORKER_REPLICAS=N。
+    # 单进程内并发另由 MAX_CONCURRENT_TASKS(prefetch) 控制；二者叠加为总并发。
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
     user: "0:0"
     env_file:
       - ./backend/.env.example
