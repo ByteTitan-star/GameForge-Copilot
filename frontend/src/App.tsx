@@ -1,6 +1,7 @@
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeBootstrap } from '@/components/theme/ThemeBootstrap'
+import { Toaster } from '@/components/ui/Toaster'
 import { AppRoutes } from '@/routes'
 
 const queryClient = new QueryClient({
@@ -20,6 +21,7 @@ export default function App() {
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>
+      <Toaster />
     </QueryClientProvider>
   )
 }
