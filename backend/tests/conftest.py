@@ -178,18 +178,20 @@ def _fake_llm(monkeypatch: pytest.MonkeyPatch):
     新版改走 HTML5 工程师视角的 QA_PROMPT，命中下方 HTML5 分支返回 HTML 字符串，
     诊断结果仅作为字符串透传给修复节点，不做解析。
     """
+    from app.enums import LLMProvider
     from app.llm.provider import Usage
 
     async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
         if "JSON" in system or "策划" in system:
-            return _valid_design_doc_json(), Usage(10, 5)
+            return _valid_design_doc_json(), Usage(10, 5), LLMProvider.ANTHROPIC
         if "HTML5" in system:
             return (
                 "<html><body><canvas id='c'></canvas>"
                 "<button>play</button><script></script></body></html>",
                 Usage(20, 10),
+                LLMProvider.ANTHROPIC,
             )
-        return "stub design doc", Usage(10, 5)
+        return "stub design doc", Usage(10, 5), LLMProvider.ANTHROPIC
 
     from app.llm import client as llm_client
 
