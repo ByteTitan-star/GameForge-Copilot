@@ -6,14 +6,19 @@ function joinUrl(base: string, path: string): string {
   return `${b}${p}`
 }
 
+// dev 给 artifact URL 加版本戳破浏览器强缓存（改产物/CSP 后刷新即生效）；生产留空走后端 ETag
+const ARTIFACT_VER = import.meta.env.DEV ? `${Date.now()}` : ''
+
 export function playArtifactUrl(slug: string): string {
-  return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}`)
+  const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
+  return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}${q}`)
 }
 
 export function draftArtifactUrl(gameId: string, version: number | string): string {
+  const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
   return joinUrl(
     env.hostingBaseUrl,
-    `/draft/${encodeURIComponent(gameId)}/${encodeURIComponent(String(version))}`,
+    `/draft/${encodeURIComponent(gameId)}/${encodeURIComponent(String(version))}${q}`,
   )
 }
 

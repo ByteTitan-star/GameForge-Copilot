@@ -99,7 +99,8 @@
     const TILE_COUNT = canvas.width / GRID_SIZE;
     const BASE_TICK_RATE = 110; // 经典的贪吃蛇移动速度
 
-    let highScore = localStorage.getItem('snake_high_score') || 0;
+    let highScore;
+    try { highScore = localStorage.getItem('snake_high_score') || 0; } catch { highScore = 0; }
     highScoreEl.textContent = highScore;
 
     // 粒子系统：用于吃苹果或死亡时的炫彩爆发特效
@@ -270,7 +271,7 @@
           
           if (this.score > highScore) {
             highScore = this.score;
-            localStorage.setItem('snake_high_score', highScore);
+            try { localStorage.setItem('snake_high_score', highScore); } catch {}
           }
 
           // 生成绚丽的得分粒子爆炸

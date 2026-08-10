@@ -94,3 +94,34 @@ async def test_play_published_200(verified_client: httpx.AsyncClient) -> None:
     r = await verified_client.get("/play/snake-xxx")
     assert r.status_code == 200, r.text
     assert "stub game" in r.text
+
+
+async def test_play_csp_allows_https_cdn(verified_client: httpx.AsyncClient) -> None:
+    """CSP 放宽到 https：游戏可引用 tailwind/字体/库等公共 CDN 渲染（防回归）。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    async with db.SessionLocal() as s:
+        game = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert game is not None
+        game.status = "published"
+        game.slug = "csp-probe"
+        await s.commit()
+    r = await verified_client.get("/play/csp-probe")
+    csp = r.headers.get("content-security-policy", "")
+    assert "script-src 'self' 'unsafe-inline' https:" in csp
+    assert "style-src 'self' 'unsafe-inline' https:" in csp
+    assert "font-src 'self' data: https:" in csp
+
+
+async def test_play_dev_disables_cache(verified_client: httpx.AsyncClient) -> None:
+    """dev 环境 /play 禁缓存，改产物/CSP 后刷新即生效（防回归）。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    async with db.SessionLocal() as s:
+        game = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert game is not None
+        game.status = "published"
+        game.slug = "cache-probe"
+        await s.commit()
+    r = await verified_client.get("/play/cache-probe")
+    assert "no-store" in r.headers.get("cache-control", "")
