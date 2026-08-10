@@ -1,12 +1,15 @@
 """CDN 资源策略：用一份白名单统一管控 LLM 生成游戏可引用的外链域名。
 
-独立原型模块，不依赖 app.*；目的是为 hosting 的 iframe CSP、forge 代码
-生成提示词、QA 自动试玩提供同一份"可信 CDN"来源，收敛当前 hosting/routes.py
-里放行整个 https:// 的宽松策略——任意 https CDN 都能被加载，存在 XSS 与
-稳定性风险。集中到白名单后：CSP、提示词、试玩校验三方共用同一来源。
+被三方共用，单一改点：
+- app.hosting.routes：build_csp() 生成产物 iframe 的 CSP 头；
+- app.forge.prompts：白名单注入代码生成提示词；
+- app.sandbox.playtest：validate_refs() 在试玩前拦截非白名单 CDN。
+
+收敛此前放行整个 https: 的宽松策略——任意外站脚本不再能跑进产物 iframe，
+XSS 面收窄；游戏仍可引用 three.js / tailwind / 字体等公共库保证渲染质量。
 
 设计取舍：仅提取 HTML 属性（src/href）中的 http(s) 绝对外链；不解析 CSS
-url()、不处理 importmap（YAGNI，当前生成产物是单 HTML 内联结构）。
+url()、不处理 importmap（当前生成产物是单 HTML 内联结构）。
 """
 
 from __future__ import annotations
@@ -14,7 +17,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-# 内置可信 CDN 白名单：主流公共库镜像 + 字体服务。新增域名在此一处维护。
+# 内置可信 CDN 白名单：主流公共库镜像 + 字体服务。新增域名在此一处维护，
+# CSP / 提示词 / 试玩三方自动同步。
 ALLOWED_CDN_HOSTS: frozenset[str] = frozenset(
     {
         "cdn.jsdelivr.net",

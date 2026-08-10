@@ -1,17 +1,8 @@
-"""cdn_policy 单元测试。
-
-可直接 `python test_cdn_policy.py` 运行，也可被 pytest 收集。
-不依赖 app.* 与任何 conftest fixture，纯函数验证。
-"""
+"""cdn_policy 单元测试：白名单提取 / 校验 / CSP 生成。"""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent))
-
-from cdn_policy import (  # noqa: E402
+from app.core.cdn_policy import (
     ALLOWED_CDN_HOSTS,
     build_csp,
     extract_external_refs,
@@ -19,7 +10,7 @@ from cdn_policy import (  # noqa: E402
 )
 
 
-def test_extract_picks_http_https_refs():
+def test_extract_picks_http_https_refs() -> None:
     html = """
     <script src="https://cdn.jsdelivr.net/npm/three@0.160/build/three.min.js"></script>
     <link href='https://fonts.googleapis.com/css2?family=Fredoka' rel="stylesheet">
@@ -32,7 +23,7 @@ def test_extract_picks_http_https_refs():
     assert any(r.lower().startswith("http://example.com") for r in refs)
 
 
-def test_extract_ignores_relative_and_data_uri():
+def test_extract_ignores_relative_and_data_uri() -> None:
     html = """
     <script src="./local.js"></script>
     <script src="/abs.js"></script>
@@ -42,7 +33,7 @@ def test_extract_ignores_relative_and_data_uri():
     assert extract_external_refs(html) == []
 
 
-def test_extract_dedups_preserving_order():
+def test_extract_dedups_preserving_order() -> None:
     html = """
     <script src="https://unpkg.com/react"></script>
     <script src="https://unpkg.com/react"></script>
@@ -52,7 +43,7 @@ def test_extract_dedups_preserving_order():
     assert refs == ["https://unpkg.com/react", "https://unpkg.com/react-dom"]
 
 
-def test_validate_passes_for_allowlisted_hosts():
+def test_validate_passes_for_allowlisted_hosts() -> None:
     refs = [
         "https://cdn.jsdelivr.net/npm/a",
         "https://fonts.gstatic.com/s/fredoka.woff2",
@@ -62,7 +53,7 @@ def test_validate_passes_for_allowlisted_hosts():
     assert violations == []
 
 
-def test_validate_flags_off_domain_refs():
+def test_validate_flags_off_domain_refs() -> None:
     refs = [
         "https://cdn.jsdelivr.net/npm/a",  # OK
         "https://evil.example.com/steal.js",  # 违规
@@ -73,7 +64,7 @@ def test_validate_flags_off_domain_refs():
     assert violations == ["https://evil.example.com/steal.js"]
 
 
-def test_validate_accepts_custom_allowlist():
+def test_validate_accepts_custom_allowlist() -> None:
     ok, violations = validate_refs(
         ["https://cdn.example.net/x"], frozenset({"cdn.example.net"})
     )
@@ -81,13 +72,13 @@ def test_validate_accepts_custom_allowlist():
     assert violations == []
 
 
-def test_validate_empty_is_ok():
+def test_validate_empty_is_ok() -> None:
     ok, violations = validate_refs([])
     assert ok is True
     assert violations == []
 
 
-def test_build_csp_contains_every_allowlisted_host():
+def test_build_csp_contains_every_allowlisted_host() -> None:
     csp = build_csp()
     for host in ALLOWED_CDN_HOSTS:
         assert host in csp, f"CSP 缺少白名单域 {host}"
@@ -96,13 +87,7 @@ def test_build_csp_contains_every_allowlisted_host():
     assert "img-src 'self' data:" in csp
 
 
-def test_build_csp_has_no_wildcard_https():
-    # 收敛后不应再出现宽松的 https: 通配（当前 routes.py 的风险点）
+def test_build_csp_has_no_wildcard_https() -> None:
+    # 收敛后不应再出现宽松的 https: 通配（旧策略的风险点）
     csp = build_csp()
     assert "https:" not in csp
-
-
-if __name__ == "__main__":
-    import pytest
-
-    sys.exit(pytest.main([Path(__file__).name, "-v"]))

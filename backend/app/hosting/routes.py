@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.analytics import store as analytics_store
 from app.auth.deps import CurrentUser, DbSession, RedisClient
+from app.core.cdn_policy import build_csp
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus
@@ -21,16 +22,10 @@ from app.models.game_version import GameVersion
 
 router = APIRouter(tags=["hosting"])
 
-# 产物可能引用外部 https CDN（tailwind JIT / 字体 / three.js 等），iframe sandbox=
-# allow-scripts 不加 allow-same-origin（opaque origin，隔离父域 cookie/storage），故
-# CSP 放宽 script/style/font 到 https：游戏脚本拿不到父域数据，但能正常加载公共 CDN 渲染。
-_CSP = (
-    "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https:; "
-    "style-src 'self' 'unsafe-inline' https:; "
-    "font-src 'self' data: https:; "
-    "img-src 'self' data:"
-)
+# 产物引用公共 CDN（three.js / tailwind / 字体等）渲染；CSP 收敛到 app.core.cdn_policy
+# 白名单，不再放行整个 https:，避免任意外站脚本跑进 iframe。iframe sandbox=allow-scripts
+# 不加 allow-same-origin（opaque origin，隔离父域 cookie/storage），游戏脚本拿不到父域数据。
+_CSP = build_csp()
 
 
 def _cache_control(prod: str) -> str:
