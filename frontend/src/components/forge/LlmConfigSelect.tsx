@@ -23,7 +23,7 @@ export function LlmConfigSelect({
 }: Props) {
   const t = useT();
   const q = useQuery({
-    queryKey: ["llm-configs", "forge-select"],
+    queryKey: ["llm-configs"],
     queryFn: () => meApi.listLlmConfigs(accessToken),
     enabled: Boolean(accessToken),
   });

@@ -13,8 +13,10 @@ import { Check, Circle, Loader2, X } from "lucide-react";
 type Props = {
   runPhase: RunPhase | "idle" | "paused";
   stages: StagePipelineState;
-  /** 列数：默认 2（左栏纵向）；4 用于底部日志带的单行紧凑展示（窄屏回退 2 列） */
+  /** 列数（仅 variant=grid 生效）：默认 2；4 用于底部日志带的单行紧凑展示（窄屏回退 2 列） */
   columns?: 2 | 4;
+  /** grid = 卡片网格（默认，日志带用）；bar = 44px 单行横条（Header 进度条用） */
+  variant?: "grid" | "bar";
   className?: string;
 };
 
@@ -29,9 +31,89 @@ export function StagePipeline({
   runPhase,
   stages,
   columns = 2,
+  variant = "grid",
   className,
 }: Props) {
   const t = useT();
+
+  if (variant === "bar") {
+    return (
+      <ol
+        className={cn("flex items-center gap-2", className)}
+        aria-label={t("generationFlow")}
+      >
+        {PIPELINE_PHASES.map((phase, index) => {
+          const info = stages[phase];
+          const titleKey = phaseTitleKeys[phase as keyof typeof phaseTitleKeys];
+          const isActive =
+            info.status === "active" ||
+            (runPhase === phase &&
+              info.status !== "done" &&
+              info.status !== "failed");
+          const StatusIcon =
+            info.status === "failed"
+              ? X
+              : info.status === "done"
+                ? Check
+                : isActive
+                  ? Loader2
+                  : Circle;
+          const isLast = index === PIPELINE_PHASES.length - 1;
+          return (
+            <li
+              key={phase}
+              aria-current={isActive ? "step" : undefined}
+              className="flex min-w-0 flex-1 items-center gap-1.5"
+            >
+              <span
+                className={cn(
+                  "grid h-6 w-6 shrink-0 place-items-center rounded-full border",
+                  info.status === "failed" &&
+                    "border-rose-300 bg-rose-100 text-rose-700",
+                  info.status === "done" &&
+                    "border-emerald-300 bg-emerald-100 text-emerald-700",
+                  isActive &&
+                    info.status !== "failed" &&
+                    "border-[rgba(var(--gf-primary-rgb),0.35)] bg-[rgba(var(--gf-primary-rgb),0.12)] gf-text-accent",
+                  info.status === "pending" &&
+                    !isActive &&
+                    "gf-border-subtle bg-[var(--gf-surface)] gf-page-muted",
+                )}
+              >
+                <StatusIcon
+                  className={cn(
+                    "h-3 w-3",
+                    isActive && "animate-spin motion-reduce:animate-none",
+                  )}
+                  strokeWidth={2.2}
+                  aria-hidden="true"
+                />
+              </span>
+              <span
+                className={cn(
+                  "truncate text-xs font-medium",
+                  isActive ? "gf-page-body" : "gf-page-muted",
+                )}
+              >
+                {t(titleKey)}
+              </span>
+              {!isLast ? (
+                <span
+                  className={cn(
+                    "ml-auto h-px min-w-[8px] flex-1",
+                    info.status === "done"
+                      ? "bg-emerald-300/70"
+                      : "bg-black/[0.08]",
+                  )}
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    );
+  }
+
   const gridCols =
     columns === 4 ? "grid-cols-2 md:grid-cols-4" : "sm:grid-cols-2";
 

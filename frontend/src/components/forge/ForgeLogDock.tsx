@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { RunPhase } from '@/api/enums'
 import { FailureRecoveryBar } from '@/components/forge/FailureRecoveryBar'
@@ -13,6 +14,8 @@ export type ForgeLogDockFailure = {
   onRevise: () => void
   onRetry: () => void
   busy?: boolean
+  kind?: 'llm' | 'generic'
+  onConfigureLlm?: () => void
 }
 
 type Props = {
@@ -26,10 +29,30 @@ type Props = {
   failureRecovery?: ForgeLogDockFailure | null
 }
 
+const HEIGHT_KEY = 'gf-forge-log-height'
+const DEFAULT_HEIGHT = 220
+const MIN_HEIGHT = 120
+/** 占视口高度的上限，避免日志长期挤占主工作区 */
+const MAX_HEIGHT_RATIO = 0.35
+/** 阻塞错误时自动撑开的高度 */
+const BLOCKED_HEIGHT = 200
+
+function readStoredHeight(): number {
+  try {
+    const raw = localStorage.getItem(HEIGHT_KEY)
+    if (!raw) return DEFAULT_HEIGHT
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return DEFAULT_HEIGHT
+    return Math.max(MIN_HEIGHT, n)
+  } catch {
+    return DEFAULT_HEIGHT
+  }
+}
+
 /**
- * 底部横跨的「执行日志带」：标题栏常驻（执行日志 · N + currentModel + 折叠），
- * 展开后依次展示 失败恢复 → 4 阶段进度（单行）→ 事件流（自身滚动）。
- * 与左栏聊天、右栏试玩物理分离，互不挤占宽度。
+ * 底部横跨的「执行日志带」：标题栏常驻（折叠时仅 44px，显示最新事件与错误数），
+ * 展开后顶部可垂直拖拽调整高度（120px ~ 35vh，持久化），内部依次展示
+ * 失败恢复 → 4 阶段进度（单行）→ 事件流（自身滚动）。
  */
 export function ForgeLogDock({
   open,
@@ -42,29 +65,104 @@ export function ForgeLogDock({
 }: Props) {
   const t = useT()
   const showPipeline = runPhase !== 'idle' || items.length > 0
+  const [height, setHeight] = useState(readStoredHeight)
+  const draggingRef = useRef(false)
+  const dockRef = useRef<HTMLElement | null>(null)
+
+  const persistHeight = useCallback((next: number) => {
+    const maxPx = Math.round(window.innerHeight * MAX_HEIGHT_RATIO)
+    const clamped = Math.min(maxPx, Math.max(MIN_HEIGHT, next))
+    setHeight(clamped)
+    try {
+      localStorage.setItem(HEIGHT_KEY, String(clamped))
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [])
+
+  useEffect(() => {
+    function onMove(event: PointerEvent) {
+      if (!draggingRef.current || !dockRef.current) return
+      // 向上拖增大高度：新高度 = 抽屉底部 y - 指针 y
+      const bottom = dockRef.current.getBoundingClientRect().bottom
+      persistHeight(bottom - event.clientY)
+    }
+    function onUp() {
+      draggingRef.current = false
+      document.body.classList.remove('gf-forge-dock-resizing')
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.classList.remove('gf-forge-dock-resizing')
+    }
+  }, [persistHeight])
+
+  // 阻塞性错误时自动撑开到可阅读高度（不永久占用，仅提升到 BLOCKED_HEIGHT）
+  useEffect(() => {
+    if (open && failureRecovery && height < BLOCKED_HEIGHT) {
+      persistHeight(BLOCKED_HEIGHT)
+    }
+  }, [open, failureRecovery, height, persistHeight])
+
+  const latest = items[0]
+  const errorCount = items.filter((i) => i.tone === 'err').length
 
   return (
-    <section className="gf-forge-log-dock" aria-label={t('eventLog')}>
+    <section ref={dockRef} className="gf-forge-log-dock" aria-label={t('eventLog')}>
+      {open ? (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={t('forgeDragToResize')}
+          tabIndex={0}
+          className="gf-forge-dock-handle"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            draggingRef.current = true
+            document.body.classList.add('gf-forge-dock-resizing')
+          }}
+        />
+      ) : null}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         className="gf-interactive gf-forge-log-dock-header flex w-full cursor-pointer items-center justify-between gap-2 text-left transition hover:bg-black/[0.02]"
       >
-        <span className="flex items-center gap-1.5 font-mono text-[11px] tracking-wide text-[var(--gf-text-muted)] uppercase">
-          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-          {t('eventLog')}
-          <span className="font-mono text-[10px]">· {items.length}</span>
+        <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] tracking-wide text-[var(--gf-text-muted)] uppercase">
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="shrink-0">{t('eventLog')}</span>
+          <span className="shrink-0 font-mono text-[10px]">· {items.length}</span>
+          {!open && latest ? (
+            <span className="min-w-0 truncate normal-case text-[var(--gf-text)] opacity-80">
+              <span className="opacity-55">{t('forgeLogLatest')}:</span>{' '}
+              {latest.label}
+            </span>
+          ) : null}
         </span>
-        {currentModel ? (
-          <span className="font-mono text-[10px] text-[var(--gf-text-muted)]">
-            {t('currentModel')}: {currentModel}
-          </span>
-        ) : null}
+        <span className="flex shrink-0 items-center gap-2">
+          {!open && errorCount > 0 ? (
+            <span className="font-mono text-[10px] text-rose-600">
+              {t('forgeLogErrors', { n: errorCount })}
+            </span>
+          ) : null}
+          {open && currentModel ? (
+            <span className="font-mono text-[10px] text-[var(--gf-text-muted)]">
+              {t('currentModel')}: {currentModel}
+            </span>
+          ) : null}
+        </span>
       </button>
 
       {open ? (
-        <div className="gf-forge-log-dock-body">
+        <div className="gf-forge-log-dock-body" style={{ height }}>
           {failureRecovery ? (
             <FailureRecoveryBar
               runId={failureRecovery.runId}
@@ -72,9 +170,13 @@ export function ForgeLogDock({
               onRevise={failureRecovery.onRevise}
               onRetry={failureRecovery.onRetry}
               busy={failureRecovery.busy}
+              kind={failureRecovery.kind}
+              onConfigureLlm={failureRecovery.onConfigureLlm}
             />
           ) : null}
-          {showPipeline ? <StagePipeline runPhase={runPhase} stages={stages} columns={4} /> : null}
+          {showPipeline ? (
+            <StagePipeline runPhase={runPhase} stages={stages} columns={4} />
+          ) : null}
           <div className="gf-forge-log-dock-timeline">
             <RunTimeline phase={runPhase} items={items} showHeader={false} />
           </div>

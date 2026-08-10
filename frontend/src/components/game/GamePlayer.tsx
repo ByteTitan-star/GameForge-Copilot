@@ -85,7 +85,7 @@ export function GamePlayer({
       className={cn(
         "overflow-hidden",
         stage
-          ? "relative h-full w-full rounded-xl bg-[#090b10] ring-1 ring-white/10"
+          ? "relative h-full w-full rounded-xl bg-white ring-1 ring-black/[0.08]"
           : console
             ? "h-full rounded-xl border border-white/[0.08] bg-black/40"
             : "rounded-2xl border border-[rgba(30,50,90,0.1)] bg-white shadow-sm",
@@ -110,18 +110,18 @@ export function GamePlayer({
           role="alert"
         >
           <div className="max-w-sm">
-            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-400/20">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-rose-200">
               <AlertCircle className="h-5 w-5" aria-hidden="true" />
             </span>
-            <p className="mt-3 text-sm font-medium text-white">
+            <p className="mt-3 text-sm font-medium text-[#0F172A]">
               {t("loadFailed")}
             </p>
-            <p className="mt-1 break-words text-xs leading-relaxed text-white/55">
+            <p className="mt-1 break-words text-xs leading-relaxed text-[#94A3B8]">
               {error}
             </p>
             <Button
               variant="ghost"
-              className="mt-4 !min-h-10 !rounded-lg !bg-white/8 !px-3 !text-xs !text-white hover:!bg-white/12"
+              className="mt-4 !min-h-10 !rounded-lg !bg-black/[0.04] !px-3 !text-xs !text-[#0F172A] hover:!bg-black/[0.08]"
               onClick={() => setRetryVersion((version) => version + 1)}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -133,12 +133,12 @@ export function GamePlayer({
         <>
           {loading ? (
             <div
-              className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#090b10]"
+              className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-white/80"
               aria-live="polite"
             >
-              <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-white/60 ring-1 ring-white/10">
+              <div className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-[#64748B] ring-1 ring-black/[0.08]">
                 <Loader2
-                  className="h-3.5 w-3.5 animate-spin text-white/75 motion-reduce:animate-none"
+                  className="h-3.5 w-3.5 animate-spin text-[#0F172A] motion-reduce:animate-none"
                   aria-hidden="true"
                 />
                 {t("loading")}
@@ -153,7 +153,7 @@ export function GamePlayer({
             referrerPolicy="no-referrer"
             onLoad={() => setLoading(false)}
             className={cn(
-              "w-full bg-[#111]",
+              "w-full bg-white",
               stage
                 ? "h-full min-h-0"
                 : console
