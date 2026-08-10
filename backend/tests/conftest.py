@@ -346,11 +346,17 @@ async def auth_client() -> AsyncIterator[httpx.AsyncClient]:
 
 @pytest_asyncio.fixture
 async def verified_client() -> AsyncIterator[httpx.AsyncClient]:
-    """注册（注册即验证）→登录，带 Bearer 头；games/runs 端点用。"""
+    """注册→验证邮箱→登录，带 Bearer 头；games/runs 端点需 email_verified。"""
     async with _new_client() as client:
         await client.post(
             "/api/v1/auth/register", json={"email": "v@b.com", "password": "password123"}
         )
+        token = _sent["verify:v@b.com"]
+        resp = await client.post(
+            "/api/v1/auth/verify-email",
+            json={"email": "v@b.com", "code": token},
+        )
+        assert resp.status_code == 200, resp.text
         resp = await client.post(
             "/api/v1/auth/login", json={"email": "v@b.com", "password": "password123"}
         )

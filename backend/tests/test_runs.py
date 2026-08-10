@@ -25,14 +25,19 @@ async def _make_run(client: httpx.AsyncClient, gid: uuid.UUID) -> uuid.UUID:
 
 
 async def test_create_run_non_owner_404(
-    verified_client: httpx.AsyncClient, client: httpx.AsyncClient
+    verified_client: httpx.AsyncClient, client: httpx.AsyncClient, sent: dict[str, str]
 ) -> None:
-    """另一用户对非自己 game 发起 run → 404（不泄露存在）。"""
+    """另一已验证用户对非自己 game 发起 run → 404（不泄露存在）。"""
     gid = await _make_game(verified_client)
-    # 第二个用户 b@b.com（注册即验证）
+    # 第二个用户 b@b.com：注册→验证→登录（已验证才能穿过门禁到达 owner 检查）
     await client.post(
         "/api/v1/auth/register", json={"email": "b@b.com", "password": "password123"}
     )
+    code = sent["verify:b@b.com"]
+    r = await client.post(
+        "/api/v1/auth/verify-email", json={"email": "b@b.com", "code": code}
+    )
+    assert r.status_code == 200, r.text
     r = await client.post(
         "/api/v1/auth/login", json={"email": "b@b.com", "password": "password123"}
     )

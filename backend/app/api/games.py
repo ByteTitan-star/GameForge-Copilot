@@ -32,6 +32,7 @@ from app.schemas.reactions import (
 router = APIRouter(prefix="/games", tags=["games"])
 
 ERR_404 = {404: {"model": ErrorResponse, "description": "游戏不存在或不可见"}}
+ERR_403 = {403: {"model": ErrorResponse, "description": "邮箱未验证"}}
 ERR_409 = {409: {"model": ErrorResponse, "description": "状态冲突"}}
 
 
@@ -77,7 +78,7 @@ async def _public_item(db: DbSession, game: Game) -> PublicGameMeta:
     )
 
 
-@router.post("", response_model=ApiResponse[GameResp], status_code=201)
+@router.post("", response_model=ApiResponse[GameResp], status_code=201, responses=ERR_403)
 async def create_game(req: GameCreate, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
     return ApiResponse(data=_to_resp(await services.create_game(db, user, req)))
 
@@ -117,7 +118,7 @@ async def get_public_game_meta(slug: str, db: DbSession) -> ApiResponse[PublicGa
     "/fork/{slug}",
     response_model=ApiResponse[GameResp],
     status_code=201,
-    responses={**ERR_404, **ERR_409},
+    responses={**ERR_403, **ERR_404, **ERR_409},
 )
 async def fork_official_game(
     slug: str, user: CurrentUser, db: DbSession
