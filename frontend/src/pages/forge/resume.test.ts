@@ -52,6 +52,21 @@ describe('forge resume helpers', () => {
     expect(hitl?.action_url).toContain('/hitl/resolve')
   })
 
+  it('failed 终态即使残留 current_hitl 也不浮出 HITL 卡', () => {
+    // 新版流程：qa_failed/sandbox_failed 重试耗尽即 FAILED，checkpoint 仍写、
+    // get_run 仍返回 current_hitl，但不再是人工确认点。重连到这种 run 必须返回
+    // null，让上层走失败恢复条而非一张点批准必 409 的死卡。
+    const failed: RunDetail = {
+      run_id: 'r-fail',
+      game_id: 'g1',
+      status: 'failed',
+      phase: 'qa',
+      ws_url: '/ws/runs/r-fail',
+      current_hitl: { node: 'qa_failed' },
+    }
+    expect(buildResumeHitl(failed, '霓虹蛇')).toBeNull()
+  })
+
   it('从 game detail 推导草稿预览 URL', () => {
     const g = {
       game_id: 'g-1',

@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
+import { Check, ShieldCheck, X } from "lucide-react";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { Button } from "@/components/ui/button";
-import {
-  isFailureHitlNode,
-  parseDesignDoc,
-  parseHitlFailure,
-  type ParsedDesignDoc,
-} from "@/lib/hitl-design-doc";
+import { parseDesignDoc, type ParsedDesignDoc } from "@/lib/hitl-design-doc";
 import { useT } from "@/i18n/use-t";
 
 type Props = {
@@ -34,11 +29,6 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
       ),
     [payload.design_doc],
   );
-  const failure = useMemo(
-    () => parseHitlFailure(payload as unknown as Record<string, unknown>),
-    [payload],
-  );
-  const isFailure = isFailureHitlNode(payload.node);
 
   const [gameplay, setGameplay] = useState(parsed.gameplay);
   const [controls, setControls] = useState(parsed.controls);
@@ -49,15 +39,8 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
     setControls(parsed.controls);
   }, [parsed.gameplay, parsed.controls]);
 
-  const failureTitle =
-    payload.node === "sandbox_failed"
-      ? t("hitlSandboxFailed")
-      : payload.node === "qa_failed"
-        ? t("hitlQaFailed")
-        : t("manualReview");
-
-  const errorLines = [...failure.errors, ...failure.issues];
-
+  // 当前唯一 HITL 节点是 plan_confirm（策划确认）；sandbox_failed/qa_failed 在新版
+  // 流程里是 FAILED 终态，不再走人工确认，因此本卡只呈现「确认/修改策划」编辑面板。
   function buildDoc(): ParsedDesignDoc {
     return { ...parsed, gameplay, controls };
   }
@@ -77,52 +60,28 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
   return (
     <section
       className="overflow-hidden rounded-2xl border border-amber-200/80 bg-white shadow-sm"
-      aria-label={failureTitle}
+      aria-label={t("manualReview")}
     >
       <div className="h-1 bg-amber-400" aria-hidden="true" />
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-              {isFailure ? (
-                <AlertTriangle className="h-4.5 w-4.5" aria-hidden="true" />
-              ) : (
-                <ShieldCheck className="h-4.5 w-4.5" aria-hidden="true" />
-              )}
+              <ShieldCheck className="h-4.5 w-4.5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <p className="font-mono text-[10px] tracking-[0.16em] text-amber-700 uppercase">
-                {isFailure ? failureTitle : t("manualReview")}
+                {t("manualReview")}
               </p>
               <h3 className="mt-1 break-words text-base font-semibold text-[#3d3219]">
                 {t("confirmDesign")} · {parsed.title || payload.node}
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-[#786532]">
-                {isFailure
-                  ? t("hitlSuggestedActions")
-                  : t("continueAfterApproval")}
+                {t("continueAfterApproval")}
               </p>
             </div>
           </div>
         </div>
-
-        {isFailure && errorLines.length > 0 ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2.5">
-            <p className="font-mono text-[10px] text-rose-700 uppercase">
-              {t("hitlErrorList")}
-            </p>
-            <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-sm text-rose-900">
-              {errorLines.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-            {failure.retries != null ? (
-              <p className="mt-2 text-[11px] text-rose-700/80">
-                retries: {failure.retries}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
 
         <div className="mt-4 space-y-3">
           <label className="block space-y-1.5">
@@ -132,7 +91,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
             <textarea
               value={gameplay}
               onChange={(e) => setGameplay(e.target.value)}
-              rows={isFailure ? 4 : 3}
+              rows={3}
               name="hitl-gameplay"
               autoComplete="off"
               className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-3 py-2.5 text-sm text-[#3d3219] outline-none transition-[border-color,box-shadow] focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-200"

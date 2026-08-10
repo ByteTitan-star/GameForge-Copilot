@@ -37,7 +37,6 @@ import { VersionTimeline } from "@/components/forge/VersionTimeline";
 import { GamePlayer } from "@/components/game/GamePlayer";
 import { PublishNoteModal } from "@/components/games/PublishNoteModal";
 import { Button } from "@/components/ui/button";
-import { isFailureHitlNode } from "@/lib/hitl-design-doc";
 import { isTrialUser } from "@/lib/trial";
 import {
   applyPhaseStart,
@@ -144,12 +143,7 @@ export function ForgePage() {
     return Math.max(...vers.map((v) => v.version));
   }, [detail.data?.versions, detail.data?.current_version]);
 
-  const showFailureRecovery = Boolean(
-    !trial &&
-    runId &&
-    (runStatus === RunStatus.failed ||
-      (hitl != null && isFailureHitlNode(hitl.node))),
-  );
+  const showFailureRecovery = Boolean(!trial && runId && runStatus === RunStatus.failed);
   const failureSummary = runId ? runErrors[runId] : undefined;
 
   useEffect(() => {

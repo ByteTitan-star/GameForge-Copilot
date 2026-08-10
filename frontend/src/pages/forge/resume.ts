@@ -36,6 +36,11 @@ export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayl
         `/api/v1/games/${run.game_id}/runs/${run.run_id}/hitl/resolve`,
     }
   }
+  // current_hitl 兜底仅对仍可交互的 paused/running 态生效。新版流程下
+  // qa_failed/sandbox_failed 是 FAILED 终态（checkpoint 仍写、get_run 仍返回
+  // current_hitl，但 resolve 会 409），failed run 不能再浮出 HITL 卡，否则会显示
+  // 一张点批准必 409 的死卡，掩盖本应出现的失败恢复条。
+  if (run.status !== 'paused' && run.status !== 'running') return null
   if (!run.current_hitl) return null
   return {
     node: run.current_hitl.node,
