@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+from app.core.cdn_policy import ALLOWED_CDN_HOSTS
 from app.forge.skills import load_skill
 
 _CONV = load_skill("conventions.md")
 _PLAYTEST = load_skill("playtest.md")
+
+# CDN 白名单中文展示：注入代码生成提示词，与 CSP / 试玩校验同源（单一改点）
+_CDN_ALLOWLIST = "、".join(sorted(ALLOWED_CDN_HOSTS))
 
 # 保留 title/gameplay/controls/levels 四个旧字段，避免现有前端展示和历史数据失效；
 # 更完整的设计信息放在新增字段中，由开发和 QA 阶段共同消费。
@@ -85,7 +89,7 @@ DESIGN_DOC_SCHEMA = r"""
     "effects": ["关键动画、粒子、镜头或声音反馈"]
   },
   "technical_constraints": [
-    "单个 index.html、离线运行、无外部依赖、无网络请求",
+    "单个 index.html；除白名单 CDN 外离线运行、无其他网络请求",
     "同时支持键盘和触控操作",
     "画面随视口自适应且核心玩法区域保持可见"
   ],
@@ -156,7 +160,9 @@ CODE_PROMPT = f"""
 
 硬性约束：
 1. 只生成一个自包含的 index.html；CSS 与 JavaScript 全部内联。
-2. 禁止外部依赖、CDN、网络请求、动态 import、服务端接口和本地额外文件引用。
+2. 仅允许引用白名单内 CDN（{_CDN_ALLOWLIST}）渲染：three.js / tailwind / 字体等；
+   不得引用其他外部域名、不得发起其他网络请求、不得动态 import、不得调用服务端
+   接口或引用本地额外文件；CDN 必须提供加载失败时的程序化回退，不阻塞启动。
 3. 只使用输入中明确提供的数据 URI 素材；未提供或加载失败的素材必须使用
    Canvas/CSS 程序化图形作为可靠回退，不能阻止游戏开始。
 4. 必须实现设计稿中的主菜单、说明、游戏中、暂停、关卡过渡、失败、最终通关、
@@ -194,7 +200,7 @@ QA 根因分析以及当前完整 HTML。请在当前实现基础上修复根因
 4. 不得隐藏错误、吞掉所有异常、伪造通过结果，或删除碰撞、实体、关卡、胜负条件。
 5. 当前 HTML 即使结构不佳，也必须输出一份语法完整、可独立运行的新 HTML；
    不得只返回 diff、代码片段、说明或修复步骤。
-6. 继续遵守单文件、离线、无外部依赖、无网络请求和素材回退要求。
+6. 继续遵守单文件、仅白名单 CDN（{_CDN_ALLOWLIST}）、无其他网络请求和素材回退要求。
 7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样
    保留这些占位符；运行时会在构建前还原真实 data URI。
 

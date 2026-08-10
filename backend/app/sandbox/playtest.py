@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 
+from app.core.cdn_policy import extract_external_refs, validate_refs
+
 
 @dataclass
 class PlaytestResult:
@@ -121,7 +123,16 @@ async def _playwright_playtest(html_path: Path) -> PlaytestResult:
 
 
 async def run_playtest(html: str) -> PlaytestResult:
-    """Load index.html in headless browser (or static fallback) and validate playability."""
+    """加载 index.html 做可玩性校验，并独立检查 CDN 白名单。
+
+    CDN 校验与浏览器/静态检测分离：CSP 收紧后，非白名单 CDN 会被浏览器拦截，
+    在此提前抓出并置顶报错，触发 QA 修复，避免产物上线后白屏。
+    """
+    result = await _browser_playtest(html)
+    return _with_cdn_check(html, result)
+
+
+async def _browser_playtest(html: str) -> PlaytestResult:
     use_pw = os.environ.get("PLAYTEST_USE_PLAYWRIGHT", "").lower() in ("1", "true", "yes")
     if use_pw:
         try:
@@ -141,6 +152,17 @@ async def run_playtest(html: str) -> PlaytestResult:
             fallback = _static_playtest(html)
             fallback.errors.insert(0, f"Playwright 失败，已降级静态检测: {e}")
             return fallback
+
+
+def _with_cdn_check(html: str, result: PlaytestResult) -> PlaytestResult:
+    """把非白名单 CDN 引用合并为 P0 错误，排在校验结果最前。"""
+    ok, violations = validate_refs(extract_external_refs(html))
+    if ok:
+        return result
+    cdn_errors = [f"引用非白名单 CDN（将被 CSP 拦截）：{v}" for v in violations]
+    result.errors = cdn_errors + result.errors
+    result.ok = False
+    return result
 
 
 def main() -> None:

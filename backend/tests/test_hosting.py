@@ -96,8 +96,11 @@ async def test_play_published_200(verified_client: httpx.AsyncClient) -> None:
     assert "stub game" in r.text
 
 
-async def test_play_csp_allows_https_cdn(verified_client: httpx.AsyncClient) -> None:
-    """CSP 放宽到 https：游戏可引用 tailwind/字体/库等公共 CDN 渲染（防回归）。"""
+async def test_play_csp_uses_cdn_allowlist(verified_client: httpx.AsyncClient) -> None:
+    """CSP 收敛到白名单。
+
+    游戏可引用 three.js/tailwind/字体等公共 CDN 渲染，但不放行整个 https（防回归）。
+    """
     gid = await _make_game(verified_client)
     await _make_version(gid, 1)
     async with db.SessionLocal() as s:
@@ -108,9 +111,11 @@ async def test_play_csp_allows_https_cdn(verified_client: httpx.AsyncClient) -> 
         await s.commit()
     r = await verified_client.get("/play/csp-probe")
     csp = r.headers.get("content-security-policy", "")
-    assert "script-src 'self' 'unsafe-inline' https:" in csp
-    assert "style-src 'self' 'unsafe-inline' https:" in csp
-    assert "font-src 'self' data: https:" in csp
+    # 白名单域出现在 script/style/font 来源里
+    assert "cdn.jsdelivr.net" in csp
+    assert "fonts.googleapis.com" in csp
+    # 不再放行整个 https:（收敛前旧策略的风险点）
+    assert "https:" not in csp
 
 
 async def test_play_dev_disables_cache(verified_client: httpx.AsyncClient) -> None:
