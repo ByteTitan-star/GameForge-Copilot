@@ -1,4 +1,4 @@
-"""按配置选择 RabbitMQ 或 memory 后端。"""
+"""按配置选择 RabbitMQ 或 memory 后端。测试使用"""
 
 from __future__ import annotations
 
