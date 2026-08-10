@@ -18,6 +18,14 @@ class PublicGameMeta(PublicGameItem):
     creator: CreatorBrief | None = None
 
 
+class ReactionStateResp(BaseModel):
+    game_id: uuid.UUID
+    liked: bool
+    favorited: bool
+    like_count: int
+    favorite_count: int
+
+
 class ReactionToggleResp(BaseModel):
     game_id: uuid.UUID
     active: bool

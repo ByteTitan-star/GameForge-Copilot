@@ -29,17 +29,22 @@ export function GamePlayer({
   const stage = variant === "stage";
   const [iframeSrc, setIframeSrc] = useState(src);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 初始即显示 iframe：跨域/sandbox 下 onLoad 可能不触发，避免 loading 覆盖层永久挡住内容
+  const [loading, setLoading] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
   const t = useT();
 
   useEffect(() => {
     let revoked: string | null = null;
     let cancelled = false;
+    // 兜底：跨域 iframe 的 onLoad 在外部 CDN（字体等）慢时可能迟迟不触发，
+    // 8s 后强制关 loading，避免一直转圈把用户挡在外面。
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setLoading(false)
+    }, 8000)
 
     async function load() {
       setError(null);
-      setLoading(true);
       const needsAuthFetch = isDraftUrl(src) && Boolean(accessToken);
       if (!needsAuthFetch) {
         setIframeSrc(src);
@@ -70,6 +75,7 @@ export function GamePlayer({
     void load();
     return () => {
       cancelled = true;
+      window.clearTimeout(fallbackTimer);
       if (revoked) URL.revokeObjectURL(revoked);
     };
   }, [src, accessToken, retryVersion, t]);

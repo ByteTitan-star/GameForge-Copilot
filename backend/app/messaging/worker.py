@@ -129,6 +129,7 @@ async def _consume() -> None:
         channel, _exchange = await _task_channel()
         # prefetch 限流：ack 在 _run_one 结束时触发，故并发数即 prefetch_count
         await channel.set_qos(prefetch_count=settings.max_concurrent_tasks)
+        # 声明一个队列，队列名称为 TASK_QUEUE，队列是持久的， durable=True
         queue = await channel.declare_queue(TASK_QUEUE, durable=True)
         log.info(
             "worker listening queue=%s concurrency=%s url=%s",

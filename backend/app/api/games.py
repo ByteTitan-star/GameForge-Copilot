@@ -22,7 +22,12 @@ from app.schemas.game import (
     GameResp,
     VersionItem,
 )
-from app.schemas.reactions import CreatorBrief, PublicGameMeta, ReactionToggleResp
+from app.schemas.reactions import (
+    CreatorBrief,
+    PublicGameMeta,
+    ReactionStateResp,
+    ReactionToggleResp,
+)
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -197,6 +202,20 @@ async def activate_version(
     )
 
 
+@router.get(
+    "/{game_id}/reactions",
+    response_model=ApiResponse[ReactionStateResp],
+    responses=ERR_404,
+)
+async def get_reaction_state(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionStateResp]:
+    """读取当前用户对该游戏的点赞/收藏态 + 公开计数（Batch C · R7）。"""
+    return ApiResponse(
+        data=await reaction_services.get_reaction_state(db, user, game_id)
+    )
+
+
 @router.post(
     "/{game_id}/like",
     response_model=ApiResponse[ReactionToggleResp],
@@ -210,6 +229,20 @@ async def toggle_like(
     )
 
 
+@router.delete(
+    "/{game_id}/like",
+    response_model=ApiResponse[ReactionToggleResp],
+    responses=ERR_404,
+)
+async def unlike(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionToggleResp]:
+    """幂等取消点赞（不存在则 noop），返回最新计数。"""
+    return ApiResponse(
+        data=await reaction_services.remove_reaction(db, user, game_id, ReactionType.LIKE)
+    )
+
+
 @router.post(
     "/{game_id}/favorite",
     response_model=ApiResponse[ReactionToggleResp],
@@ -220,4 +253,18 @@ async def toggle_favorite(
 ) -> ApiResponse[ReactionToggleResp]:
     return ApiResponse(
         data=await reaction_services.toggle_reaction(db, user, game_id, ReactionType.FAVORITE)
+    )
+
+
+@router.delete(
+    "/{game_id}/favorite",
+    response_model=ApiResponse[ReactionToggleResp],
+    responses=ERR_404,
+)
+async def unfavorite(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionToggleResp]:
+    """幂等取消收藏（不存在则 noop），返回最新计数。"""
+    return ApiResponse(
+        data=await reaction_services.remove_reaction(db, user, game_id, ReactionType.FAVORITE)
     )
