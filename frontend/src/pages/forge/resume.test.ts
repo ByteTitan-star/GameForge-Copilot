@@ -38,6 +38,7 @@ describe('forge resume helpers', () => {
       game_id: 'g1',
       status: 'running',
       phase: 'plan',
+      entry_phase: 'plan',
       ws_url: '/ws/runs/r1',
       current_hitl: { node: 'plan_confirm' },
     }
@@ -61,6 +62,7 @@ describe('forge resume helpers', () => {
       game_id: 'g1',
       status: 'failed',
       phase: 'qa',
+      entry_phase: 'code',
       ws_url: '/ws/runs/r-fail',
       current_hitl: { node: 'qa_failed' },
     }
