@@ -5,7 +5,7 @@ import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
 

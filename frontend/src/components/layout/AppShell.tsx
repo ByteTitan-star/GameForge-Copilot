@@ -21,6 +21,12 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'gf-nav-link-active' : 'gf-nav-link',
   )
 
+const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    'gf-interactive flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium',
+    isActive ? 'gf-nav-link-active' : 'gf-nav-link',
+  )
+
 export function AppShell() {
   const t = useT()
   const location = useLocation()
@@ -50,7 +56,7 @@ export function AppShell() {
   return (
     <div className="gf-workshop relative">
       <ThemeBackground />
-      <aside className="gf-sidebar flex flex-col border-r px-3 py-4 backdrop-blur-xl">
+      <aside className="gf-sidebar flex-col border-r px-3 py-4 backdrop-blur-xl">
         <Link
           to="/home"
           title={t('backToHome')}
@@ -133,6 +139,21 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      <nav className="gf-mobile-nav" aria-label={t('mainNavigation')}>
+        {navItems.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to} className={mobileNavLinkClass} end={to === '/games'}>
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{label}</span>
+          </NavLink>
+        ))}
+        {user?.role === Role.admin ? (
+          <NavLink to="/admin" className={mobileNavLinkClass}>
+            <Shield className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('admin')}</span>
+          </NavLink>
+        ) : null}
+      </nav>
 
       <ThemePanelModal open={themeOpen} onClose={() => setThemeOpen(false)} />
       <OnboardingModal open={onboardingOpen} onClose={() => setOnboardingOpen(false)} />

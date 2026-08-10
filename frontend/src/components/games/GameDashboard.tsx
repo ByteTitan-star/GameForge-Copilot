@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, Search, Sparkles } from 'lucide-react'
+import { Clock3, FolderOpen, Globe2, Heart, PenLine, Plus, Search, Sparkles, X } from 'lucide-react'
 import { gamesApi } from '@/api/games'
 import { reactionsApi } from '@/api/reactions'
 import { GameStatus } from '@/api/enums'
@@ -26,6 +26,16 @@ const filterLabelKey: Record<(typeof filterIds)[number], MessageKey> = {
   pipeline: 'filterPipeline',
   favorites: 'filterFavorites',
 }
+
+const filterIcons = {
+  all: FolderOpen,
+  draft: PenLine,
+  published: Globe2,
+  pipeline: Clock3,
+  favorites: Heart,
+} as const
+
+const EMPTY_GAMES: GameSummary[] = []
 
 export function GameDashboard() {
   const t = useT()
@@ -52,7 +62,7 @@ export function GameDashboard() {
     queryFn: () => reactionsApi.listFavorites(token!),
   })
 
-  const rows = query.data?.data ?? []
+  const rows = query.data?.data ?? EMPTY_GAMES
 
   const counts = useMemo(() => {
     const draft = rows.filter(
@@ -93,7 +103,9 @@ export function GameDashboard() {
   }, [filter, q, rows, favoritesQ.data])
 
   const emptyTitleKey: MessageKey =
-    filter === 'favorites'
+    q
+      ? 'searchEmpty'
+      : filter === 'favorites'
       ? 'favoritesEmpty'
       : filter === 'published'
         ? 'publishedEmpty'
@@ -152,24 +164,35 @@ export function GameDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+    <div className="space-y-7">
+      <header className="flex flex-col gap-5 border-b pb-6 gf-border-subtle lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-xl">
           <h1 className="gf-page-title">{t('games')}</h1>
-          <p className="gf-page-subtitle mt-1">{t('gamesSubtitle')}</p>
+          <p className="gf-page-subtitle mt-1.5 leading-relaxed">{t('gamesSubtitle')}</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="relative block sm:w-72">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <label className="relative block min-w-0 sm:w-72">
             <Search className="gf-page-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('searchGamesPlaceholder')}
-              className="gf-input h-11 w-full rounded-xl pl-9 pr-3 text-sm"
+              className="gf-input h-11 w-full rounded-xl pl-9 pr-10 text-sm"
             />
+            {q ? (
+              <button
+                type="button"
+                title={t('clearSearch')}
+                aria-label={t('clearSearch')}
+                onClick={() => setQ('')}
+                className="gf-page-muted gf-interactive absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 cursor-pointer place-items-center rounded-md hover:bg-black/[0.05] hover:text-[var(--gf-text)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </label>
           {trial ? null : (
-            <Link to="/forge" className="gf-btn-primary inline-flex h-11 items-center justify-center gap-2 px-5 text-sm">
+            <Link to="/forge" className="gf-btn-primary inline-flex h-11 shrink-0 items-center justify-center gap-2 px-5 text-sm">
               <Plus className="h-4 w-4" />
               {t('createGame')}
             </Link>
@@ -183,27 +206,39 @@ export function GameDashboard() {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <section className="grid grid-cols-2 overflow-hidden border-y gf-border-subtle sm:grid-cols-5" aria-label={t('games')}>
         {filterIds.map((id) => {
+          const Icon = filterIcons[id]
           const count = counts[id]
           return (
             <button
               key={id}
               type="button"
               onClick={() => setFilter(id)}
+              aria-pressed={filter === id}
               className={cn(
-                'cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition',
+                'gf-interactive relative flex min-h-22 cursor-pointer flex-col justify-between gap-3 border-b px-4 py-3 text-left last:col-span-2 last:border-b-0 even:border-l gf-border-subtle sm:last:col-span-1 sm:border-b-0 sm:border-r sm:even:border-l-0 sm:last:border-r-0',
                 filter === id
-                  ? 'gf-filter-active'
-                  : 'gf-chip gf-interactive hover:bg-black/[0.03]',
+                  ? 'bg-[rgba(var(--gf-primary-rgb),0.06)]'
+                  : 'hover:bg-black/[0.025]',
               )}
             >
-              {t(filterLabelKey[id])}
-              <span className="ml-1.5 font-mono text-[10px] opacity-70">{count}</span>
+              <span className="flex items-center gap-2 text-xs font-medium gf-page-muted">
+                <Icon className={cn('h-3.5 w-3.5', filter === id && 'gf-text-accent')} aria-hidden />
+                {t(filterLabelKey[id])}
+              </span>
+              <span className="font-display text-2xl leading-none gf-page-body">{count}</span>
+              {filter === id ? (
+                <motion.span
+                  layoutId="games-filter-indicator"
+                  className="absolute inset-x-4 bottom-0 h-0.5 bg-[var(--gf-primary)]"
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                />
+              ) : null}
             </button>
           )
         })}
-      </div>
+      </section>
 
       {toast ? (
         <div className="gf-banner-info flex items-center justify-between rounded-xl px-3 py-2 text-sm">
@@ -224,17 +259,16 @@ export function GameDashboard() {
       ) : null}
 
       {!query.isLoading && !(filter === 'favorites' && favoritesQ.isLoading) && list.length === 0 ? (
-        <div className="gf-glass flex flex-col items-center rounded-2xl px-6 py-20 text-center">
-          <div className="relative">
-            <div className="gf-empty-glow absolute inset-0 scale-150 rounded-full blur-3xl" aria-hidden />
-            <div className="gf-empty-icon-wrap relative grid h-20 w-20 place-items-center rounded-2xl border">
-              <Sparkles className="gf-text-accent h-9 w-9" />
-            </div>
+        <section className="flex min-h-90 flex-col items-center justify-center border-y px-6 py-16 text-center gf-border-subtle sm:py-20">
+          <div className="gf-bg-accent-soft grid h-14 w-14 place-items-center rounded-xl gf-ring-accent">
+            <Sparkles className="gf-text-accent h-6 w-6" aria-hidden />
           </div>
-          <h2 className="gf-page-body mt-8 text-xl font-medium">{t(emptyTitleKey)}</h2>
+          <h2 className="gf-page-body mt-6 text-xl font-medium">{t(emptyTitleKey)}</h2>
           {filter === 'favorites' ? null : (
             <>
-              <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
+              <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">
+                {q ? t('searchEmptyHint') : t('noGamesHint')}
+              </p>
               {trial ? null : (
                 <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
                   <Plus className="h-4 w-4" />
@@ -243,7 +277,7 @@ export function GameDashboard() {
               )}
             </>
           )}
-        </div>
+        </section>
       ) : (
         <motion.div
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
