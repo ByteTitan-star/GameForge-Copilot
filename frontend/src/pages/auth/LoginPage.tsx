@@ -64,6 +64,7 @@ export function LoginPage() {
     <AuthShell title={t('login')} subtitle={t('tagline')}>
       <form className="space-y-4" onSubmit={onSubmit}>
         <Input
+          variant="glass"
           name="email"
           label={t('email')}
           type="email"
@@ -73,6 +74,7 @@ export function LoginPage() {
           required
         />
         <Input
+          variant="glass"
           name="password"
           label={t('password')}
           type="password"

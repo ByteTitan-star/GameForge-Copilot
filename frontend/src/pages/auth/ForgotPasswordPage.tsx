@@ -94,6 +94,7 @@ export function ForgotPasswordPage() {
       {step === 'request' ? (
         <form className="space-y-4" onSubmit={onRequest}>
           <Input
+            variant="glass"
             name="email"
             label={t('email')}
             type="email"
@@ -126,6 +127,7 @@ export function ForgotPasswordPage() {
           )}
           {!tokenFromLink ? (
             <Input
+              variant="glass"
               name="token"
               label={t('resetToken')}
               value={token}
@@ -134,6 +136,7 @@ export function ForgotPasswordPage() {
             />
           ) : null}
           <Input
+            variant="glass"
             name="password"
             label={t('newPassword')}
             type="password"
