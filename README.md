@@ -74,6 +74,10 @@ curl http://127.0.0.1:8000/ready
 # 账号密码都是：gameforge 
 ```
 
+### 清理缓存+残留任务
+curl -X POST "http://127.0.0.1:8000/api/v1/dev/reset?confirm=FLUSH"
+
+
 ---
 
 ## ⚠️ Windows 特别注意
@@ -245,13 +249,15 @@ cd backend
 cp .env.example .env          # 按需改连接串，见上文「环境变量配置」
 uv sync                       # 安装 Python 依赖
 uv run alembic upgrade head   # 建表 / 升级 schema
-uv run python -m scripts.seed_official_games   # 写入 3 款官方试玩游戏（幂等，可重复执行）
+uv run python -m scripts.seed_official_games   # 写入/修复 3 款官方试玩游戏（幂等、自愈，可重复执行）
 cd ..
 ```
 
 之后若拉取了含新迁移的代码，在 **`backend/`** 下再执行一次 `uv run alembic upgrade head` 即可。
 
 **官方预置游戏（Batch A · R1）** 不随迁移自动写入，**新环境 / 空库必须跑 seed**。终端用户无感知；部署与联调者需知道这一步。写入内容：3 款 `published` 游戏（`official-neon-snake` 等）+ `backend/.hosting/` 下静态产物，owner 为系统账号 `official@gameforge.internal`（不可登录）。
+
+> **改官方试玩游戏**：编辑源文件 `backend/scripts/official_assets/*.html`，再重跑 `uv run python -m scripts.seed_official_games` 即更新线上试玩（**勿直接改 `.hosting/`**——那是构建产物，会被覆盖）。3 款游戏用**固定 UUID**（`...0000000000a1/a2/a3`），重建 DB 也不会让产物漂移成孤儿；seed 遇到历史随机 UUID 的旧行会自愈迁移。
 
 ---
 

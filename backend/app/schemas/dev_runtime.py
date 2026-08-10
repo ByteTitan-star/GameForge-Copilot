@@ -58,3 +58,10 @@ class DevRequeueResp(BaseModel):
     task: str
     status: str
     phase: str | None = None
+
+
+class DevResetResp(BaseModel):
+    failed_runs: list[UUID]
+    failed_count: int
+    redis_deleted: dict[str, int]
+    queue: QueuePurgeResp

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from datetime import UTC, datetime
 
 import redis.asyncio as redis
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -209,3 +211,42 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
         }
 
     raise AppError(ErrorCode.INVALID_STATE, f"run status={run.status} 不可 requeue")
+
+
+async def reset_dev_state(db: AsyncSession, r: redis.Redis) -> dict:
+    """一键清本地 dev 的 forge 运行态（dev only）。
+
+    组合三步，用于本地调试想要干净状态时：
+        1. 把所有 running/paused 的 run 置 failed + ended_at（顶部「等待确认」banner 的源头）。
+        2. 清掉所有 run 的 forge Redis 键（events/ckpt/ctrl/hitl，含已 failed run 的残留缓冲）。
+        3. 清空任务队列里残留的 execute_run/resume_run 消息。
+    已 failed 的 run 不受 DB 改动影响；终态守卫保证残留消息不会复活它们。
+    """
+    active_ids = (
+        (
+            await db.scalars(
+                select(GenerationRun.id).where(
+                    GenerationRun.status.in_(
+                        [RunStatus.RUNNING.value, RunStatus.PAUSED.value]
+                    )
+                )
+            )
+        )
+        .all()
+        .copy()
+    )
+    if active_ids:
+        await db.execute(
+            update(GenerationRun)
+            .where(GenerationRun.id.in_(active_ids))
+            .values(status=RunStatus.FAILED.value, ended_at=datetime.now(UTC))
+        )
+        await db.commit()
+    redis_deleted = await flush_redis(r, ["forge"], run_id=None, pattern=None)
+    queue = await purge_queue()
+    return {
+        "failed_runs": active_ids,
+        "failed_count": len(active_ids),
+        "redis_deleted": redis_deleted,
+        "queue": queue,
+    }

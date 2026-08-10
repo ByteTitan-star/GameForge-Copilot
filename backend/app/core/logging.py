@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import sys
@@ -27,6 +28,54 @@ def beijing_iso_from_timestamp(ts: float) -> str:
     return datetime.fromtimestamp(ts, BEIJING).isoformat()
 
 
+# 请求级结构化字段：一次请求（如一次 run_generation）绑定 trace_id/run_id/user_id，
+# 之后该上下文内每条日志都自动带上这些顶层字段，无需逐条传参。
+# 用 contextvars 而非全局 dict，保证多任务/协程间互不串扰。
+_log_context: contextvars.ContextVar[dict[str, object] | None] = contextvars.ContextVar(
+    "gf_log_context", default=None
+)
+
+# stdlib LogRecord 固有属性（formatter 输出时跳过，只把它们当作「内部」字段）
+_RECORD_RESERVED = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "message",
+        "asctime",
+    }
+)
+
+
+def bind_log_context(**fields: object) -> None:
+    """合并当前请求的上下文字段（trace_id/run_id/user_id 等），写入每条日志顶层。"""
+    current = _log_context.get() or {}
+    _log_context.set({**current, **fields})
+
+
+def clear_log_context() -> None:
+    """请求结束时清空上下文，避免跨请求（worker 连续消费多条消息）字段串扰。"""
+    _log_context.set({})
+
+
 class JsonFormatter(logging.Formatter):
     def __init__(self, *, service: str = "backend") -> None:
         super().__init__()
@@ -40,6 +89,13 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        # 请求级字段（contextvar）：绑定后每条日志都带
+        for key, value in (_log_context.get() or {}).items():
+            payload[key] = value
+        # 单条 extra 字段：logger.info(..., extra={...}) 的任意非保留键
+        for key, value in record.__dict__.items():
+            if key not in _RECORD_RESERVED and key not in payload:
+                payload[key] = value
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)

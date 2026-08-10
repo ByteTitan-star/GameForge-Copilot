@@ -25,6 +25,9 @@ def init_langfuse() -> None:
     if _registered:
         return
     if not (settings.langfuse_public_key and settings.langfuse_secret_key):
+        # 未配置 key：把 SDK 自身的鉴权 WARNING（"initialized without public_key"）
+        # 提到 ERROR 之上，避免它在每次任务里反复刷屏污染日志
+        logging.getLogger("langfuse").setLevel(logging.CRITICAL)
         log.info("langfuse disabled (no keys configured)")
         return
     from langfuse import Langfuse

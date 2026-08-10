@@ -738,7 +738,9 @@ body {
 .gf-forge-split {
   position: relative;
   z-index: 1;
-  display: flex;
+  /* 布局模型交给组件 Tailwind 类：移动端 flex/flex-col，桌面端 lg:grid +
+     内联 gridTemplateColumns。这里不再写 display，避免未分层 CSS 压过
+     Tailwind 的 lg:grid 工具类导致桌面端分栏比例失效。 */
   flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;

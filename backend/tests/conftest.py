@@ -3,6 +3,7 @@
 `uv run pytest` 无需 docker。每测建表/清表隔离；email enqueue 替换为捕获。
 """
 
+import json
 import uuid
 from collections import defaultdict
 from collections.abc import AsyncIterator
@@ -60,26 +61,134 @@ def _playtest_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.forge.graph.run_playtest", _ok)
 
 
+def _valid_design_doc_json() -> str:
+    """构造能通过 validate_design_doc 的 v2 设计稿，供 plan/revise 节点测试使用。"""
+    return json.dumps(
+        {
+            "title": "测试游戏",
+            "gameplay": "玩家操控方块在网格中收集金币并躲避障碍，达到目标分数通关。",
+            "controls": ["方向键或 WASD 移动；触屏滑动改变方向"],
+            "levels": ["第一关", "第二关"],
+            "overview": {
+                "genre": "休闲街机",
+                "target_experience": "短局反应与路径规划",
+                "session_length": "约 3 分钟",
+                "scope": "单个离线 index.html 可运行的原型",
+            },
+            "core_loop": ["观察障碍与金币", "操作移动", "结算并进入下一关"],
+            "rules": {
+                "objectives": ["收集金币"],
+                "win_conditions": ["达到目标分数"],
+                "lose_conditions": ["撞到障碍"],
+                "scoring": ["每枚金币 10 分"],
+                "progression": ["难度递增"],
+            },
+            "game_states": [
+                {"id": "menu", "purpose": "开始入口", "transitions": ["开始 -> playing"]},
+                {
+                    "id": "playing",
+                    "purpose": "主玩法",
+                    "transitions": [
+                        "暂停 -> paused",
+                        "通关 -> level_complete",
+                        "失败 -> game_over",
+                    ],
+                },
+                {"id": "paused", "purpose": "暂停", "transitions": ["继续 -> playing"]},
+                {
+                    "id": "level_complete",
+                    "purpose": "过关结算",
+                    "transitions": ["下一关 -> playing", "全部完成 -> victory"],
+                },
+                {"id": "game_over", "purpose": "失败结算", "transitions": ["重开 -> menu"]},
+                {"id": "victory", "purpose": "通关", "transitions": ["重开 -> menu"]},
+            ],
+            "entities": [
+                {
+                    "id": "player",
+                    "name": "玩家",
+                    "type": "player",
+                    "behavior": ["响应输入移动"],
+                    "properties": {},
+                }
+            ],
+            "level_specs": [
+                {
+                    "id": "level_1",
+                    "name": "第一关",
+                    "goal": "收集 5 金币",
+                    "setup": ["生成玩家与障碍"],
+                    "mechanics": ["移动收集"],
+                    "difficulty": ["低速障碍"],
+                    "completion": "达到 50 分",
+                    "next": "level_2",
+                },
+                {
+                    "id": "level_2",
+                    "name": "第二关",
+                    "goal": "收集 10 金币",
+                    "setup": ["增加障碍密度"],
+                    "mechanics": ["移动收集"],
+                    "difficulty": ["高速障碍"],
+                    "completion": "达到 100 分",
+                    "next": "victory",
+                },
+            ],
+            "ui": {
+                "screens": ["主菜单", "游戏", "结算"],
+                "hud": ["分数"],
+                "feedback": ["得分提示"],
+                "instructions": ["方向键移动"],
+            },
+            "presentation": {
+                "visual_style": "扁平像素风",
+                "color_palette": ["#111111", "#eeeeee"],
+            },
+            "acceptance_criteria": [
+                {
+                    "id": f"AC-{i:02d}",
+                    "requirement": req,
+                    "verification": ver,
+                }
+                for i, (req, ver) in enumerate(
+                    [
+                        ("可从菜单开始游戏", "点击开始进入 playing"),
+                        ("键盘可移动", "按方向键玩家移动"),
+                        ("触控可移动", "触屏滑动改变方向"),
+                        ("可暂停并继续", "暂停后继续正常运行"),
+                        ("通关判定", "达分进入 level_complete"),
+                        ("失败判定", "撞障碍进入 game_over"),
+                        ("可重新开始", "结算后返回 menu 重开"),
+                        ("无控制台错误", "试玩无 pageerror"),
+                    ],
+                    start=1,
+                )
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+
 @pytest.fixture
 def _fake_llm(monkeypatch: pytest.MonkeyPatch):
-    """mock call_llm：plan 返 JSON，code 返 HTML。"""
+    """mock call_llm：plan/revise 返合法 v2 设计稿 JSON，code/repair 返 HTML。
+
+    新版 plan 节点会用 validate_design_doc 真实校验策划稿，最小四字段 JSON 会被
+    拒绝并重试耗尽后抛错，因此这里必须返回结构完整的 v2 设计稿。QA 失败诊断在
+    新版改走 HTML5 工程师视角的 QA_PROMPT，命中下方 HTML5 分支返回 HTML 字符串，
+    诊断结果仅作为字符串透传给修复节点，不做解析。
+    """
     from app.llm.provider import Usage
 
     async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
         if "JSON" in system or "策划" in system:
-            return (
-                '{"title":"测试游戏","gameplay":"stub design","controls":"方向键",'
-                '"levels":["关卡1"]}',
-                Usage(10, 5),
-            )
+            return _valid_design_doc_json(), Usage(10, 5)
         if "HTML5" in system:
             return (
                 "<html><body><canvas id='c'></canvas>"
                 "<button>play</button><script></script></body></html>",
                 Usage(20, 10),
             )
-        if "质检辅助" in system:
-            return "试玩摘要 ok", Usage(5, 3)
         return "stub design doc", Usage(10, 5)
 
     from app.llm import client as llm_client

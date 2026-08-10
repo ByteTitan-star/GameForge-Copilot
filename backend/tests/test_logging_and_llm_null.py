@@ -5,11 +5,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.core.logging import BEIJING, beijing_date_key, setup_logging
 from app.enums import LLMProvider
-from app.llm.provider import Usage, complete
+from app.llm import provider
+from app.llm.provider import Usage, _build_llm_client, complete
 
 _FIXED = datetime(2026, 8, 7, 15, 51, 19, tzinfo=BEIJING)
 
@@ -73,3 +75,85 @@ async def test_complete_coerces_null_openai_content(monkeypatch: pytest.MonkeyPa
     )
     assert content == ""
     assert usage == Usage(input_tokens=1, output_tokens=0)
+
+
+class _OkResp:
+    status_code = 200
+    text = ""
+
+    @staticmethod
+    def json() -> dict:
+        return {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+
+
+class _CapturingClient:
+    """记录 post 请求体，供断言 enable_thinking 是否注入。"""
+
+    def __init__(self) -> None:
+        self.last_json: object = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    async def post(self, _url: str, *, headers=None, json=None) -> _OkResp:
+        self.last_json = json
+        return _OkResp()
+
+
+_DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+
+@pytest.mark.asyncio
+async def test_complete_injects_enable_thinking_for_qwen3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.OPENAI_COMPAT, "key", "qwen3-max", "sys", "user", base_url=_DASHSCOPE
+    )
+    assert cap.last_json["enable_thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_complete_skips_enable_thinking_for_non_qwen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(LLMProvider.OPENAI, "key", "gpt-4o", "sys", "user")
+    assert "enable_thinking" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_respects_disable_thinking_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    monkeypatch.setattr(provider.settings, "llm_disable_thinking", False)
+    await complete(
+        LLMProvider.OPENAI_COMPAT, "key", "qwen3-max", "sys", "user", base_url=_DASHSCOPE
+    )
+    assert "enable_thinking" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_build_llm_client_bypasses_proxy_for_domestic_host() -> None:
+    direct = _build_llm_client(f"{_DASHSCOPE}/chat/completions", httpx.Timeout(10))
+    proxied = _build_llm_client(
+        "https://api.openai.com/v1/chat/completions", httpx.Timeout(10)
+    )
+    try:
+        # 国内 host 强制直连（trust_env=False）；海外 host 沿用系统代理（trust_env=True）
+        assert direct.trust_env is False
+        assert proxied.trust_env is True
+    finally:
+        await direct.aclose()
+        await proxied.aclose()

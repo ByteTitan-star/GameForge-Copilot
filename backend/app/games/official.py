@@ -24,9 +24,16 @@ from app.models.user import User
 OFFICIAL_OWNER_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 OFFICIAL_OWNER_EMAIL = "official@gameforge.internal"
 
+# 固定官方游戏 ID：避免每次重建 DB 拿随机 UUID，导致 .hosting/{id}/ 产物漂移成孤儿。
+# 与 OFFICIAL_OWNER_ID 同一命名空间（...0000000000ax），一眼可辨是 seed 写入的官方行。
+OFFICIAL_NEON_SNAKE_ID = uuid.UUID("00000000-0000-4000-8000-0000000000a1")
+OFFICIAL_PIXEL_RUNNER_ID = uuid.UUID("00000000-0000-4000-8000-0000000000a2")
+OFFICIAL_TOWER_STUB_ID = uuid.UUID("00000000-0000-4000-8000-0000000000a3")
+
 
 @dataclass(frozen=True)
 class OfficialGameSpec:
+    game_id: uuid.UUID
     slug: str
     title: str
     description: str
@@ -36,6 +43,7 @@ class OfficialGameSpec:
 
 OFFICIAL_CATALOG: tuple[OfficialGameSpec, ...] = (
     OfficialGameSpec(
+        game_id=OFFICIAL_NEON_SNAKE_ID,
         slug="official-neon-snake",
         title="霓虹贪吃蛇",
         description="方向键控制霓虹小蛇，吃豆得分，撞墙结束。",
@@ -43,6 +51,7 @@ OFFICIAL_CATALOG: tuple[OfficialGameSpec, ...] = (
         html_filename="neon_snake.html",
     ),
     OfficialGameSpec(
+        game_id=OFFICIAL_PIXEL_RUNNER_ID,
         slug="official-pixel-runner",
         title="像素跑酷",
         description="空格跳跃躲避障碍，像素风侧 scroll 跑酷。",
@@ -50,6 +59,7 @@ OFFICIAL_CATALOG: tuple[OfficialGameSpec, ...] = (
         html_filename="pixel_runner.html",
     ),
     OfficialGameSpec(
+        game_id=OFFICIAL_TOWER_STUB_ID,
         slug="official-tower-stub",
         title="塔防雏形",
         description="点击放置防御塔，拦截沿路径前进的小怪。",
@@ -89,46 +99,81 @@ async def ensure_official_user(db: AsyncSession) -> User:
     return user
 
 
-async def seed_official_games(db: AsyncSession) -> int:
-    """幂等写入官方 published 游戏，返回新建数量。"""
+@dataclass(frozen=True)
+class SeedResult:
+    """seed 执行结果：created=新建（含自愈重建），refreshed=已存在并刷新产物。"""
+
+    created: int
+    refreshed: int
+
+
+async def seed_official_games(db: AsyncSession) -> SeedResult:
+    """幂等 upsert 官方 published 游戏，返回新建/刷新计数。
+
+    固定 spec.game_id，使 .hosting/{id}/ 产物不随 DB 重建漂移成孤儿：
+      - 不存在 → 按 spec.game_id 创建 + 写产物（计入 created）；
+      - 存在但 id 非固定值（历史随机 UUID）→ 删旧行 + 旧产物，按固定 id 重建（计入 created）；
+      - 存在且 id 匹配 → 同步 title/requirement + 始终从源重写产物（计入 refreshed）。
+    故「created 0, refreshed 3」= 三款已就位、产物已按源刷新，属正常稳态。
+    """
     owner = await ensure_official_user(db)
     created = 0
+    refreshed = 0
     now = datetime.now(UTC)
     for spec in OFFICIAL_CATALOG:
-        existing = await db.scalar(select(Game).where(Game.slug == spec.slug))
-        if existing is not None:
-            continue
-        html = load_html(spec)
-        game = Game(
-            owner_id=owner.id,
-            slug=spec.slug,
-            title=spec.title,
-            requirement=spec.requirement,
-            status=GameStatus.PUBLISHED.value,
-            current_version=1,
-            published_at=now,
-            play_count=0,
-        )
-        db.add(game)
-        await db.flush()
-        artifact_path = f"{game.id}/1/index.html"
-        db.add(
-            GameVersion(
-                game_id=game.id,
-                version=1,
-                artifact_path=artifact_path,
-                design_doc={
-                    "title": spec.title,
-                    "gameplay": spec.requirement,
-                    "controls": "见游戏内说明",
-                    "levels": [],
-                },
+        game = await db.scalar(select(Game).where(Game.slug == spec.slug))
+        if game is not None and game.id != spec.game_id:
+            # 历史随机 UUID：清掉旧行 + 旧产物，下面按固定 id 重建。
+            stale_dir = artifact_dir(game.id, 1)
+            await db.delete(game)  # ON DELETE CASCADE 连带 game_versions
+            await db.commit()
+            shutil.rmtree(stale_dir, ignore_errors=True)
+            game = None
+        if game is None:
+            game = Game(
+                id=spec.game_id,
+                owner_id=owner.id,
+                slug=spec.slug,
+                title=spec.title,
+                requirement=spec.requirement,
+                status=GameStatus.PUBLISHED.value,
+                current_version=1,
+                published_at=now,
+                play_count=0,
+            )
+            db.add(game)
+            await db.flush()
+            created += 1
+        else:
+            game.title = spec.title
+            game.requirement = spec.requirement
+            refreshed += 1
+        design_doc = {
+            "title": spec.title,
+            "gameplay": spec.requirement,
+            "controls": "见游戏内说明",
+            "levels": [],
+        }
+        version = await db.scalar(
+            select(GameVersion).where(
+                GameVersion.game_id == spec.game_id, GameVersion.version == 1
             )
         )
-        await write_artifact(game.id, 1, {"index.html": html})
-        created += 1
+        if version is None:
+            db.add(
+                GameVersion(
+                    game_id=spec.game_id,
+                    version=1,
+                    artifact_path=f"{spec.game_id}/1/index.html",
+                    design_doc=design_doc,
+                )
+            )
+        else:
+            version.design_doc = design_doc
+        # 始终从源重写产物：编辑 scripts/official_assets 后重跑 seed 即更新线上试玩。
+        await write_artifact(spec.game_id, 1, {"index.html": load_html(spec)})
     await db.commit()
-    return created
+    return SeedResult(created=created, refreshed=refreshed)
 
 
 async def list_official_games(db: AsyncSession) -> list[dict[str, str | None]]:

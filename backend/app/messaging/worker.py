@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from typing import TYPE_CHECKING
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -16,6 +17,9 @@ from app.messaging.rabbit import _task_channel, close_connection  # RabbitMQ 连
 from app.messaging.tasks import TASK_QUEUE, decode_task  # 队列名称和消息解码
 
 log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from aio_pika.abc import AbstractIncomingMessage
 
 
 def _is_transport_reset_noise(context: dict[str, object]) -> bool:
@@ -87,57 +91,66 @@ async def _scheduler_loop() -> None:
             log.exception("scheduler scan failed")  # 出错时记录日志，不影响主循环
 
 
+async def _run_one(message: AbstractIncomingMessage) -> None:
+    """处理单条消息。
+
+    ack 持有到任务结束：成功则 ack；抛异常则 nack(requeue=True) 重投，保证 at-least-once。
+    慢任务（如 LLM 生成）在独立 task 里跑，不阻塞消费循环（见 _consume 的 prefetch 并发）。
+    """
+    async with message.process(requeue=True):
+        task, payload = decode_task(message.body)
+        log.info("task=%s payload_keys=%s", task, list(payload.keys()))
+        try:
+            await dispatch_task(task, payload)
+        except Exception:
+            # 失败重新抛出 → message.process 捕获后 nack(requeue=True) 重投
+            log.exception("task=%s failed", task)
+            raise
+
+
 async def _consume() -> None:
     """
-    消息消费主协程（Worker 的核心逻辑）。
-    
-    执行流程：
-        1. 设置自定义异常处理器
-        2. 启动定时任务调度协程（后台运行）
-        3. 连接 RabbitMQ，声明队列
-        4. 进入消息消费循环，持续监听队列
-        5. 收到消息 → 解码 → 分发到对应的处理器执行
-        6. 执行完成后确认消息，继续等待下一条
-    
-    注意：
-        - message.process(requeue=True)：处理失败时重新入队
-        - queue.iterator()：异步迭代器，持续监听新消息
+    消息消费主协程：prefetch 有界并发，每条消息独立 task 执行。
+
+    并发模型（docs/02 §可观测）：
+        - channel.set_qos(prefetch_count=N)：broker 最多投 N 条未 ack 消息 → 并发=N 且自带背压。
+        - 每条消息起一个 _run_one task：ack 在该 task 结束时触发，慢 LLM 不阻塞消费循环。
+        - asyncio.create_task 拷贝 contextvars，各 run 的 trace_id/run_id/user_id 互不串扰。
+        - 水平扩容：多开 worker 进程（docker compose --scale worker=N），竞争消费同一队列。
     """
     # 1. 设置事件循环的自定义异常处理器
     asyncio.get_running_loop().set_exception_handler(_worker_loop_exception_handler)
-    
+
     # 2. 启动定时任务扫描协程（并发执行）
     scan_task = asyncio.create_task(_scheduler_loop())
-    
+    in_flight: set[asyncio.Task] = set()
     try:
         # 3. 连接 RabbitMQ，获取 channel 和交换器
         channel, _exchange = await _task_channel()
-        
-        # 4. 声明队列（如果不存在则创建，持久化）
+        # prefetch 限流：ack 在 _run_one 结束时触发，故并发数即 prefetch_count
+        await channel.set_qos(prefetch_count=settings.max_concurrent_tasks)
         queue = await channel.declare_queue(TASK_QUEUE, durable=True)
-        log.info("worker listening on queue=%s url=%s", TASK_QUEUE, settings.rabbitmq_url)
+        log.info(
+            "worker listening queue=%s concurrency=%s url=%s",
+            TASK_QUEUE,
+            settings.max_concurrent_tasks,
+            settings.rabbitmq_url,
+        )
 
-        # 5. 进入消息消费循环
+        # 4. 消费循环：每条消息交给独立 task，立即继续取下一条
         async with queue.iterator() as it:
-            async for message in it:  # 持续等待新消息
-                # 处理消息，requeue=True 表示失败时重新入队
-                async with message.process(requeue=True):
-                    # 6. 解码消息体：提取任务名和载荷数据
-                    task, payload = decode_task(message.body)
-                    log.info("task=%s payload_keys=%s", task, list(payload.keys()))
-                    
-                    # 7. 分发并执行任务
-                    try:
-                        await dispatch_task(task, payload)
-                    except Exception:
-                        # 任务执行失败，记录错误日志并重新抛出（触发重新入队）
-                        log.exception("task=%s failed", task)
-                        raise
+            async for message in it:
+                handler = asyncio.create_task(_run_one(message))
+                in_flight.add(handler)
+                handler.add_done_callback(in_flight.discard)
     finally:
-        # 8. 清理资源：取消定时任务，flush langfuse，关闭 RabbitMQ 连接
+        # 5. 清理：停调度循环、等在飞行的任务落地、flush langfuse、关连接。
+        #    被取消的在飞行任务：未正常 ack，broker 会在断连时把未 ack 消息重投，不丢。
         scan_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await scan_task
+        if in_flight:
+            await asyncio.gather(*in_flight, return_exceptions=True)
         from app.core.langfuse import flush_langfuse
 
         flush_langfuse()
