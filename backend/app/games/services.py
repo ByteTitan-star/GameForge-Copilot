@@ -253,6 +253,22 @@ async def create_run(
     month_used = usage.month.input_tokens + usage.month.output_tokens
     if month_used >= monthly_default:
         raise AppError(ErrorCode.QUOTA_EXCEEDED, "本月 token 配额已耗尽")
+
+    # 默认配置路径：未显式指定 llm_config_id 时必须有 is_default 配置，否则 run 带病入队
+    if req.llm_config_id is None:
+        has_default = await db.scalar(
+            select(UserLLMConfig.id)
+            .where(
+                UserLLMConfig.user_id == user.id,
+                UserLLMConfig.is_default.is_(True),
+            )
+            .limit(1)
+        )
+        if has_default is None:
+            raise AppError(
+                ErrorCode.LLM_CONFIG_INVALID,
+                "尚未配置默认 LLM，请先在「设置 → LLM 配置」中添加并设为默认。",
+            )
     if req.llm_config_id is not None:
         cfg = await db.scalar(
             select(UserLLMConfig).where(

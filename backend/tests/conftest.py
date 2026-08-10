@@ -362,6 +362,28 @@ async def verified_client() -> AsyncIterator[httpx.AsyncClient]:
         )
         assert resp.status_code == 200, resp.text
         client.headers["Authorization"] = f"Bearer {resp.json()['data']['access_token']}"
+        # 预置默认 LLM 配置：create_run 前置校验要求用户有 is_default 配置
+        from sqlalchemy import select
+
+        from app.enums import LLMProvider
+        from app.llm import crypto
+        from app.models.llm_config import UserLLMConfig
+        from app.models.user import User
+
+        async with _SessionLocal() as s:
+            user = (await s.scalars(select(User).where(User.email == "v@b.com"))).first()
+            assert user is not None
+            s.add(
+                UserLLMConfig(
+                    user_id=user.id,
+                    provider=LLMProvider.ANTHROPIC.value,
+                    model="claude-sonnet-5",
+                    apikey_enc=crypto.encrypt_apikey("sk-test-verify"),
+                    base_url=None,
+                    is_default=True,
+                )
+            )
+            await s.commit()
         yield client
 
 
