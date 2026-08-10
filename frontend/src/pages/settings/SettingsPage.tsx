@@ -4,10 +4,11 @@ import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { Role } from '@/api/enums'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 import { ProfilePanel } from './ProfilePanel'
 import { LlmConfigPanel } from './LlmConfigPanel'
 import { UsagePanel } from './UsagePanel'
@@ -26,35 +27,31 @@ export function SettingsPage() {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [pwdError, setPwdError] = useState('')
-  const [pwdOk, setPwdOk] = useState('')
   const [pwdLoading, setPwdLoading] = useState(false)
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault()
-    setPwdError('')
-    setPwdOk('')
     if (!token) {
-      setPwdError(t('loginRequired'))
+      toast.error(t('loginRequired'))
       return
     }
     if (newPassword.length < 8) {
-      setPwdError(t('pwdMinLength'))
+      toast.error(t('pwdMinLength'))
       return
     }
     if (newPassword !== confirmPassword) {
-      setPwdError(t('pwdMismatch'))
+      toast.error(t('pwdMismatch'))
       return
     }
     setPwdLoading(true)
     try {
       await authApi.changePassword(oldPassword, newPassword, token)
-      setPwdOk(t('pwdUpdated'))
+      toast.success(t('pwdUpdated'))
       setOldPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPwdError(formatApiError(err, t('changePwdFailed')))
+      toast.error(formatApiError(err, t('changePwdFailed')))
     } finally {
       setPwdLoading(false)
     }
@@ -141,16 +138,6 @@ export function SettingsPage() {
                 minLength={8}
                 autoComplete="new-password"
               />
-              {pwdError ? (
-                <p role="alert" className="text-sm text-red-600">
-                  {pwdError}
-                </p>
-              ) : null}
-              {pwdOk ? (
-                <p role="status" className="text-sm gf-text-accent">
-                  {pwdOk}
-                </p>
-              ) : null}
               <Button type="submit" className="gf-btn-primary !rounded-xl !border-0" disabled={pwdLoading}>
                 {pwdLoading ? t('savingPassword') : t('changePassword')}
               </Button>

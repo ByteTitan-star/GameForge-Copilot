@@ -5,8 +5,9 @@ import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
+import { toast } from '@/stores/toast-store'
 
 export function RegisterPage() {
   const t = useT()
@@ -14,14 +15,12 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    setError('')
     if (password !== confirm) {
-      setError(t('errPasswordMismatch'))
+      toast.error(t('errPasswordMismatch'))
       return
     }
     setLoading(true)
@@ -34,7 +33,7 @@ export function RegisterPage() {
         state: { email: trimmedEmail, password },
       })
     } catch (err) {
-      setError(formatApiError(err, t('errRegisterFailed')))
+      toast.error(formatApiError(err, t('errRegisterFailed')))
     } finally {
       setLoading(false)
     }
@@ -75,11 +74,6 @@ export function RegisterPage() {
           required
           minLength={8}
         />
-        {error ? (
-          <p role="alert" className="text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
           {loading ? t('registering') : t('register')}
         </MagneticButton>

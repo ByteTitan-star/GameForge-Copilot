@@ -4,9 +4,10 @@ import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 
 const RESEND_COOLDOWN = 60
 
@@ -22,8 +23,6 @@ export function VerifyEmailPage() {
 
   const [email, setEmail] = useState(initialEmail)
   const [code, setCode] = useState('')
-  const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN)
 
@@ -36,11 +35,9 @@ export function VerifyEmailPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    setError('')
-    setInfo('')
     const trimmedEmail = email.trim()
     if (!trimmedEmail) {
-      setError(t('errVerifyEmailMissing'))
+      toast.error(t('errVerifyEmailMissing'))
       return
     }
     setLoading(true)
@@ -59,7 +56,7 @@ export function VerifyEmailPage() {
         navigate('/login', { replace: true, state: { email: trimmedEmail } })
       }
     } catch (err) {
-      setError(formatApiError(err, t('errVerifyCode')))
+      toast.error(formatApiError(err, t('errVerifyCode')))
     } finally {
       setLoading(false)
     }
@@ -68,14 +65,12 @@ export function VerifyEmailPage() {
   async function onResend() {
     const trimmedEmail = email.trim()
     if (!trimmedEmail || cooldown > 0) return
-    setError('')
-    setInfo('')
     try {
       await authApi.resendVerification(trimmedEmail)
-      setInfo(t('verifyCodeResent'))
+      toast.success(t('verifyCodeResent'))
       setCooldown(RESEND_COOLDOWN)
     } catch (err) {
-      setError(formatApiError(err, t('errVerifyCode')))
+      toast.error(formatApiError(err, t('errVerifyCode')))
     }
   }
 
@@ -101,16 +96,6 @@ export function VerifyEmailPage() {
           onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
           required
         />
-        {error ? (
-          <p role="alert" className="text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
-        {info ? (
-          <p role="status" className="text-sm text-white/70">
-            {info}
-          </p>
-        ) : null}
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
           {loading ? t('verifying') : t('verifySubmit')}
         </MagneticButton>

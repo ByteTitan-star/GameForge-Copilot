@@ -4,9 +4,10 @@ import { authApi } from '@/api/auth'
 import { formatApiError } from '@/api/error-message'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { MagneticButton } from '@/components/ui/magnetic-button'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 
 type Step = 'request' | 'sent' | 'confirm' | 'done'
 
@@ -20,18 +21,16 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [token, setToken] = useState(tokenFromLink)
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function onRequest(e: FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       await authApi.requestPasswordReset(email.trim())
       setStep('sent')
     } catch (err) {
-      setError(formatApiError(err, t('errRequestFailed')))
+      toast.error(formatApiError(err, t('errRequestFailed')))
     } finally {
       setLoading(false)
     }
@@ -39,7 +38,6 @@ export function ForgotPasswordPage() {
 
   async function onConfirm(e: FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       const result = await authApi.confirmPasswordReset(token.trim(), password)
@@ -56,7 +54,7 @@ export function ForgotPasswordPage() {
       }
       setStep('done')
     } catch (err) {
-      setError(formatApiError(err, t('errResetFailed')))
+      toast.error(formatApiError(err, t('errResetFailed')))
     } finally {
       setLoading(false)
     }
@@ -102,11 +100,6 @@ export function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          {error ? (
-            <p role="alert" className="text-sm text-red-300">
-              {error}
-            </p>
-          ) : null}
           <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
             {t('sendReset')}
           </MagneticButton>
@@ -147,11 +140,6 @@ export function ForgotPasswordPage() {
             autoComplete="new-password"
             autoFocus={Boolean(tokenFromLink)}
           />
-          {error ? (
-            <p role="alert" className="text-sm text-red-300">
-              {error}
-            </p>
-          ) : null}
           <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
             {loading ? t('loading') : t('resetConfirm')}
           </MagneticButton>
