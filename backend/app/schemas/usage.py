@@ -61,3 +61,21 @@ class GameAnalyticsResp(BaseModel):
     play_count: int
     pv_30d: int
     uv_30d: int
+
+
+class AnalyticsTopItem(BaseModel):
+    game_id: uuid.UUID
+    title: str
+    slug: str | None = None
+    play_count: int
+
+
+class AnalyticsTrendPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    page_views: int
+    unique_visitors: int
+
+
+class AdminAnalyticsResp(BaseModel):
+    top_games: list[AnalyticsTopItem]
+    trend: list[AnalyticsTrendPoint]

@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     default_daily_token_limit: int = 500_000
     default_monthly_token_limit: int = 10_000_000
     default_rate_limit_per_min: int = 30
+    # LLM 连通测试（真实付费调用）每分钟上限，比通用限流更紧
+    llm_probe_rate_limit_per_min: int = 5
+    # create_run 幂等缓存有效期（秒）：同一 Idempotency-Key 在窗口内复用同一 run
+    create_run_idempotency_ttl: int = 86_400
     max_concurrent_runs: int = 3  # 每用户同时进行中的 run 上限（docs/05）
     max_concurrent_tasks: int = 3  # worker 进程内同时处理的任务数（RabbitMQ prefetch_count）
     max_versions_per_game: int = 20  # 版本保留上限（docs/04），超出删最旧

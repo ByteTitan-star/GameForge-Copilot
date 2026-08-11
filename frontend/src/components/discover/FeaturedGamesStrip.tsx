@@ -50,7 +50,12 @@ export function FeaturedGamesStrip({ className, variant = 'dark' }: Props) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {games.map((g) => (
-            <PublicGameCard key={g.game_id} game={g} compact />
+            <PublicGameCard
+              key={g.game_id}
+              game={g}
+              compact
+              variant={variant === 'light' ? 'theme' : 'dark'}
+            />
           ))}
         </div>
       )}

@@ -21,6 +21,9 @@ type Props = {
   left: ReactNode;
   right: ReactNode;
   className?: string;
+  /** 移动端（<lg）视图切换：chat=只看聊天，play=只试试玩；桌面端忽略 */
+  mobileView?: "chat" | "play";
+  onMobileViewChange?: (view: "chat" | "play") => void;
 };
 
 function readStoredRatio(): number {
@@ -35,7 +38,14 @@ function readStoredRatio(): number {
   }
 }
 
-export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
+export function ForgeSplitLayout({
+  stageOpen,
+  left,
+  right,
+  className,
+  mobileView = "chat",
+  onMobileViewChange,
+}: Props) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [stageRatio, setStageRatio] = useState(readStoredRatio);
@@ -115,9 +125,53 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
           : undefined
       }
     >
-      <div className="gf-forge-panel-left min-h-0 min-w-0">{left}</div>
+      {onMobileViewChange ? (
+        <div
+          role="tablist"
+          aria-label={t("forge")}
+          className="flex shrink-0 items-center gap-1 rounded-lg border border-black/[0.06] bg-black/[0.03] p-1 lg:hidden"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileView === "chat"}
+            onClick={() => onMobileViewChange("chat")}
+            className={cn(
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              mobileView === "chat"
+                ? "bg-white text-[#0F172A] shadow-sm"
+                : "text-[#64748B] hover:text-[#0F172A]",
+            )}
+          >
+            {t("chat")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileView === "play"}
+            onClick={() => onMobileViewChange("play")}
+            className={cn(
+              "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              mobileView === "play"
+                ? "bg-white text-[#0F172A] shadow-sm"
+                : "text-[#64748B] hover:text-[#0F172A]",
+            )}
+          >
+            {t("playView")}
+          </button>
+        </div>
+      ) : null}
 
-      {stageOpen ? (
+      <div
+        className={cn(
+          "gf-forge-panel-left flex flex-col min-h-0 min-w-0",
+          mobileView === "play" && "max-lg:hidden",
+        )}
+      >
+        {left}
+      </div>
+
+      {stageOpen || mobileView === "play" ? (
         <>
           <div
             role="separator"
@@ -136,7 +190,12 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
             }}
             onKeyDown={resizeWithKeyboard}
           />
-          <div className="gf-forge-panel-right min-h-0 min-w-0">
+          <div
+            className={cn(
+              "gf-forge-panel-right flex flex-col min-h-0 min-w-0",
+              mobileView === "chat" && "max-lg:hidden",
+            )}
+          >
             {right}
           </div>
         </>

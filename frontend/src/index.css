@@ -823,18 +823,15 @@ body.gf-forge-resizing * {
   }
 }
 
-/* 面板容器：仅负责 flex 结构；边框/背景/阴影交给各 <section> 内联 Tailwind，
-   避免与 Grid 轨道宽度打架。panel-left 默认 flex:1，收起试玩后自动占满。 */
+/* 面板容器：仅保留 flex 比例/溢出；display 交给组件 Tailwind（flex flex-col），
+   这样移动端的 max-lg:hidden 能正常覆盖以切换视图。
+   panel-left 默认 flex:1，收起试玩后自动占满。 */
 .gf-forge-panel-left {
-  display: flex;
   flex: 1 1 0;
-  flex-direction: column;
   min-height: 0;
 }
 
 .gf-forge-panel-right {
-  display: flex;
-  flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }

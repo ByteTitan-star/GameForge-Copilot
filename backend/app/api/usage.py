@@ -9,7 +9,9 @@ from app.auth.deps import AdminUser, CurrentUser, DbSession, RedisClient
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.games import services as game_services
 from app.schemas.usage import (
+    AdminAnalyticsResp,
     AdminUsageResp,
+    AnalyticsTopItem,
     GameAnalyticsResp,
     GameUsageResp,
     UsageBreakdownItem,
@@ -96,14 +98,16 @@ async def game_analytics(
     )
 
 
-@router.get("/admin/analytics/top")
+@router.get("/admin/analytics/top", response_model=ApiResponse[AdminAnalyticsResp])
 async def admin_analytics_top(
     admin: AdminUser,
     db: DbSession,
+    r: RedisClient,
     limit: int = Query(10, ge=1, le=50),
-) -> ApiResponse[list[dict]]:
+) -> ApiResponse[AdminAnalyticsResp]:
     from sqlalchemy import select
 
+    from app.analytics import store as analytics_store
     from app.enums import GameStatus
     from app.models.game import Game
 
@@ -117,13 +121,16 @@ async def admin_analytics_top(
         )
     ).all()
     return ApiResponse(
-        data=[
-            {
-                "game_id": g.id,
-                "title": g.title,
-                "slug": g.slug,
-                "play_count": int(g.play_count or 0),
-            }
-            for g in rows
-        ]
+        data=AdminAnalyticsResp(
+            top_games=[
+                AnalyticsTopItem(
+                    game_id=g.id,
+                    title=g.title,
+                    slug=g.slug,
+                    play_count=int(g.play_count or 0),
+                )
+                for g in rows
+            ],
+            trend=await analytics_store.site_trend(r, days=30),
+        )
     )

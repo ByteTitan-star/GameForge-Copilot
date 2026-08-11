@@ -1,8 +1,15 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { AdminShell } from '@/components/layout/AdminShell'
 import { AppShell } from '@/components/layout/AppShell'
 import { RequireAdmin } from '@/components/layout/RequireAdmin'
 import { RequireAuth } from '@/components/layout/RequireAuth'
-import { AdminPage } from '@/pages/admin/AdminPage'
+import { AnalyticsSection } from '@/pages/admin/sections/AnalyticsSection'
+import { AuditSection } from '@/pages/admin/sections/AuditSection'
+import { PublishedSection } from '@/pages/admin/sections/PublishedSection'
+import { QueueSection } from '@/pages/admin/sections/QueueSection'
+import { SettingsSection } from '@/pages/admin/sections/SettingsSection'
+import { UsageSection } from '@/pages/admin/sections/UsageSection'
+import { UsersSection } from '@/pages/admin/sections/UsersSection'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
@@ -41,8 +48,21 @@ export function AppRoutes() {
           <Route path="/forge" element={<ForgePage />} />
           <Route path="/forge/:gameId" element={<ForgePage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route element={<RequireAdmin />}>
-            <Route path="/admin" element={<AdminPage />} />
+        </Route>
+      </Route>
+
+      {/* 独立后台 shell：双守卫 + AdminShell layout + section 子路由（URL 驱动，可分享/后退） */}
+      <Route element={<RequireAuth />}>
+        <Route element={<RequireAdmin />}>
+          <Route path="/admin" element={<AdminShell />}>
+            <Route index element={<Navigate to="/admin/queue" replace />} />
+            <Route path="queue" element={<QueueSection />} />
+            <Route path="published" element={<PublishedSection />} />
+            <Route path="users" element={<UsersSection />} />
+            <Route path="usage" element={<UsageSection />} />
+            <Route path="analytics" element={<AnalyticsSection />} />
+            <Route path="audit" element={<AuditSection />} />
+            <Route path="settings" element={<SettingsSection />} />
           </Route>
         </Route>
       </Route>

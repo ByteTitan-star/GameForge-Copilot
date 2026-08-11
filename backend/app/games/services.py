@@ -231,71 +231,80 @@ async def create_run(
     _require_verified(user)
     game = await _get_owned_game(db, user, game_id)
 
-    active = await db.scalar(
-        select(func.count())
-        .select_from(GenerationRun)
-        .where(
-            GenerationRun.user_id == user.id,
-            GenerationRun.status.in_([s.value for s in _ACTIVE_RUNS]),
-        )
-    )
-    if int(active or 0) >= settings.max_concurrent_runs:
-        raise AppError(
-            ErrorCode.RATE_LIMITED,
-            f"同时进行的 run 已达上限（{settings.max_concurrent_runs}）",
-        )
-
-    daily_default, monthly_default, _ = await admin_services.get_effective_limits(db)
-    daily = await quota_mod.get_user_daily_limit(r, user.id, daily_default)
-    usage = await get_user_usage(r, user.id, daily)
-    if usage.quota.remaining <= 0:
-        raise AppError(ErrorCode.QUOTA_EXCEEDED, "今日 token 配额已耗尽")
-    month_used = usage.month.input_tokens + usage.month.output_tokens
-    if month_used >= monthly_default:
-        raise AppError(ErrorCode.QUOTA_EXCEEDED, "本月 token 配额已耗尽")
-
-    # 默认配置路径：未显式指定 llm_config_id 时必须有 is_default 配置，否则 run 带病入队
-    if req.llm_config_id is None:
-        has_default = await db.scalar(
-            select(UserLLMConfig.id)
+    # 串行化同一用户的 run 创建：吸收双击/重复提交，并消除并发数计数的 TOCTOU。
+    # 锁仅在创建期间持有（毫秒级，create_run 本身不跑 LLM）；进程崩溃则 10s 后自动释放。
+    lock_key = f"run:create:{user.id}"
+    if not await r.set(lock_key, "1", nx=True, ex=10):
+        raise AppError(ErrorCode.RATE_LIMITED, "请勿重复发起 run，稍后再试")
+    try:
+        active = await db.scalar(
+            select(func.count())
+            .select_from(GenerationRun)
             .where(
-                UserLLMConfig.user_id == user.id,
-                UserLLMConfig.is_default.is_(True),
+                GenerationRun.user_id == user.id,
+                GenerationRun.status.in_([s.value for s in _ACTIVE_RUNS]),
             )
-            .limit(1)
         )
-        if has_default is None:
+        if int(active or 0) >= settings.max_concurrent_runs:
             raise AppError(
-                ErrorCode.LLM_CONFIG_INVALID,
-                "尚未配置默认 LLM，请先在「设置 → LLM 配置」中添加并设为默认。",
+                ErrorCode.RATE_LIMITED,
+                f"同时进行的 run 已达上限（{settings.max_concurrent_runs}）",
             )
-    if req.llm_config_id is not None:
-        cfg = await db.scalar(
-            select(UserLLMConfig).where(
-                UserLLMConfig.id == req.llm_config_id, UserLLMConfig.user_id == user.id
+
+        daily_default, monthly_default, _ = await admin_services.get_effective_limits(db)
+        daily = await quota_mod.get_user_daily_limit(r, user.id, daily_default)
+        usage = await get_user_usage(r, user.id, daily)
+        if usage.quota.remaining <= 0:
+            raise AppError(ErrorCode.QUOTA_EXCEEDED, "今日 token 配额已耗尽")
+        month_used = usage.month.input_tokens + usage.month.output_tokens
+        if month_used >= monthly_default:
+            raise AppError(ErrorCode.QUOTA_EXCEEDED, "本月 token 配额已耗尽")
+
+        # 默认配置路径：未显式指定 llm_config_id 时必须有 is_default 配置，否则 run 带病入队
+        if req.llm_config_id is None:
+            has_default = await db.scalar(
+                select(UserLLMConfig.id)
+                .where(
+                    UserLLMConfig.user_id == user.id,
+                    UserLLMConfig.is_default.is_(True),
+                )
+                .limit(1)
             )
+            if has_default is None:
+                raise AppError(
+                    ErrorCode.LLM_CONFIG_INVALID,
+                    "尚未配置默认 LLM，请先在「设置 → LLM 配置」中添加并设为默认。",
+                )
+        if req.llm_config_id is not None:
+            cfg = await db.scalar(
+                select(UserLLMConfig).where(
+                    UserLLMConfig.id == req.llm_config_id,
+                    UserLLMConfig.user_id == user.id,
+                )
+            )
+            if cfg is None:
+                raise AppError(ErrorCode.LLM_CONFIG_NOT_FOUND, "LLM 配置不存在")
+        entry = classify_entry_phase(
+            req.requirement, has_prior_version=game.current_version > 0
         )
-        if cfg is None:
-            raise AppError(ErrorCode.LLM_CONFIG_NOT_FOUND, "LLM 配置不存在")
-    entry = classify_entry_phase(
-        req.requirement, has_prior_version=game.current_version > 0
-    )
-    initial_phase = RunPhase.CODE if entry == EntryPhase.CODE else RunPhase.PLAN
-    run = GenerationRun(
-        game_id=game.id,
-        user_id=user.id,
-        llm_config_id=req.llm_config_id,
-        requirement=req.requirement,
-        entry_phase=entry.value,
-        status=RunStatus.RUNNING.value,
-        phase=initial_phase.value,
-        started_at=datetime.now(UTC),
-    )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
-    await forge_queue.enqueue_run(run.id)
-    return run
+        initial_phase = RunPhase.CODE if entry == EntryPhase.CODE else RunPhase.PLAN
+        run = GenerationRun(
+            game_id=game.id,
+            user_id=user.id,
+            llm_config_id=req.llm_config_id,
+            requirement=req.requirement,
+            entry_phase=entry.value,
+            status=RunStatus.RUNNING.value,
+            phase=initial_phase.value,
+            started_at=datetime.now(UTC),
+        )
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
+        await forge_queue.enqueue_run(run.id)
+        return run
+    finally:
+        await r.delete(lock_key)
 
 
 async def list_runs(
