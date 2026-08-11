@@ -5,8 +5,11 @@ provider.test_connectivity 被 monkeypatch，不打真实网络。
 
 import httpx
 import pytest
+from sqlalchemy import select
 
-from app.llm import provider
+from app.llm import crypto, provider
+from app.models.llm_config import UserLLMConfig
+from app.models.user import User
 
 BASE = "/api/v1/me/llm-configs"
 _BODY = {"provider": "anthropic", "model": "claude-sonnet-5", "apikey": "sk-test-1234567890"}
@@ -37,6 +40,62 @@ async def test_create_list_mask_default(
     items = r.json()["data"]
     assert len(items) == 1
     assert items[0]["config_id"] == d["config_id"]
+
+
+async def test_list_skips_config_encrypted_with_unknown_key(
+    auth_client: httpx.AsyncClient,
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(provider, "test_connectivity", _ok)
+    saved = await auth_client.post(BASE, json={**_BODY, "is_default": True})
+    saved_id = saved.json()["data"]["config_id"]
+
+    user = (await db_session.scalars(select(User).where(User.email == "u@b.com"))).one()
+    db_session.add(
+        UserLLMConfig(
+            user_id=user.id,
+            provider="openai",
+            model="stale-model",
+            apikey_enc="no-longer-decryptable",
+            is_default=False,
+        )
+    )
+    await db_session.commit()
+
+    response = await auth_client.get(BASE)
+
+    assert response.status_code == 200, response.text
+    assert [item["config_id"] for item in response.json()["data"]] == [saved_id]
+
+
+async def test_list_migrates_config_from_legacy_dev_key(
+    auth_client: httpx.AsyncClient,
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(crypto, "_fernet", None)
+    user = (await db_session.scalars(select(User).where(User.email == "u@b.com"))).one()
+    legacy_ciphertext = crypto._derive_fernet(crypto._LEGACY_DEV_JWT_SECRET).encrypt(
+        b"sk-legacy-test-key"
+    ).decode()
+    stale = UserLLMConfig(
+        user_id=user.id,
+        provider="openai",
+        model="gpt-5.5",
+        apikey_enc=legacy_ciphertext,
+        is_default=True,
+    )
+    db_session.add(stale)
+    await db_session.commit()
+
+    response = await auth_client.get(BASE)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"][0]["config_id"] == str(stale.id)
+    await db_session.refresh(stale)
+    assert stale.apikey_enc != legacy_ciphertext
+    assert crypto.decrypt_apikey(stale.apikey_enc) == "sk-legacy-test-key"
 
 
 async def test_create_second_default_unsets_first(

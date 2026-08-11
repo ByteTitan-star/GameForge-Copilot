@@ -132,6 +132,24 @@ async def test_complete_skips_enable_thinking_for_non_qwen(
 
 
 @pytest.mark.asyncio
+async def test_complete_uses_gpt5_token_parameter(monkeypatch: pytest.MonkeyPatch) -> None:
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "gpt-5.6",
+        "sys",
+        "user",
+        base_url="https://proxy.example.com/v1",
+    )
+
+    assert cap.last_json["max_completion_tokens"] == provider.settings.llm_max_tokens
+    assert "max_tokens" not in cap.last_json
+
+
+@pytest.mark.asyncio
 async def test_complete_respects_disable_thinking_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

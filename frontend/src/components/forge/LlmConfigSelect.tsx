@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Bot, ChevronDown, Loader2 } from "lucide-react";
+import { formatApiError } from "@/api/error-message";
 import { meApi } from "@/api/me";
 import { pickDefaultLlmConfigId } from "@/lib/llm-config";
 import { useT } from "@/i18n/use-t";
@@ -46,6 +47,17 @@ export function LlmConfigSelect({
         />
         {t("loading")}
       </p>
+    );
+  }
+
+  if (q.isError) {
+    return (
+      <div className={cn("text-xs text-rose-500", className)} role="alert">
+        {t("llmConfigLoadFailed")} {formatApiError(q.error)}{" "}
+        <Link to="/settings" className="underline-offset-2 hover:underline">
+          {t("llmConfigGoSettings")}
+        </Link>
+      </div>
     );
   }
 

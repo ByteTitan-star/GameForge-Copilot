@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import redis.asyncio as redis
@@ -51,6 +52,18 @@ from app.sandbox.playtest import run_playtest
 PLAN_MAX_ATTEMPTS = 2
 
 log = logging.getLogger(__name__)
+
+
+def _read_html_text(path: Path) -> str:
+    """Read generated HTML without letting a malformed byte abort a run."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        log.warning(
+            "generated HTML is not valid UTF-8; replacing invalid bytes",
+            extra={"path": str(path)},
+        )
+        return path.read_bytes().decode("utf-8", errors="replace")
 
 
 class ForgeState(TypedDict, total=False):
@@ -393,7 +406,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     ctx.game.id, ctx.game.current_version
                 )
                 if current_path is not None and current_path.exists():
-                    previous_html = current_path.read_text(encoding="utf-8")
+                    previous_html = _read_html_text(current_path)
 
             def normalize_html(raw: str) -> str:
                 html = (raw or "").strip()
@@ -552,7 +565,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 result_ok = False
                 console_logs: list[str] = []
             else:
-                html = html_path.read_text(encoding="utf-8")
+                html = _read_html_text(html_path)
                 pt = await run_playtest(html)
                 result_ok = pt.ok
                 errors = pt.errors

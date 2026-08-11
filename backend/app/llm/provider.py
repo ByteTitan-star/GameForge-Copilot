@@ -29,8 +29,8 @@ _OFFICIAL_API_HOSTS: dict[LLMProvider, frozenset[str]] = {
 # 拉取失败时的回退白名单（docs/05 §模型列表来源）
 _MODEL_WHITELIST: dict[LLMProvider, list[str]] = {
     LLMProvider.ANTHROPIC: ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5"],
-    LLMProvider.OPENAI: ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
-    LLMProvider.OPENAI_COMPAT: [],
+    LLMProvider.OPENAI: ["gpt-5.6", "gpt-4o", "gpt-4o-mini", "gpt-4.1"],
+    LLMProvider.OPENAI_COMPAT: ["gpt-5.6"],
 }
 
 
@@ -148,6 +148,11 @@ def _is_qwen_thinking_model(model: str) -> bool:
     return "qwen3" in (model or "").lower()
 
 
+def _uses_max_completion_tokens(model: str) -> bool:
+    """GPT-5 系列仅接受 Chat Completions 的 max_completion_tokens。"""
+    return (model or "").strip().lower().startswith("gpt-5")
+
+
 async def test_connectivity(
     provider: LLMProvider,
     apikey: str,
@@ -218,6 +223,9 @@ async def complete(
         max_tokens = settings.llm_max_tokens
     headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
     url = _messages_url(provider, base_url)
+    token_limit_key = (
+        "max_completion_tokens" if _uses_max_completion_tokens(model) else "max_tokens"
+    )
     if _uses_anthropic_native_api(provider, base_url):
         body = {
             "model": model,
@@ -228,7 +236,8 @@ async def complete(
     else:
         body = {
             "model": model,
-            "max_tokens": max_tokens,
+            # GPT-5（含兼容网关暴露的 gpt-5.6）拒绝旧的 max_tokens 参数。
+            token_limit_key: max_tokens,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
