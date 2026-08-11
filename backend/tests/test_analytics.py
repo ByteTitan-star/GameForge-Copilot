@@ -49,7 +49,17 @@ async def test_record_play_increments_count(
     assert r.status_code == 200
     assert r.json()["data"]["play_count"] == 1
 
+    # 全站 rollup 也应被 record_play 顺带写入
+    trend = await analytics_store.site_trend(redis_client, days=1)
+    assert trend[-1]["page_views"] >= 1
+    assert trend[-1]["unique_visitors"] >= 1
+
 
 async def test_admin_analytics_top(admin_client: httpx.AsyncClient) -> None:
     r = await admin_client.get("/api/v1/admin/analytics/top?limit=5")
     assert r.status_code == 200
+    data = r.json()["data"]
+    assert "top_games" in data
+    assert "trend" in data
+    assert len(data["trend"]) == 30
+    assert {"date", "page_views", "unique_visitors"} <= set(data["trend"][0])

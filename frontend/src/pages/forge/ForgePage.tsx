@@ -75,6 +75,14 @@ function mid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** 生成 create_run 的 Idempotency-Key：同一发送意图一次，配合后端幂等去重。 */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `run-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function ForgePage() {
   const t = useT();
   const { gameId: routeGameId } = useParams();
@@ -121,6 +129,7 @@ export function ForgePage() {
   );
   const [flashRing, setFlashRing] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
+  const [mobileView, setMobileView] = useState<"chat" | "play">("chat");
   const [stageOpen, setStageOpen] = useState(true);
   const [logDockOpen, setLogDockOpen] = useState(false);
   const [stagePipeline, setStagePipeline] =
@@ -420,7 +429,13 @@ export function ForgePage() {
         setGameId(gid);
         navigate(`/forge/${gid}`, { replace: true });
       }
-      const run = await gamesApi.startRun(gid, requirement, token, llmConfigId);
+      const run = await gamesApi.startRun(
+        gid,
+        requirement,
+        token,
+        llmConfigId,
+        newIdempotencyKey(),
+      );
       setRunId(run.run_id);
       setRunStatus(RunStatus.running);
       setPhase(RunPhase.plan);
@@ -892,6 +907,8 @@ export function ForgePage() {
       <ForgeSplitLayout
         stageOpen={stageOpen}
         className="relative z-[1] min-h-0 flex-1 p-3 md:p-4"
+        mobileView={mobileView}
+        onMobileViewChange={setMobileView}
         left={
           <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-[var(--gf-surface)] shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
             <ForgeAiStatusBar status={status} />
@@ -983,6 +1000,11 @@ export function ForgePage() {
                 <span className="font-mono text-[10px] tracking-[0.12em] text-[#94A3B8] uppercase">
                   {t("previewStage")}
                 </span>
+                {previewUrl ? (
+                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-[#0F172A]">
+                    v{previewVersion ?? detail.data?.current_version ?? latestVersion}
+                  </span>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-1">
                 {(

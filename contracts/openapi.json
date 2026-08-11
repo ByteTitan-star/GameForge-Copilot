@@ -331,7 +331,7 @@
           "auth"
         ],
         "summary": "Password Reset",
-        "description": "防枚举：无论邮箱是否存在恒返回 sent=true。",
+        "description": "防枚举：无论邮箱是否存在恒返回 sent=true。\n\n限流（IP+email）：避免对单一邮箱的邮件轰炸；与 resend-verification 一致。",
         "operationId": "password_reset_api_v1_auth_password_reset_post",
         "requestBody": {
           "content": {
@@ -350,6 +350,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_PasswordResetResp_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -942,6 +952,16 @@
               }
             }
           },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1014,7 +1034,7 @@
           "llm-config"
         ],
         "summary": "Test Draft Config",
-        "description": "保存前连通测试（provider + model + apikey + base_url），不落库。",
+        "description": "保存前连通测试（provider + model + apikey + base_url），不落库。\n\n纯付费 LLM 调用，按用户限流防成本放大。",
         "operationId": "test_draft_config_api_v1_me_llm_configs_test_post",
         "requestBody": {
           "content": {
@@ -1033,6 +1053,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_LLMConfigDryTestResp_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1226,6 +1256,16 @@
           },
           "404": {
             "description": "配置不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
             "content": {
               "application/json": {
                 "schema": {
@@ -3792,7 +3832,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_list_dict__"
+                  "$ref": "#/components/schemas/ApiResponse_AdminAnalyticsResp_"
                 }
               }
             }
@@ -4587,6 +4627,30 @@
         ],
         "title": "ActiveRunItem"
       },
+      "AdminAnalyticsResp": {
+        "properties": {
+          "top_games": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsTopItem"
+            },
+            "type": "array",
+            "title": "Top Games"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsTrendPoint"
+            },
+            "type": "array",
+            "title": "Trend"
+          }
+        },
+        "type": "object",
+        "required": [
+          "top_games",
+          "trend"
+        ],
+        "title": "AdminAnalyticsResp"
+      },
       "AdminGameFeaturedPatch": {
         "properties": {
           "featured_rank": {
@@ -4642,6 +4706,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured",
+            "default": false
           }
         },
         "type": "object",
@@ -4855,6 +4924,76 @@
           "calls"
         ],
         "title": "AdminUserUsage"
+      },
+      "AnalyticsTopItem": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "play_count": {
+            "type": "integer",
+            "title": "Play Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "title",
+          "play_count"
+        ],
+        "title": "AnalyticsTopItem"
+      },
+      "AnalyticsTrendPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "page_views": {
+            "type": "integer",
+            "title": "Page Views"
+          },
+          "unique_visitors": {
+            "type": "integer",
+            "title": "Unique Visitors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "page_views",
+          "unique_visitors"
+        ],
+        "title": "AnalyticsTrendPoint"
+      },
+      "ApiResponse_AdminAnalyticsResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminAnalyticsResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[AdminAnalyticsResp]"
       },
       "ApiResponse_AdminGameItem_": {
         "properties": {
@@ -5569,23 +5708,6 @@
           "data"
         ],
         "title": "ApiResponse[list[WSEvent]]"
-      },
-      "ApiResponse_list_dict__": {
-        "properties": {
-          "data": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponse[list[dict]]"
       },
       "ApiResponse_list_str__": {
         "properties": {

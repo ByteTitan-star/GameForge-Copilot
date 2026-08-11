@@ -9,6 +9,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError, ErrorCode
@@ -70,7 +71,13 @@ async def submit(
     )
     db.add(req)
     game.status = GameStatus.SUBMITTED.value
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # 并发 submit TOCTOU 兜底：两个请求同时穿过 _SUBMITTABLE 检查，
+        # 部分唯一索引（uq_publish_active_per_game）拦下第二条 → 409。
+        await db.rollback()
+        raise AppError(ErrorCode.INVALID_STATE, "该游戏已有待审核的发布申请") from None
     await db.refresh(req)
     return req
 

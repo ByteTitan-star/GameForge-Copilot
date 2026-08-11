@@ -2,9 +2,11 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.auth.deps import CurrentUser, DbSession, RedisClient
+from app.auth.ratelimit import check_rate_limit
+from app.core.config import settings
 from app.core.response import ApiResponse, ErrorResponse
 from app.enums import LLMProvider
 from app.llm import services
@@ -24,6 +26,7 @@ router = APIRouter(prefix="/me/llm-configs", tags=["llm-config"])
 ERR_404 = {404: {"model": ErrorResponse, "description": "配置不存在"}}
 ERR_400 = {400: {"model": ErrorResponse, "description": "连通测试失败"}}
 ERR_409 = {409: {"model": ErrorResponse, "description": "删除默认配置需先指定新默认"}}
+ERR_429 = {429: {"model": ErrorResponse, "description": "限流"}}
 
 
 @router.get("", response_model=ApiResponse[list[LLMConfigResp]])
@@ -46,22 +49,46 @@ async def list_models(
     "",
     response_model=ApiResponse[LLMConfigCreateResp],
     status_code=201,
-    responses=ERR_400,
+    responses={**ERR_400, **ERR_429},
 )
 async def create_config(
-    user: CurrentUser, db: DbSession, req: LLMConfigCreate
+    user: CurrentUser,
+    db: DbSession,
+    r: RedisClient,
+    request: Request,
+    req: LLMConfigCreate,
 ) -> ApiResponse[LLMConfigCreateResp]:
+    # create 内含一次真实 LLM 连通探测，按用户限流防成本放大
+    await check_rate_limit(
+        r,
+        f"rl:llm-probe:{user.id}",
+        settings.llm_probe_rate_limit_per_min,
+        60,
+    )
     return ApiResponse(data=await services.create_config(db, user, req))
 
 
 @router.post(
     "/test",
     response_model=ApiResponse[LLMConfigDryTestResp],
+    responses=ERR_429,
 )
 async def test_draft_config(
-    _user: CurrentUser, req: LLMConfigTestReq
+    user: CurrentUser,
+    r: RedisClient,
+    request: Request,
+    req: LLMConfigTestReq,
 ) -> ApiResponse[LLMConfigDryTestResp]:
-    """保存前连通测试（provider + model + apikey + base_url），不落库。"""
+    """保存前连通测试（provider + model + apikey + base_url），不落库。
+
+    纯付费 LLM 调用，按用户限流防成本放大。
+    """
+    await check_rate_limit(
+        r,
+        f"rl:llm-probe:{user.id}",
+        settings.llm_probe_rate_limit_per_min,
+        60,
+    )
     return ApiResponse(data=await services.test_draft_config(req))
 
 
@@ -86,9 +113,20 @@ async def delete_config(
 @router.post(
     "/{config_id}/test",
     response_model=ApiResponse[LLMConfigTestResp],
-    responses=ERR_404,
+    responses={**ERR_404, **ERR_429},
 )
 async def test_config(
-    user: CurrentUser, db: DbSession, config_id: UUID
+    user: CurrentUser,
+    db: DbSession,
+    r: RedisClient,
+    request: Request,
+    config_id: UUID,
 ) -> ApiResponse[LLMConfigTestResp]:
+    # 已存配置连通测试：真实付费 LLM 调用，按用户限流防成本放大
+    await check_rate_limit(
+        r,
+        f"rl:llm-probe:{user.id}",
+        settings.llm_probe_rate_limit_per_min,
+        60,
+    )
     return ApiResponse(data=await services.test_config(db, user, config_id))
