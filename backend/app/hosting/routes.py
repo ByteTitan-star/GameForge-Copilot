@@ -12,6 +12,8 @@ from sqlalchemy import select
 
 from app.analytics import store as analytics_store
 from app.auth.deps import CurrentUser, DbSession, RedisClient
+from app.core.cdn_policy import build_csp
+from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus
 from app.hosting import store
@@ -20,12 +22,15 @@ from app.models.game_version import GameVersion
 
 router = APIRouter(tags=["hosting"])
 
-# 产物是 LLM 生成的单文件 HTML（内联 <script>），iframe sandbox=allow-scripts 不加
-# allow-same-origin（隔离 origin/cookie），故允许 inline 不引入同源风险。
-_CSP = (
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-    "style-src 'self' 'unsafe-inline'; img-src 'self' data:"
-)
+# 产物引用公共 CDN（three.js / tailwind / 字体等）渲染；CSP 收敛到 app.core.cdn_policy
+# 白名单，不再放行整个 https:，避免任意外站脚本跑进 iframe。iframe sandbox=allow-scripts
+# 不加 allow-same-origin（opaque origin，隔离父域 cookie/storage），游戏脚本拿不到父域数据。
+_CSP = build_csp()
+
+
+def _cache_control(prod: str) -> str:
+    """dev 禁缓存（改产物/CSP 即时生效）；生产沿用 prod 策略。"""
+    return "no-store" if settings.env == "development" else prod
 
 
 @router.get("/play/{slug}")
@@ -55,7 +60,7 @@ async def play(
         path,
         headers={
             "Content-Security-Policy": _CSP,
-            "Cache-Control": "public, max-age=31536000, immutable",
+            "Cache-Control": _cache_control("public, max-age=31536000, immutable"),
         },
     )
 
@@ -82,6 +87,6 @@ async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSessi
         path,
         headers={
             "Content-Security-Policy": _CSP,
-            "Cache-Control": "private, max-age=60",
+            "Cache-Control": _cache_control("private, max-age=60"),
         },
     )

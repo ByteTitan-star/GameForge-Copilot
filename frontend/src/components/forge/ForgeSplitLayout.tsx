@@ -11,10 +11,10 @@ import { useT } from "@/i18n/use-t";
 import { cn } from "@/lib/cn";
 
 const STORAGE_KEY = "gf-forge-stage-ratio";
-const DEFAULT_STAGE_RATIO = 0.62;
-const MIN_STAGE_RATIO = 0.45;
+const DEFAULT_STAGE_RATIO = 0.64;
+const MIN_STAGE_RATIO = 0.55;
 const MAX_STAGE_RATIO = 0.72;
-const MIN_LEFT_PX = 360;
+const MIN_LEFT_PX = 320;
 
 type Props = {
   stageOpen: boolean;
@@ -81,7 +81,6 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
   }, [persistRatio, stageOpen]);
 
   const leftRatio = `${((1 - stageRatio) * 100).toFixed(2)}%`;
-  const rightRatio = `${(stageRatio * 100).toFixed(2)}%`;
 
   function resizeWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
     const step = event.shiftKey ? 0.05 : 0.02;
@@ -111,13 +110,12 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
       style={
         stageOpen
           ? ({
-              "--gf-forge-left-ratio": leftRatio,
-              gridTemplateColumns: `${leftRatio} 12px minmax(0, ${rightRatio})`,
+              gridTemplateColumns: `${leftRatio} 6px 1fr`,
             } as CSSProperties)
           : undefined
       }
     >
-      <div className="gf-forge-panel-left min-h-[420px] lg:min-h-0">{left}</div>
+      <div className="gf-forge-panel-left min-h-0 min-w-0">{left}</div>
 
       {stageOpen ? (
         <>
@@ -130,7 +128,7 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
             tabIndex={0}
             aria-label={t("forgeDragToResize")}
             title={t("forgeDragToResize")}
-            className="gf-forge-split-handle group relative hidden cursor-col-resize touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.4)] focus-visible:ring-offset-2 lg:grid"
+            className="gf-forge-split-handle group relative hidden cursor-col-resize touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.4)] focus-visible:ring-offset-2 xl:grid"
             onPointerDown={(event) => {
               event.preventDefault();
               draggingRef.current = true;
@@ -138,7 +136,7 @@ export function ForgeSplitLayout({ stageOpen, left, right, className }: Props) {
             }}
             onKeyDown={resizeWithKeyboard}
           />
-          <div className="gf-forge-panel-right min-h-[480px] lg:min-h-0">
+          <div className="gf-forge-panel-right min-h-0 min-w-0">
             {right}
           </div>
         </>

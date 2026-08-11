@@ -135,7 +135,8 @@
 
     let gameState = 'START'; 
     let score = 0;
-    let highScore = localStorage.getItem('neonGravityHighScore') || 0;
+    let highScore;
+    try { highScore = localStorage.getItem('neonGravityHighScore') || 0; } catch { highScore = 0; }
     highScoreEl.textContent = highScore;
     let baseSpeed = 6;
     let speedMultiplier = 1;
@@ -399,7 +400,7 @@
       
       if (score > highScore) {
         highScore = score;
-        localStorage.setItem('neonGravityHighScore', highScore);
+        try { localStorage.setItem('neonGravityHighScore', highScore); } catch {}
         highScoreEl.textContent = highScore;
       }
 

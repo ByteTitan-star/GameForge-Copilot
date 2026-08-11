@@ -16,6 +16,8 @@ type Props = {
   onInputChange: (v: string) => void;
   onSend: () => void;
   disabled?: boolean;
+  /** 发送按钮禁用态，默认 = disabled || 输入为空；阻塞态可额外禁用 */
+  sendDisabled?: boolean;
   streaming?: boolean;
   placeholder?: string;
   className?: string;
@@ -34,6 +36,7 @@ export function ChatPanel({
   onInputChange,
   onSend,
   disabled,
+  sendDisabled,
   streaming,
   placeholder,
   className,
@@ -218,7 +221,7 @@ export function ChatPanel({
                       ? "gf-btn-primary gf-interactive !border-0"
                       : "!bg-[#20262d] !text-white hover:!bg-[#303940]"),
                 )}
-                disabled={disabled || !input.trim()}
+                disabled={sendDisabled ?? (disabled || !input.trim())}
                 onClick={onSend}
               >
                 <Send className="h-3.5 w-3.5" />

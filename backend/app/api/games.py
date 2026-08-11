@@ -22,11 +22,17 @@ from app.schemas.game import (
     GameResp,
     VersionItem,
 )
-from app.schemas.reactions import CreatorBrief, PublicGameMeta, ReactionToggleResp
+from app.schemas.reactions import (
+    CreatorBrief,
+    PublicGameMeta,
+    ReactionStateResp,
+    ReactionToggleResp,
+)
 
 router = APIRouter(prefix="/games", tags=["games"])
 
 ERR_404 = {404: {"model": ErrorResponse, "description": "游戏不存在或不可见"}}
+ERR_403 = {403: {"model": ErrorResponse, "description": "邮箱未验证"}}
 ERR_409 = {409: {"model": ErrorResponse, "description": "状态冲突"}}
 
 
@@ -72,7 +78,7 @@ async def _public_item(db: DbSession, game: Game) -> PublicGameMeta:
     )
 
 
-@router.post("", response_model=ApiResponse[GameResp], status_code=201)
+@router.post("", response_model=ApiResponse[GameResp], status_code=201, responses=ERR_403)
 async def create_game(req: GameCreate, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
     return ApiResponse(data=_to_resp(await services.create_game(db, user, req)))
 
@@ -112,7 +118,7 @@ async def get_public_game_meta(slug: str, db: DbSession) -> ApiResponse[PublicGa
     "/fork/{slug}",
     response_model=ApiResponse[GameResp],
     status_code=201,
-    responses={**ERR_404, **ERR_409},
+    responses={**ERR_403, **ERR_404, **ERR_409},
 )
 async def fork_official_game(
     slug: str, user: CurrentUser, db: DbSession
@@ -197,6 +203,20 @@ async def activate_version(
     )
 
 
+@router.get(
+    "/{game_id}/reactions",
+    response_model=ApiResponse[ReactionStateResp],
+    responses=ERR_404,
+)
+async def get_reaction_state(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionStateResp]:
+    """读取当前用户对该游戏的点赞/收藏态 + 公开计数（Batch C · R7）。"""
+    return ApiResponse(
+        data=await reaction_services.get_reaction_state(db, user, game_id)
+    )
+
+
 @router.post(
     "/{game_id}/like",
     response_model=ApiResponse[ReactionToggleResp],
@@ -210,6 +230,20 @@ async def toggle_like(
     )
 
 
+@router.delete(
+    "/{game_id}/like",
+    response_model=ApiResponse[ReactionToggleResp],
+    responses=ERR_404,
+)
+async def unlike(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionToggleResp]:
+    """幂等取消点赞（不存在则 noop），返回最新计数。"""
+    return ApiResponse(
+        data=await reaction_services.remove_reaction(db, user, game_id, ReactionType.LIKE)
+    )
+
+
 @router.post(
     "/{game_id}/favorite",
     response_model=ApiResponse[ReactionToggleResp],
@@ -220,4 +254,18 @@ async def toggle_favorite(
 ) -> ApiResponse[ReactionToggleResp]:
     return ApiResponse(
         data=await reaction_services.toggle_reaction(db, user, game_id, ReactionType.FAVORITE)
+    )
+
+
+@router.delete(
+    "/{game_id}/favorite",
+    response_model=ApiResponse[ReactionToggleResp],
+    responses=ERR_404,
+)
+async def unfavorite(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[ReactionToggleResp]:
+    """幂等取消收藏（不存在则 noop），返回最新计数。"""
+    return ApiResponse(
+        data=await reaction_services.remove_reaction(db, user, game_id, ReactionType.FAVORITE)
     )

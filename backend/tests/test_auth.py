@@ -6,14 +6,26 @@ PWD = "password123"
 EMAIL = "a@b.com"
 
 
-async def test_register_login_refresh_logout(client: httpx.AsyncClient) -> None:
-    # 1. 注册（注册即视为已验证，无需验证邮箱步骤）
+async def test_register_verify_login_refresh_logout(
+    client: httpx.AsyncClient, sent: dict[str, str]
+) -> None:
+    # 1. 注册（生成 6 位验证码，由 conftest 捕获）
     resp = await client.post(
         "/api/v1/auth/register", json={"email": EMAIL, "password": PWD}
     )
     assert resp.status_code == 201, resp.text
+    token = sent[f"verify:{EMAIL}"]
+    assert token
+    assert len(token) == 6
 
-    # 2. 登录（email_verified 恒为 True）
+    # 2. 验证邮箱
+    resp = await client.post(
+        "/api/v1/auth/verify-email", json={"email": EMAIL, "code": token}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["email_verified"] is True
+
+    # 3. 登录（已验证）
     resp = await client.post(
         "/api/v1/auth/login", json={"email": EMAIL, "password": PWD}
     )
@@ -23,22 +35,22 @@ async def test_register_login_refresh_logout(client: httpx.AsyncClient) -> None:
     assert body["user"]["email_verified"] is True
     assert body["user"]["role"] == "user"
 
-    # 3. refresh 轮换
+    # 4. refresh 轮换
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 200, resp.text
     new_refresh = resp.json()["data"]["refresh_token"]
     assert new_refresh != refresh
 
-    # 4. 旧 refresh 失效
+    # 5. 旧 refresh 失效
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 401
 
-    # 5. logout
+    # 6. logout
     resp = await client.post("/api/v1/auth/logout", json={"refresh_token": new_refresh})
     assert resp.status_code == 204
     assert resp.text == ""
 
-    # 6. logout 后 refresh 失效
+    # 7. logout 后 refresh 失效
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
     assert resp.status_code == 401
 
@@ -136,3 +148,20 @@ async def test_password_change_requires_auth(client: httpx.AsyncClient) -> None:
         json={"old_password": PWD, "new_password": "newpassword123"},
     )
     assert r.status_code == 401
+
+
+async def test_unverified_cannot_create_game_403(client: httpx.AsyncClient) -> None:
+    """门禁：未验证邮箱的用户不能创建游戏（_require_verified → 403）。"""
+    await client.post("/api/v1/auth/register", json={"email": "uv@b.com", "password": PWD})
+    resp = await client.post(
+        "/api/v1/auth/login", json={"email": "uv@b.com", "password": PWD}
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["data"]["access_token"]
+    resp = await client.post(
+        "/api/v1/games",
+        json={"title": "t"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"

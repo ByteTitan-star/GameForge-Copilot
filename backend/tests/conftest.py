@@ -346,16 +346,44 @@ async def auth_client() -> AsyncIterator[httpx.AsyncClient]:
 
 @pytest_asyncio.fixture
 async def verified_client() -> AsyncIterator[httpx.AsyncClient]:
-    """注册（注册即验证）→登录，带 Bearer 头；games/runs 端点用。"""
+    """注册→验证邮箱→登录，带 Bearer 头；games/runs 端点需 email_verified。"""
     async with _new_client() as client:
         await client.post(
             "/api/v1/auth/register", json={"email": "v@b.com", "password": "password123"}
         )
+        token = _sent["verify:v@b.com"]
+        resp = await client.post(
+            "/api/v1/auth/verify-email",
+            json={"email": "v@b.com", "code": token},
+        )
+        assert resp.status_code == 200, resp.text
         resp = await client.post(
             "/api/v1/auth/login", json={"email": "v@b.com", "password": "password123"}
         )
         assert resp.status_code == 200, resp.text
         client.headers["Authorization"] = f"Bearer {resp.json()['data']['access_token']}"
+        # 预置默认 LLM 配置：create_run 前置校验要求用户有 is_default 配置
+        from sqlalchemy import select
+
+        from app.enums import LLMProvider
+        from app.llm import crypto
+        from app.models.llm_config import UserLLMConfig
+        from app.models.user import User
+
+        async with _SessionLocal() as s:
+            user = (await s.scalars(select(User).where(User.email == "v@b.com"))).first()
+            assert user is not None
+            s.add(
+                UserLLMConfig(
+                    user_id=user.id,
+                    provider=LLMProvider.ANTHROPIC.value,
+                    model="claude-sonnet-5",
+                    apikey_enc=crypto.encrypt_apikey("sk-test-verify"),
+                    base_url=None,
+                    is_default=True,
+                )
+            )
+            await s.commit()
         yield client
 
 

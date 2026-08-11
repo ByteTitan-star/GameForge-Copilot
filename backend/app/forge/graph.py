@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.errors import AppError
 from app.enums import RunPhase, RunStatus, WSEventType
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
@@ -790,10 +791,21 @@ async def run_generation(
                 )
             except Exception as e:
                 duration = round(time.monotonic() - started, 3)
-                log.exception(
-                    "request failed",
-                    extra={"stage": stage, "duration": duration},
-                )
+                if isinstance(e, AppError):
+                    # 业务错（LLM 未配置/apikey 错等）不打整条栈，仅一行 warning
+                    log.warning(
+                        "request failed (business)",
+                        extra={
+                            "stage": stage,
+                            "duration": duration,
+                            "code": e.code.value,
+                        },
+                    )
+                else:
+                    log.exception(
+                        "request failed",
+                        extra={"stage": stage, "duration": duration},
+                    )
                 run.status = RunStatus.FAILED.value
                 run.ended_at = datetime.now(UTC)
                 await s.commit()

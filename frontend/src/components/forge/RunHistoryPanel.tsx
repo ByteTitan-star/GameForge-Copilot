@@ -16,10 +16,10 @@ type Props = {
 }
 
 const statusTone: Record<string, string> = {
-  running: 'text-emerald-400',
-  paused: 'text-amber-400',
-  done: 'text-white/50',
-  failed: 'text-rose-400',
+  running: 'text-emerald-600',
+  paused: 'text-amber-600',
+  done: 'text-slate-500',
+  failed: 'text-rose-600',
 }
 
 export function RunHistoryPanel({

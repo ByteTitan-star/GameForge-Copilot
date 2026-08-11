@@ -12,7 +12,7 @@ from app.enums import GameStatus, ReactionType
 from app.models.game import Game
 from app.models.game_reaction import GameReaction
 from app.models.user import User
-from app.schemas.reactions import FavoriteGameItem, ReactionToggleResp
+from app.schemas.reactions import FavoriteGameItem, ReactionStateResp, ReactionToggleResp
 
 
 async def _get_published_game(db: AsyncSession, game_id: UUID) -> Game:
@@ -68,6 +68,54 @@ async def toggle_reaction(
     return ReactionToggleResp(
         game_id=game_id,
         active=active,
+        like_count=like_count,
+        favorite_count=favorite_count,
+    )
+
+
+async def get_reaction_state(
+    db: AsyncSession, user: User, game_id: UUID
+) -> ReactionStateResp:
+    """当前用户对该游戏的点赞/收藏态 + 公开计数（游戏须 published）。"""
+    await _get_published_game(db, game_id)
+    reacted = {
+        t
+        for t in await db.scalars(
+            select(GameReaction.type).where(
+                GameReaction.user_id == user.id,
+                GameReaction.game_id == game_id,
+            )
+        )
+    }
+    like_count, favorite_count = await reaction_counts(db, game_id)
+    return ReactionStateResp(
+        game_id=game_id,
+        liked=ReactionType.LIKE.value in reacted,
+        favorited=ReactionType.FAVORITE.value in reacted,
+        like_count=like_count,
+        favorite_count=favorite_count,
+    )
+
+
+async def remove_reaction(
+    db: AsyncSession, user: User, game_id: UUID, reaction_type: ReactionType
+) -> ReactionToggleResp:
+    """幂等删除当前用户的指定 reaction（不存在则 noop），返回最新计数。"""
+    await _get_published_game(db, game_id)
+    row = await db.scalar(
+        select(GameReaction).where(
+            GameReaction.user_id == user.id,
+            GameReaction.game_id == game_id,
+            GameReaction.type == reaction_type.value,
+        )
+    )
+    if row is not None:
+        await db.delete(row)
+        await db.commit()
+    like_count, favorite_count = await reaction_counts(db, game_id)
+    return ReactionToggleResp(
+        game_id=game_id,
+        active=False,
         like_count=like_count,
         favorite_count=favorite_count,
     )

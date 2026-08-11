@@ -243,6 +243,140 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dev/verification-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Peek Verification Code */
+        get: operations["peek_verification_code_api_v1_dev_verification_code_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/runtime/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Status
+         * @description Redis key counts by scope + RabbitMQ queue depth.
+         */
+        get: operations["runtime_status_api_v1_dev_runtime_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/queue/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Queue Stats */
+        get: operations["queue_stats_api_v1_dev_queue_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/queue/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue Purge
+         * @description Purge pending worker tasks (e.g. after worker crash during debug).
+         */
+        post: operations["queue_purge_api_v1_dev_queue_purge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/redis/flush": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redis Flush
+         * @description Delete Redis keys by scope. Use run_id with forge scope for a single run.
+         */
+        post: operations["redis_flush_api_v1_dev_redis_flush_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/runs/{run_id}/requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Requeue Run
+         * @description Re-enqueue a stuck run after worker restart.
+         */
+        post: operations["requeue_run_api_v1_dev_runs__run_id__requeue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dev/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Dev
+         * @description 一键清本地 dev 的 forge 运行态：失败所有 active run + 清 forge Redis + 清任务队列。
+         */
+        post: operations["reset_dev_api_v1_dev_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/llm-configs": {
         parameters: {
             query?: never;
@@ -275,6 +409,26 @@ export interface paths {
         get: operations["list_models_api_v1_me_llm_configs_models_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/llm-configs/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Draft Config
+         * @description 保存前连通测试（provider + model + apikey + base_url），不落库。
+         */
+        post: operations["test_draft_config_api_v1_me_llm_configs_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -354,6 +508,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/featured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Featured Games
+         * @description 本周精选（Batch C · R7）。
+         */
+        get: operations["list_featured_games_api_v1_games_featured_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/public/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Game Meta */
+        get: operations["get_public_game_meta_api_v1_games_public__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/fork/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork Official Game
+         * @description Fork 官方预置游戏为当前用户 draft（Batch A · R1）。
+         */
+        post: operations["fork_official_game_api_v1_games_fork__slug__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}": {
         parameters: {
             query?: never;
@@ -393,6 +604,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/{game_id}/versions/{version}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Version
+         * @description 切换 current_version（Batch A · R4）。
+         */
+        post: operations["activate_version_api_v1_games__game_id__versions__version__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/reactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reaction State
+         * @description 读取当前用户对该游戏的点赞/收藏态 + 公开计数（Batch C · R7）。
+         */
+        get: operations["get_reaction_state_api_v1_games__game_id__reactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/like": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Like */
+        post: operations["toggle_like_api_v1_games__game_id__like_post"];
+        /**
+         * Unlike
+         * @description 幂等取消点赞（不存在则 noop），返回最新计数。
+         */
+        delete: operations["unlike_api_v1_games__game_id__like_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Favorite */
+        post: operations["toggle_favorite_api_v1_games__game_id__favorite_post"];
+        /**
+         * Unfavorite
+         * @description 幂等取消收藏（不存在则 noop），返回最新计数。
+         */
+        delete: operations["unfavorite_api_v1_games__game_id__favorite_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/official-games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Official Games */
+        get: operations["list_official_games_api_v1_official_games_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates": {
         parameters: {
             query?: never;
@@ -402,6 +712,58 @@ export interface paths {
         };
         /** Get Templates */
         get: operations["get_templates_api_v1_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile */
+        get: operations["get_profile_api_v1_me_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Profile */
+        patch: operations["patch_profile_api_v1_me_profile_patch"];
+        trace?: never;
+    };
+    "/api/v1/u/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Creator */
+        get: operations["get_creator_api_v1_u__handle__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Favorites */
+        get: operations["list_favorites_api_v1_me_favorites_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -428,6 +790,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/runs/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Active Runs
+         * @description 跨游戏进行中的 run，供刷新/跳转后找回任务。
+         */
+        get: operations["list_active_runs_api_v1_me_runs_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -437,6 +819,26 @@ export interface paths {
         };
         /** Get Run */
         get: operations["get_run_api_v1_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Events
+         * @description WS 事件历史（Redis 缓冲），HTTP 回退 replay。
+         */
+        get: operations["get_run_events_api_v1_runs__run_id__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -490,6 +892,26 @@ export interface paths {
         put?: never;
         /** Cancel Run */
         post: operations["cancel_run_api_v1_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Run
+         * @description 从失败阶段重试（Batch A · R3）。
+         */
+        post: operations["retry_run_api_v1_runs__run_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -844,6 +1266,23 @@ export interface paths {
         patch: operations["patch_game_schedule_api_v1_admin_games__game_id__schedule_patch"];
         trace?: never;
     };
+    "/api/v1/admin/games/{game_id}/featured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Game Featured */
+        patch: operations["patch_game_featured_api_v1_admin_games__game_id__featured_patch"];
+        trace?: never;
+    };
     "/play/{slug}": {
         parameters: {
             query?: never;
@@ -888,6 +1327,36 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActiveRunItem */
+        ActiveRunItem: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Game Title */
+            game_title: string;
+            status: components["schemas"]["RunStatus"];
+            phase: components["schemas"]["RunPhase"];
+            entry_phase: components["schemas"]["EntryPhase"];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ws Url */
+            ws_url: string;
+        };
+        /** AdminGameFeaturedPatch */
+        AdminGameFeaturedPatch: {
+            /** Featured Rank */
+            featured_rank?: number | null;
+        };
         /** AdminGameItem */
         AdminGameItem: {
             /**
@@ -1005,6 +1474,18 @@ export interface components {
         ApiResponse_AdminUserItem_: {
             data: components["schemas"]["AdminUserItem"];
         };
+        /** ApiResponse[CreatorProfile] */
+        ApiResponse_CreatorProfile_: {
+            data: components["schemas"]["CreatorProfile"];
+        };
+        /** ApiResponse[DevRequeueResp] */
+        ApiResponse_DevRequeueResp_: {
+            data: components["schemas"]["DevRequeueResp"];
+        };
+        /** ApiResponse[DevResetResp] */
+        ApiResponse_DevResetResp_: {
+            data: components["schemas"]["DevResetResp"];
+        };
         /** ApiResponse[GameAnalyticsResp] */
         ApiResponse_GameAnalyticsResp_: {
             data: components["schemas"]["GameAnalyticsResp"];
@@ -1041,6 +1522,10 @@ export interface components {
         ApiResponse_LLMConfigDeleteResp_: {
             data: components["schemas"]["LLMConfigDeleteResp"];
         };
+        /** ApiResponse[LLMConfigDryTestResp] */
+        ApiResponse_LLMConfigDryTestResp_: {
+            data: components["schemas"]["LLMConfigDryTestResp"];
+        };
         /** ApiResponse[LLMConfigResp] */
         ApiResponse_LLMConfigResp_: {
             data: components["schemas"]["LLMConfigResp"];
@@ -1069,6 +1554,10 @@ export interface components {
         ApiResponse_PasswordResetResp_: {
             data: components["schemas"]["PasswordResetResp"];
         };
+        /** ApiResponse[PublicGameMeta] */
+        ApiResponse_PublicGameMeta_: {
+            data: components["schemas"]["PublicGameMeta"];
+        };
         /** ApiResponse[PublishApproveResp] */
         ApiResponse_PublishApproveResp_: {
             data: components["schemas"]["PublishApproveResp"];
@@ -1081,9 +1570,29 @@ export interface components {
         ApiResponse_PublishSubmitResp_: {
             data: components["schemas"]["PublishSubmitResp"];
         };
+        /** ApiResponse[QueuePurgeResp] */
+        ApiResponse_QueuePurgeResp_: {
+            data: components["schemas"]["QueuePurgeResp"];
+        };
+        /** ApiResponse[QueueStatsResp] */
+        ApiResponse_QueueStatsResp_: {
+            data: components["schemas"]["QueueStatsResp"];
+        };
+        /** ApiResponse[ReactionStateResp] */
+        ApiResponse_ReactionStateResp_: {
+            data: components["schemas"]["ReactionStateResp"];
+        };
+        /** ApiResponse[ReactionToggleResp] */
+        ApiResponse_ReactionToggleResp_: {
+            data: components["schemas"]["ReactionToggleResp"];
+        };
         /** ApiResponse[Ready] */
         ApiResponse_Ready_: {
             data: components["schemas"]["Ready"];
+        };
+        /** ApiResponse[RedisFlushResp] */
+        ApiResponse_RedisFlushResp_: {
+            data: components["schemas"]["RedisFlushResp"];
         };
         /** ApiResponse[RegisterResp] */
         ApiResponse_RegisterResp_: {
@@ -1105,6 +1614,10 @@ export interface components {
         ApiResponse_RunStatusResp_: {
             data: components["schemas"]["RunStatusResp"];
         };
+        /** ApiResponse[RuntimeStatusResp] */
+        ApiResponse_RuntimeStatusResp_: {
+            data: components["schemas"]["RuntimeStatusResp"];
+        };
         /** ApiResponse[TakeDownResp] */
         ApiResponse_TakeDownResp_: {
             data: components["schemas"]["TakeDownResp"];
@@ -1117,6 +1630,10 @@ export interface components {
         ApiResponse_UsageResp_: {
             data: components["schemas"]["UsageResp"];
         };
+        /** ApiResponse[UserProfile] */
+        ApiResponse_UserProfile_: {
+            data: components["schemas"]["UserProfile"];
+        };
         /** ApiResponse[VerifyEmailResp] */
         ApiResponse_VerifyEmailResp_: {
             data: components["schemas"]["VerifyEmailResp"];
@@ -1128,6 +1645,18 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ApiResponse[dict[str, str]] */
+        ApiResponse_dict_str__str__: {
+            /** Data */
+            data: {
+                [key: string]: string;
+            };
+        };
+        /** ApiResponse[list[ActiveRunItem]] */
+        ApiResponse_list_ActiveRunItem__: {
+            /** Data */
+            data: components["schemas"]["ActiveRunItem"][];
+        };
         /** ApiResponse[list[LLMConfigResp]] */
         ApiResponse_list_LLMConfigResp__: {
             /** Data */
@@ -1137,6 +1666,11 @@ export interface components {
         ApiResponse_list_NotificationItem__: {
             /** Data */
             data: components["schemas"]["NotificationItem"][];
+        };
+        /** ApiResponse[list[OfficialGameItem]] */
+        ApiResponse_list_OfficialGameItem__: {
+            /** Data */
+            data: components["schemas"]["OfficialGameItem"][];
         };
         /** ApiResponse[list[PublishQueueItem]] */
         ApiResponse_list_PublishQueueItem__: {
@@ -1157,6 +1691,11 @@ export interface components {
         ApiResponse_list_VersionItem__: {
             /** Data */
             data: components["schemas"]["VersionItem"][];
+        };
+        /** ApiResponse[list[WSEvent]] */
+        ApiResponse_list_WSEvent__: {
+            /** Data */
+            data: components["schemas"]["WSEvent"][];
         };
         /** ApiResponse[list[dict]] */
         ApiResponse_list_dict__: {
@@ -1196,6 +1735,73 @@ export interface components {
              */
             created_at: string;
         };
+        /** CreatorBrief */
+        CreatorBrief: {
+            /** Handle */
+            handle?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+        };
+        /** CreatorGameItem */
+        CreatorGameItem: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Title */
+            title: string;
+            /** Slug */
+            slug: string;
+            /** Play Count */
+            play_count: number;
+            /** Published At */
+            published_at: string | null;
+        };
+        /** CreatorProfile */
+        CreatorProfile: {
+            /** Handle */
+            handle: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Total Plays */
+            total_plays: number;
+            /** Latest Published At */
+            latest_published_at: string | null;
+            /** Games */
+            games: components["schemas"]["CreatorGameItem"][];
+        };
+        /** DevRequeueResp */
+        DevRequeueResp: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Task */
+            task: string;
+            /** Status */
+            status: string;
+            /** Phase */
+            phase?: string | null;
+        };
+        /** DevResetResp */
+        DevResetResp: {
+            /** Failed Runs */
+            failed_runs: string[];
+            /** Failed Count */
+            failed_count: number;
+            /** Redis Deleted */
+            redis_deleted: {
+                [key: string]: number;
+            };
+            queue: components["schemas"]["QueuePurgeResp"];
+        };
+        /**
+         * EntryPhase
+         * @enum {string}
+         */
+        EntryPhase: "plan" | "code";
         /** ErrorDetail */
         ErrorDetail: {
             /** Code */
@@ -1213,6 +1819,26 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /** FavoriteGameItem */
+        FavoriteGameItem: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Title */
+            title: string;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["GameStatus"];
+            /** Play Count */
+            play_count: number;
+            /**
+             * Favorited At
+             * Format: date-time
+             */
+            favorited_at: string;
         };
         /** GameAnalyticsResp */
         GameAnalyticsResp: {
@@ -1397,6 +2023,17 @@ export interface components {
             /** Node */
             node: string;
         };
+        /** HitlWaitDetail */
+        HitlWaitDetail: {
+            /** Node */
+            node: string;
+            /** Design Doc */
+            design_doc?: {
+                [key: string]: unknown;
+            } | string | null;
+            /** Action Url */
+            action_url?: string | null;
+        };
         /** LLMConfigCreate */
         LLMConfigCreate: {
             provider: components["schemas"]["LLMProvider"];
@@ -1444,6 +2081,13 @@ export interface components {
              */
             deleted: boolean;
         };
+        /** LLMConfigDryTestResp */
+        LLMConfigDryTestResp: {
+            /** Tested Ok */
+            tested_ok: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /** LLMConfigPatch */
         LLMConfigPatch: {
             /** Model */
@@ -1467,6 +2111,19 @@ export interface components {
             base_url?: string | null;
             /** Is Default */
             is_default: boolean;
+        };
+        /**
+         * LLMConfigTestReq
+         * @description 保存前探测：provider + model + apikey + base_url（不落库）。
+         */
+        LLMConfigTestReq: {
+            provider: components["schemas"]["LLMProvider"];
+            /** Model */
+            model: string;
+            /** Apikey */
+            apikey: string;
+            /** Base Url */
+            base_url?: string | null;
         };
         /** LLMConfigTestResp */
         LLMConfigTestResp: {
@@ -1539,6 +2196,19 @@ export interface components {
              */
             read: boolean;
         };
+        /** OfficialGameItem */
+        OfficialGameItem: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Play Url */
+            play_url: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+        };
         /** PaginatedData[AdminGameItem] */
         PaginatedData_AdminGameItem_: {
             /** Data */
@@ -1572,6 +2242,17 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** PaginatedData[FavoriteGameItem] */
+        PaginatedData_FavoriteGameItem_: {
+            /** Data */
+            data: components["schemas"]["FavoriteGameItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /** PaginatedData[GameListItem] */
         PaginatedData_GameListItem_: {
             /** Data */
@@ -1583,10 +2264,10 @@ export interface components {
             /** Size */
             size: number;
         };
-        /** PaginatedData[PublicGameItem] */
-        PaginatedData_PublicGameItem_: {
+        /** PaginatedData[PublicGameMeta] */
+        PaginatedData_PublicGameMeta_: {
             /** Data */
-            data: components["schemas"]["PublicGameItem"][];
+            data: components["schemas"]["PublicGameMeta"][];
             /** Total */
             total: number;
             /** Page */
@@ -1666,8 +2347,17 @@ export interface components {
              */
             sent: boolean;
         };
-        /** PublicGameItem */
-        PublicGameItem: {
+        /** ProfilePatch */
+        ProfilePatch: {
+            /** Handle */
+            handle?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Profile Public */
+            profile_public?: boolean | null;
+        };
+        /** PublicGameMeta */
+        PublicGameMeta: {
             /**
              * Game Id
              * Format: uuid
@@ -1683,6 +2373,17 @@ export interface components {
             published_at: string | null;
             /** Play Count */
             play_count: number;
+            /**
+             * Like Count
+             * @default 0
+             */
+            like_count: number;
+            /**
+             * Favorite Count
+             * @default 0
+             */
+            favorite_count: number;
+            creator?: components["schemas"]["CreatorBrief"] | null;
         };
         /** PublishApproveResp */
         PublishApproveResp: {
@@ -1760,6 +2461,26 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** QueuePurgeResp */
+        QueuePurgeResp: {
+            /** Backend */
+            backend: string;
+            /** Queue */
+            queue: string;
+            /** Purged */
+            purged: number;
+        };
+        /** QueueStatsResp */
+        QueueStatsResp: {
+            /** Backend */
+            backend: string;
+            /** Queue */
+            queue: string;
+            /** Messages */
+            messages: number;
+            /** Consumers */
+            consumers?: number | null;
+        };
         /** QuotaInfo */
         QuotaInfo: {
             /** Daily Token Limit */
@@ -1769,6 +2490,36 @@ export interface components {
             /** Remaining */
             remaining: number;
         };
+        /** ReactionStateResp */
+        ReactionStateResp: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Liked */
+            liked: boolean;
+            /** Favorited */
+            favorited: boolean;
+            /** Like Count */
+            like_count: number;
+            /** Favorite Count */
+            favorite_count: number;
+        };
+        /** ReactionToggleResp */
+        ReactionToggleResp: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Active */
+            active: boolean;
+            /** Like Count */
+            like_count: number;
+            /** Favorite Count */
+            favorite_count: number;
+        };
         /** Ready */
         Ready: {
             /** Db */
@@ -1777,6 +2528,30 @@ export interface components {
             redis: boolean;
             /** Rabbitmq */
             rabbitmq: boolean;
+        };
+        /** RedisFlushReq */
+        RedisFlushReq: {
+            /** Scopes */
+            scopes: ("forge" | "usage" | "analytics" | "rate_limits" | "quota" | "dev_helpers" | "models_cache" | "refresh_tokens" | "all_ephemeral" | "pattern")[];
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Pattern
+             * @description Required when scopes includes 'pattern', e.g. run:events:*
+             */
+            pattern?: string | null;
+            /**
+             * Confirm
+             * @description Must be "FLUSH" to execute destructive ops
+             */
+            confirm: string;
+        };
+        /** RedisFlushResp */
+        RedisFlushResp: {
+            /** Deleted */
+            deleted: {
+                [key: string]: number;
+            };
         };
         /** RefreshReq */
         RefreshReq: {
@@ -1882,6 +2657,7 @@ export interface components {
             game_id: string;
             status: components["schemas"]["RunStatus"];
             phase: components["schemas"]["RunPhase"];
+            entry_phase: components["schemas"]["EntryPhase"];
             /** Ws Url */
             ws_url: string;
         };
@@ -1904,9 +2680,23 @@ export interface components {
             game_id: string;
             status: components["schemas"]["RunStatus"];
             phase: components["schemas"]["RunPhase"];
+            entry_phase: components["schemas"]["EntryPhase"];
             /** Ws Url */
             ws_url: string;
             current_hitl?: components["schemas"]["HitlState"] | null;
+            hitl_wait?: components["schemas"]["HitlWaitDetail"] | null;
+        };
+        /** RuntimeStatusResp */
+        RuntimeStatusResp: {
+            /** Env */
+            env: string;
+            /** Messaging Backend */
+            messaging_backend: string;
+            /** Redis */
+            redis: {
+                [key: string]: number;
+            };
+            queue: components["schemas"]["QueueStatsResp"];
         };
         /** SystemUsage */
         SystemUsage: {
@@ -1986,6 +2776,25 @@ export interface components {
             total: components["schemas"]["UsageBucket"];
             quota: components["schemas"]["QuotaInfo"];
         };
+        /** UserProfile */
+        UserProfile: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Handle */
+            handle?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Profile Public
+             * @default true
+             */
+            profile_public: boolean;
+        };
         /** UserPublic */
         UserPublic: {
             /**
@@ -2047,6 +2856,32 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * WSEvent
+         * @description WS 事件外层；payload 按 type 不同，前端据 type 解析。
+         */
+        WSEvent: {
+            type: components["schemas"]["WSEventType"];
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * WSEventType
+         * @enum {string}
+         */
+        WSEventType: "phase_start" | "llm_call" | "tool_call" | "build_done" | "qa_report" | "hitl_wait" | "usage" | "done" | "error";
     };
     responses: never;
     parameters: never;
@@ -2546,6 +3381,203 @@ export interface operations {
             };
         };
     };
+    peek_verification_code_api_v1_dev_verification_code_get: {
+        parameters: {
+            query: {
+                email: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_dict_str__str__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_status_api_v1_dev_runtime_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_RuntimeStatusResp_"];
+                };
+            };
+        };
+    };
+    queue_stats_api_v1_dev_queue_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_QueueStatsResp_"];
+                };
+            };
+        };
+    };
+    queue_purge_api_v1_dev_queue_purge_post: {
+        parameters: {
+            query: {
+                confirm: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_QueuePurgeResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redis_flush_api_v1_dev_redis_flush_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedisFlushReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_RedisFlushResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    requeue_run_api_v1_dev_runs__run_id__requeue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DevRequeueResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_dev_api_v1_dev_reset_post: {
+        parameters: {
+            query: {
+                confirm: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_DevResetResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_configs_api_v1_me_llm_configs_get: {
         parameters: {
             query?: never;
@@ -2626,6 +3658,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_list_str__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_draft_config_api_v1_me_llm_configs_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMConfigTestReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_LLMConfigDryTestResp_"];
                 };
             };
             /** @description Validation Error */
@@ -2866,7 +3931,137 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedData_PublicGameItem_"];
+                    "application/json": components["schemas"]["PaginatedData_PublicGameMeta_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_featured_games_api_v1_games_featured_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedData_PublicGameMeta_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_game_meta_api_v1_games_public__slug__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PublicGameMeta_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fork_official_game_api_v1_games_fork__slug__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameResp_"];
+                };
+            };
+            /** @description 邮箱未验证 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3062,6 +4257,276 @@ export interface operations {
             };
         };
     };
+    activate_version_api_v1_games__game_id__versions__version__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reaction_state_api_v1_games__game_id__reactions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ReactionStateResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_like_api_v1_games__game_id__like_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlike_api_v1_games__game_id__like_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_favorite_api_v1_games__game_id__favorite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfavorite_api_v1_games__game_id__favorite_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_official_games_api_v1_official_games_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_OfficialGameItem__"];
+                };
+            };
+        };
+    };
     get_templates_api_v1_templates_get: {
         parameters: {
             query?: never;
@@ -3078,6 +4543,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_list_TemplateItem__"];
+                };
+            };
+        };
+    };
+    get_profile_api_v1_me_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_UserProfile_"];
+                };
+            };
+        };
+    };
+    patch_profile_api_v1_me_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_UserProfile_"];
+                };
+            };
+            /** @description handle 冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_creator_api_v1_u__handle__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_CreatorProfile_"];
+                };
+            };
+            /** @description 创作者不存在或未公开 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_favorites_api_v1_me_favorites_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedData_FavoriteGameItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3184,6 +4783,26 @@ export interface operations {
             };
         };
     };
+    list_active_runs_api_v1_me_runs_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_ActiveRunItem__"];
+                };
+            };
+        };
+    };
     get_run_api_v1_runs__run_id__get: {
         parameters: {
             query?: never;
@@ -3202,6 +4821,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_RunStatusResp_"];
+                };
+            };
+            /** @description run 或游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_events_api_v1_runs__run_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_WSEvent__"];
                 };
             };
             /** @description run 或游戏不存在或不可见 */
@@ -3323,6 +4982,55 @@ export interface operations {
         };
     };
     cancel_run_api_v1_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_RunControlResp_"];
+                };
+            };
+            /** @description run 或游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_run_api_v1_runs__run_id__retry_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4181,6 +5889,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AdminGameSchedulePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AdminGameItem_"];
+                };
+            };
+            /** @description 用户不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_game_featured_api_v1_admin_games__game_id__featured_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGameFeaturedPatch"];
             };
         };
         responses: {

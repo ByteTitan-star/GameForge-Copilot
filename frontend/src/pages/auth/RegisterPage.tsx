@@ -7,38 +7,33 @@ import { OAuthButtons } from '@/components/auth/OAuthButtons'
 import { MagneticButton } from '@/components/ui/magnetic-button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
-import { useAuthStore } from '@/stores/auth-store'
+import { toast } from '@/stores/toast-store'
 
 export function RegisterPage() {
   const t = useT()
   const navigate = useNavigate()
-  const setSession = useAuthStore((s) => s.setSession)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    setError('')
     if (password !== confirm) {
-      setError(t('errPasswordMismatch'))
+      toast.error(t('errPasswordMismatch'))
       return
     }
     setLoading(true)
     try {
       const trimmedEmail = email.trim()
       await authApi.register(trimmedEmail, password)
-      const session = await authApi.login(trimmedEmail, password)
-      setSession({
-        user: session.user,
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
+      // 注册成功 → 跳验证页输码；password 仅存内存 route state，用于验证后自动登录
+      navigate('/verify-email', {
+        replace: true,
+        state: { email: trimmedEmail, password },
       })
-      navigate('/games', { replace: true })
     } catch (err) {
-      setError(formatApiError(err, t('errRegisterFailed')))
+      toast.error(formatApiError(err, t('errRegisterFailed')))
     } finally {
       setLoading(false)
     }
@@ -48,6 +43,7 @@ export function RegisterPage() {
     <AuthShell title={t('register')} subtitle={t('registerSubtitle')}>
       <form className="space-y-4" onSubmit={onSubmit} autoComplete="off">
         <Input
+          variant="glass"
           name="email"
           label={t('email')}
           type="email"
@@ -57,6 +53,7 @@ export function RegisterPage() {
           required
         />
         <Input
+          variant="glass"
           name="password"
           label={t('password')}
           type="password"
@@ -67,6 +64,7 @@ export function RegisterPage() {
           minLength={8}
         />
         <Input
+          variant="glass"
           name="confirm"
           label={t('confirmPassword')}
           type="password"
@@ -76,11 +74,6 @@ export function RegisterPage() {
           required
           minLength={8}
         />
-        {error ? (
-          <p role="alert" className="text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
         <MagneticButton type="submit" className="w-full !rounded-xl" disabled={loading}>
           {loading ? t('registering') : t('register')}
         </MagneticButton>

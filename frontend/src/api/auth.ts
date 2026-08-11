@@ -6,6 +6,8 @@ import type {
   PasswordResetResponse,
   RefreshResponse,
   RegisterResponse,
+  ResendVerificationResponse,
+  VerifyEmailResponse,
 } from './types'
 
 export const authApi = {
@@ -20,6 +22,21 @@ export const authApi = {
     return apiRequest<RegisterResponse>('/auth/register', {
       method: 'POST',
       body: { email, password },
+    })
+  },
+
+  verifyEmail(email: string, code: string) {
+    return apiRequest<VerifyEmailResponse>('/auth/verify-email', {
+      method: 'POST',
+      body: { email, code },
+    })
+  },
+
+  /** 重发验证码；后端防枚举恒返回 sent=true */
+  resendVerification(email: string) {
+    return apiRequest<ResendVerificationResponse>('/auth/resend-verification', {
+      method: 'POST',
+      body: { email },
     })
   },
 
