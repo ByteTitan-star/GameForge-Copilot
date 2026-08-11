@@ -203,6 +203,21 @@ async def list_versions(db: AsyncSession, user: User, game_id: UUID) -> list[Gam
     return list(rows)
 
 
+async def get_owned_version(
+    db: AsyncSession, user: User, game_id: UUID, version: int
+) -> tuple[Game, GameVersion]:
+    """Return one version only after verifying ownership to avoid leaking its existence."""
+    game = await _get_owned_game(db, user, game_id)
+    row = await db.scalar(
+        select(GameVersion).where(
+            GameVersion.game_id == game_id, GameVersion.version == version
+        )
+    )
+    if row is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
+    return game, row
+
+
 async def prune_old_versions(db: AsyncSession, game: Game) -> None:
     """保留最近 max_versions_per_game 个版本，删除更旧的 DB 行与产物目录。"""
     rows = (

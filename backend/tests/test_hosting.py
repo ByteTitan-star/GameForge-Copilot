@@ -24,9 +24,12 @@ async def _make_game(client: httpx.AsyncClient) -> uuid.UUID:
     return uuid.UUID(r.json()["data"]["game_id"])
 
 
-async def _make_version(gid: uuid.UUID, version: int = 1) -> None:
+async def _make_version(
+    gid: uuid.UUID, version: int = 1, *, write_artifact: bool = True
+) -> None:
     """直接建产物 + version 行，绕过生成链。"""
-    await store.write_artifact(gid, version, {"index.html": _HTML})
+    if write_artifact:
+        await store.write_artifact(gid, version, {"index.html": _HTML})
     async with db.SessionLocal() as s:
         game = (await s.scalars(select(Game).where(Game.id == gid))).first()
         assert game is not None
@@ -74,6 +77,50 @@ async def test_draft_non_owner_404(
 async def test_draft_version_not_found(verified_client: httpx.AsyncClient) -> None:
     gid = await _make_game(verified_client)
     r = await verified_client.get(f"/draft/{gid}/999")
+    assert r.status_code == 404
+
+
+async def test_download_owned_version_returns_html_attachment(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    async with db.SessionLocal() as s:
+        game = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert game is not None
+        game.title = "browser-game"
+        await s.commit()
+
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/download")
+    assert r.status_code == 200, r.text
+    assert r.content == _HTML.encode()
+    assert r.headers["content-type"].startswith("text/html")
+    assert r.headers["content-disposition"] == (
+        'attachment; filename="browser-game-v1.html"; '
+        "filename*=UTF-8''browser-game-v1.html"
+    )
+    assert r.headers["cache-control"] == "private, no-store"
+
+
+async def test_download_non_owner_returns_404(
+    verified_client: httpx.AsyncClient, auth_client: httpx.AsyncClient
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await auth_client.get(f"/api/v1/games/{gid}/versions/1/download")
+    assert r.status_code == 404
+
+
+async def test_download_missing_version_returns_404(verified_client: httpx.AsyncClient) -> None:
+    gid = await _make_game(verified_client)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/999/download")
+    assert r.status_code == 404
+
+
+async def test_download_missing_artifact_returns_404(verified_client: httpx.AsyncClient) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1, write_artifact=False)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/download")
     assert r.status_code == 404
 
 

@@ -1,4 +1,4 @@
-import { apiRequest, apiRequestList } from './client'
+import { apiRequest, apiRequestFile, apiRequestList } from './client'
 import type {
   CreateGameResponse,
   GameDeleteResponse,
@@ -69,6 +69,13 @@ export const gamesApi = {
 
   listVersions(gameId: string, accessToken: string) {
     return apiRequestList<GameVersion>(`/games/${gameId}/versions`, { token: accessToken })
+  },
+
+  downloadVersion(gameId: string, version: number, accessToken: string) {
+    return apiRequestFile(`/games/${gameId}/versions/${version}/download`, {
+      token: accessToken,
+      headers: { Accept: 'text/html' },
+    })
   },
 
   getRun(runId: string, accessToken: string) {

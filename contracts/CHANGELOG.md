@@ -6,6 +6,8 @@
 
 ---
 
+- ADDED: `GET /games/{game_id}/versions/{version}/download` — 仅游戏所有者可下载指定版本的独立 HTML 附件；版本、产物缺失或非所有者均返回 404，前端以 Bearer 请求后保存 Blob。
+
 ## 未发布（working copy）
 
 ## 未发布（working copy）

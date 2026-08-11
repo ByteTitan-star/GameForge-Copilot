@@ -1,14 +1,19 @@
 """游戏端点（M4 真实逻辑）：CRUD + versions + 可见性（owner 过滤）。"""
 
+import re
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Query
+from fastapi.responses import Response
 
 from app.auth.deps import CurrentUser, DbSession
+from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.enums import GameStatus, ReactionType
 from app.games import official as official_svc
 from app.games import services
+from app.hosting import store as hosting_store
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.profile import services as profile_services
@@ -60,6 +65,18 @@ def _to_item(game: Game) -> GameListItem:
 
 def _to_version(v: GameVersion) -> VersionItem:
     return VersionItem(version=v.version, artifact_path=v.artifact_path, created_at=v.created_at)
+
+
+def _download_headers(title: str, version: int) -> dict[str, str]:
+    safe_title = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "-", title).strip(" .-") or "game"
+    filename = f"{safe_title}-v{version}.html"
+    fallback = filename if filename.isascii() else f"game-v{version}.html"
+    return {
+        "Content-Disposition": (
+            f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"
+        ),
+        "Cache-Control": "private, no-store",
+    }
 
 
 async def _public_item(db: DbSession, game: Game) -> PublicGameMeta:
@@ -187,6 +204,38 @@ async def list_versions(
 ) -> ApiResponse[list[VersionItem]]:
     rows = await services.list_versions(db, user, game_id)
     return ApiResponse(data=[_to_version(v) for v in rows])
+
+
+@router.get(
+    "/{game_id}/versions/{version}/download",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "游戏 HTML 版本下载",
+            "content": {"text/html": {"schema": {"type": "string", "format": "binary"}}},
+            "headers": {
+                "Content-Disposition": {
+                    "description": "附件文件名",
+                    "schema": {"type": "string"},
+                }
+            },
+        },
+        **ERR_404,
+    },
+)
+async def download_version(
+    game_id: UUID, version: int, user: CurrentUser, db: DbSession
+) -> Response:
+    """Download an owned version as a standalone HTML file."""
+    game, _ = await services.get_owned_version(db, user, game_id, version)
+    content = await hosting_store.read_bytes(game_id, version, "index.html")
+    if content is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
+    return Response(
+        content=content,
+        media_type="text/html",
+        headers=_download_headers(game.title, version),
+    )
 
 
 @router.post(

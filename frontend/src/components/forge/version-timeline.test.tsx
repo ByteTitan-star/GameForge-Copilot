@@ -34,6 +34,8 @@ describe('VersionTimeline', () => {
   it('renders versions and calls onPreview without activate when previewing current', () => {
     const { onPreview } = renderTimeline()
     expect(screen.getAllByTestId('preview-v2').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('download-v2')).toBeTruthy()
+    expect(screen.getByTestId('download-v1')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^设为当前版本$|^Set as current$/i })).toBeNull()
     fireEvent.click(screen.getAllByTestId('preview-v2')[0]!)
     expect(onPreview).toHaveBeenCalledWith(2)

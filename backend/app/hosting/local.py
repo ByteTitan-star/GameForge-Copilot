@@ -54,3 +54,15 @@ async def write_artifact(
 def index_path(game_id: uuid.UUID, version: int) -> Path | None:
     p = artifact_dir(game_id, version) / "index.html"
     return p if p.exists() else None
+
+
+def _read_bytes_sync(base: Path, rel: str) -> bytes | None:
+    if not base.exists():
+        return None
+    target = _check_path(base.resolve(), rel)
+    return target.read_bytes() if target.is_file() else None
+
+
+async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None:
+    """Read a single artifact file without exposing the hosting root to callers."""
+    return await asyncio.to_thread(_read_bytes_sync, artifact_dir(game_id, version), rel)

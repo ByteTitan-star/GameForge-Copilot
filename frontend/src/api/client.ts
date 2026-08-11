@@ -148,3 +148,31 @@ export async function apiRequestList<T>(
     }
   })
 }
+
+export type DownloadedFile = {
+  blob: Blob
+  filename: string | null
+}
+
+function filenameFromContentDisposition(value: string | null): string | null {
+  if (!value) return null
+  const encoded = value.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded)
+    } catch {
+      return null
+    }
+  }
+  return value.match(/filename="?([^";]+)"?/i)?.[1] ?? null
+}
+
+export async function apiRequestFile(
+  path: string,
+  options: RequestOptions = {},
+): Promise<DownloadedFile> {
+  return request(path, options, async (res) => ({
+    blob: await res.blob(),
+    filename: filenameFromContentDisposition(res.headers.get('Content-Disposition')),
+  }))
+}

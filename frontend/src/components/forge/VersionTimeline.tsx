@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, History, Loader2, Upload } from 'lucide-react'
+import { Download, Eye, History, Loader2, Upload } from 'lucide-react'
 import { gamesApi } from '@/api/games'
 import { formatApiError } from '@/api/error-message'
 import type { GameVersion } from '@/api/types'
+import { downloadFile } from '@/lib/download-file'
 import { formatRelativeTime } from '@/lib/relative-time'
 import { useT } from '@/i18n/use-t'
 import { useLocaleStore } from '@/stores/locale-store'
@@ -52,6 +53,7 @@ export function VersionTimeline({
   const [publishVersion, setPublishVersion] = useState<number | null>(null)
   const [publishing, setPublishing] = useState(false)
   const [activating, setActivating] = useState(false)
+  const [downloadingVersion, setDownloadingVersion] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const activePreview = previewVersion ?? currentVersion
@@ -86,6 +88,19 @@ export function VersionTimeline({
       setError(formatApiError(e, t('submitPublishFailed')))
     } finally {
       setPublishing(false)
+    }
+  }
+
+  async function handleDownload(version: number) {
+    setDownloadingVersion(version)
+    setError(null)
+    try {
+      const file = await gamesApi.downloadVersion(gameId, version, accessToken)
+      downloadFile(file.blob, file.filename ?? `game-v${version}.html`)
+    } catch (e) {
+      setError(formatApiError(e, t('versionDownloadFailed')))
+    } finally {
+      setDownloadingVersion(null)
     }
   }
 
@@ -159,6 +174,21 @@ export function VersionTimeline({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  data-testid={`download-v${v.version}`}
+                  title={downloadingVersion === v.version ? t('versionDownloading') : t('versionDownload')}
+                  aria-label={downloadingVersion === v.version ? t('versionDownloading') : t('versionDownload')}
+                  disabled={downloadingVersion !== null}
+                  onClick={() => void handleDownload(v.version)}
+                  className="gf-interactive inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md gf-chip transition hover:bg-black/[0.04] disabled:cursor-wait disabled:opacity-50"
+                >
+                  {downloadingVersion === v.version ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <button
                   type="button"
                   data-testid={`preview-v${v.version}`}
