@@ -5,9 +5,10 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.auth.deps import CurrentUser, DbSession, RedisClient
+from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, RunPhase, RunStatus
@@ -58,10 +59,29 @@ def _to_resp(run: GenerationRun) -> RunResp:
     responses={**ERR_404, **ERR_403, **ERR_429},
 )
 async def create_run(
-    game_id: UUID, req: RunCreate, user: CurrentUser, db: DbSession, r: RedisClient
+    game_id: UUID,
+    req: RunCreate,
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    r: RedisClient,
 ) -> ApiResponse[RunResp]:
+    # Idempotency-Key（可选）：同一 key 在 TTL 窗口内复用首次创建的 run，
+    # 吸收客户端网络重试/双击，避免重复入队烧 LLM token。
+    idem_key = (request.headers.get("Idempotency-Key") or "").strip()
+    if idem_key:
+        cached = await r.get(f"idem:run:{user.id}:{idem_key}")
+        if cached:
+            return ApiResponse(data=RunResp.model_validate_json(cached))
     run = await services.create_run(db, r, user, game_id, req)
-    return ApiResponse(data=_to_resp(run))
+    resp = _to_resp(run)
+    if idem_key:
+        await r.setex(
+            f"idem:run:{user.id}:{idem_key}",
+            settings.create_run_idempotency_ttl,
+            resp.model_dump_json(),
+        )
+    return ApiResponse(data=resp)
 
 
 @router.get(
@@ -241,7 +261,9 @@ async def resolve_hitl(
     """解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。"""
     _ = game_id
     run = await services.get_run(db, user, run_id)
-    if not await r.set(f"run:hitl:{run_id}", "1", nx=True, ex=3600):
+    # TTL 收窄到 60s：仅用于拦截同一次 HITL 的并发双击；同一 run 后续 HITL 阶段
+    # （如 plan_confirm→qa_failed）不会被遗留锁误阻塞。执行层的重复由 run:executing 兜底。
+    if not await r.set(f"run:hitl:{run_id}", "1", nx=True, ex=60):
         raise AppError(ErrorCode.INVALID_STATE, "run 正在处理或已处理")
     state = await ckpt.load_state(r, run_id)
     if state is None or state.get("phase") not in _HITL_PHASES:

@@ -56,3 +56,4 @@ class AdminGameItem(BaseModel):
     owner_id: uuid.UUID
     current_version: int
     updated_at: datetime
+    featured: bool = False  # 由 featured_rank is not None 派生，供后台精选开关反映状态

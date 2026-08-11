@@ -12,6 +12,7 @@ type Props = {
   authorHandle?: string | null
   authorDisplay?: string | null
   official?: boolean
+  variant?: 'dark' | 'theme'
   className?: string
 }
 
@@ -20,20 +21,28 @@ export function CreatorLink({
   authorHandle,
   authorDisplay,
   official = false,
+  variant = 'dark',
   className,
 }: Props) {
   const t = useT()
+  const theme = variant === 'theme'
 
   if (official) {
     return (
-      <span className={cn('text-xs text-white/50', className)}>{t('officialCreator')}</span>
+      <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/50', className)}>
+        {t('officialCreator')}
+      </span>
     )
   }
 
   const handle = creator?.handle ?? authorHandle
   if (!handle) {
     if (authorDisplay) {
-      return <span className={cn('text-xs text-white/50', className)}>{authorDisplay}</span>
+      return (
+        <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/50', className)}>
+          {authorDisplay}
+        </span>
+      )
     }
     return null
   }
@@ -43,7 +52,8 @@ export function CreatorLink({
     <Link
       to={`/u/${handle}`}
       className={cn(
-        'text-xs text-cyan-200/85 underline-offset-2 transition hover:text-cyan-100 hover:underline',
+        'text-xs underline-offset-2 transition hover:underline',
+        theme ? 'gf-text-accent' : 'text-cyan-200/85 hover:text-cyan-100',
         className,
       )}
     >

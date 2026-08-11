@@ -94,10 +94,12 @@ export const adminApi = {
   },
 
   setFeatured(gameId: string, featured: boolean, accessToken: string) {
-    return apiRequest<{ featured: boolean }>(`/admin/games/${gameId}/featured`, {
+    // 后端 AdminGameFeaturedPatch 收 featured_rank（int|null），不是 featured boolean。
+    // 设精选给 rank=1，取消给 null；排序可在后台后续细化。
+    return apiRequest<{ featured_rank: number | null }>(`/admin/games/${gameId}/featured`, {
       method: 'PATCH',
       token: accessToken,
-      body: { featured },
+      body: { featured_rank: featured ? 1 : null },
     })
   },
 }

@@ -155,6 +155,7 @@ async def list_admin_games(
                 slug=g.slug,
                 owner_id=g.owner_id,
                 current_version=g.current_version,
+                featured=g.featured_rank is not None,
                 updated_at=g.updated_at,
             )
             for g in rows
@@ -191,6 +192,7 @@ async def patch_game_schedule(
             slug=g.slug,
             owner_id=g.owner_id,
             current_version=g.current_version,
+            featured=g.featured_rank is not None,
             updated_at=g.updated_at,
         )
     )
@@ -216,6 +218,7 @@ async def patch_game_featured(
             slug=g.slug,
             owner_id=g.owner_id,
             current_version=g.current_version,
+            featured=g.featured_rank is not None,
             updated_at=g.updated_at,
         )
     )

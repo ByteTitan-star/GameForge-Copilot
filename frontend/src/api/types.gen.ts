@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Health
-         * @description 存活检查（进程在），无需鉴权。
+         * @description ����飨�����ڣ��������Ȩ��
          */
         get: operations["health_healthz_get"];
         put?: never;
@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * Ready
-         * @description 就绪检查：DB + Redis + RabbitMQ（memory 后端时 rabbitmq=true）。
+         * @description ������飺DB + Redis + RabbitMQ��memory ���ʱ rabbitmq=true����
          */
         get: operations["ready_ready_get"];
         put?: never;
@@ -123,7 +123,7 @@ export interface paths {
         put?: never;
         /**
          * Resend Verification
-         * @description 重发 6 位邮箱验证码；防枚举恒返回 sent=true。
+         * @description �ط� 6 λ������֤�룻��ö�ٺ㷵�� sent=true��
          */
         post: operations["resend_verification_api_v1_auth_resend_verification_post"];
         delete?: never;
@@ -143,7 +143,9 @@ export interface paths {
         put?: never;
         /**
          * Password Reset
-         * @description 防枚举：无论邮箱是否存在恒返回 sent=true。
+         * @description ��ö�٣����������Ƿ���ں㷵�� sent=true��
+         *
+         *     ������IP+email��������Ե�һ������ʼ���ը���� resend-verification һ�¡�
          */
         post: operations["password_reset_api_v1_auth_password_reset_post"];
         delete?: never;
@@ -180,7 +182,7 @@ export interface paths {
         put?: never;
         /**
          * Password Change
-         * @description 登录态改密（需 Bearer）；旧密码错误 → 401。
+         * @description ��¼̬���ܣ��� Bearer������������� �� 401��
          */
         post: operations["password_change_api_v1_auth_password_change_post"];
         delete?: never;
@@ -200,7 +202,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description 登出：refresh 从 Redis 删除，access 自然过期。
+         * @description �ǳ���refresh �� Redis ɾ����access ��Ȼ���ڡ�
          */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
@@ -368,7 +370,7 @@ export interface paths {
         put?: never;
         /**
          * Reset Dev
-         * @description 一键清本地 dev 的 forge 运行态：失败所有 active run + 清 forge Redis + 清任务队列。
+         * @description һ���屾�� dev �� forge ����̬��ʧ������ active run + �� forge Redis + ��������С�
          */
         post: operations["reset_dev_api_v1_dev_reset_post"];
         delete?: never;
@@ -404,7 +406,7 @@ export interface paths {
         };
         /**
          * List Models
-         * @description 按 provider 拉可选模型（用户配置 key；失败回退白名单，docs/05）。
+         * @description �� provider ����ѡģ�ͣ��û����� key��ʧ�ܻ��˰�������docs/05����
          */
         get: operations["list_models_api_v1_me_llm_configs_models_get"];
         put?: never;
@@ -426,7 +428,9 @@ export interface paths {
         put?: never;
         /**
          * Test Draft Config
-         * @description 保存前连通测试（provider + model + apikey + base_url），不落库。
+         * @description ����ǰ��ͨ���ԣ�provider + model + apikey + base_url��������⡣
+         *
+         *     ������ LLM ���ã����û��������ɱ��Ŵ�
          */
         post: operations["test_draft_config_api_v1_me_llm_configs_test_post"];
         delete?: never;
@@ -497,7 +501,7 @@ export interface paths {
         };
         /**
          * List Public Games
-         * @description 公开已发布游戏发现页（无需登录，无 owner PII）。
+         * @description �����ѷ�����Ϸ����ҳ�������¼���� owner PII����
          */
         get: operations["list_public_games_api_v1_games_public_get"];
         put?: never;
@@ -517,7 +521,7 @@ export interface paths {
         };
         /**
          * List Featured Games
-         * @description 本周精选（Batch C · R7）。
+         * @description ���ܾ�ѡ��Batch C �� R7����
          */
         get: operations["list_featured_games_api_v1_games_featured_get"];
         put?: never;
@@ -556,7 +560,7 @@ export interface paths {
         put?: never;
         /**
          * Fork Official Game
-         * @description Fork 官方预置游戏为当前用户 draft（Batch A · R1）。
+         * @description Fork �ٷ�Ԥ����ϷΪ��ǰ�û� draft��Batch A �� R1����
          */
         post: operations["fork_official_game_api_v1_games_fork__slug__post"];
         delete?: never;
@@ -582,7 +586,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Game
-         * @description 草稿重命名（docs/01 MVP）。
+         * @description �ݸ���������docs/01 MVP����
          */
         patch: operations["patch_game_api_v1_games__game_id__patch"];
         trace?: never;
@@ -615,7 +619,7 @@ export interface paths {
         put?: never;
         /**
          * Activate Version
-         * @description 切换 current_version（Batch A · R4）。
+         * @description �л� current_version��Batch A �� R4����
          */
         post: operations["activate_version_api_v1_games__game_id__versions__version__activate_post"];
         delete?: never;
@@ -633,7 +637,7 @@ export interface paths {
         };
         /**
          * Get Reaction State
-         * @description 读取当前用户对该游戏的点赞/收藏态 + 公开计数（Batch C · R7）。
+         * @description ��ȡ��ǰ�û��Ը���Ϸ�ĵ���/�ղ�̬ + ����������Batch C �� R7����
          */
         get: operations["get_reaction_state_api_v1_games__game_id__reactions_get"];
         put?: never;
@@ -657,7 +661,7 @@ export interface paths {
         post: operations["toggle_like_api_v1_games__game_id__like_post"];
         /**
          * Unlike
-         * @description 幂等取消点赞（不存在则 noop），返回最新计数。
+         * @description �ݵ�ȡ�����ޣ��������� noop�����������¼�����
          */
         delete: operations["unlike_api_v1_games__game_id__like_delete"];
         options?: never;
@@ -678,7 +682,7 @@ export interface paths {
         post: operations["toggle_favorite_api_v1_games__game_id__favorite_post"];
         /**
          * Unfavorite
-         * @description 幂等取消收藏（不存在则 noop），返回最新计数。
+         * @description �ݵ�ȡ���ղأ��������� noop�����������¼�����
          */
         delete: operations["unfavorite_api_v1_games__game_id__favorite_delete"];
         options?: never;
@@ -799,7 +803,7 @@ export interface paths {
         };
         /**
          * List Active Runs
-         * @description 跨游戏进行中的 run，供刷新/跳转后找回任务。
+         * @description ����Ϸ�����е� run����ˢ��/��ת���һ�����
          */
         get: operations["list_active_runs_api_v1_me_runs_active_get"];
         put?: never;
@@ -836,7 +840,7 @@ export interface paths {
         };
         /**
          * Get Run Events
-         * @description WS 事件历史（Redis 缓冲），HTTP 回退 replay。
+         * @description WS �¼���ʷ��Redis ���壩��HTTP ���� replay��
          */
         get: operations["get_run_events_api_v1_runs__run_id__events_get"];
         put?: never;
@@ -909,7 +913,7 @@ export interface paths {
         put?: never;
         /**
          * Retry Run
-         * @description 从失败阶段重试（Batch A · R3）。
+         * @description ��ʧ�ܽ׶����ԣ�Batch A �� R3����
          */
         post: operations["retry_run_api_v1_runs__run_id__retry_post"];
         delete?: never;
@@ -929,7 +933,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve Hitl
-         * @description 解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。
+         * @description ��� HITL��plan_confirm / sandbox_failed / qa_failed �� enqueue resume��
          */
         post: operations["resolve_hitl_api_v1_games__game_id__runs__run_id__hitl_resolve_post"];
         delete?: never;
@@ -1238,7 +1242,7 @@ export interface paths {
         };
         /**
          * List Admin Games
-         * @description 管理员游戏列表（不含草稿），默认含 published/submitted/reviewing/taken_down。
+         * @description ����Ա��Ϸ�б��������ݸ壩��Ĭ�Ϻ� published/submitted/reviewing/taken_down��
          */
         get: operations["list_admin_games_api_v1_admin_games_get"];
         put?: never;
@@ -1292,7 +1296,7 @@ export interface paths {
         };
         /**
          * Play
-         * @description 已发布游戏入口，公开。非 published 一律 404。
+         * @description �ѷ�����Ϸ��ڣ��������� published һ�� 404��
          */
         get: operations["play_play__slug__get"];
         put?: never;
@@ -1312,7 +1316,7 @@ export interface paths {
         };
         /**
          * Draft
-         * @description 草稿试玩，仅 owner。非 owner/不存在 → 404 不泄露。
+         * @description �ݸ����棬�� owner���� owner/������ �� 404 ��й¶��
          */
         get: operations["draft_draft__game_id___version__get"];
         put?: never;
@@ -1381,6 +1385,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Featured
+             * @default false
+             */
+            featured: boolean;
         };
         /** AdminGameSchedulePatch */
         AdminGameSchedulePatch: {
@@ -1815,7 +1824,7 @@ export interface components {
         };
         /**
          * ErrorResponse
-         * @description 统一错误响应：{"error": {code, message, detail}}
+         * @description ͳһ������Ӧ��{"error": {code, message, detail}}
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
@@ -1930,7 +1939,7 @@ export interface components {
         };
         /**
          * GamePatch
-         * @description 草稿重命名等（docs/01 MVP）。
+         * @description �ݸ��������ȣ�docs/01 MVP����
          */
         GamePatch: {
             /** Title */
@@ -2114,7 +2123,7 @@ export interface components {
         };
         /**
          * LLMConfigTestReq
-         * @description 保存前探测：provider + model + apikey + base_url（不落库）。
+         * @description ����ǰ̽�⣺provider + model + apikey + base_url������⣩��
          */
         LLMConfigTestReq: {
             provider: components["schemas"]["LLMProvider"];
@@ -2288,7 +2297,7 @@ export interface components {
         };
         /**
          * PasswordChangeReq
-         * @description 登录态改密：校验旧密码后设新密码。
+         * @description ��¼̬���ܣ�У���������������롣
          */
         PasswordChangeReq: {
             /** Old Password */
@@ -2858,7 +2867,7 @@ export interface components {
         };
         /**
          * WSEvent
-         * @description WS 事件外层；payload 按 type 不同，前端据 type 解析。
+         * @description WS �¼���㣻payload �� type ��ͬ��ǰ�˾� type ������
          */
         WSEvent: {
             type: components["schemas"]["WSEventType"];
@@ -2953,7 +2962,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RegisterResp_"];
                 };
             };
-            /** @description 邮箱已注册 */
+            /** @description ������ע�� */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2971,7 +2980,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description 限流 */
+            /** @description ���� */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3004,7 +3013,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_LoginResp_"];
                 };
             };
-            /** @description 未认证或 token 失效 */
+            /** @description δ��֤�� token ʧЧ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3022,7 +3031,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description 限流 */
+            /** @description ���� */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3055,7 +3064,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_TokenResp_"];
                 };
             };
-            /** @description 未认证或 token 失效 */
+            /** @description δ��֤�� token ʧЧ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3097,7 +3106,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_VerifyEmailResp_"];
                 };
             };
-            /** @description token 无效或已过期 */
+            /** @description token ��Ч���ѹ��� */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3148,7 +3157,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description 限流 */
+            /** @description ���� */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3190,6 +3199,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description ���� */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     password_reset_confirm_api_v1_auth_password_reset_confirm_post: {
@@ -3214,7 +3232,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PasswordResetConfirmResp_"];
                 };
             };
-            /** @description token 无效或已过期 */
+            /** @description token ��Ч���ѹ��� */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3256,7 +3274,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PasswordChangeResp_"];
                 };
             };
-            /** @description token 无效或已过期 */
+            /** @description token ��Ч���ѹ��� */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3265,7 +3283,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 未认证或 token 失效 */
+            /** @description δ��֤�� token ʧЧ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3620,7 +3638,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_LLMConfigCreateResp_"];
                 };
             };
-            /** @description 连通测试失败 */
+            /** @description ��ͨ����ʧ�� */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3636,6 +3654,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description ���� */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -3702,6 +3729,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description ���� */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     delete_config_api_v1_me_llm_configs__config_id__delete: {
@@ -3724,7 +3760,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_LLMConfigDeleteResp_"];
                 };
             };
-            /** @description 配置不存在 */
+            /** @description ���ò����� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3733,7 +3769,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 删除默认配置需先指定新默认 */
+            /** @description ɾ��Ĭ����������ָ����Ĭ�� */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3777,7 +3813,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_LLMConfigResp_"];
                 };
             };
-            /** @description 配置不存在 */
+            /** @description ���ò����� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3817,7 +3853,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_LLMConfigTestResp_"];
                 };
             };
-            /** @description 配置不存在 */
+            /** @description ���ò����� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3833,6 +3869,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description ���� */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -3892,7 +3937,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameResp_"];
                 };
             };
-            /** @description 邮箱未验证 */
+            /** @description ����δ��֤ */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3997,7 +4042,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PublicGameMeta_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4037,7 +4082,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameResp_"];
                 };
             };
-            /** @description 邮箱未验证 */
+            /** @description ����δ��֤ */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4046,7 +4091,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4055,7 +4100,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4095,7 +4140,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameDetailResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4135,7 +4180,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameDeleteResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4144,7 +4189,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4188,7 +4233,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4197,7 +4242,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4237,7 +4282,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_list_VersionItem__"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4278,7 +4323,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4287,7 +4332,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4327,7 +4372,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_ReactionStateResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4367,7 +4412,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4407,7 +4452,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4447,7 +4492,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4487,7 +4532,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_ReactionToggleResp_"];
                 };
             };
-            /** @description 游戏不存在或不可见 */
+            /** @description ��Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4589,7 +4634,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_UserProfile_"];
                 };
             };
-            /** @description handle 冲突 */
+            /** @description handle ��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4629,7 +4674,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_CreatorProfile_"];
                 };
             };
-            /** @description 创作者不存在或未公开 */
+            /** @description �����߲����ڻ�δ���� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4701,7 +4746,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_list_RunListItem__"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4745,7 +4790,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunResp_"];
                 };
             };
-            /** @description 邮箱未验证 */
+            /** @description ����δ��֤ */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4754,7 +4799,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4772,7 +4817,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description 配额耗尽 */
+            /** @description ���ľ� */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4823,7 +4868,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunStatusResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4863,7 +4908,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_list_WSEvent__"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4903,7 +4948,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunControlResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4912,7 +4957,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4952,7 +4997,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunControlResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4961,7 +5006,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5001,7 +5046,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunControlResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5010,7 +5055,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5050,7 +5095,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_RunControlResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5059,7 +5104,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5104,7 +5149,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_HitlResolveResp_"];
                 };
             };
-            /** @description run 或游戏不存在或不可见 */
+            /** @description run ����Ϸ�����ڻ򲻿ɼ� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5113,7 +5158,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5157,7 +5202,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PublishSubmitResp_"];
                 };
             };
-            /** @description 游戏或申请不存在 */
+            /** @description ��Ϸ�����벻���� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5166,7 +5211,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5237,7 +5282,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PublishApproveResp_"];
                 };
             };
-            /** @description 游戏或申请不存在 */
+            /** @description ��Ϸ�����벻���� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5246,7 +5291,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5290,7 +5335,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_PublishRejectResp_"];
                 };
             };
-            /** @description 游戏或申请不存在 */
+            /** @description ��Ϸ�����벻���� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5299,7 +5344,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5343,7 +5388,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_TakeDownResp_"];
                 };
             };
-            /** @description 游戏或申请不存在 */
+            /** @description ��Ϸ�����벻���� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5352,7 +5397,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 状态冲突 */
+            /** @description ״̬��ͻ */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5390,7 +5435,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_UsageResp_"];
                 };
             };
-            /** @description 未认证 */
+            /** @description δ��֤ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5419,7 +5464,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_AdminUsageResp_"];
                 };
             };
-            /** @description 未认证 */
+            /** @description δ��֤ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5428,7 +5473,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description 无权限 */
+            /** @description ��Ȩ�� */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5492,7 +5537,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_GameUsageResp_"];
                 };
             };
-            /** @description 未认证 */
+            /** @description δ��֤ */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5625,7 +5670,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_NotificationReadResp_"];
                 };
             };
-            /** @description 通知不存在 */
+            /** @description ֪ͨ������ */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5695,7 +5740,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description 用户不存在 */
+            /** @description �û������� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5739,7 +5784,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_AdminUserItem_"];
                 };
             };
-            /** @description 用户不存在 */
+            /** @description �û������� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5901,7 +5946,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_AdminGameItem_"];
                 };
             };
-            /** @description 用户不存在 */
+            /** @description �û������� */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5945,7 +5990,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_AdminGameItem_"];
                 };
             };
-            /** @description 用户不存在 */
+            /** @description �û������� */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -118,11 +118,24 @@ async def resend_verification(
     return ApiResponse(data=ResendVerificationResp())
 
 
-@router.post("/password/reset", response_model=ApiResponse[PasswordResetResp])
+@router.post(
+    "/password/reset",
+    response_model=ApiResponse[PasswordResetResp],
+    responses=ERR_429,
+)
 async def password_reset(
-    req: PasswordResetReq, db: DbSession, r: RedisClient
+    req: PasswordResetReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[PasswordResetResp]:
-    """防枚举：无论邮箱是否存在恒返回 sent=true。"""
+    """防枚举：无论邮箱是否存在恒返回 sent=true。
+
+    限流（IP+email）：避免对单一邮箱的邮件轰炸；与 resend-verification 一致。
+    """
+    await check_rate_limit(
+        r,
+        f"rl:reset:{request.client.host if request.client else 'na'}:{req.email}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
     result = await services.request_password_reset(db, req.email)
     if result is not None:
         email, token = result

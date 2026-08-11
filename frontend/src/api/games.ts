@@ -53,11 +53,13 @@ export const gamesApi = {
     requirement: string,
     accessToken: string,
     llm_config_id: string | null = null,
+    idempotencyKey?: string,
   ) {
     return apiRequest<RunSummary>(`/games/${gameId}/runs`, {
       method: 'POST',
       token: accessToken,
       body: { requirement, llm_config_id },
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     })
   },
 
