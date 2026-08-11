@@ -4,6 +4,7 @@
 """
 
 import json
+import logging
 from uuid import UUID
 
 import redis.asyncio as redis
@@ -27,17 +28,20 @@ from app.schemas.llm_config import (
     LLMConfigTestResp,
 )
 
+log = logging.getLogger(__name__)
+
 
 def _mask(apikey: str) -> str:
     return f"{apikey[:3]}***{apikey[-3:]}" if len(apikey) > 6 else "***"
 
 
-def _to_resp(cfg: UserLLMConfig) -> LLMConfigResp:
+def _to_resp(cfg: UserLLMConfig, apikey: str | None = None) -> LLMConfigResp:
+    masked_apikey = apikey if apikey is not None else crypto.decrypt_apikey(cfg.apikey_enc)
     return LLMConfigResp(
         config_id=cfg.id,
         provider=LLMProvider(cfg.provider),
         model=cfg.model,
-        apikey_masked=_mask(crypto.decrypt_apikey(cfg.apikey_enc)),
+        apikey_masked=_mask(masked_apikey),
         base_url=cfg.base_url,
         is_default=cfg.is_default,
     )
@@ -46,7 +50,27 @@ def _to_resp(cfg: UserLLMConfig) -> LLMConfigResp:
 async def list_configs(db: AsyncSession, user: User) -> list[LLMConfigResp]:
     stmt = select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
     rows = (await db.scalars(stmt)).all()
-    return [_to_resp(r) for r in rows]
+    configs: list[LLMConfigResp] = []
+    migrated = False
+    for row in rows:
+        try:
+            apikey, used_legacy_key = crypto.decrypt_apikey_with_migration(row.apikey_enc)
+            if used_legacy_key:
+                row.apikey_enc = crypto.encrypt_apikey(apikey)
+                migrated = True
+            configs.append(_to_resp(row, apikey))
+        except AppError as exc:
+            if exc.code != ErrorCode.LLM_CONFIG_INVALID:
+                raise
+            # A key encrypted under a former local secret cannot be recovered. Do not let
+            # one stale record make every usable configuration disappear from the UI.
+            log.warning(
+                "skip unreadable llm config",
+                extra={"config_id": str(row.id), "user_id": str(user.id)},
+            )
+    if migrated:
+        await db.commit()
+    return configs
 
 
 async def list_models_for_user(

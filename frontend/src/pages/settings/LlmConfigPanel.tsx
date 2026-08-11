@@ -129,6 +129,11 @@ export function LlmConfigPanel() {
         </p>
       ) : null}
 
+      {list.isError ? (
+        <p role="alert" className="text-sm text-rose-500">
+          {t('llmConfigLoadFailed')} {formatApiError(list.error)}
+        </p>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1.5 text-sm">

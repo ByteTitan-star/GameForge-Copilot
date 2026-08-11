@@ -142,11 +142,17 @@ body {
 
 /* —— 工作台布局 —— */
 .gf-workshop {
-  --gf-sidebar-w: 220px;
+  --gf-sidebar-w: 0px;
   height: 100dvh;
   overflow: hidden;
   background: var(--gf-bg);
   color: var(--gf-text);
+}
+
+@media (min-width: 768px) {
+  .gf-workshop {
+    --gf-sidebar-w: 220px;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -156,10 +162,18 @@ body {
 }
 
 .gf-shell-main {
-  margin-left: var(--gf-sidebar-w);
+  margin-left: 0;
   height: 100dvh;
   min-width: 0;
   overflow: hidden;
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .gf-shell-main {
+    margin-left: var(--gf-sidebar-w);
+    padding-bottom: 0;
+  }
 }
 
 .gf-main-canvas {
@@ -180,12 +194,40 @@ body {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 40;
+  display: none;
   width: var(--gf-sidebar-w);
   height: 100dvh;
   overflow: hidden;
   border-color: var(--gf-border);
   background: var(--gf-sidebar-bg);
   box-shadow: 1px 0 0 rgba(15, 23, 42, 0.04);
+}
+
+@media (min-width: 768px) {
+  .gf-sidebar {
+    display: flex;
+  }
+}
+
+.gf-mobile-nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  display: flex;
+  min-height: 4.5rem;
+  padding: 0.5rem max(0.75rem, env(safe-area-inset-right)) calc(0.5rem + env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  border-top: 1px solid var(--gf-border);
+  background: var(--gf-sidebar-bg);
+  box-shadow: 0 -1px 0 rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@media (min-width: 768px) {
+  .gf-mobile-nav {
+    display: none;
+  }
 }
 
 [data-gf-style='taskly'] .gf-sidebar {
