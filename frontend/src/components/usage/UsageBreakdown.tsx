@@ -119,7 +119,7 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
 }
 
 type TrendProps = {
-  data: { date: string; page_views: number; play_starts: number }[]
+  data: { date: string; page_views: number; unique_visitors: number }[]
   tone?: 'light' | 'dark'
 }
 
@@ -154,7 +154,7 @@ export function AnalyticsTrendChart({ data, tone = 'dark' }: TrendProps) {
             }}
           />
           <Line type="monotone" dataKey="page_views" stroke="#2dd4bf" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="play_starts" stroke="#38bdf8" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="unique_visitors" stroke="#38bdf8" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
