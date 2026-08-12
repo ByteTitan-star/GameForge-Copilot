@@ -115,3 +115,76 @@ async def test_public_games_sort_by_play_count(
     assert r.status_code == 200
     counts = [g["play_count"] for g in r.json()["data"] if g["game_id"] in (str(low), str(high))]
     assert counts == sorted(counts, reverse=True)
+
+
+async def test_batch_delete_partial(verified_client: httpx.AsyncClient) -> None:
+    """批量删除：草稿可删、published 计入 failed，部分成功持久化。"""
+    from app.core import db
+
+    d1 = await _create(verified_client)
+    d2 = await _create(verified_client)
+    pub = await _create(verified_client)
+    async with db.SessionLocal() as s:
+        g = (await s.scalars(select(Game).where(Game.id == pub))).first()
+        assert g is not None
+        g.status = "published"
+        await s.commit()
+
+    r = await verified_client.post(
+        "/api/v1/games/batch-delete",
+        json={"game_ids": [str(d1), str(d2), str(pub)]},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert set(data["deleted"]) == {str(d1), str(d2)}
+    assert [f["game_id"] for f in data["failed"]] == [str(pub)]
+
+    # 已删的详情 404，published 仍在
+    assert (await verified_client.get(f"/api/v1/games/{d1}")).status_code == 404
+    assert (await verified_client.get(f"/api/v1/games/{pub}")).status_code == 200
+
+
+async def test_batch_delete_non_owner_in_failed(verified_client: httpx.AsyncClient) -> None:
+    """批量删除：不存在/非自己仓库的游戏计入 failed，不中断。"""
+    mine = await _create(verified_client)
+    foreign = uuid.uuid4()  # 不存在（等价于他人仓库：后端统一「不存在或不可见」不泄露）
+    r = await verified_client.post(
+        "/api/v1/games/batch-delete",
+        json={"game_ids": [str(mine), str(foreign)]},
+    )
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["deleted"] == [str(mine)]
+    assert [f["game_id"] for f in data["failed"]] == [str(foreign)]
+
+
+async def test_unpublish_own_game(
+    verified_client: httpx.AsyncClient, admin_client: httpx.AsyncClient
+) -> None:
+    """owner 自助下架：published → taken_down，清 featured_rank。"""
+    from app.core import db
+
+    gid = await _create(verified_client)
+    async with db.SessionLocal() as s:
+        g = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert g is not None
+        g.status = "published"
+        g.slug = "my-game"
+        g.featured_rank = 3
+        await s.commit()
+
+    r = await verified_client.post(f"/api/v1/games/{gid}/unpublish")
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["status"] == "taken_down"
+
+    async with db.SessionLocal() as s:
+        g = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert g is not None
+        assert g.status == "taken_down"
+        assert g.featured_rank is None
+
+
+async def test_unpublish_non_published_409(verified_client: httpx.AsyncClient) -> None:
+    gid = await _create(verified_client)  # draft
+    r = await verified_client.post(f"/api/v1/games/{gid}/unpublish")
+    assert r.status_code == 409

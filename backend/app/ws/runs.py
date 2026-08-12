@@ -37,27 +37,53 @@ async def _ws_user(db: AsyncSession, token: str | None) -> User | None:
     return await db.get(User, uid)
 
 
-async def _replay_buffered(ws: WebSocket, run_id: uuid.UUID) -> None:
-    for data in await list_events_auto(run_id):
+async def _replay_buffered(ws: WebSocket, run_id: uuid.UUID, after: int | None) -> None:
+    for data in await list_events_auto(run_id, after):
         await ws.send_text(data)
 
 
-async def _relay_memory(ws: WebSocket, run_id: uuid.UUID) -> None:
+async def _relay_memory(
+    ws: WebSocket,
+    run_id: uuid.UUID,
+    ready: asyncio.Event | None = None,
+    replayed: asyncio.Event | None = None,
+) -> None:
     bus = get_ws_bus()
-    async for data in bus.iter_events(run_id):
-        await ws.send_text(data)
-
-
-async def _relay_rabbit(ws: WebSocket, run_id: uuid.UUID) -> None:
-    bus = get_ws_bus()
-    channel, queue = await bus.subscribe_queue(run_id)
+    queue = bus.subscribe(run_id)
+    if ready is not None:
+        ready.set()
     try:
+        if replayed is not None:
+            await replayed.wait()
+        while True:
+            await ws.send_text(await queue.get())
+    finally:
+        bus.unsubscribe(run_id, queue)
+
+
+async def _relay_rabbit(
+    ws: WebSocket,
+    run_id: uuid.UUID,
+    ready: asyncio.Event | None = None,
+    replayed: asyncio.Event | None = None,
+) -> None:
+    bus = get_ws_bus()
+    channel = None
+    try:
+        channel, queue = await bus.subscribe_queue(run_id)
+        if ready is not None:
+            ready.set()
+        if replayed is not None:
+            await replayed.wait()
         async with queue.iterator() as it:
             async for message in it:
                 async with message.process():
                     await ws.send_text(message.body.decode())
     finally:
-        await channel.close()
+        if ready is not None:
+            ready.set()
+        if channel is not None:
+            await channel.close()
 
 
 async def _await_disconnect(ws: WebSocket) -> None:
@@ -85,9 +111,17 @@ async def run_ws(websocket: WebSocket, run_id: uuid.UUID) -> None:
         return
 
     await websocket.accept()
-    await _replay_buffered(websocket, run_id)
+    try:
+        after = int(websocket.query_params.get("after", "0"))
+    except ValueError:
+        after = 0
     relay_fn = _relay_memory if use_memory() else _relay_rabbit
-    relay = asyncio.create_task(relay_fn(websocket, run_id))
+    ready = asyncio.Event()
+    replayed = asyncio.Event()
+    relay = asyncio.create_task(relay_fn(websocket, run_id, ready, replayed))
+    await ready.wait()
+    await _replay_buffered(websocket, run_id, after)
+    replayed.set()
     disc = asyncio.create_task(_await_disconnect(websocket))
     try:
         _done, pending = await asyncio.wait({relay, disc}, return_when=asyncio.FIRST_COMPLETED)

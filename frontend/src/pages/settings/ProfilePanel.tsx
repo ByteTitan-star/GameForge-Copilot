@@ -110,7 +110,7 @@ export function ProfilePanel({ accessToken }: Props) {
           </p>
         ) : null}
         {handle.trim() ? (
-          <p className="gf-page-muted font-mono text-[11px]">
+          <p className="gf-page-muted text-[11px]">
             {t('profilePublicUrl')}: /u/{handle.trim()}
           </p>
         ) : null}

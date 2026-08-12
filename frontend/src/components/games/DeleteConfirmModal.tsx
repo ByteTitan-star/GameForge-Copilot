@@ -1,16 +1,52 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/cn'
 import { useT } from '@/i18n/use-t'
+
+type Tone = 'danger' | 'warn'
 
 type Props = {
   open: boolean
-  title: string
+  /** 顶部小标签文字（如 Delete / Unpublish / Withdraw） */
+  badge: string
+  /** 主标题（已本地化） */
+  headline: string
+  /** 正文（已本地化） */
+  body: string
+  confirmLabel: string
+  tone?: Tone
   busy?: boolean
   onCancel: () => void
   onConfirm: () => void
 }
 
-export function DeleteConfirmModal({ open, title, busy, onCancel, onConfirm }: Props) {
+const TONE_BADGE: Record<Tone, string> = {
+  danger: 'text-rose-300/70',
+  warn: 'text-amber-300/70',
+}
+
+const TONE_BTN: Record<Tone, string> = {
+  danger: 'bg-rose-500 hover:bg-rose-400',
+  warn: 'bg-amber-500 hover:bg-amber-400 text-black',
+}
+
+const TONE_GLOW: Record<Tone, string> = {
+  danger: 'shadow-[0_0_40px_rgba(244,63,94,0.12)]',
+  warn: 'shadow-[0_0_40px_rgba(245,158,11,0.12)]',
+}
+
+/** 通用确认弹窗：删除/下架/撤回共用。单个删除时传 title 占位渲染后的 headline/body。 */
+export function DeleteConfirmModal({
+  open,
+  badge,
+  headline,
+  body,
+  confirmLabel,
+  tone = 'danger',
+  busy,
+  onCancel,
+  onConfirm,
+}: Props) {
   const t = useT()
 
   return (
@@ -34,11 +70,16 @@ export function DeleteConfirmModal({ open, title, busy, onCancel, onConfirm }: P
             initial={{ opacity: 0, scale: 0.92, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="relative w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#131821]/95 p-5 shadow-[0_0_40px_rgba(244,63,94,0.12)]"
+            className={cn(
+              'relative w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#131821]/95 p-5',
+              TONE_GLOW[tone],
+            )}
           >
-            <p className="font-mono text-[10px] tracking-[0.16em] text-rose-300/70 uppercase">Delete</p>
-            <h3 className="mt-2 text-lg text-white">{t('deleteConfirmTitle')}</h3>
-            <p className="mt-2 text-sm text-white/55">{t('deleteConfirmBody').replace('{title}', title)}</p>
+            <p className={cn('font-mono text-[10px] tracking-[0.16em] uppercase', TONE_BADGE[tone])}>
+              {badge}
+            </p>
+            <h3 className="mt-2 text-lg text-white">{headline}</h3>
+            <p className="mt-2 text-sm text-white/55">{body}</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -52,10 +93,13 @@ export function DeleteConfirmModal({ open, title, busy, onCancel, onConfirm }: P
                 type="button"
                 disabled={busy}
                 onClick={onConfirm}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-rose-500 px-3 py-2 text-sm font-medium text-white hover:bg-rose-400 disabled:opacity-60"
+                className={cn(
+                  'inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-60',
+                  TONE_BTN[tone],
+                )}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                {t('confirmDelete')}
+                {confirmLabel}
               </button>
             </div>
           </motion.div>

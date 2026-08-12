@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from contextvars import ContextVar
 
@@ -10,6 +11,7 @@ import redis.asyncio as redis
 from app.core.redis import pool
 
 _KEY = "run:events:{run_id}"
+_SEQ_KEY = "run:event_seq:{run_id}"
 _MAX_EVENTS = 200
 _TTL_SECONDS = 86400 * 7
 
@@ -37,20 +39,42 @@ async def append_event(r: redis.Redis, run_id: uuid.UUID, data: str) -> None:
         await pipe.execute()
 
 
-async def list_events(r: redis.Redis, run_id: uuid.UUID) -> list[str]:
+async def next_event_seq(r: redis.Redis, run_id: uuid.UUID) -> int:
+    key = _SEQ_KEY.format(run_id=run_id)
+    async with r.pipeline(transaction=True) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, _TTL_SECONDS)
+        values = await pipe.execute()
+    return int(values[0])
+
+
+async def list_events(
+    r: redis.Redis, run_id: uuid.UUID, after: int | None = None
+) -> list[str]:
     key = _KEY.format(run_id=run_id)
     rows = await r.lrange(key, 0, -1)
-    return list(rows or [])
+    events = list(rows or [])
+    if not after:
+        return events
+    filtered: list[str] = []
+    for line in events:
+        try:
+            seq = json.loads(line).get("seq")
+        except (json.JSONDecodeError, AttributeError):
+            seq = None
+        if seq is None or int(seq) > after:
+            filtered.append(line)
+    return filtered
 
 
-async def list_events_auto(run_id: uuid.UUID) -> list[str]:
+async def list_events_auto(run_id: uuid.UUID, after: int | None = None) -> list[str]:
     client, owned = await _client()
     try:
-        return await list_events(client, run_id)
+        return await list_events(client, run_id, after)
     finally:
         if owned:
             await client.aclose()
 
 
 async def clear_events(r: redis.Redis, run_id: uuid.UUID) -> None:
-    await r.delete(_KEY.format(run_id=run_id))
+    await r.delete(_KEY.format(run_id=run_id), _SEQ_KEY.format(run_id=run_id))

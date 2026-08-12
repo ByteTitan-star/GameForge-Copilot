@@ -7,6 +7,7 @@ export type WsEnvelope<T = Record<string, unknown>> = {
   type: WSEventType
   run_id: string
   ts: string
+  seq?: number
   payload: T
 }
 

@@ -45,6 +45,7 @@ class PublishStatus(StrEnum):
     REVIEWING = "reviewing"
     APPROVED = "approved"
     REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
 
 
 class LLMProvider(StrEnum):

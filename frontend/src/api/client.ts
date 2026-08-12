@@ -75,7 +75,9 @@ async function request<T>(path: string, options: RequestOptions, parse: (res: Re
 // single-flight：N 个请求同时收到 401 时，只触发一次 refresh，避免 refresh token
 // 轮换语义下并发刷新互相把对方登出。JS 单线程保证 maybeRefresh 同步前缀（设值）先于
 // 其他请求的同步前缀（读值）执行，故不会重复创建刷新 promise。
-let refreshInFlight: Promise<string | null> | null = null
+// 单飞对象绑定发起刷新所用的 refresh token：换号后旧单飞不再被新账号的请求复用，
+// 避免拿到属于上一个账号的刷新结果。
+let refreshInFlight: { token: string; promise: Promise<string | null> } | null = null
 
 function performRefresh(): Promise<string | null> {
   const store = useAuthStore.getState()
@@ -94,7 +96,11 @@ function performRefresh(): Promise<string | null> {
       })
       return tokens.access_token
     } catch {
-      store.clearSession()
+      // 仅当 store 里的 refresh_token 仍是发起本次刷新的那个时才清会话；
+      // 否则说明期间已发生登出/换号，当前会话属于另一个账号，不能误清。
+      if (store.refresh_token === refresh) {
+        store.clearSession()
+      }
       return null
     }
   })()
@@ -102,10 +108,16 @@ function performRefresh(): Promise<string | null> {
 
 async function maybeRefresh(options: RequestOptions): Promise<string | null> {
   if (options._retried) return null
-  if (refreshInFlight) return refreshInFlight
-  refreshInFlight = performRefresh()
+  const currentRefresh = useAuthStore.getState().refresh_token
+  // 仅复用「同一 refresh token 发起」的在飞刷新；换号后 currentRefresh 变化，旧单飞作废。
+  if (refreshInFlight && currentRefresh && refreshInFlight.token === currentRefresh) {
+    return refreshInFlight.promise
+  }
+  const token = currentRefresh ?? ''
+  const promise = performRefresh()
+  refreshInFlight = { token, promise }
   try {
-    return await refreshInFlight
+    return await promise
   } finally {
     refreshInFlight = null
   }

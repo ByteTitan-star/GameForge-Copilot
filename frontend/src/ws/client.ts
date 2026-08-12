@@ -27,6 +27,9 @@ type ConnectOptions = {
   maxRetries?: number
   /** 页面存活期间持续重连（刷新后由 HTTP+新 WS 接管） */
   persistent?: boolean
+  /** Last processed event sequence, used for replay resume and de-duplication. */
+  afterSeq?: number
+  onSeq?: (seq: number) => void
 }
 
 export function connectRunWs(options: ConnectOptions): RunWsHandle {
@@ -36,10 +39,11 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
   let closed = false
   let socket: WebSocket | null = null
   let retryTimer: number | null = null
+  let lastSeq = options.afterSeq ?? 0
 
   function open() {
     if (closed) return
-    const url = wsRunUrl(options.runId, options.accessToken)
+    const url = wsRunUrl(options.runId, options.accessToken, lastSeq)
     socket = new WebSocket(url)
 
     socket.onopen = () => {
@@ -48,7 +52,13 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
 
     socket.onmessage = (msg) => {
       const ev = parseWsEnvelope(String(msg.data))
-      if (ev) options.onEvent(ev)
+      if (!ev) return
+      if (typeof ev.seq === 'number') {
+        if (ev.seq <= lastSeq) return
+        lastSeq = ev.seq
+        options.onSeq?.(lastSeq)
+      }
+      options.onEvent(ev)
     }
     socket.onerror = (err) => {
       clientLog.error('ws.error', { runId: options.runId })

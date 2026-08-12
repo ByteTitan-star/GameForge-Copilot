@@ -91,7 +91,7 @@ export function StagePipeline({
               </span>
               <span
                 className={cn(
-                  "truncate text-xs font-medium",
+                  "whitespace-nowrap text-[13px] font-semibold",
                   isActive ? "gf-page-body" : "gf-page-muted",
                 )}
               >
@@ -123,10 +123,10 @@ export function StagePipeline({
       aria-label={t("generationFlow")}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-[10px] tracking-[0.14em] gf-page-muted uppercase">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">
           {t("stagePipelineTitle")}
         </p>
-        <span className="font-mono text-[10px] tabular-nums gf-page-muted">
+        <span className="font-mono text-[11px] tabular-nums gf-page-muted">
           {
             PIPELINE_PHASES.filter((phase) => stages[phase].status === "done")
               .length
@@ -209,13 +209,13 @@ export function StagePipeline({
                     <span className="font-medium gf-page-body">
                       {t(titleKey)}
                     </span>
-                    <span className="font-mono text-[10px] tabular-nums opacity-55">
+                    <span className="font-mono text-[11px] tabular-nums opacity-55">
                       0{index + 1}
                     </span>
                   </div>
                   <p className="mt-1 line-clamp-2 leading-relaxed">{human}</p>
                   {eta ? (
-                    <p className="mt-1 font-mono text-[10px] tabular-nums opacity-65">
+                    <p className="mt-1 font-mono text-[11px] tabular-nums opacity-65">
                       {eta}
                     </p>
                   ) : null}

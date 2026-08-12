@@ -1,6 +1,7 @@
 import { apiRequest, apiRequestFile, apiRequestList } from './client'
 import type {
   CreateGameResponse,
+  GameBatchDeleteResponse,
   GameDeleteResponse,
   GameDetail,
   GamePatchRequest,
@@ -36,6 +37,30 @@ export const gamesApi = {
   remove(gameId: string, accessToken: string) {
     return apiRequest<GameDeleteResponse>(`/games/${gameId}`, {
       method: 'DELETE',
+      token: accessToken,
+    })
+  },
+
+  removeBatch(gameIds: string[], accessToken: string) {
+    return apiRequest<GameBatchDeleteResponse>(`/games/batch-delete`, {
+      method: 'POST',
+      token: accessToken,
+      body: { game_ids: gameIds },
+    })
+  },
+
+  /** owner 自助下架已发布游戏（published → taken_down） */
+  unpublish(gameId: string, accessToken: string) {
+    return apiRequest<CreateGameResponse>(`/games/${gameId}/unpublish`, {
+      method: 'POST',
+      token: accessToken,
+    })
+  },
+
+  /** owner 撤回待审核的发布申请（submitted/reviewing → draft） */
+  withdrawPublish(gameId: string, accessToken: string) {
+    return apiRequest<PublishSubmitResponse>(`/games/${gameId}/publish/withdraw`, {
+      method: 'POST',
       token: accessToken,
     })
   },

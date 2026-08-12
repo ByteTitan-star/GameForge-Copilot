@@ -46,7 +46,7 @@ export function ForgeAiStatusBar({ status, className }: Props) {
         />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--gf-text-muted)]">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--gf-text-muted)]">
           {t("requirementChat")}
         </p>
         <p className="mt-0.5 truncate text-sm font-medium text-[var(--gf-text)]">

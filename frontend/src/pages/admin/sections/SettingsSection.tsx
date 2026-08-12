@@ -55,7 +55,7 @@ export function SettingsSection() {
     <section className="gf-glass max-w-lg space-y-4 rounded-2xl p-5">
       <h2 className="text-lg text-[var(--gf-text)]">{t('adminSettingsTitle')}</h2>
       <label className="block space-y-1.5 text-sm">
-        <span className="gf-page-muted font-mono text-[10px] uppercase">
+        <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminDailyQuotaLabel')}
         </span>
         <input
@@ -66,7 +66,7 @@ export function SettingsSection() {
         />
       </label>
       <label className="block space-y-1.5 text-sm">
-        <span className="gf-page-muted font-mono text-[10px] uppercase">
+        <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminMonthlyQuotaLabel')}
         </span>
         <input
@@ -77,7 +77,7 @@ export function SettingsSection() {
         />
       </label>
       <label className="block space-y-1.5 text-sm">
-        <span className="gf-page-muted font-mono text-[10px] uppercase">
+        <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminRateLimitLabel')}
         </span>
         <input
@@ -88,7 +88,7 @@ export function SettingsSection() {
         />
       </label>
       <label className="block space-y-1.5 text-sm">
-        <span className="gf-page-muted font-mono text-[10px] uppercase">
+        <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminContactLabel')}
         </span>
         <input

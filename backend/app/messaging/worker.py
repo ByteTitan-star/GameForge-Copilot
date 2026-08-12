@@ -91,6 +91,17 @@ async def _scheduler_loop() -> None:
             log.exception("scheduler scan failed")  # 出错时记录日志，不影响主循环
 
 
+async def _outbox_loop() -> None:
+    from app.messaging.outbox import dispatch_pending
+
+    while True:
+        try:
+            await dispatch_pending()
+        except Exception:
+            log.exception("outbox dispatch failed")
+        await asyncio.sleep(2)
+
+
 async def _run_one(message: AbstractIncomingMessage) -> None:
     """处理单条消息。
 
@@ -102,7 +113,14 @@ async def _run_one(message: AbstractIncomingMessage) -> None:
         log.info("task=%s payload_keys=%s", task, list(payload.keys()))
         try:
             await dispatch_task(task, payload)
-        except Exception:
+        except Exception as exc:
+            from app.forge.runner import TaskLeaseBusy
+
+            if isinstance(exc, TaskLeaseBusy):
+                # Avoid a tight nack/requeue loop while the current owner is alive.
+                await asyncio.sleep(2)
+                log.info("task lease busy; requeue task=%s", task)
+                raise
             # 失败重新抛出 → message.process 捕获后 nack(requeue=True) 重投
             log.exception("task=%s failed", task)
             raise
@@ -123,6 +141,7 @@ async def _consume() -> None:
 
     # 2. 启动定时任务扫描协程（并发执行）
     scan_task = asyncio.create_task(_scheduler_loop())
+    outbox_task = asyncio.create_task(_outbox_loop())
     in_flight: set[asyncio.Task] = set()
     try:
         # 3. 连接 RabbitMQ，获取 channel 和交换器
@@ -148,8 +167,11 @@ async def _consume() -> None:
         # 5. 清理：停调度循环、等在飞行的任务落地、flush langfuse、关连接。
         #    被取消的在飞行任务：未正常 ack，broker 会在断连时把未 ack 消息重投，不丢。
         scan_task.cancel()
+        outbox_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await scan_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
         if in_flight:
             await asyncio.gather(*in_flight, return_exceptions=True)
         from app.core.langfuse import flush_langfuse

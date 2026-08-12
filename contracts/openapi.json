@@ -1673,6 +1673,73 @@
         }
       }
     },
+    "/api/v1/games/batch-delete": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Batch Delete Games",
+        "description": "批量删除：已发布/审核中的会被状态规则挡下并计入 failed。",
+        "operationId": "batch_delete_games_api_v1_games_batch_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameBatchDeleteReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_GameBatchDeleteResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/games/{game_id}": {
       "patch": {
         "tags": [
@@ -1837,6 +1904,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_GameDeleteResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/{game_id}/unpublish": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Unpublish Game",
+        "description": "owner 自助下架已发布游戏（published → taken_down）。\n\n与 admin 的 take-down 区分：owner 自助操作，无需原因。",
+        "operationId": "unpublish_game_api_v1_games__game_id__unpublish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_GameResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/{game_id}/publish/withdraw": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Withdraw Publish",
+        "description": "owner 撤回待审核的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。",
+        "operationId": "withdraw_publish_api_v1_games__game_id__publish_withdraw_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PublishSubmitResp_"
                 }
               }
             }
@@ -3539,6 +3744,75 @@
         }
       }
     },
+    "/api/v1/publish/{publish_request_id}/withdraw": {
+      "post": {
+        "tags": [
+          "publish"
+        ],
+        "summary": "Withdraw Publish",
+        "description": "owner 撤回自己的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。",
+        "operationId": "withdraw_publish_api_v1_publish__publish_request_id__withdraw_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publish_request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Publish Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PublishSubmitResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏或申请不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/games/{game_id}/take-down": {
       "post": {
         "tags": [
@@ -5168,6 +5442,18 @@
         ],
         "title": "ApiResponse[GameAnalyticsResp]"
       },
+      "ApiResponse_GameBatchDeleteResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GameBatchDeleteResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[GameBatchDeleteResp]"
+      },
       "ApiResponse_GameDeleteResp_": {
         "properties": {
           "data": {
@@ -6166,6 +6452,69 @@
           "uv_30d"
         ],
         "title": "GameAnalyticsResp"
+      },
+      "GameBatchDeleteItem": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "reason"
+        ],
+        "title": "GameBatchDeleteItem"
+      },
+      "GameBatchDeleteReq": {
+        "properties": {
+          "game_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Game Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_ids"
+        ],
+        "title": "GameBatchDeleteReq"
+      },
+      "GameBatchDeleteResp": {
+        "properties": {
+          "deleted": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Deleted"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/GameBatchDeleteItem"
+            },
+            "type": "array",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "failed"
+        ],
+        "title": "GameBatchDeleteResp"
       },
       "GameCreate": {
         "properties": {
@@ -7546,7 +7895,8 @@
           "submitted",
           "reviewing",
           "approved",
-          "rejected"
+          "rejected",
+          "withdrawn"
         ],
         "title": "PublishStatus"
       },
@@ -8567,6 +8917,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Ts"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
           },
           "payload": {
             "additionalProperties": true,

@@ -38,3 +38,14 @@ async def test_missing_index() -> None:
     r = await LocalSandbox().execute(source={"readme.txt": "no html"})
     assert not r.ok
     assert r.error == "产物缺少 index.html"
+
+
+@pytest.mark.asyncio
+async def test_chinese_html_roundtrips_as_utf8() -> None:
+    # 回归：sandbox 写盘必须显式 UTF-8。Windows 默认 CP936(GBK) 会让含中文的 HTML 以
+    # GBK 字节落盘，随后 qa_node 的 read_text(encoding="utf-8") 直接 UnicodeDecodeError。
+    # LocalSandbox/DockerSandbox 共享同一写入反模式，docker 后端同源修复（CI 无容器不测）。
+    html = "<!DOCTYPE html><html><body><h1>开始游戏</h1></body></html>"
+    r = await LocalSandbox().execute(source={"index.html": html})
+    assert r.ok
+    assert r.files["index.html"].decode("utf-8") == html

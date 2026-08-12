@@ -44,7 +44,7 @@ function StatCell({
         ) : (
           <p className="font-mono text-xl leading-none text-[var(--gf-text)] tabular-nums">{value}</p>
         )}
-        <p className="gf-page-muted mt-1 font-mono text-[10px] uppercase tracking-wider">{label}</p>
+        <p className="gf-page-muted mt-1 text-[11px] font-medium uppercase tracking-wider">{label}</p>
       </div>
     </div>
   )
@@ -118,7 +118,7 @@ export function DiscoverPage() {
         <header className="mb-10 border-b border-[var(--gf-border)] pb-6">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
-              <p className="gf-text-accent flex items-center gap-2 font-mono text-[11px] tracking-[0.16em] uppercase">
+              <p className="gf-text-accent flex items-center gap-2 text-[11px] font-medium tracking-[0.14em] uppercase">
                 <Compass className="h-3.5 w-3.5" />
                 {t('discoverBadge')}
               </p>
@@ -209,7 +209,7 @@ export function DiscoverPage() {
           <p
             role="status"
             aria-live="polite"
-            className="gf-page-muted mb-4 font-mono text-[11px] uppercase tracking-wider"
+            className="gf-page-muted mb-4 text-[11px] font-medium uppercase tracking-wider"
           >
             {t('discoverResultCount').replace('{n}', String(filtered.length))}
           </p>

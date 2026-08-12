@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, Search, Sparkles } from 'lucide-react'
+import { Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { gamesApi } from '@/api/games'
 import { reactionsApi } from '@/api/reactions'
 import { GameStatus } from '@/api/enums'
@@ -27,6 +27,13 @@ const filterLabelKey: Record<(typeof filterIds)[number], MessageKey> = {
   favorites: 'filterFavorites',
 }
 
+type ConfirmState =
+  | { kind: 'delete-single'; game: GameSummary }
+  | { kind: 'delete-batch' }
+  | { kind: 'unpublish'; game: GameSummary }
+  | { kind: 'withdraw'; game: GameSummary }
+  | null
+
 export function GameDashboard() {
   const t = useT()
   const qc = useQueryClient()
@@ -36,12 +43,15 @@ export function GameDashboard() {
   const [filter, setFilter] = useState<(typeof filterIds)[number]>('all')
   const [q, setQ] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<GameSummary | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [detailGame, setDetailGame] = useState<GameSummary | null>(null)
   const [exitingId, setExitingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const gamesKey = ['games', user?.user_id] as const
 
   const query = useQuery({
-    queryKey: ['games', user?.user_id],
+    queryKey: gamesKey,
     enabled: Boolean(token && user),
     queryFn: () => gamesApi.list(token!),
   })
@@ -92,6 +102,29 @@ export function GameDashboard() {
     })
   }, [filter, q, rows, favoritesQ.data])
 
+  // favorites 视图为他人已发布游戏的只读集合；不参与多选/删除
+  const selectable = !trial && filter !== 'favorites'
+  const listIds = useMemo(() => list.map((g) => g.game_id), [list])
+  const allSelected = selectable && listIds.length > 0 && listIds.every((id) => selectedIds.has(id))
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const all = listIds.every((id) => prev.has(id))
+      return all ? new Set() : new Set(listIds)
+    })
+  }
+
   const emptyTitleKey: MessageKey =
     filter === 'favorites'
       ? 'favoritesEmpty'
@@ -104,9 +137,9 @@ export function GameDashboard() {
   const removeMu = useMutation({
     mutationFn: (gameId: string) => gamesApi.remove(gameId, token!),
     onSuccess: async () => {
-      setDeleteTarget(null)
+      setConfirm(null)
       setExitingId(null)
-      await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
+      await qc.invalidateQueries({ queryKey: gamesKey })
       setToast(t('deleted'))
     },
     onError: (e) => {
@@ -115,11 +148,44 @@ export function GameDashboard() {
     },
   })
 
+  const batchRemoveMu = useMutation({
+    mutationFn: (ids: string[]) => gamesApi.removeBatch(ids, token!),
+    onSuccess: async (data) => {
+      setConfirm(null)
+      clearSelection()
+      await qc.invalidateQueries({ queryKey: gamesKey })
+      const parts = [t('batchDeleted', { n: data.deleted.length })]
+      if (data.failed.length > 0) parts.push(t('batchDeletePartial', { n: data.failed.length }))
+      setToast(parts.join('；'))
+    },
+    onError: (e) => setToast(formatApiError(e, t('batchDeleteFailed'))),
+  })
+
+  const unpublishMu = useMutation({
+    mutationFn: (gameId: string) => gamesApi.unpublish(gameId, token!),
+    onSuccess: async () => {
+      setConfirm(null)
+      await qc.invalidateQueries({ queryKey: gamesKey })
+      setToast(t('unpublished'))
+    },
+    onError: (e) => setToast(formatApiError(e, t('unpublishFailed'))),
+  })
+
+  const withdrawMu = useMutation({
+    mutationFn: (gameId: string) => gamesApi.withdrawPublish(gameId, token!),
+    onSuccess: async () => {
+      setConfirm(null)
+      await qc.invalidateQueries({ queryKey: gamesKey })
+      setToast(t('withdrawn'))
+    },
+    onError: (e) => setToast(formatApiError(e, t('withdrawFailed'))),
+  })
+
   const renameMu = useMutation({
     mutationFn: ({ gameId, title }: { gameId: string; title: string }) =>
       gamesApi.patch(gameId, { title }, token!),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
+      await qc.invalidateQueries({ queryKey: gamesKey })
       setToast(t('renamed'))
     },
     onError: (e) => {
@@ -131,7 +197,7 @@ export function GameDashboard() {
   async function publishGame(g: GameSummary, note: string) {
     try {
       await gamesApi.submitPublish(g.game_id, g.current_version, note || t('defaultPublishNote'), token!)
-      await qc.invalidateQueries({ queryKey: ['games', user?.user_id] })
+      await qc.invalidateQueries({ queryKey: gamesKey })
       setToast(t('publishSubmitted'))
     } catch (e) {
       setToast(formatApiError(e, t('submitFailed')))
@@ -143,13 +209,65 @@ export function GameDashboard() {
     await renameMu.mutateAsync({ gameId: g.game_id, title })
   }
 
-  function confirmDelete() {
-    if (!deleteTarget) return
-    const id = deleteTarget.game_id
-    setDeleteTarget(null)
-    setExitingId(id)
-    window.setTimeout(() => removeMu.mutate(id), 320)
+  function confirmAction() {
+    if (!confirm) return
+    if (confirm.kind === 'delete-single') {
+      const id = confirm.game.game_id
+      setConfirm(null)
+      setExitingId(id)
+      window.setTimeout(() => removeMu.mutate(id), 320)
+    } else if (confirm.kind === 'delete-batch') {
+      batchRemoveMu.mutate([...selectedIds])
+    } else if (confirm.kind === 'unpublish') {
+      unpublishMu.mutate(confirm.game.game_id)
+    } else if (confirm.kind === 'withdraw') {
+      withdrawMu.mutate(confirm.game.game_id)
+    }
   }
+
+  // 统一确认弹窗渲染：根据 confirm 派生 badge/headline/body/confirmLabel/tone
+  const busy =
+    removeMu.isPending ||
+    batchRemoveMu.isPending ||
+    unpublishMu.isPending ||
+    withdrawMu.isPending
+  const modalProps = (() => {
+    if (!confirm) return null
+    if (confirm.kind === 'delete-single') {
+      return {
+        badge: 'Delete',
+        headline: t('deleteConfirmTitle'),
+        body: t('deleteConfirmBody', { title: confirm.game.title }),
+        confirmLabel: t('confirmDelete'),
+        tone: 'danger' as const,
+      }
+    }
+    if (confirm.kind === 'delete-batch') {
+      return {
+        badge: 'Delete',
+        headline: t('batchDeleteConfirmTitle', { n: selectedIds.size }),
+        body: t('batchDeleteConfirmBody'),
+        confirmLabel: t('confirmDelete'),
+        tone: 'danger' as const,
+      }
+    }
+    if (confirm.kind === 'unpublish') {
+      return {
+        badge: 'Unpublish',
+        headline: t('unpublishConfirmTitle'),
+        body: t('unpublishConfirmBody', { title: confirm.game.title }),
+        confirmLabel: t('unpublish'),
+        tone: 'warn' as const,
+      }
+    }
+    return {
+      badge: 'Withdraw',
+      headline: t('withdrawConfirmTitle'),
+      body: t('withdrawConfirmBody', { title: confirm.game.title }),
+      confirmLabel: t('withdrawReview'),
+      tone: 'warn' as const,
+    }
+  })()
 
   return (
     <div className="space-y-6">
@@ -163,7 +281,10 @@ export function GameDashboard() {
             <Search className="gf-page-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                setQ(e.target.value)
+                clearSelection()
+              }}
               placeholder={t('searchGamesPlaceholder')}
               className="gf-input h-11 w-full rounded-xl pl-9 pr-3 text-sm"
             />
@@ -190,7 +311,10 @@ export function GameDashboard() {
             <button
               key={id}
               type="button"
-              onClick={() => setFilter(id)}
+              onClick={() => {
+                setFilter(id)
+                clearSelection()
+              }}
               className={cn(
                 'cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition',
                 filter === id
@@ -204,6 +328,27 @@ export function GameDashboard() {
           )
         })}
       </div>
+
+      {selectable && selectedIds.size > 0 ? (
+        <div className="gf-glass flex flex-wrap items-center gap-3 rounded-xl px-4 py-2.5 text-sm">
+          <span className="gf-page-body font-medium">{t('selectedCount', { n: selectedIds.size })}</span>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="gf-page-muted gf-interactive cursor-pointer text-xs hover:underline"
+          >
+            {allSelected ? t('deselectAll') : t('selectAll')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirm({ kind: 'delete-batch' })}
+            className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-rose-300 ring-1 ring-rose-400/25 transition hover:bg-rose-500/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {t('batchDelete')}
+          </button>
+        </div>
+      ) : null}
 
       {toast ? (
         <div className="gf-banner-info flex items-center justify-between rounded-xl px-3 py-2 text-sm">
@@ -263,10 +408,15 @@ export function GameDashboard() {
                 >
                   <GameCard
                     game={g}
-                    readOnly={trial}
+                    readOnly={trial || filter === 'favorites'}
+                    selectable={selectable}
+                    selected={selectedIds.has(g.game_id)}
+                    onToggleSelect={toggleSelect}
                     onPublish={publishGame}
-                    onRequestDelete={setDeleteTarget}
-                    onRename={trial ? undefined : renameGame}
+                    onRequestDelete={setConfirmStateDeleteSingle}
+                    onRequestUnpublish={trial ? undefined : setConfirmStateUnpublish}
+                    onRequestWithdraw={trial ? undefined : setConfirmStateWithdraw}
+                    onRename={trial || filter === 'favorites' ? undefined : renameGame}
                     onOpenDetail={g.current_version > 0 ? setDetailGame : undefined}
                   />
                 </motion.div>
@@ -275,13 +425,19 @@ export function GameDashboard() {
         </motion.div>
       )}
 
-      <DeleteConfirmModal
-        open={Boolean(deleteTarget)}
-        title={deleteTarget?.title ?? ''}
-        busy={removeMu.isPending}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-      />
+      {modalProps ? (
+        <DeleteConfirmModal
+          open
+          badge={modalProps.badge}
+          headline={modalProps.headline}
+          body={modalProps.body}
+          confirmLabel={modalProps.confirmLabel}
+          tone={modalProps.tone}
+          busy={busy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={confirmAction}
+        />
+      ) : null}
 
       {token ? (
         <GameDetailDrawer
@@ -289,9 +445,19 @@ export function GameDashboard() {
           accessToken={token}
           readOnly={trial}
           onClose={() => setDetailGame(null)}
-          onPublished={() => void qc.invalidateQueries({ queryKey: ['games', user?.user_id] })}
+          onPublished={() => void qc.invalidateQueries({ queryKey: gamesKey })}
         />
       ) : null}
     </div>
   )
+
+  function setConfirmStateDeleteSingle(game: GameSummary) {
+    setConfirm({ kind: 'delete-single', game })
+  }
+  function setConfirmStateUnpublish(game: GameSummary) {
+    setConfirm({ kind: 'unpublish', game })
+  }
+  function setConfirmStateWithdraw(game: GameSummary) {
+    setConfirm({ kind: 'withdraw', game })
+  }
 }

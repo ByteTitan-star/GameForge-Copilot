@@ -91,7 +91,7 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
       <div className="overflow-x-auto rounded-xl ring-1 ring-[var(--gf-border)]">
         <table className="w-full min-w-[480px] text-left text-sm">
           <thead>
-            <tr className="border-b border-[var(--gf-border)] bg-black/[0.03] font-mono text-[10px] tracking-wider gf-page-muted uppercase">
+            <tr className="border-b border-[var(--gf-border)] bg-[color-mix(in_srgb,var(--gf-text)_3%,transparent)] text-[11px] font-medium tracking-wider gf-page-muted uppercase">
               <th className="px-3 py-2">{t('usageBreakdownGame')}</th>
               <th className="px-3 py-2">{t('usageBreakdownTokens')}</th>
               <th className="px-3 py-2">{t('usageBreakdownCost')}</th>
@@ -119,7 +119,7 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
 }
 
 type TrendProps = {
-  data: { date: string; page_views: number; play_starts: number }[]
+  data: { date: string; page_views: number; unique_visitors: number }[]
   tone?: 'light' | 'dark'
 }
 
@@ -153,8 +153,22 @@ export function AnalyticsTrendChart({ data, tone = 'dark' }: TrendProps) {
               fontFamily: CHART_FONT,
             }}
           />
-          <Line type="monotone" dataKey="page_views" stroke="#2dd4bf" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="play_starts" stroke="#38bdf8" strokeWidth={2} dot={false} />
+          <Line
+            type="monotone"
+            dataKey="page_views"
+            name={t('analyticsPageViews')}
+            stroke="#2dd4bf"
+            strokeWidth={2}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="unique_visitors"
+            name={t('analyticsUniqueVisitors')}
+            stroke="#38bdf8"
+            strokeWidth={2}
+            dot={false}
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>

@@ -122,7 +122,10 @@ export function ForgeSplitLayout({
           ? ({
               gridTemplateColumns: `${leftRatio} 6px 1fr`,
             } as CSSProperties)
-          : undefined
+          : // 关闭预览时显式单列填满，避免 grid 退到 auto 隐式列导致面板宽度不确定/溢出
+            ({
+              gridTemplateColumns: "minmax(0, 1fr)",
+            } as CSSProperties)
       }
     >
       {onMobileViewChange ? (

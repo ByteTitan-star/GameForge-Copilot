@@ -17,11 +17,12 @@ from app.core import db
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import PublishStatus
-from app.forge.runner import execute_run
+from app.forge.runner import TaskLeaseBusy, execute_run
 from app.hosting import store
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.publish_request import PublishRequest
+from app.models.run_checkpoint import RunCheckpoint
 from app.models.user import User
 
 GAME_BODY = {"title": "贪吃蛇", "requirement": "方向键"}
@@ -130,17 +131,18 @@ async def test_create_run_lock_blocks_burst(
 # --------------------------------------------------------------------------- #
 
 
-async def test_execute_run_skips_when_already_executing(
+async def test_execute_run_requeues_when_already_executing(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
 ) -> None:
-    """重投消息（run:executing 锁已存在）→ execute_run 跳过，不推进 run。"""
+    """锁冲突必须抛错，让 broker 重投，不能正常返回并 ACK。"""
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
     await redis_client.set(f"run:executing:{rid}", "1", nx=True, ex=7200)
 
-    await execute_run({"redis": redis_client}, rid)  # 应跳过
+    with pytest.raises(TaskLeaseBusy):
+        await execute_run({"redis": redis_client}, rid)
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     d = r.json()["data"]
@@ -158,6 +160,28 @@ async def test_execute_run_releases_lock_on_completion(
     rid = await _make_run(verified_client, gid)
     await execute_run({"redis": redis_client}, rid)
     assert await redis_client.get(f"run:executing:{rid}") is None
+
+
+async def test_redelivered_execute_does_not_restart_paused_run(
+    verified_client: httpx.AsyncClient,
+    redis_client: fakeredis.aioredis.FakeRedis,
+    _fake_llm,
+) -> None:
+    """An execute redelivery after HITL pause is already handled and must be a no-op."""
+    gid = await _make_game(verified_client)
+    rid = await _make_run(verified_client, gid)
+    await execute_run({"redis": redis_client}, rid)
+    async with db.SessionLocal() as session:
+        before = await session.get(RunCheckpoint, rid)
+        assert before is not None
+        revision = before.revision
+
+    await execute_run({"redis": redis_client}, rid)
+
+    async with db.SessionLocal() as session:
+        after = await session.get(RunCheckpoint, rid)
+        assert after is not None
+        assert after.revision == revision
 
 
 # --------------------------------------------------------------------------- #

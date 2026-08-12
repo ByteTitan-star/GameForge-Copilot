@@ -139,6 +139,7 @@ export function ForgePage() {
   const resumedRef = useRef<string | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const prevPreviewRef = useRef<string | null>(null);
+  const eventSeqRef = useRef<Record<string, number>>({});
 
   const detail = useQuery({
     queryKey: ["game", gameId],
@@ -246,6 +247,10 @@ export function ForgePage() {
       runId: activeRunId,
       accessToken: token!,
       persistent: true,
+      afterSeq: eventSeqRef.current[activeRunId] ?? 0,
+      onSeq: (seq) => {
+        eventSeqRef.current[activeRunId] = seq;
+      },
       onEvent: (ev) =>
         handleForgeWsEvent(ev, eventBridge(activeGameId, activeRunId)),
       onError: () => toast.error(t("generationFailed")),
@@ -341,15 +346,26 @@ export function ForgePage() {
     const timer = window.setInterval(async () => {
       try {
         const run = await gamesApi.getRun(runId, token);
+        const ui = syncUiFromRun(run, title);
+        setRunStatus(ui.runStatus);
+        setHitl(ui.hitl);
+        setPhase(ui.phase);
+        setBusy(ui.busy);
+        if (ui.hitl) setStageOpen(true);
         if (run.status === "done" || run.status === "failed") {
           clearActiveRun(runId);
-          setRunStatus(run.status);
-          setBusy(false);
+          closeHandle();
           if (run.status === "done") {
-            setPhase(RunPhase.done);
-            void detail.refetch();
+            const refreshed = await detail.refetch();
+            if (refreshed.data) {
+              const preview = previewFromGameDetail(refreshed.data);
+              if (preview) setPreviewUrl(preview);
+            }
           } else {
-            setPhase("idle");
+            setRunErrors((prev) => ({
+              ...prev,
+              [runId]: prev[runId] ?? t("runFailedError"),
+            }));
           }
         }
       } catch {
@@ -357,7 +373,7 @@ export function ForgePage() {
       }
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [runId, token, gameId, runStatus, detail]);
+  }, [runId, token, gameId, runStatus, detail, title, t]);
 
   function pushItem(
     partial: Omit<TimelineItem, "id" | "at"> & { at?: string },
@@ -383,6 +399,7 @@ export function ForgePage() {
       pushItem,
       setHitl,
       setBusy,
+      setRunStatus,
       setPreviewUrl,
       setSideTab,
       appendMessages: (msgs: ChatMsg[]) => setMessages((m) => [...m, ...msgs]),
@@ -395,6 +412,7 @@ export function ForgePage() {
       },
       onRunFinished: () => {
         if (activeRunId) clearActiveRun(activeRunId);
+        closeHandle();
       },
       setStagePipeline,
       gameId: activeGameId,
@@ -445,8 +463,12 @@ export function ForgePage() {
         handleForgeWsEvent(ev, eventBridge(gid, run.run_id));
       handleRef.current = connectRunWs({
         runId: run.run_id,
-        accessToken: token,
-        persistent: true,
+      accessToken: token,
+      persistent: true,
+      afterSeq: eventSeqRef.current[run.run_id] ?? 0,
+      onSeq: (seq) => {
+        eventSeqRef.current[run.run_id] = seq;
+      },
         onEvent,
         onError: () => toast.error(t("generationFailed")),
       });
@@ -592,18 +614,27 @@ export function ForgePage() {
     }
   }
 
-  function onRejectHitl() {
-    // 契约仅有 approve|modify（都会 resume）；拒绝 = 本地中止并断开 WS，不调 resolve
-    setHitl(null);
-    setBusy(false);
-    setRunStatus("idle");
-    setPhase("idle");
-    closeHandle();
-    pushItem({ label: t("hitlRejected"), tone: "err" });
-    setMessages((m) => [
-      ...m,
-      { id: mid("m"), role: "assistant", content: t("runStopped") },
-    ]);
+  async function onRejectHitl() {
+    if (!runId || !token || trial) return;
+    setBusy(true);
+    try {
+      const resp = await gamesApi.cancelRun(runId, token);
+      setHitl(null);
+      setBusy(false);
+      setRunStatus(resp.status as RunStatus);
+      setPhase("idle");
+      closeHandle();
+      clearActiveRun(runId);
+      void qc.invalidateQueries({ queryKey: ["active-runs"] });
+      pushItem({ label: t("hitlRejected"), tone: "err" });
+      setMessages((m) => [
+        ...m,
+        { id: mid("m"), role: "assistant", content: t("runStopped") },
+      ]);
+    } catch (e) {
+      setBusy(false);
+      toast.error(formatApiError(e, t("cancelFailed")));
+    }
   }
 
   async function pauseRun() {
@@ -751,7 +782,6 @@ export function ForgePage() {
     <div
       className={cn(
         "gf-forge-hero isolate flex min-h-0 flex-col overflow-hidden bg-[#f3f5f7]",
-        stageOpen && "gf-forge-hero--stage-open",
       )}
     >
       <div className="gf-forge-grid-bg" aria-hidden />
@@ -768,12 +798,12 @@ export function ForgePage() {
           </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] gf-page-muted">
+              <span className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">
                 {t("forge")}
               </span>
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ring-1",
+                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ring-1",
                   STATUS_BADGE_CLASS[status.tone].wrap,
                 )}
               >
@@ -795,12 +825,12 @@ export function ForgePage() {
 
         <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5">
           {quotaHint ? (
-            <span className="hidden max-w-40 truncate font-mono text-[10px] gf-page-muted xl:inline">
+            <span className="hidden max-w-40 truncate font-mono text-[11px] gf-page-muted xl:inline">
               {quotaHint}
             </span>
           ) : null}
           {currentModel ? (
-            <span className="hidden max-w-48 truncate font-mono text-[10px] gf-page-muted 2xl:inline">
+            <span className="hidden max-w-48 truncate font-mono text-[11px] gf-page-muted xl:inline">
               {t("currentModel")}: {currentModel}
             </span>
           ) : null}
@@ -843,22 +873,22 @@ export function ForgePage() {
               <span className="hidden xl:inline">{t("cancelRunBtn")}</span>
             </Button>
           ) : null}
-          {busy || previewUrl || runId || stageOpen ? (
-            <Button
-              variant="ghost"
-              className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
-              onClick={() => setStageOpen((open) => !open)}
-            >
-              {stageOpen ? (
-                <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              <span className="hidden sm:inline">
-                {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
-              </span>
-            </Button>
-          ) : null}
+          <Button
+            variant="ghost"
+            className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
+            onClick={() => setStageOpen((open) => !open)}
+            aria-pressed={stageOpen}
+            title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+          >
+            {stageOpen ? (
+              <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">
+              {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+            </span>
+          </Button>
           <button
             type="button"
             title={t("captureIssue")}
@@ -906,7 +936,7 @@ export function ForgePage() {
 
       <ForgeSplitLayout
         stageOpen={stageOpen}
-        className="relative z-[1] min-h-0 flex-1 p-3 md:p-4"
+        className="relative z-[1] min-h-0 flex-1"
         mobileView={mobileView}
         onMobileViewChange={setMobileView}
         left={
@@ -929,22 +959,6 @@ export function ForgePage() {
               }
               conversationFooter={
                 <>
-                  {status.blocked && !trial ? (
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs">
-                      <span className="text-rose-800">
-                        {status.blockedReasonKey
-                          ? t(status.blockedReasonKey)
-                          : t("forgeStageBlocked")}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        className="!min-h-8 !shrink-0 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
-                        onClick={() => navigate("/settings")}
-                      >
-                        {t("forgeConfigureLlm")}
-                      </Button>
-                    </div>
-                  ) : null}
                   {hitl ? (
                     <HitlCard
                       payload={hitl}
@@ -997,11 +1011,11 @@ export function ForgePage() {
                     )}
                   />
                 </div>
-                <span className="font-mono text-[10px] tracking-[0.12em] text-[#94A3B8] uppercase">
+                <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#94A3B8]">
                   {t("previewStage")}
                 </span>
                 {previewUrl ? (
-                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-[#0F172A]">
+                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#0F172A]">
                     v{previewVersion ?? detail.data?.current_version ?? latestVersion}
                   </span>
                 ) : null}
@@ -1023,7 +1037,7 @@ export function ForgePage() {
                     type="button"
                     onClick={() => setRightTab(id)}
                     className={cn(
-                      "min-h-8 cursor-pointer rounded-lg px-2.5 py-1 font-mono text-[10px] tracking-wide uppercase transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]",
+                      "min-h-8 cursor-pointer rounded-lg px-2.5 py-1 text-[12px] font-medium uppercase tracking-wide transition-[color,background-color] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]",
                       rightTab === id
                         ? "bg-blue-50 text-blue-600 ring-1 ring-blue-100"
                         : "text-[#94A3B8] hover:bg-black/[0.04] hover:text-[#0F172A]",
@@ -1155,7 +1169,6 @@ export function ForgePage() {
           runPhase={phase}
           stages={stagePipeline}
           items={items}
-          currentModel={currentModel}
           failureRecovery={
             showFailureRecovery && runId
               ? {

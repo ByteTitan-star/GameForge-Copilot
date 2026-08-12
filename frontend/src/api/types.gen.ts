@@ -569,6 +569,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Delete Games
+         * @description 批量删除：已发布/审核中的会被状态规则挡下并计入 failed。
+         */
+        post: operations["batch_delete_games_api_v1_games_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}": {
         parameters: {
             query?: never;
@@ -589,6 +609,48 @@ export interface paths {
          * @description 草稿重命名（docs/01 MVP）。
          */
         patch: operations["patch_game_api_v1_games__game_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpublish Game
+         * @description owner 自助下架已发布游戏（published → taken_down）。
+         *
+         *     与 admin 的 take-down 区分：owner 自助操作，无需原因。
+         */
+        post: operations["unpublish_game_api_v1_games__game_id__unpublish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/publish/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Publish
+         * @description owner 撤回待审核的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。
+         */
+        post: operations["withdraw_publish_api_v1_games__game_id__publish_withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/games/{game_id}/versions": {
@@ -1024,6 +1086,26 @@ export interface paths {
         put?: never;
         /** Reject Publish */
         post: operations["reject_publish_api_v1_publish__publish_request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publish/{publish_request_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Publish
+         * @description owner 撤回自己的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。
+         */
+        post: operations["withdraw_publish_api_v1_publish__publish_request_id__withdraw_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1553,6 +1635,10 @@ export interface components {
         ApiResponse_GameAnalyticsResp_: {
             data: components["schemas"]["GameAnalyticsResp"];
         };
+        /** ApiResponse[GameBatchDeleteResp] */
+        ApiResponse_GameBatchDeleteResp_: {
+            data: components["schemas"]["GameBatchDeleteResp"];
+        };
         /** ApiResponse[GameDeleteResp] */
         ApiResponse_GameDeleteResp_: {
             data: components["schemas"]["GameDeleteResp"];
@@ -1909,6 +1995,28 @@ export interface components {
             pv_30d: number;
             /** Uv 30D */
             uv_30d: number;
+        };
+        /** GameBatchDeleteItem */
+        GameBatchDeleteItem: {
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /** GameBatchDeleteReq */
+        GameBatchDeleteReq: {
+            /** Game Ids */
+            game_ids: string[];
+        };
+        /** GameBatchDeleteResp */
+        GameBatchDeleteResp: {
+            /** Deleted */
+            deleted: string[];
+            /** Failed */
+            failed: components["schemas"]["GameBatchDeleteItem"][];
         };
         /** GameCreate */
         GameCreate: {
@@ -2493,7 +2601,7 @@ export interface components {
          * PublishStatus
          * @enum {string}
          */
-        PublishStatus: "submitted" | "reviewing" | "approved" | "rejected";
+        PublishStatus: "submitted" | "reviewing" | "approved" | "rejected" | "withdrawn";
         /** PublishSubmitReq */
         PublishSubmitReq: {
             /** Version */
@@ -2928,6 +3036,8 @@ export interface components {
              * Format: date-time
              */
             ts: string;
+            /** Seq */
+            seq?: number | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -4167,6 +4277,57 @@ export interface operations {
             };
         };
     };
+    batch_delete_games_api_v1_games_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameBatchDeleteReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameBatchDeleteResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_game_api_v1_games__game_id__get: {
         parameters: {
             query?: never;
@@ -4278,6 +4439,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_GameResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unpublish_game_api_v1_games__game_id__unpublish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_GameResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_publish_api_v1_games__game_id__publish_withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PublishSubmitResp_"];
                 };
             };
             /** @description 游戏不存在或不可见 */
@@ -5423,6 +5682,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_PublishRejectResp_"];
+                };
+            };
+            /** @description 游戏或申请不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_publish_api_v1_publish__publish_request_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publish_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PublishSubmitResp_"];
                 };
             };
             /** @description 游戏或申请不存在 */

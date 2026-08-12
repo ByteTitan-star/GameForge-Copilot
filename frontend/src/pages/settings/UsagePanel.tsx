@@ -67,13 +67,13 @@ export function UsagePanel() {
               [t('usageDailyRemaining'), fmt(d.quota.remaining)],
             ].map(([k, v]) => (
               <div key={k} className="rounded-xl bg-black/[0.02] p-3 ring-1 ring-[var(--gf-border)]">
-                <p className="font-mono text-[10px] tracking-wider gf-page-muted uppercase">{k}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider gf-page-muted">{k}</p>
                 <p className="mt-1 text-xl gf-text-accent">{v}</p>
               </div>
             ))}
           </div>
           <UsageChart data={chartData} tone="light" />
-          <p className="font-mono text-[11px] gf-page-muted">
+          <p className="text-[11px] leading-relaxed gf-page-muted">
             {t('usageDailyLimitLine')
               .replace('{limit}', fmt(d.quota.daily_token_limit))
               .replace('{in}', fmt(d.today.input_tokens))
@@ -91,7 +91,7 @@ export function UsagePanel() {
         {breakdownQ.data ? (
           <div className="mt-3">
             <UsageBreakdownChart items={breakdownQ.data.items} tone="light" />
-            <p className="mt-2 font-mono text-[11px] gf-page-muted">
+            <p className="mt-2 text-[11px] gf-page-muted">
               {t('usageBreakdownCost')}: ${breakdownQ.data.total_estimated_cost_usd.toFixed(2)}
             </p>
           </div>

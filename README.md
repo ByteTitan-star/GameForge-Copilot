@@ -322,7 +322,23 @@ pnpm run dev
 1. **注册** → 在 Worker 终端找 `[dev-email]` 验证码 → 完成邮箱验证。
 2. **登录** → 未验证进设置页；已验证进游戏列表。
 3. **忘记密码 / 重置** → 登录态可在 Setting 改密。
-4. 认证通过后：Setting 配置 LLM → 工坊生成 → Admin 审批（需 `admin` 角色，在库中把用户 `role` 设为 `admin`）。
+4. 认证通过后：Setting 配置 LLM → 工坊生成 → Admin 审批（管理员初始化见下节）。
+
+### 管理员账号与后台
+
+注册账号默认均为普通用户，系统不预置固定管理员邮箱或密码。首次管理员由有数据库访问权限的运维人员在 `backend/` 下创建或提权：
+
+```bash
+# 创建新管理员（交互输入密码）
+uv run python -m scripts.create_admin --email admin@example.com
+
+# 将已注册账号提权为管理员（保留原密码）
+uv run python -m scripts.create_admin --email user@example.com --promote-existing
+```
+
+提权后请退出并重新登录。管理员可从左侧导航或账号菜单进入 `/admin`，进行发布审批、游戏下架/精选、用户与配额管理、用量分析、审计日志和全局设置。前端会隐藏并拦截普通用户的后台入口，后端所有管理接口还会独立校验数据库中的 `role=admin`；系统禁止禁用/删除当前管理员，并确保至少保留一名可用管理员。
+
+> **安全说明：** `create_admin.py` 是仅供运维执行的命令行工具，不是公开 API；当前后端容器镜像也未复制 `backend/scripts/`。不要把生产数据库凭据、服务器终端权限或 `.env` 交给非运维人员。将该脚本加入 `.gitignore` 不能构成安全保护：文件已被 Git 跟踪，且拥有生产数据库写权限的人即使没有脚本也能直接修改角色。
 
 ---
 

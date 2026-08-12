@@ -82,6 +82,49 @@ async def submit(
     return req
 
 
+async def withdraw(db: AsyncSession, user: User, pr_id: uuid.UUID) -> PublishRequest:
+    """owner 撤回自己的发布申请：submitted/reviewing → withdrawn，游戏回 draft。
+
+    部分唯一索引 uq_publish_active_per_game 只覆盖 submitted/reviewing，
+    置为 withdrawn 即释放名额，允许后续重新 submit。
+    """
+    req = await _get_request(db, pr_id)
+    game = await _get_game(db, req.game_id)
+    if game.owner_id != user.id:
+        # 非-owner 不暴露存在性，与 _get_owned_game 语义一致
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "发布申请不存在")
+    if PublishStatus(req.status) not in _REVIEWABLE:
+        raise AppError(ErrorCode.INVALID_STATE, "该申请不可撤回")
+    req.status = PublishStatus.WITHDRAWN.value
+    req.reviewed_at = datetime.now(UTC)
+    game.status = GameStatus.DRAFT.value
+    await db.commit()
+    await db.refresh(req)
+    return req
+
+
+async def withdraw_by_game(
+    db: AsyncSession, user: User, game_id: uuid.UUID
+) -> PublishRequest:
+    """owner 按 game_id 撤回当前待审核申请（前端卡片视角只有 game_id）。
+
+    校验 owner 后，定位该 game 的 active pr（submitted/reviewing），无则 409，
+    再复用 withdraw 完成 status 迁移与游戏回 draft。
+    """
+    game = await _get_game(db, game_id)
+    if game.owner_id != user.id:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或不可见")
+    req = await db.scalar(
+        select(PublishRequest).where(
+            PublishRequest.game_id == game_id,
+            PublishRequest.status.in_([s.value for s in _REVIEWABLE]),
+        )
+    )
+    if req is None:
+        raise AppError(ErrorCode.INVALID_STATE, "该游戏没有待审核的发布申请")
+    return await withdraw(db, user, req.id)
+
+
 async def list_queue(
     db: AsyncSession, status: PublishStatus | None
 ) -> list[tuple[PublishRequest, Game]]:

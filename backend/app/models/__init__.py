@@ -10,7 +10,9 @@ from app.models.notification import Notification
 from app.models.oauth_account import OAuthAccount
 from app.models.password_reset import PasswordResetToken
 from app.models.publish_request import PublishRequest
+from app.models.run_checkpoint import RunCheckpoint
 from app.models.system_setting import SystemSetting
+from app.models.task_outbox import TaskOutbox
 from app.models.user import User
 
 __all__ = [
@@ -23,6 +25,8 @@ __all__ = [
     "GameReaction",
     "GameVersion",
     "GenerationRun",
+    "RunCheckpoint",
+    "TaskOutbox",
     "PublishRequest",
     "AuditLog",
     "SystemSetting",

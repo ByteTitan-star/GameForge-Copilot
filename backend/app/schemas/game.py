@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.enums import GameStatus
 
@@ -57,6 +57,20 @@ class GameDetailResp(BaseModel):
 class GameDeleteResp(BaseModel):
     game_id: uuid.UUID
     deleted: bool = True
+
+
+class GameBatchDeleteItem(BaseModel):
+    game_id: uuid.UUID
+    reason: str
+
+
+class GameBatchDeleteReq(BaseModel):
+    game_ids: list[uuid.UUID] = Field(..., min_length=1, max_length=50)
+
+
+class GameBatchDeleteResp(BaseModel):
+    deleted: list[uuid.UUID]
+    failed: list[GameBatchDeleteItem]
 
 
 class PublicGameItem(BaseModel):

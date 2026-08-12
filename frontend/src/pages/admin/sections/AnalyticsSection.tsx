@@ -45,7 +45,7 @@ export function AnalyticsSection() {
             ))}
           />
           <section className="gf-glass rounded-2xl p-4">
-            <p className="gf-page-muted mb-3 font-mono text-[10px] uppercase tracking-wider">
+            <p className="gf-page-muted mb-3 text-[11px] font-medium uppercase tracking-wider">
               {t('adminAnalyticsTrend')}
             </p>
             <AnalyticsTrendChart data={data.trend} />
