@@ -843,22 +843,22 @@ export function ForgePage() {
               <span className="hidden xl:inline">{t("cancelRunBtn")}</span>
             </Button>
           ) : null}
-          {busy || previewUrl || runId || stageOpen ? (
-            <Button
-              variant="ghost"
-              className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
-              onClick={() => setStageOpen((open) => !open)}
-            >
-              {stageOpen ? (
-                <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              <span className="hidden sm:inline">
-                {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
-              </span>
-            </Button>
-          ) : null}
+          <Button
+            variant="ghost"
+            className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
+            onClick={() => setStageOpen((open) => !open)}
+            aria-pressed={stageOpen}
+            title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+          >
+            {stageOpen ? (
+              <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">
+              {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+            </span>
+          </Button>
           <button
             type="button"
             title={t("captureIssue")}
@@ -906,7 +906,7 @@ export function ForgePage() {
 
       <ForgeSplitLayout
         stageOpen={stageOpen}
-        className="relative z-[1] min-h-0 flex-1 p-3 md:p-4"
+        className="relative z-[1] min-h-0 flex-1"
         mobileView={mobileView}
         onMobileViewChange={setMobileView}
         left={
@@ -929,22 +929,6 @@ export function ForgePage() {
               }
               conversationFooter={
                 <>
-                  {status.blocked && !trial ? (
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs">
-                      <span className="text-rose-800">
-                        {status.blockedReasonKey
-                          ? t(status.blockedReasonKey)
-                          : t("forgeStageBlocked")}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        className="!min-h-8 !shrink-0 !rounded-lg !bg-rose-600 !px-3 !text-xs !text-white hover:!bg-rose-700"
-                        onClick={() => navigate("/settings")}
-                      >
-                        {t("forgeConfigureLlm")}
-                      </Button>
-                    </div>
-                  ) : null}
                   {hitl ? (
                     <HitlCard
                       payload={hitl}
