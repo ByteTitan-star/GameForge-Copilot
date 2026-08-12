@@ -1087,3 +1087,101 @@ body.gf-forge-dock-resizing * {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   Admin 后台亮色 SaaS 质感层
+   不改 :root token（applyTheme 写到 inline style，优先级最高），
+   只在 admin 局部作用域（.gf-admin）叠加 surface 分层 / 阴影 / 圆角。
+   brand 色继续走 var(--gf-primary)，用户自定义主题在 admin 仍跟随。
+   暗色背景：[data-gf-surface="light"] 不命中 → 兜底块回退到全局 surface。
+   ============================================================ */
+
+/* 兜底：暗色背景 / 未应用主题时，卡片回退到全局 surface token，不塌 */
+.gf-admin-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--gf-border);
+  background: var(--gf-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* 亮色增强：定义 admin 专属局部变量（命名空间 --gf-admin-*，applyTheme 不会碰） */
+[data-gf-surface="light"] .gf-admin {
+  --gf-admin-card: #ffffff;
+  --gf-admin-card-2: #f8fafc;
+  --gf-admin-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --gf-admin-shadow-hover: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.08);
+  --gf-admin-ring: 0 0 0 3px rgba(var(--gf-primary-rgb), 0.14);
+  --gf-admin-row-hover: rgba(var(--gf-primary-rgb), 0.04);
+}
+
+/* 亮色下卡片用白底 + 柔弥散阴影（变量未定义时内联回退，双重保险） */
+[data-gf-surface="light"] .gf-admin-card {
+  background: var(--gf-admin-card, var(--gf-surface));
+  box-shadow: var(--gf-admin-shadow, 0 1px 2px rgba(15, 23, 42, 0.04));
+}
+
+.gf-admin-card-hover {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+[data-gf-surface="light"] .gf-admin-card-hover:hover {
+  border-color: rgba(var(--gf-primary-rgb), 0.18);
+  box-shadow: var(--gf-admin-shadow-hover, 0 1px 2px rgba(15, 23, 42, 0.04));
+}
+
+/* 表格行 hover：浅品牌色高亮（admin-table 标记类触发） */
+.gf-admin-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.gf-admin-table tbody tr:hover {
+  background: var(--gf-admin-row-hover, rgba(var(--gf-primary-rgb), 0.04));
+}
+
+/* admin 作用域内主按钮：实心品牌色，去渐变去发光（保留 :active scale） */
+[data-gf-surface="light"] .gf-admin .gf-btn-primary {
+  background: var(--gf-primary);
+  border-radius: 0.5rem;
+}
+
+[data-gf-surface="light"] .gf-admin .gf-btn-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 1px 3px rgba(var(--gf-primary-rgb), 0.2);
+}
+
+/* admin 输入框聚焦：更明显的外发光（在全局 .gf-input 基础上增强） */
+[data-gf-surface="light"] .gf-admin .gf-input:focus {
+  border-color: rgba(var(--gf-primary-rgb), 0.5);
+  box-shadow: var(--gf-admin-ring);
+}
+
+/* mobile sidebar 抽屉：<1024px 隐藏，is-open 滑入。不动全局 .gf-sidebar */
+@media (max-width: 1023px) {
+  .gf-admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .gf-admin-sidebar.is-open {
+    transform: none;
+  }
+
+  .gf-admin-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: gf-admin-overlay-in 0.15s ease-out;
+  }
+}
+
+@keyframes gf-admin-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
