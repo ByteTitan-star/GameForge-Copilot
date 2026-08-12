@@ -102,6 +102,26 @@ async def reject_publish(
 
 
 @router.post(
+    "/publish/{publish_request_id}/withdraw",
+    response_model=ApiResponse[PublishSubmitResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def withdraw_publish(
+    publish_request_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[PublishSubmitResp]:
+    """owner 撤回自己的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。"""
+    pr = await services.withdraw(db, user, publish_request_id)
+    return ApiResponse(
+        data=PublishSubmitResp(
+            publish_request_id=pr.id,
+            status=PublishStatus(pr.status),
+            game_id=pr.game_id,
+            version=pr.version,
+        )
+    )
+
+
+@router.post(
     "/games/{game_id}/take-down",
     response_model=ApiResponse[TakeDownResp],
     responses={**ERR_404, **ERR_409},

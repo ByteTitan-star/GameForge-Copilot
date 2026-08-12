@@ -141,3 +141,72 @@ async def test_submit_non_owner_404(
     # auth_client 是未验证的另一用户；submit 非 owner → 404
     r = await auth_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
     assert r.status_code == 404
+
+
+async def test_withdraw_flow(verified_client: httpx.AsyncClient) -> None:
+    """owner 撤回 submitted 申请：pr=withdrawn、game 回 draft、可重新 submit。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+    pr_id = r.json()["data"]["publish_request_id"]
+
+    r = await verified_client.post(f"/api/v1/publish/{pr_id}/withdraw")
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["status"] == "withdrawn"
+
+    # game 回到 draft
+    r = await verified_client.get(f"/api/v1/games/{gid}")
+    assert r.json()["data"]["status"] == "draft"
+
+    # 撤回后能重新 submit（唯一索引已释放）
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+    assert r.status_code == 200
+
+
+async def test_withdraw_non_owner_404(
+    verified_client: httpx.AsyncClient, auth_client: httpx.AsyncClient
+) -> None:
+    """非 owner 撤回 → 404，不暴露存在性。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+    pr_id = r.json()["data"]["publish_request_id"]
+    r = await auth_client.post(f"/api/v1/publish/{pr_id}/withdraw")
+    assert r.status_code == 404
+
+
+async def test_withdraw_non_reviewable_409(
+    verified_client: httpx.AsyncClient, admin_client: httpx.AsyncClient
+) -> None:
+    """已 approved 的申请不可撤回 → 409。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+    pr_id = r.json()["data"]["publish_request_id"]
+    await admin_client.post(f"/api/v1/publish/{pr_id}/approve")
+    r = await verified_client.post(f"/api/v1/publish/{pr_id}/withdraw")
+    assert r.status_code == 409
+
+
+async def test_withdraw_by_game(verified_client: httpx.AsyncClient) -> None:
+    """owner 按 game_id 撤回（前端卡片入口）：game 回 draft，可重新提交。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/withdraw")
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["status"] == "withdrawn"
+    assert (await verified_client.get(f"/api/v1/games/{gid}")).json()["data"]["status"] == "draft"
+
+    # 重新提交成功（唯一索引已释放）
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
+    assert r.status_code == 200
+
+
+async def test_withdraw_by_game_no_active_pr_409(verified_client: httpx.AsyncClient) -> None:
+    """无待审核申请时按 game_id 撤回 → 409。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.post(f"/api/v1/games/{gid}/publish/withdraw")
+    assert r.status_code == 409

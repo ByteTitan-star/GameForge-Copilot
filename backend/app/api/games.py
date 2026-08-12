@@ -10,15 +10,18 @@ from fastapi.responses import Response
 from app.auth.deps import CurrentUser, DbSession
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
-from app.enums import GameStatus, ReactionType
+from app.enums import GameStatus, PublishStatus, ReactionType
 from app.games import official as official_svc
 from app.games import services
 from app.hosting import store as hosting_store
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.profile import services as profile_services
+from app.publish import services as publish_services
 from app.reactions import services as reaction_services
 from app.schemas.game import (
+    GameBatchDeleteReq,
+    GameBatchDeleteResp,
     GameCreate,
     GameDeleteResp,
     GameDetailResp,
@@ -27,6 +30,7 @@ from app.schemas.game import (
     GameResp,
     VersionItem,
 )
+from app.schemas.publish import PublishSubmitResp
 from app.schemas.reactions import (
     CreatorBrief,
     PublicGameMeta,
@@ -156,6 +160,24 @@ async def list_games(
     return PaginatedData(data=[_to_item(g) for g in rows], total=total, page=page, size=size)
 
 
+@router.post(
+    "/batch-delete",
+    response_model=ApiResponse[GameBatchDeleteResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def batch_delete_games(
+    req: GameBatchDeleteReq, user: CurrentUser, db: DbSession
+) -> ApiResponse[GameBatchDeleteResp]:
+    """批量删除：已发布/审核中的会被状态规则挡下并计入 failed。"""
+    deleted, failed = await services.delete_games(db, user, req.game_ids)
+    return ApiResponse(
+        data=GameBatchDeleteResp(
+            deleted=deleted,
+            failed=[{"game_id": gid, "reason": reason} for gid, reason in failed],
+        )
+    )
+
+
 @router.patch("/{game_id}", response_model=ApiResponse[GameResp], responses={**ERR_404, **ERR_409})
 async def patch_game(
     game_id: UUID, req: GamePatch, user: CurrentUser, db: DbSession
@@ -192,6 +214,41 @@ async def delete_game(
 ) -> ApiResponse[GameDeleteResp]:
     game = await services.delete_game(db, user, game_id)
     return ApiResponse(data=GameDeleteResp(game_id=game.id))
+
+
+@router.post(
+    "/{game_id}/unpublish",
+    response_model=ApiResponse[GameResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def unpublish_game(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[GameResp]:
+    """owner 自助下架已发布游戏（published → taken_down）。
+
+    与 admin 的 take-down 区分：owner 自助操作，无需原因。
+    """
+    return ApiResponse(data=_to_resp(await services.unpublish_own_game(db, user, game_id)))
+
+
+@router.post(
+    "/{game_id}/publish/withdraw",
+    response_model=ApiResponse[PublishSubmitResp],
+    responses={**ERR_404, **ERR_409},
+)
+async def withdraw_publish(
+    game_id: UUID, user: CurrentUser, db: DbSession
+) -> ApiResponse[PublishSubmitResp]:
+    """owner 撤回待审核的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。"""
+    pr = await publish_services.withdraw_by_game(db, user, game_id)
+    return ApiResponse(
+        data=PublishSubmitResp(
+            publish_request_id=pr.id,
+            status=PublishStatus(pr.status),
+            game_id=pr.game_id,
+            version=pr.version,
+        )
+    )
 
 
 @router.get(

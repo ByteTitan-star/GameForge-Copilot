@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, History, Loader2, Pencil, Sparkles, Trash2, Upload } from 'lucide-react'
+import { ArrowUpRight, EyeOff, History, Loader2, Pencil, Sparkles, Trash2, Undo2, Upload } from 'lucide-react'
 import { GameStatus } from '@/api/enums'
 import type { GameSummary } from '@/api/types'
 import type { MessageKey } from '@/i18n/messages'
@@ -34,10 +34,15 @@ function blurbFor(g: GameSummary, t: (key: MessageKey) => string) {
 
 export type GameCardProps = {
   game: GameSummary
-  /** 试用只读：隐藏发布/删除，编辑改为查看 */
+  /** 试用只读：隐藏发布/删除/下架/撤回，编辑改为查看 */
   readOnly?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
   onPublish: (g: GameSummary, note: string) => Promise<void>
   onRequestDelete: (g: GameSummary) => void
+  onRequestUnpublish?: (g: GameSummary) => void
+  onRequestWithdraw?: (g: GameSummary) => void
   onRename?: (g: GameSummary, title: string) => Promise<void>
   onOpenDetail?: (g: GameSummary) => void
 }
@@ -45,8 +50,13 @@ export type GameCardProps = {
 export function GameCard({
   game: g,
   readOnly = false,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
   onPublish,
   onRequestDelete,
+  onRequestUnpublish,
+  onRequestWithdraw,
   onRename,
   onOpenDetail,
 }: GameCardProps) {
@@ -79,6 +89,13 @@ export function GameCard({
     (g.status === GameStatus.draft ||
       g.status === GameStatus.rejected ||
       g.status === GameStatus.taken_down)
+
+  const canUnpublish = !readOnly && g.status === GameStatus.published && Boolean(onRequestUnpublish)
+
+  const canWithdraw =
+    !readOnly &&
+    (g.status === GameStatus.submitted || g.status === GameStatus.reviewing) &&
+    Boolean(onRequestWithdraw)
 
   const canRename =
     !readOnly &&
@@ -140,6 +157,19 @@ export function GameCard({
 
       <div className={cn('relative h-28 overflow-hidden', coverFor(g.game_id))}>
         <div className="absolute inset-0 opacity-40 mix-blend-screen [background-image:linear-gradient(115deg,transparent_40%,rgba(255,255,255,0.18)_50%,transparent_60%)]" />
+        {selectable ? (
+          <label
+            className="absolute top-2.5 left-2.5 z-10 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/30 px-2 py-1 text-white backdrop-blur-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect?.(g.game_id)}
+              className="gf-checkbox"
+            />
+          </label>
+        ) : null}
         <div className="absolute top-3 right-3">
           <StatusBadge status={g.status} />
         </div>
@@ -212,6 +242,26 @@ export function GameCard({
             >
               <Pencil className="h-3.5 w-3.5" />
               {t('rename')}
+            </button>
+          ) : null}
+          {canWithdraw ? (
+            <button
+              type="button"
+              onClick={() => onRequestWithdraw?.(g)}
+              className="gf-page-muted gf-chip gf-interactive inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition hover:bg-black/[0.03]"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              {t('withdrawReview')}
+            </button>
+          ) : null}
+          {canUnpublish ? (
+            <button
+              type="button"
+              onClick={() => onRequestUnpublish?.(g)}
+              className="gf-page-muted gf-chip gf-interactive inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition hover:bg-black/[0.03]"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              {t('unpublish')}
             </button>
           ) : null}
           {canDelete ? (

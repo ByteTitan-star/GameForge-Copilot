@@ -38,6 +38,7 @@ export const PublishStatus = {
   reviewing: 'reviewing',
   approved: 'approved',
   rejected: 'rejected',
+  withdrawn: 'withdrawn',
 } as const
 export type PublishStatus = (typeof PublishStatus)[keyof typeof PublishStatus]
 

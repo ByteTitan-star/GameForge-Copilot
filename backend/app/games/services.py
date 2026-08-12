@@ -16,10 +16,16 @@ from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import EntryPhase, GameStatus, RunPhase, RunStatus
 from app.forge import control as run_ctrl
-from app.forge import queue as forge_queue
 from app.forge import state as ckpt
 from app.forge.entry_router import classify_entry_phase
 from app.hosting import store as hosting_store
+from app.messaging.outbox import add_task, cancel_run_tasks
+from app.messaging.tasks import (
+    TASK_EXECUTE_RUN,
+    TASK_RESUME_RUN,
+    resume_payload,
+    run_id_payload,
+)
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
@@ -193,6 +199,50 @@ async def delete_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
     return game
 
 
+async def delete_games(
+    db: AsyncSession, user: User, game_ids: list[UUID]
+) -> tuple[list[UUID], list[tuple[UUID, str]]]:
+    """批量删除：逐个按 owner + 可删状态校验，部分失败不中断。
+
+    返回 (deleted_ids, failed) — failed 每项为 (game_id, reason)。
+    单事务提交：已通过校验的删除一起持久化，被拒的记入 failed。
+    """
+    deleted: list[UUID] = []
+    failed: list[tuple[UUID, str]] = []
+    games: dict[UUID, Game] = {}
+    for gid in game_ids:
+        game = await db.scalar(select(Game).where(Game.id == gid, Game.owner_id == user.id))
+        if game is None:
+            failed.append((gid, "游戏不存在或不可见"))
+            continue
+        if GameStatus(game.status) not in _DELETABLE:
+            failed.append((gid, "当前状态不可删除，请先下架或撤回"))
+            continue
+        games[gid] = game
+    for game in games.values():
+        await db.delete(game)
+        deleted.append(game.id)
+    if deleted:
+        await db.commit()
+    return deleted, failed
+
+
+async def unpublish_own_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    """owner 自助下架已发布游戏：published → taken_down。
+
+    与 admin take_down 区分：owner 走自己的仓库视图，无需审批原因。
+    下架后清掉 featured_rank（已下架不应再占据精选位）。
+    """
+    game = await _get_owned_game(db, user, game_id)
+    if GameStatus(game.status) != GameStatus.PUBLISHED:
+        raise AppError(ErrorCode.INVALID_STATE, "仅已发布游戏可下架")
+    game.status = GameStatus.TAKEN_DOWN.value
+    game.featured_rank = None
+    await db.commit()
+    await db.refresh(game)
+    return game
+
+
 async def list_versions(db: AsyncSession, user: User, game_id: UUID) -> list[GameVersion]:
     await _get_owned_game(db, user, game_id)
     rows = (
@@ -241,7 +291,12 @@ async def prune_old_versions(db: AsyncSession, game: Game) -> None:
 
 
 async def create_run(
-    db: AsyncSession, r: redis.Redis, user: User, game_id: UUID, req: RunCreate
+    db: AsyncSession,
+    r: redis.Redis,
+    user: User,
+    game_id: UUID,
+    req: RunCreate,
+    client_request_id: str | None = None,
 ) -> GenerationRun:
     _require_verified(user)
     game = await _get_owned_game(db, user, game_id)
@@ -252,6 +307,15 @@ async def create_run(
     if not await r.set(lock_key, "1", nx=True, ex=10):
         raise AppError(ErrorCode.RATE_LIMITED, "请勿重复发起 run，稍后再试")
     try:
+        if client_request_id:
+            existing = await db.scalar(
+                select(GenerationRun).where(
+                    GenerationRun.user_id == user.id,
+                    GenerationRun.client_request_id == client_request_id,
+                )
+            )
+            if existing is not None:
+                return existing
         active = await db.scalar(
             select(func.count())
             .select_from(GenerationRun)
@@ -308,15 +372,17 @@ async def create_run(
             user_id=user.id,
             llm_config_id=req.llm_config_id,
             requirement=req.requirement,
+            client_request_id=client_request_id,
             entry_phase=entry.value,
             status=RunStatus.RUNNING.value,
             phase=initial_phase.value,
             started_at=datetime.now(UTC),
         )
         db.add(run)
+        await db.flush()
+        await add_task(db, TASK_EXECUTE_RUN, run_id_payload(run.id))
         await db.commit()
         await db.refresh(run)
-        await forge_queue.enqueue_run(run.id)
         return run
     finally:
         await r.delete(lock_key)
@@ -388,16 +454,12 @@ async def resume_run_control(
     run = await get_run(db, user, run_id)
     if run.status != RunStatus.PAUSED.value:
         raise AppError(ErrorCode.INVALID_STATE, "仅 paused 可续跑")
-    st = await ckpt.load_state(r, run_id) or {}
+    await ckpt.load_state(r, run_id, db)
     await run_ctrl.clear_control(r, run_id)
     run.status = RunStatus.RUNNING.value
+    run.ended_at = None
+    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
     await db.commit()
-    phase = st.get("phase")
-    if phase in ("plan_confirm", "sandbox_failed", "qa_failed"):
-        await forge_queue.enqueue_resume(run_id, "approve", None)
-    else:
-        # 节点间 pause：带 design 从 art 续
-        await forge_queue.enqueue_resume(run_id, "approve", None)
     await db.refresh(run)
     return run
 
@@ -411,9 +473,10 @@ async def cancel_run(
     await run_ctrl.request_cancel(r, run_id)
     run.status = RunStatus.FAILED.value
     run.ended_at = datetime.now(UTC)
+    await cancel_run_tasks(db, run_id)
     await db.commit()
-    await ckpt.clear_state(r, run_id)
-    await run_ctrl.clear_control(r, run_id)
+    await ckpt.clear_state(r, run_id, db)
+    await db.commit()
     await r.delete(f"run:hitl:{run_id}")  # 清掉 HITL 并发锁，避免残留 resolve 重新触发已取消的 run
     await db.refresh(run)
     return run
@@ -467,7 +530,7 @@ async def retry_run(
 ) -> GenerationRun:
     """从失败检查点重试（Batch A · B-A5）。"""
     run = await get_run(db, user, run_id)
-    st = await ckpt.load_state(r, run_id) or {}
+    st = await ckpt.load_state(r, run_id, db) or {}
     phase = st.get("phase")
     if phase not in _RETRY_PHASES:
         raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")
@@ -478,7 +541,7 @@ async def retry_run(
     run.status = RunStatus.RUNNING.value
     run.phase = RunPhase.CODE.value
     run.ended_at = None
+    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
     await db.commit()
-    await forge_queue.enqueue_resume(run_id, "approve", None)
     await db.refresh(run)
     return run
