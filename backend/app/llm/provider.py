@@ -4,6 +4,8 @@ docs/05 §连通性测试：保存前发最小 completion，失败不让保存�
 complete() 返回 (content, usage)，usage 取响应真实字段，不估算（docs/05）。
 """
 
+import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -15,6 +17,9 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
 
 log = logging.getLogger(__name__)
+
+_MAX_ATTEMPTS = 3
+_RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524}
 
 _DEFAULT_API_BASE = {
     LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1",
@@ -39,6 +44,10 @@ _MODEL_WHITELIST: dict[LLMProvider, list[str]] = {
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+
+
+class _RetryableLLMError(Exception):
+    pass
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
@@ -149,6 +158,143 @@ def _is_qwen_thinking_model(model: str) -> bool:
     return "qwen3" in (model or "").lower()
 
 
+def _content_text(value: object) -> str:
+    """Extract text from OpenAI-compatible string or content-block payloads."""
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, list):
+        return ""
+    parts: list[str] = []
+    for block in value:
+        if not isinstance(block, dict):
+            continue
+        text = block.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts)
+
+
+def _update_usage(usage: Usage, raw: object, *, anthropic: bool = False) -> None:
+    if not isinstance(raw, dict):
+        return
+    input_key = "input_tokens" if anthropic else "prompt_tokens"
+    output_key = "output_tokens" if anthropic else "completion_tokens"
+    input_tokens = raw.get(input_key)
+    output_tokens = raw.get(output_key)
+    if isinstance(input_tokens, int):
+        usage.input_tokens = input_tokens
+    if isinstance(output_tokens, int):
+        usage.output_tokens = output_tokens
+
+
+async def _consume_stream(
+    resp: httpx.Response, *, anthropic: bool
+) -> tuple[str, Usage]:
+    """Aggregate SSE chunks while keeping the upstream connection active."""
+    if resp.status_code != 200:
+        raw = await resp.aread()
+        body = raw.decode(errors="replace")
+        hint = ""
+        if resp.status_code == 404:
+            hint = (
+                f"；请求 URL: {resp.request.url}。"
+                "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
+                "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
+            )
+        message = f"LLM 调用失败 HTTP {resp.status_code}: {body[:120]}{hint}"
+        if resp.status_code in _RETRYABLE_STATUS_CODES:
+            raise _RetryableLLMError(message)
+        raise AppError(ErrorCode.LLM_CONFIG_INVALID, message)
+
+    parts: list[str] = []
+    usage = Usage()
+    async for raw_line in resp.aiter_lines():
+        line = raw_line.strip()
+        if not line or line.startswith(":") or line.startswith("event:"):
+            continue
+        payload = line[5:].strip() if line.startswith("data:") else line
+        if payload == "[DONE]":
+            break
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            log.warning("ignore malformed llm stream chunk")
+            continue
+        if not isinstance(data, dict):
+            continue
+        error = data.get("error")
+        if error:
+            message = error.get("message") if isinstance(error, dict) else str(error)
+            code = error.get("code") if isinstance(error, dict) else None
+            error_type = error.get("type") if isinstance(error, dict) else None
+            retry_text = f"{code or ''} {error_type or ''} {message}".lower()
+            retryable = any(
+                marker in retry_text
+                for marker in (
+                    "temporarily unavailable",
+                    "timeout",
+                    "rate limit",
+                    "overload",
+                    "server error",
+                    "upstream",
+                )
+            )
+            stream_error = f"LLM 流式调用失败: {message}"
+            if retryable:
+                raise _RetryableLLMError(stream_error)
+            raise AppError(ErrorCode.LLM_CONFIG_INVALID, stream_error)
+
+        if anthropic:
+            event_type = data.get("type")
+            if event_type == "message_start":
+                message = data.get("message")
+                if isinstance(message, dict):
+                    _update_usage(usage, message.get("usage"), anthropic=True)
+            elif event_type == "content_block_start":
+                block = data.get("content_block")
+                if isinstance(block, dict):
+                    parts.append(_content_text(block.get("text")))
+            elif event_type == "content_block_delta":
+                delta = data.get("delta")
+                if isinstance(delta, dict) and delta.get("type") == "text_delta":
+                    parts.append(_content_text(delta.get("text")))
+            elif event_type == "message_delta":
+                _update_usage(usage, data.get("usage"), anthropic=True)
+            continue
+
+        _update_usage(usage, data.get("usage"))
+        choices = data.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta")
+            if isinstance(delta, dict):
+                parts.append(_content_text(delta.get("content")))
+
+    content = "".join(parts)
+    if not content:
+        raise _RetryableLLMError("LLM 流式响应未返回文本内容")
+    return content, usage
+
+
+async def _stream_completion(
+    url: str,
+    headers: dict[str, str],
+    body: dict[str, object],
+    timeout: httpx.Timeout,
+    *,
+    anthropic: bool,
+) -> tuple[str, Usage, int]:
+    async with (
+        _build_llm_client(url, timeout) as client,
+        client.stream("POST", url, headers=headers, json=body) as resp,
+    ):
+        content, usage = await _consume_stream(resp, anthropic=anthropic)
+        return content, usage, resp.status_code
+
+
 async def test_connectivity(
     provider: LLMProvider,
     apikey: str,
@@ -219,22 +365,27 @@ async def complete(
         max_tokens = settings.llm_max_tokens
     headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
     url = _messages_url(provider, base_url)
-    if _uses_anthropic_native_api(provider, base_url):
+    anthropic_native = _uses_anthropic_native_api(provider, base_url)
+    if anthropic_native:
         body = {
             "model": model,
             "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": user_msg}],
+            "stream": True,
         }
     else:
         body = {
             "model": model,
             "max_tokens": max_tokens,
+            "stream": True,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
             ],
         }
+        if _is_official_base(provider, base_url):
+            body["stream_options"] = {"include_usage": True}
     # qwen3 默认开 thinking 会拉长代码生成、易触发读超时；DashScope 非流式调用也要求
     # enable_thinking=false。命中 qwen3 则按配置关闭（仅 OpenAI 兼容路径）。
     if (
@@ -253,50 +404,55 @@ async def complete(
     # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
     started = time.monotonic()
     log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
-    try:
-        async with _build_llm_client(url, timeout) as client:
-            resp = await client.post(url, headers=headers, json=body)
-    except httpx.HTTPError:
-        duration = round(time.monotonic() - started, 3)
-        log.exception(
-            "llm http failed",
-            extra={"stage": "http", "model": model, "duration": duration},
-        )
-        raise
+    last_error: Exception | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            content, usage, status_code = await _stream_completion(
+                url,
+                headers,
+                body,
+                timeout,
+                anthropic=anthropic_native,
+            )
+            break
+        except (httpx.HTTPError, _RetryableLLMError) as exc:
+            last_error = exc
+            if attempt == _MAX_ATTEMPTS:
+                duration = round(time.monotonic() - started, 3)
+                log.exception(
+                    "llm http failed after retries",
+                    extra={
+                        "stage": "http",
+                        "model": model,
+                        "duration": duration,
+                        "attempt": attempt,
+                    },
+                )
+                raise AppError(
+                    ErrorCode.LLM_CONFIG_INVALID,
+                    f"LLM 调用在重试 {_MAX_ATTEMPTS} 次后失败: {exc}",
+                ) from exc
+            delay = 2 ** (attempt - 1)
+            log.warning(
+                "llm call retry",
+                extra={
+                    "stage": "http",
+                    "model": model,
+                    "attempt": attempt,
+                    "retry_in": delay,
+                },
+            )
+            await asyncio.sleep(delay)
+    else:  # pragma: no cover - loop always breaks or raises
+        raise RuntimeError("LLM retry loop ended unexpectedly") from last_error
     duration = round(time.monotonic() - started, 3)
     log.info(
         "llm http response",
         extra={
             "stage": "http",
             "model": model,
-            "status": resp.status_code,
+            "status": status_code,
             "duration": duration,
         },
     )
-    if resp.status_code != 200:
-        hint = ""
-        if resp.status_code == 404:
-            hint = (
-                f"；请求 URL: {url}。"
-                "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
-                "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
-            )
-        raise AppError(
-            ErrorCode.LLM_CONFIG_INVALID,
-            f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:120]}{hint}",
-        )
-    data = resp.json()
-    if _uses_anthropic_native_api(provider, base_url):
-        content = "".join(b.get("text", "") for b in data.get("content", []))
-        usage = Usage(
-            input_tokens=data.get("usage", {}).get("input_tokens", 0),
-            output_tokens=data.get("usage", {}).get("output_tokens", 0),
-        )
-    else:
-        raw = data["choices"][0]["message"].get("content")
-        content = raw if isinstance(raw, str) else (raw or "")
-        usage = Usage(
-            input_tokens=data.get("usage", {}).get("prompt_tokens", 0),
-            output_tokens=data.get("usage", {}).get("completion_tokens", 0),
-        )
-    return content or "", usage
+    return content, usage

@@ -26,7 +26,7 @@ class LocalSandbox:
             for rel, content in source.items():
                 p = workspace / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(content)
+                p.write_text(content, encoding="utf-8")
             if build_cmd is not None:
                 logs, error = await self._run_build(workspace, list(build_cmd))
                 if error is not None:

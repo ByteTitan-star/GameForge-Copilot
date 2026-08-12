@@ -42,7 +42,7 @@ class DockerSandbox:
             for rel, content in source.items():
                 p = workspace / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(content)
+                p.write_text(content, encoding="utf-8")
             try:
                 result = await self._run_container(workspace, build_cmd, limits)
                 SANDBOX_RUNS.labels("docker", "ok" if result.ok else "fail").inc()
