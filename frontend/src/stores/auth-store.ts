@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { authApi } from '@/api/auth'
 import type { User } from '@/api/types'
 import { isTrialUser } from '@/lib/trial'
+import { queryClient } from '@/lib/query-client'
 
 type AuthState = {
   user: User | null
@@ -50,6 +51,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           if (refresh) await authApi.logout(refresh)
         } finally {
+          // 先取消所有在飞请求，避免旧账号的 401-refresh 竞态回流清掉新会话；
+          // 再清空缓存，避免换号后新账号命中旧账号 ['notifications'] 等无 user 维度的 key。
+          // cancelQueries 可能因「无查询可取消」抛出，属预期，显式兜住。
+          await queryClient.cancelQueries().catch(() => {})
+          queryClient.clear()
           get().clearSession()
         }
       },
