@@ -1,4 +1,4 @@
-import { RunPhase, WSEventType } from '@/api/enums'
+import { RunPhase, RunStatus, WSEventType } from '@/api/enums'
 import type { HitlWaitPayload, WsEnvelope } from '@/api/ws-types'
 import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { ChatMsg } from '@/components/forge/ChatPanel'
@@ -18,6 +18,7 @@ export type ForgeEventHandlers = {
   pushItem: (partial: Omit<TimelineItem, 'id' | 'at'> & { at?: string }) => void
   setHitl: (p: HitlWaitPayload | null) => void
   setBusy: (v: boolean) => void
+  setRunStatus?: (status: RunStatus) => void
   setPreviewUrl: (url: string | null) => void
   setSideTab: (t: 'log' | 'play') => void
   appendMessages: (msgs: ChatMsg[]) => void
@@ -93,6 +94,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       h.setHitl(payload)
       h.setPhase('paused')
       h.setBusy(false)
+      h.setRunStatus?.(RunStatus.paused)
       const doc = parseDesignDoc(payload.design_doc)
       h.pushItem({
         label: h.t('humanReviewWaiting'),
@@ -150,6 +152,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       return
     case WSEventType.error:
       h.setBusy(false)
+      h.setRunStatus?.(RunStatus.failed)
       h.setPhase('idle')
       h.onRunFinished?.()
       if (h.runId) h.setRunError?.(h.runId, String(p.message))
@@ -170,6 +173,7 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
   h.setPhase(RunPhase.done)
   h.setBusy(false)
+  h.setRunStatus?.(RunStatus.done)
   h.onRunFinished?.()
   h.setStagePipeline?.((prev) => markAllDone(prev))
   h.setSideTab('play')

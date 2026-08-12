@@ -31,9 +31,11 @@ export function resolveHostingUrl(url: string): string {
   return url
 }
 
-export function wsRunUrl(runId: string, accessToken: string): string {
+export function wsRunUrl(runId: string, accessToken: string, after = 0): string {
   const base = env.wsBaseUrl.replace(/\/$/, '')
-  return `${base}/ws/runs/${encodeURIComponent(runId)}?token=${encodeURIComponent(accessToken)}`
+  const params = new URLSearchParams({ token: accessToken })
+  if (after > 0) params.set('after', String(after))
+  return `${base}/ws/runs/${encodeURIComponent(runId)}?${params.toString()}`
 }
 
 /** 草稿托管需 Bearer；iframe 无法带头，改为 fetch → blob URL */

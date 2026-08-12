@@ -24,6 +24,9 @@ type Props = {
   items: TimelineItem[];
   /** 是否渲染内置的「生成流程 + 阶段 chips」表头；底部日志带已在外层展示 StagePipeline，传 false 去重 */
   showHeader?: boolean;
+  /** 是否由本组件承担滚动。默认 true（独立面板使用）；底部日志带把进度条与事件流放进同一外层
+   * 滚动容器时传 false，避免双层滚动嵌套，列表高度自适应、由外层统一滚动。 */
+  scrollable?: boolean;
   className?: string;
 };
 
@@ -57,6 +60,7 @@ export function RunTimeline({
   phase,
   items,
   showHeader = true,
+  scrollable = true,
   className,
 }: Props) {
   const t = useT();
@@ -72,7 +76,8 @@ export function RunTimeline({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white",
+        "flex flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white",
+        scrollable ? "h-full min-h-0" : "h-auto",
         className,
       )}
     >
@@ -91,7 +96,7 @@ export function RunTimeline({
                 <li
                   key={p}
                   className={cn(
-                    "rounded-md px-2 py-1 font-mono text-[10px] tracking-wider uppercase ring-1",
+                    "rounded-md px-2 py-1 text-[11px] font-medium uppercase tracking-wider ring-1",
                     done && "bg-[#1b9a6c]/12 text-[#167052] ring-[#1b9a6c]/25",
                     current &&
                       !done &&
@@ -112,7 +117,7 @@ export function RunTimeline({
         </header>
       ) : null}
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className={cn("flex-1 px-3 py-3", scrollable ? "overflow-y-auto" : "overflow-visible")}>
         {items.length === 0 ? (
           <p className="px-1 py-8 text-center text-sm text-[#9099a1]">
             {t("timelineEmpty")}
@@ -146,7 +151,7 @@ export function RunTimeline({
                       <p className="break-words text-sm font-medium text-[#303940]">
                         {it.label}
                       </p>
-                      <time className="shrink-0 font-mono text-[10px] tabular-nums text-[#7f8992]">
+                      <time className="shrink-0 font-mono text-[11px] tabular-nums text-[#7f8992]">
                         {timeFormatter.format(new Date(it.at))}
                       </time>
                     </div>

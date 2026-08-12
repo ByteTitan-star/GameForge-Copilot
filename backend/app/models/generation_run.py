@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -11,6 +11,11 @@ from app.models.base import Base, TimestampMixin
 
 class GenerationRun(Base, TimestampMixin):
     __tablename__ = "generation_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "client_request_id", name="uq_generation_run_user_request"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     game_id: Mapped[uuid.UUID] = mapped_column(
@@ -23,6 +28,7 @@ class GenerationRun(Base, TimestampMixin):
         Uuid, ForeignKey("user_llm_config.id", ondelete="SET NULL"), nullable=True
     )
     requirement: Mapped[str] = mapped_column(Text, nullable=False)
+    client_request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     entry_phase: Mapped[str] = mapped_column(String(8), default="plan")
     status: Mapped[str] = mapped_column(String(16), default=RunStatus.RUNNING.value)
     phase: Mapped[str | None] = mapped_column(String(16), default=RunPhase.PLAN.value)

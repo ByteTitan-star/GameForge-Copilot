@@ -129,8 +129,8 @@ export function ChatPanel({
                     : "rounded-2xl rounded-tl-md bg-[#eef1f3] px-3.5 py-2.5 text-[#303940] ring-1 ring-black/[0.05]"),
                 m.role === "system" &&
                   (workshop
-                    ? "rounded-lg bg-amber-50 px-3 py-1.5 text-center font-mono text-[11px] text-amber-900 ring-1 ring-amber-200"
-                    : "rounded-lg bg-[#ffcf5a]/15 px-3 py-1.5 text-center font-mono text-[11px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
+                    ? "rounded-lg bg-amber-50 px-3 py-1.5 text-center text-[12px] text-amber-900 ring-1 ring-amber-200"
+                    : "rounded-lg bg-[#ffcf5a]/15 px-3 py-1.5 text-center text-[12px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
               )}
             >
               {m.content}
@@ -204,7 +204,7 @@ export function ChatPanel({
             >
               <span
                 className={cn(
-                  "font-mono text-[10px]",
+                  "text-[11px]",
                   workshop ? "gf-page-muted" : "text-[#9099a1]",
                 )}
               >

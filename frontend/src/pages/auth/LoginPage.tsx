@@ -25,15 +25,29 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [trialLoading, setTrialLoading] = useState(false)
 
   useEffect(() => {
     if (authState?.email) setEmail(authState.email)
   }, [authState?.email])
 
-  function fillTrialAccount() {
-    setEmail(TRIAL_EMAIL)
-    setPassword(TRIAL_PASSWORD)
-    setRemember(false)
+  // 试用预览：直接用预置试用账号登录并跳转主界面，免去手动填表+点登录
+  async function startTrialPreview() {
+    setTrialLoading(true)
+    try {
+      const data = await authApi.login(TRIAL_EMAIL, TRIAL_PASSWORD)
+      setSession({
+        user: data.user,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+      const from = authState?.from
+      navigate(from && from !== '/login' ? from : '/games', { replace: true })
+    } catch (err) {
+      toast.error(formatApiError(err, t('errTrialFailed')))
+    } finally {
+      setTrialLoading(false)
+    }
   }
 
   async function onSubmit(e: FormEvent) {
@@ -103,9 +117,10 @@ export function LoginPage() {
           type="button"
           variant="secondary"
           className="w-full !rounded-xl"
-          onClick={fillTrialAccount}
+          onClick={() => void startTrialPreview()}
+          disabled={trialLoading || loading}
         >
-          {t('fillTrialPreview')}
+          {trialLoading ? t('loading') : t('fillTrialPreview')}
         </Button>
         <p className="text-center text-[11px] leading-relaxed text-white/50">{t('fillTrialHint')}</p>
         <p className="text-center text-xs text-white/65">

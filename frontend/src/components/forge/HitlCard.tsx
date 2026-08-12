@@ -70,7 +70,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
               <ShieldCheck className="h-4.5 w-4.5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="font-mono text-[10px] tracking-[0.16em] text-amber-700 uppercase">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
                 {t("manualReview")}
               </p>
               <h3 className="mt-1 break-words text-base font-semibold text-[#3d3219]">
@@ -85,7 +85,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
 
         <div className="mt-4 space-y-3">
           <label className="block space-y-1.5">
-            <span className="font-mono text-[10px] text-[#a17f31] uppercase">
+            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
               {t("gameplay")}
             </span>
             <textarea
@@ -98,7 +98,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="font-mono text-[10px] text-[#a17f31] uppercase">
+            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
               {t("controls")}
             </span>
             <textarea
@@ -119,7 +119,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
                 {parsed.levels.map((lv) => (
                   <li
                     key={lv}
-                    className="rounded-md bg-amber-50 px-2 py-1 font-mono text-[11px] text-[#7f631c] ring-1 ring-amber-200"
+                    className="rounded-md bg-amber-50 px-2 py-1 text-[12px] text-[#7f631c] ring-1 ring-amber-200"
                   >
                     {lv}
                   </li>
@@ -128,7 +128,7 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
             </div>
           ) : null}
           <label className="block space-y-1.5">
-            <span className="font-mono text-[10px] text-[#a17f31] uppercase">
+            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
               {t("hitlModifyFeedback")}
             </span>
             <textarea

@@ -42,7 +42,8 @@ class DockerSandbox:
             for rel, content in source.items():
                 p = workspace / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(content)
+                # 显式 UTF-8：与 LocalSandbox 同源，避免 Windows 默认 GBK 把含中文 HTML 写坏。
+                p.write_text(content, encoding="utf-8")
             try:
                 result = await self._run_container(workspace, build_cmd, limits)
                 SANDBOX_RUNS.labels("docker", "ok" if result.ok else "fail").inc()

@@ -25,17 +25,16 @@ type Props = {
   runPhase: RunPhase | 'idle' | 'paused'
   stages: StagePipelineState
   items: TimelineItem[]
-  currentModel?: string | null
   failureRecovery?: ForgeLogDockFailure | null
 }
 
 const HEIGHT_KEY = 'gf-forge-log-height'
-const DEFAULT_HEIGHT = 220
+const DEFAULT_HEIGHT = 260
 const MIN_HEIGHT = 120
 /** 占视口高度的上限，避免日志长期挤占主工作区 */
-const MAX_HEIGHT_RATIO = 0.35
+const MAX_HEIGHT_RATIO = 0.45
 /** 阻塞错误时自动撑开的高度 */
-const BLOCKED_HEIGHT = 200
+const BLOCKED_HEIGHT = 240
 
 function readStoredHeight(): number {
   try {
@@ -51,8 +50,8 @@ function readStoredHeight(): number {
 
 /**
  * 底部横跨的「执行日志带」：标题栏常驻（折叠时仅 44px，显示最新事件与错误数），
- * 展开后顶部可垂直拖拽调整高度（120px ~ 35vh，持久化），内部依次展示
- * 失败恢复 → 4 阶段进度（单行）→ 事件流（自身滚动）。
+ * 展开后顶部可垂直拖拽调整高度（120px ~ 45vh，持久化）。失败恢复条固定可见；
+ * 4 阶段进度（sticky 置顶）与事件流共享同一滚动容器，内容再多也能向下滚动到底。
  */
 export function ForgeLogDock({
   open,
@@ -60,7 +59,6 @@ export function ForgeLogDock({
   runPhase,
   stages,
   items,
-  currentModel,
   failureRecovery,
 }: Props) {
   const t = useT()
@@ -132,14 +130,14 @@ export function ForgeLogDock({
         aria-expanded={open}
         className="gf-interactive gf-forge-log-dock-header flex w-full cursor-pointer items-center justify-between gap-2 text-left transition hover:bg-black/[0.02]"
       >
-        <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] tracking-wide text-[var(--gf-text-muted)] uppercase">
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--gf-text-muted)]">
           {open ? (
             <ChevronDown className="h-3.5 w-3.5 shrink-0" />
           ) : (
             <ChevronUp className="h-3.5 w-3.5 shrink-0" />
           )}
           <span className="shrink-0">{t('eventLog')}</span>
-          <span className="shrink-0 font-mono text-[10px]">· {items.length}</span>
+          <span className="shrink-0 font-mono text-[11px]">· {items.length}</span>
           {!open && latest ? (
             <span className="min-w-0 truncate normal-case text-[var(--gf-text)] opacity-80">
               <span className="opacity-55">{t('forgeLogLatest')}:</span>{' '}
@@ -149,13 +147,8 @@ export function ForgeLogDock({
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {!open && errorCount > 0 ? (
-            <span className="font-mono text-[10px] text-rose-600">
+            <span className="font-mono text-[11px] text-rose-600">
               {t('forgeLogErrors', { n: errorCount })}
-            </span>
-          ) : null}
-          {open && currentModel ? (
-            <span className="font-mono text-[10px] text-[var(--gf-text-muted)]">
-              {t('currentModel')}: {currentModel}
             </span>
           ) : null}
         </span>
@@ -174,11 +167,20 @@ export function ForgeLogDock({
               onConfigureLlm={failureRecovery.onConfigureLlm}
             />
           ) : null}
-          {showPipeline ? (
-            <StagePipeline runPhase={runPhase} stages={stages} columns={4} />
-          ) : null}
-          <div className="gf-forge-log-dock-timeline">
-            <RunTimeline phase={runPhase} items={items} showHeader={false} />
+          {/* 失败恢复条固定可见；进度条与事件流共享同一滚动容器，
+              进度条 sticky 置顶，事件再多也能向下滚动到底。 */}
+          <div className="gf-forge-log-dock-scroll">
+            {showPipeline ? (
+              <div className="gf-forge-log-dock-sticky">
+                <StagePipeline runPhase={runPhase} stages={stages} columns={4} />
+              </div>
+            ) : null}
+            <RunTimeline
+              phase={runPhase}
+              items={items}
+              showHeader={false}
+              scrollable={false}
+            />
           </div>
         </div>
       ) : null}

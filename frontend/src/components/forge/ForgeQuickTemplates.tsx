@@ -30,7 +30,7 @@ export function ForgeQuickTemplates({ onPick, className }: Props) {
 
   return (
     <div className={cn("space-y-2", className)}>
-      <p className="font-mono text-[10px] tracking-[0.12em] text-[var(--gf-text-muted)] uppercase">
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--gf-text-muted)]">
         {t("quickTemplates")}
       </p>
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3">

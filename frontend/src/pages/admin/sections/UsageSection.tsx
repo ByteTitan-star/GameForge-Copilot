@@ -40,7 +40,7 @@ export function UsageSection() {
       <h2 className="text-lg text-[var(--gf-text)]">{t('adminUsageTitle')}</h2>
       <UsageChart data={chart} />
       <div>
-        <p className="gf-page-muted font-mono text-[10px] uppercase tracking-wider">
+        <p className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminTopUsers')}
         </p>
         <ul className="mt-2 space-y-1.5">

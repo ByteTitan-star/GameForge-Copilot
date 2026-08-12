@@ -19,7 +19,10 @@ type HitlWaitDetail = {
 /** 从 API hitl_wait 或 current_hitl 恢复 HITL 卡片 */
 export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayload | null {
   const extended = run as RunDetail & { hitl_wait?: HitlWaitDetail | null }
-  if (extended.hitl_wait) {
+  if (
+    extended.hitl_wait &&
+    (run.status === 'paused' || run.status === 'running')
+  ) {
     const hw = extended.hitl_wait
     return {
       node: hw.node,

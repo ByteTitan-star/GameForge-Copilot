@@ -12,10 +12,11 @@ from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, RunPhase, RunStatus
-from app.forge import queue as forge_queue
 from app.forge import state as ckpt
 from app.forge.event_log import list_events
 from app.games import services
+from app.messaging.outbox import add_task
+from app.messaging.tasks import TASK_RESUME_RUN, resume_payload
 from app.models.generation_run import GenerationRun
 from app.schemas.active_run import ActiveRunItem
 from app.schemas.run import (
@@ -73,7 +74,7 @@ async def create_run(
         cached = await r.get(f"idem:run:{user.id}:{idem_key}")
         if cached:
             return ApiResponse(data=RunResp.model_validate_json(cached))
-    run = await services.create_run(db, r, user, game_id, req)
+    run = await services.create_run(db, r, user, game_id, req, idem_key or None)
     resp = _to_resp(run)
     if idem_key:
         await r.setex(
@@ -153,7 +154,7 @@ async def get_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunStatusResp]:
     run = await services.get_run(db, user, run_id)
-    state = await ckpt.load_state(r, run_id)
+    state = await ckpt.load_state(r, run_id, db)
     current_hitl, hitl_wait = _hitl_from_state(run, state)
     return ApiResponse(
         data=RunStatusResp(
@@ -265,7 +266,7 @@ async def resolve_hitl(
     # （如 plan_confirm→qa_failed）不会被遗留锁误阻塞。执行层的重复由 run:executing 兜底。
     if not await r.set(f"run:hitl:{run_id}", "1", nx=True, ex=60):
         raise AppError(ErrorCode.INVALID_STATE, "run 正在处理或已处理")
-    state = await ckpt.load_state(r, run_id)
+    state = await ckpt.load_state(r, run_id, db)
     if state is None or state.get("phase") not in _HITL_PHASES:
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 不在 HITL 等待态")
@@ -273,8 +274,9 @@ async def resolve_hitl(
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
     run.status = RunStatus.RUNNING.value
+    run.ended_at = None
+    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, req.decision, req.modify_text))
     await db.commit()
-    await forge_queue.enqueue_resume(run_id, req.decision, req.modify_text)
     next_phase = RunPhase.ART if state.get("phase") == "plan_confirm" else RunPhase.CODE
     return ApiResponse(
         data=HitlResolveResp(run_id=run.id, status=RunStatus.RUNNING, phase=next_phase)

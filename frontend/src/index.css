@@ -168,11 +168,6 @@ body {
 }
 
 .gf-main-canvas--forge {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.gf-main-canvas--forge:has(.gf-forge-hero--stage-open) {
   overflow: hidden;
 }
 
@@ -665,23 +660,16 @@ body {
   position: relative;
   isolation: isolate;
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   flex-direction: column;
-  height: auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 1.25rem;
   border: 1px solid var(--gf-border);
   background: var(--gf-surface);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 12px 40px rgba(15, 23, 42, 0.06);
-}
-
-.gf-forge-hero--stage-open {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .gf-forge-grid-bg {
@@ -717,6 +705,13 @@ body {
   }
 }
 
+/* 尊重「减少动态效果」偏好：纯装饰的网格漂浮动画无信息量，直接停掉 */
+@media (prefers-reduced-motion: reduce) {
+  .gf-forge-grid-bg {
+    animation: none;
+  }
+}
+
 .gf-forge-toolbar {
   position: relative;
   z-index: 1;
@@ -741,18 +736,13 @@ body {
   /* 布局模型交给组件 Tailwind 类：移动端 flex/flex-col，桌面端 lg:grid +
      内联 gridTemplateColumns。这里不再写 display，避免未分层 CSS 压过
      Tailwind 的 lg:grid 工具类导致桌面端分栏比例失效。 */
-  flex: 0 0 auto;
+  flex: 1 1 0;
   flex-direction: column;
   /* grid 模式下行高占满：保证收起试玩后 panel-left 撑满垂直空间，
      不塌缩成内容高度（grid-template-rows 在 flex 模式下无效，无副作用） */
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   padding: 0.75rem;
-}
-
-.gf-forge-hero--stage-open .gf-forge-split {
-  flex: 1 1 0;
-  min-height: 0;
 }
 
 @media (min-width: 768px) {
@@ -858,7 +848,6 @@ body.gf-forge-resizing * {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
   min-height: 0;
   padding-inline: 1.25rem;
   padding-bottom: 0.75rem;
@@ -885,9 +874,25 @@ body.gf-forge-dock-resizing * {
   user-select: none !important;
 }
 
-.gf-forge-log-dock-timeline {
+/* 进度条 + 事件流共享的唯一滚动容器：失败恢复条固定在外，其余内容在此处统一滚动 */
+.gf-forge-log-dock-scroll {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+/* 进度条粘性置顶：事件流向下滚动时它始终可见；底色避免事件穿透 */
+.gf-forge-log-dock-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(6px);
+  padding-bottom: 0.25rem;
 }
 
 @media (min-width: 768px) {

@@ -91,7 +91,7 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
       <div className="overflow-x-auto rounded-xl ring-1 ring-[var(--gf-border)]">
         <table className="w-full min-w-[480px] text-left text-sm">
           <thead>
-            <tr className="border-b border-[var(--gf-border)] bg-[color-mix(in_srgb,var(--gf-text)_3%,transparent)] font-mono text-[10px] tracking-wider gf-page-muted uppercase">
+            <tr className="border-b border-[var(--gf-border)] bg-[color-mix(in_srgb,var(--gf-text)_3%,transparent)] text-[11px] font-medium tracking-wider gf-page-muted uppercase">
               <th className="px-3 py-2">{t('usageBreakdownGame')}</th>
               <th className="px-3 py-2">{t('usageBreakdownTokens')}</th>
               <th className="px-3 py-2">{t('usageBreakdownCost')}</th>

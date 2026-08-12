@@ -122,7 +122,7 @@ export function VersionTimeline({
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           <History className="gf-page-muted h-3.5 w-3.5" />
-          <p className="font-mono text-[10px] tracking-[0.14em] gf-page-muted uppercase">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">
             {t('versionTimelineTitle')}
           </p>
         </div>
@@ -169,7 +169,7 @@ export function VersionTimeline({
                     <span className="ml-1.5 text-[10px] font-normal text-emerald-600">{t('versionLatest')}</span>
                   ) : null}
                 </span>
-                <p className="gf-page-muted mt-0.5 font-mono text-[10px]" title={new Date(v.created_at).toLocaleString()}>
+                <p className="gf-page-muted mt-0.5 text-[11px]" title={new Date(v.created_at).toLocaleString()}>
                   {formatRelativeTime(v.created_at, locale)}
                 </p>
               </div>
@@ -219,7 +219,7 @@ export function VersionTimeline({
         })}
       </ul>
 
-      <p className="gf-page-muted px-1 font-mono text-[10px]">{t('versionTimelineHint')}</p>
+      <p className="gf-page-muted px-1 text-[11px] leading-relaxed">{t('versionTimelineHint')}</p>
 
       <PublishNoteModal
         open={publishVersion != null}

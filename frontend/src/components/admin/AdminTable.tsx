@@ -28,7 +28,7 @@ export function AdminTable({
       <table className="w-full text-left text-sm">
         <thead
           style={headerBg}
-          className="gf-page-muted border-b border-[var(--gf-border)] font-mono text-[10px] tracking-wider uppercase"
+          className="gf-page-muted border-b border-[var(--gf-border)] text-[11px] font-medium tracking-wider uppercase"
         >
           <tr>
             {headers.map((h) => (

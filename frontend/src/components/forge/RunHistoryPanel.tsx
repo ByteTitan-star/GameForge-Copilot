@@ -42,7 +42,7 @@ export function RunHistoryPanel({
 
   return (
     <section className={cn('space-y-2', className)}>
-      <p className="font-mono text-[10px] tracking-[0.14em] gf-page-muted uppercase">{t('runHistory')}</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">{t('runHistory')}</p>
       {q.isLoading ? (
         <p className="flex items-center gap-2 text-xs gf-page-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -68,7 +68,7 @@ export function RunHistoryPanel({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-[10px] gf-page-body">{run.run_id.slice(0, 8)}…</p>
+                    <p className="truncate font-mono text-[11px] gf-page-body">{run.run_id.slice(0, 8)}…</p>
                     <p className={cn('mt-0.5 font-medium uppercase', statusTone[run.status] ?? 'gf-page-muted')}>
                       {run.status} · {run.phase}
                     </p>

@@ -13,6 +13,7 @@ class WSEvent(BaseModel):
     type: WSEventType
     run_id: uuid.UUID
     ts: datetime
+    seq: int | None = None
     payload: dict[str, Any]
 
 

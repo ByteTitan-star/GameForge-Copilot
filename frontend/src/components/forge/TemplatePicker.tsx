@@ -39,7 +39,7 @@ export function TemplatePicker({ onSelect, selectedId, className, compact = fals
   return (
     <section className={cn('space-y-3', className)}>
       <div>
-        <p className="font-mono text-[10px] tracking-[0.14em] gf-page-muted uppercase">{t('templatePickerTitle')}</p>
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">{t('templatePickerTitle')}</p>
         <p className="mt-1 text-sm gf-page-muted">{t('templatePickerSubtitle')}</p>
       </div>
 

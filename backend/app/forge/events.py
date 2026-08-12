@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime
 
 from app.enums import WSEventType
-from app.forge.event_log import _client, append_event
+from app.forge.event_log import _client, append_event, next_event_seq
 from app.messaging.factory import get_ws_bus
 from app.schemas.ws import WSEvent
 
@@ -18,14 +18,19 @@ async def publish_event(
     event_type: WSEventType,
     payload: dict,
 ) -> None:
-    ev = WSEvent(
-        type=event_type, run_id=run_id, ts=datetime.now(UTC), payload=payload
-    )
-    data = ev.model_dump_json()
-    await get_ws_bus().publish_data(run_id, data)
     client, owned = await _client()
     try:
+        seq = await next_event_seq(client, run_id)
+        ev = WSEvent(
+            type=event_type,
+            run_id=run_id,
+            ts=datetime.now(UTC),
+            seq=seq,
+            payload=payload,
+        )
+        data = ev.model_dump_json()
         await append_event(client, run_id, data)
+        await get_ws_bus().publish_data(run_id, data)
     finally:
         if owned:
             await client.aclose()

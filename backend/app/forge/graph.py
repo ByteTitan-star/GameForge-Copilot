@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import redis.asyncio as redis
@@ -54,6 +55,61 @@ PLAN_MAX_ATTEMPTS = 2
 log = logging.getLogger(__name__)
 
 
+def _read_html(path: Path) -> str:
+    """读取已落盘的 index.html，UTF-8 优先、GBK 回退。
+
+    修复前在 Windows 上 sandbox 以默认 CP936(GBK) 写盘，旧版本产物可能仍是 GBK 字节；
+    prune_old_versions 只删超额版本，current_version 永不删，因此读取端必须兼容历史产物，
+    否则对这些 game 再触发 run 会重 UnicodeDecodeError。
+    """
+    data = path.read_bytes()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("gbk", errors="replace")
+
+
+def normalize_html(raw: str) -> str:
+    """规整 LLM 输出的 HTML：剥离 Markdown 围栏、按 DOCTYPE/</html> 裁剪。
+
+    并兜底注入 ``<meta charset="utf-8">``：prompts 未强制 charset，缺失时浏览器会按系统
+    区域码猜测（Windows Chrome 默认 GBK），导致中文乱码。已存在 charset 声明则跳过。
+    """
+    html = (raw or "").strip()
+    if html.startswith("```"):
+        first_newline = html.find("\n")
+        html = html[first_newline + 1 :] if first_newline >= 0 else html[3:]
+        if html.rstrip().endswith("```"):
+            html = html.rstrip()[:-3].rstrip()
+    lower = html.lower()
+    start = lower.find("<!doctype html")
+    if start >= 0:
+        html = html[start:]
+        lower = html.lower()
+    end = lower.rfind("</html>")
+    if end >= 0:
+        html = html[: end + len("</html>")]
+    html = html.strip()
+    return _ensure_charset(html)
+
+
+def _ensure_charset(html: str) -> str:
+    """若无 charset 声明，在 <head> 起始后注入 <meta charset="utf-8">。"""
+    if "charset" in html.lower():
+        return html
+    m = re.search(r"<head\b[^>]*>", html, re.IGNORECASE)
+    if m:
+        insert_at = m.end()
+        return html[:insert_at] + '<meta charset="utf-8">' + html[insert_at:]
+    # 没有 <head>：紧跟 <!DOCTYPE html> 之后插入一个最小 head。
+    m = re.search(r"<!doctype html\s*>", html, re.IGNORECASE)
+    if m:
+        return (
+            html[: m.end()] + "<head><meta charset=\"utf-8\"></head>" + html[m.end() :]
+        )
+    return html
+
+
 class ForgeState(TypedDict, total=False):
     run_id: str
     resume: bool
@@ -73,6 +129,10 @@ class ForgeState(TypedDict, total=False):
     error: str
     hitl_stop: bool
     paused: bool
+
+
+class RunFinalized(Exception):
+    """The run was cancelled or otherwise finalized by another request."""
 
 
 class _Ctx:
@@ -131,6 +191,9 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str) -> str:
 
 
 async def _set_phase(ctx: _Ctx, phase: RunPhase) -> None:
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+        raise RunFinalized
     ctx.run.phase = phase.value
     await ctx.s.commit()
     await publish_event(
@@ -141,6 +204,9 @@ async def _set_phase(ctx: _Ctx, phase: RunPhase) -> None:
 
 
 async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> None:
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.ended_at is not None:
+        return
     ctx.run.status = RunStatus.FAILED.value
     ctx.run.ended_at = datetime.now(UTC)
     await ctx.s.commit()
@@ -154,6 +220,9 @@ async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> Non
 async def _pause_hitl(
     ctx: _Ctx, node: str, design_doc: dict[str, Any], extra: dict | None = None
 ) -> None:
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+        raise RunFinalized
     ctx.run.status = RunStatus.PAUSED.value
     await ctx.s.commit()
     payload = {
@@ -176,7 +245,7 @@ async def _check_ctrl(
     if flag == "pause":
         doc = coerce_design_doc(design_doc, ctx.game.title)
         await ckpt.save_state(
-            ctx.r, ctx.run.id, {"phase": "user_pause", "design_doc": doc}
+            ctx.r, ctx.run.id, {"phase": "user_pause", "design_doc": doc}, ctx.s
         )
         ctx.run.status = RunStatus.PAUSED.value
         await ctx.s.commit()
@@ -226,7 +295,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 return "code"
             return "plan"
 
-        st = await ckpt.load_state(ctx.r, ctx.run.id) or {}
+        st = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
         phase = st.get("phase")
         if phase == "plan_confirm":
             if state.get("decision") == "modify" and state.get("modify_text"):
@@ -266,6 +335,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 ctx.r,
                 ctx.run.id,
                 {"phase": "plan_confirm", "design_doc": design_doc},
+                ctx.s,
             )
             await _pause_hitl(ctx, "plan_confirm", design_doc)
             return {"design_doc": design_doc, "hitl_stop": True}
@@ -305,6 +375,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 ctx.r,
                 ctx.run.id,
                 {"phase": "plan_confirm", "design_doc": design_doc},
+                ctx.s,
             )
             # 用户要求只确认策划案；修改后的策划案仍属于策划确认范围。
             await _pause_hitl(ctx, "plan_confirm", design_doc)
@@ -394,24 +465,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     ctx.game.id, ctx.game.current_version
                 )
                 if current_path is not None and current_path.exists():
-                    previous_html = current_path.read_text(encoding="utf-8")
-
-            def normalize_html(raw: str) -> str:
-                html = (raw or "").strip()
-                if html.startswith("```"):
-                    first_newline = html.find("\n")
-                    html = html[first_newline + 1 :] if first_newline >= 0 else html[3:]
-                    if html.rstrip().endswith("```"):
-                        html = html.rstrip()[:-3].rstrip()
-                lower = html.lower()
-                start = lower.find("<!doctype html")
-                if start >= 0:
-                    html = html[start:]
-                    lower = html.lower()
-                end = lower.rfind("</html>")
-                if end >= 0:
-                    html = html[: end + len("</html>")]
-                return html.strip()
+                    previous_html = _read_html(current_path)
 
             def mask_data_uris(source: str) -> tuple[str, dict[str, str]]:
                 replacements: dict[str, str] = {}
@@ -466,6 +520,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                 result = await get_sandbox().execute(source={"index.html": html})
                 if result.ok:
                     from app.games import services as game_services
+
+                    await ctx.s.refresh(ctx.run)
+                    if (
+                        ctx.run.status != RunStatus.RUNNING.value
+                        or ctx.run.ended_at is not None
+                    ):
+                        raise RunFinalized
 
                     ctx.game.current_version += 1
                     version = ctx.game.current_version
@@ -524,6 +585,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "design_doc": design_doc,
                     "error": last_error,
                 },
+                ctx.s,
             )
             await _fail(
                 ctx,
@@ -553,7 +615,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 result_ok = False
                 console_logs: list[str] = []
             else:
-                html = html_path.read_text(encoding="utf-8")
+                html = _read_html(html_path)
                 pt = await run_playtest(html)
                 result_ok = pt.ok
                 errors = pt.errors
@@ -642,6 +704,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "design_doc": design_doc,
                     "qa": "; ".join(errors),
                 },
+                ctx.s,
             )
             await _fail(
                 ctx,
@@ -660,12 +723,16 @@ def _build_graph(ctx: _Ctx) -> Any:
 
     async def done_node(state: ForgeState) -> dict:
         with observe_phase("done"):
+            await ctx.s.refresh(ctx.run)
+            if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+                raise RunFinalized
             ctx.run.status = RunStatus.DONE.value
             ctx.run.phase = RunPhase.DONE.value
             ctx.run.ended_at = datetime.now(UTC)
             await ctx.s.commit()
-            await ckpt.clear_state(ctx.r, ctx.run.id)
+            await ckpt.clear_state(ctx.r, ctx.run.id, ctx.s)
             await run_ctrl.clear_control(ctx.r, ctx.run.id)
+            await ctx.s.commit()
             await publish_event(
                 ctx.run.id,
                 WSEventType.DONE,
@@ -758,12 +825,11 @@ async def run_generation(
             # 又改回 RUNNING 继续跑（HITL 等待中点「终止」后 worker 仍复活的根因）。
             # 合法的复活路径（retry_run / dev_requeue / HITL resolve）都会在入队前
             # 把 status 重置为 RUNNING 并清空 ended_at，故不会误伤。
-            if (
-                run.status in (RunStatus.FAILED.value, RunStatus.DONE.value)
-                or run.ended_at is not None
-            ):
+            inactive = run.status in (RunStatus.FAILED.value, RunStatus.DONE.value)
+            duplicate_execute = not resume and run.status != RunStatus.RUNNING.value
+            if inactive or duplicate_execute or run.ended_at is not None:
                 log.warning(
-                    "skip finalized run", extra={"stage": stage, "status": run.status}
+                    "skip inactive run", extra={"stage": stage, "status": run.status}
                 )
                 return
             try:
@@ -776,6 +842,9 @@ async def run_generation(
                     "request completed",
                     extra={"stage": stage, "duration": duration},
                 )
+            except RunFinalized:
+                await s.rollback()
+                log.info("run finalized while worker was executing", extra={"stage": stage})
             except Exception as e:
                 duration = round(time.monotonic() - started, 3)
                 if isinstance(e, AppError):
@@ -793,14 +862,17 @@ async def run_generation(
                         "request failed",
                         extra={"stage": stage, "duration": duration},
                     )
-                run.status = RunStatus.FAILED.value
-                run.ended_at = datetime.now(UTC)
-                await s.commit()
-                await publish_event(
-                    run_id,
-                    WSEventType.ERROR,
-                    {"code": "RUN_FAILED", "message": str(e), "fatal": True},
-                )
+                await s.rollback()
+                await s.refresh(run)
+                if run.ended_at is None:
+                    run.status = RunStatus.FAILED.value
+                    run.ended_at = datetime.now(UTC)
+                    await s.commit()
+                    await publish_event(
+                        run_id,
+                        WSEventType.ERROR,
+                        {"code": "RUN_FAILED", "message": str(e), "fatal": True},
+                    )
     finally:
         clear_log_context()
 
@@ -819,7 +891,7 @@ async def _run_body(
     entry_phase = getattr(run, "entry_phase", "plan") or "plan"
     entry_requirement: str | None = None
     if resume:
-        st = await ckpt.load_state(r, run_id) or {}
+        st = await ckpt.load_state(r, run_id, s) or {}
         design_doc = st.get("design_doc") or run.requirement
         run.status = RunStatus.RUNNING.value
         await s.commit()
