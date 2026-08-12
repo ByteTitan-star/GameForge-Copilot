@@ -16,6 +16,10 @@ def index_path(game_id: uuid.UUID, version: int) -> Path | None:
     return get_hosting_backend().index_path(game_id, version)
 
 
+async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None:
+    return await get_hosting_backend().read_bytes(game_id, version, rel)
+
+
 def artifact_dir(game_id: uuid.UUID, version: int) -> Path:
     from app.hosting.local import artifact_dir as _local_dir
 

@@ -56,6 +56,7 @@
 | POST /games/{id}/runs | mock→可 real | 多轮 = 同 game 新 run + requirement |
 | GET /games/{id}/runs | mock→可 real | |
 | GET /games/{id}/versions | mock→可 real | |
+| GET /games/{id}/versions/{version}/download | real | Bearer 请求后保存 HTML Blob；仅 owner 可下载 |
 | GET /runs/{run_id} | mock→可 real | HITL 后 status=`paused` |
 | POST /runs/{run_id}/pause | mock→可 real | Forge 顶栏 |
 | POST /runs/{run_id}/resume | mock→可 real | Forge 顶栏 |
