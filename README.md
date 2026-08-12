@@ -12,9 +12,7 @@ The project combines a React workspace, a FastAPI backend, asynchronous workers,
 
 ## Gameplay demo
 
-[![Watch the playable game demo](docs/assets/gameplay-demo-cover.png)](docs/assets/gameplay-demo.mp4)
-
-The video records an actual local run: a game request, design confirmation, generation, browser preview, and gameplay.
+The gameplay walkthrough is reserved for a follow-up media update after the current game-generation work lands. See [the media checklist](docs/assets/README.md) for the required capture flow and file names.
 
 ## Core features
 

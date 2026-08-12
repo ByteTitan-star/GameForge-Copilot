@@ -12,9 +12,7 @@ GameForge-Copilot 是一个可自行部署的 Web 工作区，用于将游戏想
 
 ## 试玩演示
 
-[![观看可试玩游戏演示](docs/assets/gameplay-demo-cover.png)](docs/assets/gameplay-demo.mp4)
-
-视频记录了一次真实的本地运行：输入游戏需求、确认设计、生成游戏、进入浏览器预览并实际操作。
+完整试玩流程视频将在当前游戏生成功能合入后，以后续媒体更新补充。录制流程和文件名见[媒体清单](docs/assets/README.md)。
 
 ## 核心功能
 
