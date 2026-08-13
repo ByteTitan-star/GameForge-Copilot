@@ -56,7 +56,7 @@ POST /api/v1/me/feedback
 | 字段 | 类型 | 必填 | 约束 |
 |---|---|---|---|
 | `run_id` | `str`（UUID） | 是 | 必须是当前用户名下的 run，否则 `GAME_NOT_FOUND` |
-| `message` | `str` | 否 | 允许空串；上限 2000 字符，超限 422 |
+| `message` | `str` | 否 | 允许空串；上限 2000 字符，超限返回 `VALIDATION_ERROR`（400，项目统一把 Pydantic 422 转 400） |
 | `error_summary` | `str` | 否 | 允许空串；上限 2000 字符 |
 
 响应 `FeedbackResp`：`{ "submitted": true }`，包在 `ApiResponse` 里。
@@ -176,7 +176,7 @@ cd backend && uv run python -c "from app.export_openapi import export; open('../
 | 限流超限 | 后端 `RATE_LIMITED`（429），前端 toast `feedbackFailed` |
 | run 非本人/不存在 | 后端 `GAME_NOT_FOUND`（404），前端 toast `feedbackFailed` |
 | 管理员邮箱未配置 | 后端 `INTERNAL`（500），前端 toast `feedbackFailed` |
-| message 超长 | Pydantic 422，前端表单层用 maxLength 拦截，理论不触达 |
+| message 超长 | Pydantic 校验 → `VALIDATION_ERROR`（400），前端表单层用 maxLength 拦截，理论不触达 |
 | 网络失败/worker 投递失败 | `enqueue_notification` 失败由 broker at-least-once 重投；API 层不阻塞用户，先返回成功（邮件 worker 兜底） |
 
 ## 7. 测试策略
