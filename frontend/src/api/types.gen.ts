@@ -690,6 +690,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/{game_id}/versions/{version}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Version Files
+         * @description 列出某版本产物下的全部文件（代码预览文件树，owner only）。
+         *
+         *     空产物（版本未生成/已清理）返回 data: []，不当作 404。
+         */
+        get: operations["list_version_files_api_v1_games__game_id__versions__version__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/games/{game_id}/versions/{version}/files/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch Version File
+         * @description 读取某版本产物下单个文件的原始字节（代码预览内容，owner only）。
+         *
+         *     file_path 由 FastAPI :path 转换器吃下斜杠；read_bytes 已做防穿越校验。
+         *     文件不存在/越界一律 GAME_NOT_FOUND，不泄漏存在性。
+         */
+        get: operations["fetch_version_file_api_v1_games__game_id__versions__version__files__file_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}/versions/{version}/activate": {
         parameters: {
             query?: never;
@@ -1843,6 +1888,11 @@ export interface components {
             /** Data */
             data: components["schemas"]["ActiveRunItem"][];
         };
+        /** ApiResponse[list[ArtifactFileItem]] */
+        ApiResponse_list_ArtifactFileItem__: {
+            /** Data */
+            data: components["schemas"]["ArtifactFileItem"][];
+        };
         /** ApiResponse[list[ForgeMessageItem]] */
         ApiResponse_list_ForgeMessageItem__: {
             /** Data */
@@ -1892,6 +1942,18 @@ export interface components {
         ApiResponse_list_str__: {
             /** Data */
             data: string[];
+        };
+        /**
+         * ArtifactFileItem
+         * @description 产物单个文件的只读描述（代码预览用）。路径为相对产物根的 POSIX 路径。
+         */
+        ArtifactFileItem: {
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Mime */
+            mime?: string | null;
         };
         /** AuditLogItem */
         AuditLogItem: {
@@ -4708,6 +4770,89 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_version_files_api_v1_games__game_id__versions__version__files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_ArtifactFileItem__"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fetch_version_file_api_v1_games__game_id__versions__version__files__file_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+                version: number;
+                file_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 产物文件原始内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description 游戏不存在或不可见 */

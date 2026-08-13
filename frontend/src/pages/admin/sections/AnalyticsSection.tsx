@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { analyticsApi } from '@/api/analytics'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { AdminTable } from '@/components/admin/AdminTable'
 import { AnalyticsTrendChart } from '@/components/usage/UsageBreakdown'
+
+/** admin 橙色 hex，喂给 recharts（绕过 useThemeColors 读 <html> 的限制） */
+const ORANGE = '#ef4d23'
+const ORANGE_2 = '#f97316'
 
 export function AnalyticsSection() {
   const t = useT()
@@ -20,7 +25,12 @@ export function AnalyticsSection() {
 
   return (
     <div className="space-y-5">
-      {q.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
+      {q.isLoading ? (
+        <p className="flex items-center gap-2 text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t('loading')}
+        </p>
+      ) : null}
       {q.isError ? (
         <p className="flex items-center gap-2 text-sm text-rose-500">{t('loadFailed')}</p>
       ) : null}
@@ -44,7 +54,7 @@ export function AnalyticsSection() {
             <p className="gf-page-muted mb-3 text-[11px] font-medium uppercase tracking-wider">
               {t('adminAnalyticsTrend')}
             </p>
-            <AnalyticsTrendChart data={data.trend} tone="light" />
+            <AnalyticsTrendChart data={data.trend} tone="light" primaryHex={ORANGE} secondaryHex={ORANGE_2} />
           </section>
         </>
       ) : null}

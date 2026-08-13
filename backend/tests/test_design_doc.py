@@ -41,3 +41,43 @@ def test_parse_design_doc_markdown_fence() -> None:
     doc = parse_design_doc(raw, "fb")
     assert doc["title"] == "T"
     assert doc["gameplay"] == "G"
+
+
+def test_coerce_engine_defaults_canvas_when_absent() -> None:
+    """老设计稿无 engine 字段应自动补 canvas，保证向后兼容。"""
+    doc = parse_design_doc('{"title":"T","gameplay":"G","controls":"方向键"}', "T")
+    assert doc["engine"]["id"] == "canvas"
+    assert doc["engine"]["rationale"] == ""
+
+
+def test_coerce_engine_falls_back_for_unknown_id() -> None:
+    """非法 engine.id 应回退 canvas，不阻断生成。"""
+    doc = parse_design_doc('{"engine":{"id":"unity"}}', "T")
+    assert doc["engine"]["id"] == "canvas"
+
+
+def test_coerce_engine_preserves_valid_choice() -> None:
+    doc = parse_design_doc(
+        '{"engine":{"id":"phaser3","rationale":"r","version":"phaser@3.80.1"}}', "T"
+    )
+    assert doc["engine"]["id"] == "phaser3"
+    assert doc["engine"]["version"] == "phaser@3.80.1"
+
+
+def test_validate_requires_engine_rationale() -> None:
+    from tests.conftest import _valid_design_doc_json
+
+    doc = parse_design_doc(_valid_design_doc_json(), "T")
+    doc["engine"]["rationale"] = ""  # 清空选型理由
+    errors = validate_design_doc(doc)
+    assert any("engine.rationale" in e for e in errors)
+
+
+def test_validate_requires_engine_version_for_cdn_engines() -> None:
+    """phaser3/pixijs 需钉版本号防 CDN 404；canvas 无 CDN 不要求 version。"""
+    from tests.conftest import _valid_design_doc_json
+
+    doc = parse_design_doc(_valid_design_doc_json(), "T")
+    doc["engine"] = {"id": "phaser3", "rationale": "需要物理碰撞", "version": ""}
+    errors = validate_design_doc(doc)
+    assert any("engine.version" in e for e in errors)

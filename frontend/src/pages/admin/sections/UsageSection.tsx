@@ -6,6 +6,10 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { UsageChart } from '@/components/usage/UsageChart'
 
+/** admin 橙色 hex，喂给 recharts（绕过 useThemeColors 读 <html> 的限制） */
+const ORANGE = '#ef4d23'
+const ORANGE_2 = '#f97316'
+
 export function UsageSection() {
   const t = useT()
   const token = useAuthStore((s) => s.access_token)
@@ -47,7 +51,7 @@ export function UsageSection() {
   return (
     <div className="space-y-5">
       <div className="gf-admin-card space-y-4 rounded-xl p-5">
-        <UsageChart data={chart} tone="light" />
+        <UsageChart data={chart} tone="light" primaryHex={ORANGE} secondaryHex={ORANGE_2} />
         <div>
           <p className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
             {t('adminTopUsers')}

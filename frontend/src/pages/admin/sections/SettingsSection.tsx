@@ -46,7 +46,7 @@ export function SettingsSection() {
       setContactEmail('')
       onToast(t('adminSettingsSaved'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminSettingsSaveFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminSettingsSaveFail')), 'error'),
   })
 
   if (!token) return null
@@ -95,7 +95,7 @@ export function SettingsSection() {
           type="email"
           value={contactVal}
           onChange={(e) => setContactEmail(e.target.value)}
-          placeholder="wxcurry@163.com"
+          placeholder={t('adminContactPh')}
           className="gf-input h-10 w-full rounded-xl px-3"
         />
         <p className="gf-page-muted text-xs">{t('adminContactHint')}</p>

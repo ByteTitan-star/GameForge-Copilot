@@ -29,7 +29,7 @@ export function AdminTable({
   const emptyNode = typeof empty === 'string' ? <EmptyState icon={Inbox} title={empty} /> : empty
 
   return (
-    <div className="gf-admin-card gf-admin-table overflow-hidden rounded-xl">
+    <div className="gf-admin-card gf-admin-table overflow-hidden rounded-2xl">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead

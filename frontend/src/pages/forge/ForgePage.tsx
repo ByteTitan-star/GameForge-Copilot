@@ -42,6 +42,7 @@ import { StagePipeline } from "@/components/forge/StagePipeline";
 import type { TimelineItem } from "@/components/forge/RunTimeline";
 import { TemplatePicker } from "@/components/forge/TemplatePicker";
 import { VersionTimeline } from "@/components/forge/VersionTimeline";
+import { CodePreview } from "@/components/forge/CodePreview";
 import { GamePlayer } from "@/components/game/GamePlayer";
 import { PublishNoteModal } from "@/components/games/PublishNoteModal";
 import { Button } from "@/components/ui/button";
@@ -122,7 +123,7 @@ export function ForgePage() {
   const [quotaHint, setQuotaHint] = useState<string | null>(null);
   const [llmConfigId, setLlmConfigId] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
-  const [rightTab, setRightTab] = useState<"preview" | "versions" | "runs">(
+  const [rightTab, setRightTab] = useState<"preview" | "code" | "versions" | "runs">(
     "preview",
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
@@ -1110,7 +1111,12 @@ export function ForgePage() {
                     ...(gameId &&
                     detail.data &&
                     detail.data.current_version >= 1
-                      ? ([["versions", t("forgeTabVersions")]] as const)
+                      ? (
+                          [
+                            ["code", t("forgeTabCode")],
+                            ["versions", t("forgeTabVersions")],
+                          ] as const
+                        )
                       : []),
                     ...(gameId ? ([["runs", t("forgeTabRuns")]] as const) : []),
                   ] as const
@@ -1226,6 +1232,16 @@ export function ForgePage() {
                     </div>
                   </div>
                 )
+              ) : rightTab === "code" &&
+                gameId &&
+                detail.data &&
+                token &&
+                (previewVersion ?? detail.data.current_version) >= 1 ? (
+                <CodePreview
+                  gameId={gameId}
+                  version={previewVersion ?? detail.data.current_version}
+                  accessToken={token}
+                />
               ) : rightTab === "versions" && gameId && detail.data ? (
                 <VersionTimeline
                   gameId={gameId}

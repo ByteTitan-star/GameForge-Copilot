@@ -14,12 +14,14 @@ from app.enums import GameStatus, PublishStatus, ReactionType
 from app.games import official as official_svc
 from app.games import services
 from app.hosting import store as hosting_store
+from app.hosting.backend import ArtifactFileMeta
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.profile import services as profile_services
 from app.publish import services as publish_services
 from app.reactions import services as reaction_services
 from app.schemas.game import (
+    ArtifactFileItem,
     GameBatchDeleteReq,
     GameBatchDeleteResp,
     GameCreate,
@@ -305,6 +307,64 @@ async def download_version(
         media_type="text/html",
         headers=_download_headers(game.title, version),
     )
+
+
+def _artifact_file_items(
+    metas: list[ArtifactFileMeta],
+) -> list[ArtifactFileItem]:
+    return [ArtifactFileItem(path=m.path, size=m.size, mime=m.mime) for m in metas]
+
+
+@router.get(
+    "/{game_id}/versions/{version}/files",
+    response_model=ApiResponse[list[ArtifactFileItem]],
+    responses=ERR_404,
+)
+async def list_version_files(
+    game_id: UUID, version: int, user: CurrentUser, db: DbSession
+) -> ApiResponse[list[ArtifactFileItem]]:
+    """列出某版本产物下的全部文件（代码预览文件树，owner only）。
+
+    空产物（版本未生成/已清理）返回 data: []，不当作 404。
+    """
+    await services.get_owned_version(db, user, game_id, version)
+    metas = await hosting_store.list_files(game_id, version)
+    return ApiResponse(data=_artifact_file_items(metas))
+
+
+@router.get(
+    "/{game_id}/versions/{version}/files/{file_path:path}",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "产物文件原始内容",
+            "content": {"text/plain": {"schema": {"type": "string", "format": "binary"}}},
+        },
+        **ERR_404,
+    },
+)
+async def fetch_version_file(
+    game_id: UUID,
+    version: int,
+    file_path: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    """读取某版本产物下单个文件的原始字节（代码预览内容，owner only）。
+
+    file_path 由 FastAPI :path 转换器吃下斜杠；read_bytes 已做防穿越校验。
+    文件不存在/越界一律 GAME_NOT_FOUND，不泄漏存在性。
+    """
+    await services.get_owned_version(db, user, game_id, version)
+    try:
+        content = await hosting_store.read_bytes(game_id, version, file_path)
+    except AppError as exc:  # 越界路径（SANDBOX_FAILED）→ 归类为 404，与"不存在"一致不泄漏
+        if exc.code == ErrorCode.SANDBOX_FAILED:
+            raise AppError(ErrorCode.GAME_NOT_FOUND, "产物文件不存在") from exc
+        raise
+    if content is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "产物文件不存在")
+    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 @router.post(

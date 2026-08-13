@@ -44,6 +44,14 @@ class VersionItem(BaseModel):
     created_at: datetime
 
 
+class ArtifactFileItem(BaseModel):
+    """产物单个文件的只读描述（代码预览用）。路径为相对产物根的 POSIX 路径。"""
+
+    path: str
+    size: int
+    mime: str | None = None
+
+
 class GameDetailResp(BaseModel):
     game_id: uuid.UUID
     owner_id: uuid.UUID

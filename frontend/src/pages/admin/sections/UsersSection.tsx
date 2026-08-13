@@ -46,7 +46,7 @@ export function UsersSection() {
       await qc.invalidateQueries({ queryKey: ['admin', 'users'] })
       onToast(t('adminUserUpdated'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminUpdateFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminUpdateFail')), 'error'),
   })
 
   const deleteMu = useMutation({
@@ -56,7 +56,7 @@ export function UsersSection() {
       await qc.invalidateQueries({ queryKey: ['admin', 'users'] })
       onToast(t('adminUserDeleted'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminDeleteFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminDeleteFail')), 'error'),
   })
 
   if (!token) return null
