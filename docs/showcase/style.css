@@ -75,12 +75,15 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 2rem; margin-bottom: 3.2rem; }
 .section-heading h2 { font-size: clamp(2rem, 4vw, 4rem); }
 .section-heading > p { width: min(280px, 100%); margin: 0; color: var(--muted); font-size: .93rem; }
-.flow-list { display: grid; grid-template-columns: repeat(6, 1fr); padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.flow-step { min-height: 300px; padding: 1.1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .015); transition: background .22s ease, transform .22s ease; }
-.flow-step:hover { background: #142327; transform: translateY(-4px); }
-.step-index { display: block; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
-.flow-step h3 { margin: 4rem 0 .75rem; font-size: 1.14rem; }
-.flow-step p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.65; }
+.flow-list { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 0; margin: 0; list-style: none; }
+.flow-list::before { content: ""; position: absolute; top: 1.2rem; right: 8.4%; left: 8.4%; height: 1px; background: linear-gradient(90deg, var(--accent), rgba(83, 239, 183, .25)); }
+.flow-step { position: relative; min-height: 0; padding: 0 clamp(.55rem, 1.5vw, 1.1rem); transition: transform .22s ease; }
+.flow-step:hover { transform: translateY(-4px); }
+.flow-step:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; top: .72rem; right: -.18rem; color: var(--warm); font-size: 1.1rem; font-weight: 800; }
+.flow-marker { position: relative; z-index: 2; display: grid; place-items: center; width: 2.45rem; height: 2.45rem; margin: 0 auto; border: 1px solid var(--accent); border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 .45rem var(--ink); }
+.step-index { display: block; color: var(--accent); font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
+.flow-step h3 { margin: 1.5rem 0 .55rem; text-align: center; font-size: 1.06rem; }
+.flow-step p { max-width: 170px; margin: 0 auto; color: var(--muted); font-size: .82rem; line-height: 1.6; text-align: center; }
 .feature-section { padding-top: 1rem; }
 .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .feature-card { min-height: 260px; padding: 1.4rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #10191c; transition: background .22s ease; }
@@ -133,7 +136,9 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
 .has-js .reveal.is-visible { opacity: 1; transform: none; }
 
 @media (max-width: 1050px) {
-  .flow-list { grid-template-columns: repeat(3, 1fr); }
+  .flow-list { grid-template-columns: repeat(3, 1fr); row-gap: 3.5rem; }
+  .flow-list::before { top: 1.2rem; right: 16%; left: 16%; }
+  .flow-step:nth-child(3)::after { display: none; }
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
@@ -149,9 +154,13 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
   .introduction-layout, .roadmap-section { grid-template-columns: 1fr; gap: 1.6rem; }
   .section-heading { display: block; margin-bottom: 2rem; }
   .section-heading > p { margin-top: 1rem; }
-  .flow-list { grid-template-columns: repeat(2, 1fr); }
-  .flow-step { min-height: 250px; }
-  .flow-step h3 { margin-top: 2.7rem; }
+  .flow-list { display: block; padding-left: 1.2rem; }
+  .flow-list::before { top: 1.2rem; right: auto; bottom: 1.2rem; left: 2.4rem; width: 1px; height: auto; background: linear-gradient(var(--accent), rgba(83, 239, 183, .25)); }
+  .flow-step { min-height: 0; padding: 0 0 2.2rem 2.4rem; }
+  .flow-step:not(:last-child)::after { content: "↓"; top: auto; right: auto; bottom: .35rem; left: 1.93rem; font-size: 1rem; }
+  .flow-marker { margin: 0; }
+  .flow-step h3 { margin: -2rem 0 .55rem 3.7rem; text-align: left; }
+  .flow-step p { max-width: none; margin-left: 3.7rem; text-align: left; }
   .feature-card { min-height: 220px; }
   .feature-card h3 { margin-top: 2.8rem; }
   .demo-grid { grid-template-columns: 1fr; }

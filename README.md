@@ -3,7 +3,7 @@
 > 用自然语言把一个浏览器游戏从想法推进到可试玩版本。
 
 <p align="center">
-  <a href="https://bytetitan-star.github.io/GameForge-Copilot/">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">
     <img src="docs/showcase/assets/gameforge-home.gif" alt="GameForge 产品首页" width="100%" />
   </a>
 </p>
@@ -11,7 +11,7 @@
 <p align="center">
   <a href="docs/showcase/assets/gameforge-demo.mp4">观看游戏演示</a>
   &nbsp;·&nbsp;
-  <a href="https://bytetitan-star.github.io/GameForge-Copilot/">打开产品展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开产品展示</a>
 </p>
 
 ## GameForge 是什么
@@ -42,13 +42,13 @@ flowchart LR
 
 ### 像素跑酷
 
-<img src="docs/showcase/assets/demo-pixel-runner.png" alt="像素跑酷游戏画面" width="100%" />
+<img src="docs/showcase/assets/demo-pixel-runner.gif" alt="像素跑酷动态游戏画面" width="100%" />
 
 霓虹重力跑酷：空格或点击反转重力，避开障碍并累计分数。
 
 ### 塔防雏形
 
-<img src="docs/showcase/assets/demo-tower-defense.png" alt="塔防游戏画面" width="100%" />
+<img src="docs/showcase/assets/demo-tower-defense.gif" alt="塔防动态游戏画面" width="100%" />
 
 卡通塔防原型：放置防御塔、拦截敌人波次，并观察关卡进度。
 
@@ -81,7 +81,7 @@ flowchart LR
 
 ## 可视化展示页
 
-打开[在线产品展示](https://bytetitan-star.github.io/GameForge-Copilot/)，查看产品流程、游戏 Demo 和界面体验。
+打开[在线产品展示](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html)，查看产品流程、游戏 Demo 和界面体验。
 
 ## 开始使用
 
