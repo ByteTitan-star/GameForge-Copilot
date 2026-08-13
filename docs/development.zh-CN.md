@@ -1,6 +1,6 @@
 # 本地开发
 
-[README](../README.md) | [简体中文 README](../README.zh-CN.md)
+[中文产品 README](../README.md)
 
 本说明收录从产品介绍首页移出的详细启动、配置、验证和排错信息。
 
@@ -199,4 +199,3 @@ Linux 容器中，应将浏览器依赖安装进 Worker 镜像；在支持的环
 - [OpenAPI 契约](../contracts/openapi.json)
 - [API 联调说明](../contracts/INTEGRATION.md)
 - [API 变更记录](../contracts/CHANGELOG.md)
-- [README 媒体清单](assets/readme/README.md)

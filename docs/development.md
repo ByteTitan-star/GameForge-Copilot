@@ -1,6 +1,6 @@
 # Local Development
 
-[README](../README.md) | [简体中文 README](../README.zh-CN.md)
+[中文产品 README](../README.md)
 
 This guide contains the detailed setup, configuration, verification, and troubleshooting information kept out of the product-facing README.
 
@@ -199,4 +199,3 @@ For Linux containers, install the browser dependencies as part of the Worker ima
 - [OpenAPI contract](../contracts/openapi.json)
 - [API integration notes](../contracts/INTEGRATION.md)
 - [API changelog](../contracts/CHANGELOG.md)
-- [README media checklist](assets/readme/README.md)
