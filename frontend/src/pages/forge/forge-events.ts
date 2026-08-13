@@ -21,12 +21,14 @@ export type ForgeEventHandlers = {
   setRunStatus?: (status: RunStatus) => void
   setPreviewUrl: (url: string | null) => void
   setSideTab: (t: 'log' | 'play') => void
-  appendMessages: (msgs: ChatMsg[]) => void
+  appendMessages: (msgs: ChatMsg[], kind?: 'design' | 'completed') => void
   setQuotaHint?: (text: string | null) => void
   setCurrentModel?: (model: string | null) => void
   setRunError?: (runId: string, message: string) => void
   setStagePipeline?: (updater: (prev: StagePipelineState) => StagePipelineState) => void
   onRunFinished?: () => void
+  /** done 事件触发时的「自动打开试玩区」回调；由调用方按用户是否手动操作过试玩区来决定是否真正打开。 */
+  onStageAutoOpen?: () => void
   gameId: string | undefined
   runId?: string | null
   t: (key: MessageKey) => string
@@ -70,6 +72,17 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         tone: 'info',
         at: ev.ts,
       })
+      // art 节点不调 LLM（只选素材）执行极快，仅靠进度条一闪而过会让用户误以为
+      // 「美术没完成就跳到开发」。把各阶段进入消息也推进对话流，确保阶段切换在主区域可见。
+      const phaseStartedKey: Partial<Record<RunPhase, MessageKey>> = {
+        [RunPhase.art]: 'phaseArtStarted',
+        [RunPhase.code]: 'phaseCodeStarted',
+        [RunPhase.qa]: 'phaseQaStarted',
+      }
+      const startedKey = phaseStartedKey[phase]
+      if (startedKey) {
+        h.appendMessages([{ id: mid('m'), role: 'assistant', content: h.t(startedKey) }])
+      }
       return
     }
     case WSEventType.llm_call:
@@ -102,13 +115,16 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         tone: 'warn',
         at: ev.ts,
       })
-      h.appendMessages([
-        {
-          id: mid('m'),
-          role: 'assistant',
-          content: `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
-        },
-      ])
+      h.appendMessages(
+        [
+          {
+            id: mid('m'),
+            role: 'assistant',
+            content: `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
+          },
+        ],
+        'design',
+      )
       return
     }
     case WSEventType.build_done: {
@@ -181,12 +197,17 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const gid = String(p.game_id ?? h.gameId ?? '')
   const url = previewFromPayload(p, gid || h.gameId, ver)
   if (url) h.setPreviewUrl(url)
+  // 四阶段全部跑完，触发「自动打开试玩区」；是否真正打开由调用方按用户手动操作记录决定。
+  h.onStageAutoOpen?.()
   h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts })
-  h.appendMessages([
-    {
-      id: mid('m'),
-      role: 'assistant',
-      content: `${h.t('playReady')}（v${ver}）。${h.t('describeIteration')}`,
-    },
-  ])
+  h.appendMessages(
+    [
+      {
+        id: mid('m'),
+        role: 'assistant',
+        content: `${h.t('playReady')}（v${ver}）。${h.t('describeIteration')}`,
+      },
+    ],
+    'completed',
+  )
 }
