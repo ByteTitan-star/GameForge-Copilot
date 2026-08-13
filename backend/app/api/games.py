@@ -57,18 +57,30 @@ def _to_resp(game: Game) -> GameResp:
 
 
 def _to_item(game: Game) -> GameListItem:
+    # 仅已发布游戏拼封面：走公开 /play/{slug}/thumb.png，<img> 可直连。
+    # 草稿走 /draft/{id}/{ver}/thumb.png 需 owner 鉴权，<img> 带不了 Bearer → 不拼，
+    # 草稿卡片回退渐变（点进预览即可见实际画面）。
+    cover_url = None
+    if game.cover_path and game.status == GameStatus.PUBLISHED.value and game.slug:
+        cover_url = f"/play/{game.slug}/thumb.png"
     return GameListItem(
         game_id=game.id,
         title=game.title,
         status=GameStatus(game.status),
         current_version=game.current_version,
         slug=game.slug,
+        cover_url=cover_url,
         updated_at=game.updated_at,
     )
 
 
 def _to_version(v: GameVersion) -> VersionItem:
-    return VersionItem(version=v.version, artifact_path=v.artifact_path, created_at=v.created_at)
+    return VersionItem(
+        version=v.version,
+        artifact_path=v.artifact_path,
+        thumbnail_path=v.thumbnail_path,
+        created_at=v.created_at,
+    )
 
 
 def _download_headers(title: str, version: int) -> dict[str, str]:
@@ -90,7 +102,7 @@ async def _public_item(db: DbSession, game: Game) -> PublicGameMeta:
         game_id=game.id,
         title=game.title,
         slug=game.slug or "",
-        cover_url=None,
+        cover_url=(f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None),
         published_at=game.published_at,
         play_count=game.play_count,
         like_count=like_count,

@@ -6,10 +6,27 @@ import fakeredis.aioredis
 import httpx
 import pytest
 
+from app.core import db as db_module
 from app.enums import EntryPhase
+from app.forge import state as ckpt
 from app.forge.entry_router import classify_entry_phase
 from app.forge.graph import run_generation
 from app.forge.runner import execute_run
+
+
+async def _grant_resume(
+    redis_client: fakeredis.aioredis.FakeRedis, run_id: uuid.UUID
+) -> None:
+    """模拟合法入口（resolve_hitl / resume / retry）写入的一次性推进凭据。
+
+    生产路径由 app.forge.queue.enqueue_resume 写入；测试直接调 run_generation
+    绕过该入口，故手动预置，否则 _run_body 会按陈旧消息跳过。
+    """
+    async with db_module.SessionLocal() as s:
+        st = await ckpt.load_state(redis_client, run_id, s) or {}
+        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
+        await ckpt.save_state(redis_client, run_id, granted, s)
+        await s.commit()
 
 
 @pytest.mark.parametrize(
@@ -48,6 +65,7 @@ async def test_create_run_small_change_entry_code(
     rid1 = uuid.UUID(run1.json()["data"]["run_id"])
     ctx = {"redis": redis_client}
     await execute_run(ctx, rid1)
+    await _grant_resume(redis_client, rid1)
     await run_generation(ctx, rid1, resume=True, decision="approve")
 
     run2 = await verified_client.post(

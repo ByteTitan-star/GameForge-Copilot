@@ -30,3 +30,6 @@ class Game(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
     featured_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 当前封面图（镜像 current_version 的 thumbnail_path）。None 时卡片回退渐变。
+    # 冗余在 Game 表避免列表 join 版本表；qa_node 截图成功与 activate_version 时同步。
+    cover_path: Mapped[str | None] = mapped_column(String(512), nullable=True)

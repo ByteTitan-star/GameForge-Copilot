@@ -5,7 +5,11 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Bug,
   Box,
@@ -70,6 +74,7 @@ import { getTemplateById } from "@/constants/templates";
 import { templatesApi, type GameTemplate } from "@/api/templates";
 import type { RunListItem } from "@/api/types";
 import { cn } from "@/lib/cn";
+import { mergeChatMessages, toChatMessages } from "./message-history";
 
 function mid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -130,8 +135,11 @@ export function ForgePage() {
   const [flashRing, setFlashRing] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [mobileView, setMobileView] = useState<"chat" | "play">("chat");
-  const [stageOpen, setStageOpen] = useState(true);
-  const [logDockOpen, setLogDockOpen] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
+  // 用户是否手动操作过试玩区可见性。一旦手动开关，done 事件就不再自动覆盖，
+  // 避免生成过程中关掉又被「轮询兜底/done」强行打开。
+  const userToggledStageRef = useRef(false);
+  const [logDockOpen, setLogDockOpen] = useState(true);
   const [stagePipeline, setStagePipeline] =
     useState<StagePipelineState>(emptyStagePipeline);
   const [retryBusy, setRetryBusy] = useState(false);
@@ -140,11 +148,24 @@ export function ForgePage() {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const prevPreviewRef = useRef<string | null>(null);
   const eventSeqRef = useRef<Record<string, number>>({});
+  const persistedMessageKindsRef = useRef<Set<string>>(new Set());
 
   const detail = useQuery({
     queryKey: ["game", gameId],
     enabled: Boolean(gameId && token),
     queryFn: () => gamesApi.get(gameId!, token!),
+  });
+
+  const messageHistory = useInfiniteQuery({
+    queryKey: ["forge-messages", gameId],
+    enabled: Boolean(gameId && token && !trial),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => gamesApi.listMessages(gameId!, token!, 50, pageParam),
+    getNextPageParam: (lastPage) =>
+      lastPage.length === 50 ? lastPage[0]?.message_id : undefined,
+    staleTime: Infinity,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
   });
 
   // 与设置页 LlmConfigPanel / Header 下拉 LlmConfigSelect 共享同一 query key，
@@ -213,6 +234,19 @@ export function ForgePage() {
     setGameId(routeGameId);
     resumedRef.current = null;
   }, [routeGameId]);
+
+  useEffect(() => {
+    const rows = messageHistory.data?.pages.slice().reverse().flat() ?? [];
+    if (!rows.length) return;
+    persistedMessageKindsRef.current = new Set(
+      rows
+        .filter((message) => message.run_id)
+        .map((message) => `${message.run_id}:${message.kind}`),
+    );
+    setMessages((current) =>
+      mergeChatMessages(current, toChatMessages(rows)),
+    );
+  }, [messageHistory.data]);
 
   useEffect(() => {
     setMessages((current) =>
@@ -321,7 +355,9 @@ export function ForgePage() {
         setHitl(ui.hitl);
         setPhase(ui.phase);
         setBusy(ui.busy);
-        if (ui.busy || ui.hitl) setStageOpen(true);
+        // 编辑进入：有可玩版本且用户未手动关过，才默认展开试玩区；新游戏无版本则保持关闭。
+        if (previewFromGameDetail(game) && !userToggledStageRef.current)
+          setStageOpen(true);
         saveActiveRun(gameId!, run.run_id);
         pushItem({ label: t("runResumed"), detail: run.run_id, tone: "info" });
         connectWs(gameId!, run.run_id);
@@ -351,7 +387,8 @@ export function ForgePage() {
         setHitl(ui.hitl);
         setPhase(ui.phase);
         setBusy(ui.busy);
-        if (ui.hitl) setStageOpen(true);
+        // 轮询兜底只同步状态，不再强制打开试玩区（曾导致用户手动关掉后几秒被自动打开）。
+        // 试玩区的自动打开唯一入口收敛到 done 事件。
         if (run.status === "done" || run.status === "failed") {
           clearActiveRun(runId);
           closeHandle();
@@ -359,7 +396,10 @@ export function ForgePage() {
             const refreshed = await detail.refetch();
             if (refreshed.data) {
               const preview = previewFromGameDetail(refreshed.data);
-              if (preview) setPreviewUrl(preview);
+              if (preview) {
+                setPreviewUrl(preview);
+                setPreviewVersion(refreshed.data.current_version);
+              }
             }
           } else {
             setRunErrors((prev) => ({
@@ -402,7 +442,23 @@ export function ForgePage() {
       setRunStatus,
       setPreviewUrl,
       setSideTab,
-      appendMessages: (msgs: ChatMsg[]) => setMessages((m) => [...m, ...msgs]),
+      appendMessages: (msgs: ChatMsg[], kind?: "design" | "completed") => {
+        if (
+          activeRunId &&
+          kind &&
+          persistedMessageKindsRef.current.has(`${activeRunId}:${kind}`)
+        ) {
+          return;
+        }
+        setMessages((m) => [
+          ...m,
+          ...msgs.map((message) => ({
+            ...message,
+            persistenceKey:
+              activeRunId && kind ? `${activeRunId}:${kind}` : undefined,
+          })),
+        ]);
+      },
       setQuotaHint,
       setCurrentModel,
       setRunError: (rid: string, message: string) => {
@@ -413,6 +469,13 @@ export function ForgePage() {
       onRunFinished: () => {
         if (activeRunId) clearActiveRun(activeRunId);
         closeHandle();
+      },
+      onStageAutoOpen: () => {
+        // 四阶段全跑完：用户没在生成过程中手动操作过试玩区，才自动展开一次。
+        if (!userToggledStageRef.current) {
+          setStageOpen(true);
+          setMobileView("play");
+        }
       },
       setStagePipeline,
       gameId: activeGameId,
@@ -428,6 +491,9 @@ export function ForgePage() {
 
   async function startGeneration(requirement: string) {
     if (!token || !user) return;
+    // 新一轮生成：重置手动操作标记并默认收起试玩区，四阶段全跑完（done）后再自动展开一次。
+    userToggledStageRef.current = false;
+    setStageOpen(false);
     setBusy(true);
     setHitl(null);
     setPreviewUrl(null);
@@ -497,7 +563,6 @@ export function ForgePage() {
     }
     setMessages((m) => [...m, { id: mid("m"), role: "user", content: text }]);
     setInput("");
-    setStageOpen(true);
     void startGeneration(text);
   }
 
@@ -577,6 +642,10 @@ export function ForgePage() {
       parsedGameplay !== origGameplay ||
       parsedControls !== origControls ||
       Boolean(modifyText?.trim());
+    const decisionText = modified
+      ? modifyText?.trim() ||
+        `gameplay: ${parsedGameplay}\ncontrols: ${parsedControls}`
+      : "已确认设计方案";
     try {
       await gamesApi.resolveHitl(
         gameId,
@@ -584,10 +653,7 @@ export function ForgePage() {
         {
           node: hitl.node,
           decision: modified ? "modify" : "approve",
-          modify_text: modified
-            ? modifyText?.trim() ||
-              `gameplay: ${parsedGameplay}\ncontrols: ${parsedControls}`
-            : null,
+          modify_text: modified ? decisionText : null,
         },
         token,
       );
@@ -598,8 +664,9 @@ export function ForgePage() {
         ...m,
         {
           id: mid("m"),
-          role: "assistant",
-          content: `${t("designApproved")} (${t("gameplay")}: ${parsedGameplay.slice(0, 48)}…)`,
+          role: "user",
+          content: decisionText,
+          persistenceKey: `${runId}:${modified ? "hitl_modify" : "hitl_approve"}`,
         },
       ]);
       pushItem({
@@ -876,7 +943,10 @@ export function ForgePage() {
           <Button
             variant="ghost"
             className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
-            onClick={() => setStageOpen((open) => !open)}
+            onClick={() => {
+              userToggledStageRef.current = true;
+              setStageOpen((open) => !open);
+            }}
             aria-pressed={stageOpen}
             title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
           >
@@ -947,6 +1017,9 @@ export function ForgePage() {
               scrollMode="panel"
               className="min-h-0 flex-1"
               messages={messages}
+              canLoadEarlier={messageHistory.hasNextPage}
+              loadingEarlier={messageHistory.isFetchingNextPage}
+              onLoadEarlier={() => void messageHistory.fetchNextPage()}
               input={input}
               onInputChange={setInput}
               onSend={onSend}
@@ -1062,8 +1135,13 @@ export function ForgePage() {
                       title={t("forgeStageOpenWindow")}
                       aria-label={t("forgeStageOpenWindow")}
                       onClick={() =>
-                        previewUrl &&
-                        window.open(previewUrl, "_blank", "noopener,noreferrer")
+                        gameId &&
+                        previewVersion != null &&
+                        window.open(
+                          `/draft/${encodeURIComponent(gameId)}/${previewVersion}`,
+                          "_blank",
+                          "noopener,noreferrer",
+                        )
                       }
                       className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
                     >
@@ -1084,7 +1162,10 @@ export function ForgePage() {
                   type="button"
                   title={t("forgeHidePreview")}
                   aria-label={t("forgeHidePreview")}
-                  onClick={() => setStageOpen(false)}
+                  onClick={() => {
+                    userToggledStageRef.current = true;
+                    setStageOpen(false);
+                  }}
                   className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
                 >
                   <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />

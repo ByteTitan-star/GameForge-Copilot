@@ -2960,6 +2960,93 @@
         }
       }
     },
+    "/api/v1/games/{game_id}/messages": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Forge Messages",
+        "operationId": "get_forge_messages_api_v1_games__game_id__messages_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ForgeMessageItem__"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "run 或游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/runs/active": {
       "get": {
         "tags": [
@@ -4926,6 +5013,47 @@
           }
         }
       }
+    },
+    "/play/{slug}/thumb.png": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Thumb",
+        "description": "已发布游戏封面截图，公开。不触发 PV 统计。",
+        "operationId": "play_thumb_play__slug__thumb_png_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5944,6 +6072,22 @@
         ],
         "title": "ApiResponse[list[ActiveRunItem]]"
       },
+      "ApiResponse_list_ForgeMessageItem__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ForgeMessageItem"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ForgeMessageItem]]"
+      },
       "ApiResponse_list_LLMConfigResp__": {
         "properties": {
           "data": {
@@ -6424,6 +6568,70 @@
         ],
         "title": "FavoriteGameItem"
       },
+      "ForgeMessageItem": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Message Id"
+          },
+          "game_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Game Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ],
+            "title": "Role"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message_id",
+          "game_id",
+          "role",
+          "kind",
+          "content",
+          "metadata",
+          "created_at"
+        ],
+        "title": "ForgeMessageItem"
+      },
       "GameAnalyticsResp": {
         "properties": {
           "game_id": {
@@ -6667,6 +6875,17 @@
               }
             ],
             "title": "Slug"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
           },
           "updated_at": {
             "type": "string",
@@ -8888,6 +9107,17 @@
           "artifact_path": {
             "type": "string",
             "title": "Artifact Path"
+          },
+          "thumbnail_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Path"
           },
           "created_at": {
             "type": "string",

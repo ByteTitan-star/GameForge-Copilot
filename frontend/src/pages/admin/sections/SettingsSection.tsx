@@ -52,9 +52,9 @@ export function SettingsSection() {
   if (!token) return null
 
   return (
-    <section className="gf-glass max-w-lg space-y-4 rounded-2xl p-5">
-      <h2 className="text-lg text-[var(--gf-text)]">{t('adminSettingsTitle')}</h2>
-      <label className="block space-y-1.5 text-sm">
+    <div className="space-y-5">
+      <section className="gf-admin-card max-w-lg space-y-4 rounded-xl p-5">
+        <label className="block space-y-1.5 text-sm">
         <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
           {t('adminDailyQuotaLabel')}
         </span>
@@ -102,13 +102,14 @@ export function SettingsSection() {
       </label>
       <button
         type="button"
-        className="gf-interactive gf-btn-primary inline-flex h-11 cursor-pointer items-center justify-center gap-2 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        className="gf-interactive gf-btn-primary inline-flex h-10 cursor-pointer items-center justify-center gap-2 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         disabled={saveMu.isPending || !dailyVal || !monthlyVal || !rateVal || !contactVal}
         onClick={() => saveMu.mutate()}
       >
         {saveMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {t('save')}
       </button>
-    </section>
+      </section>
+    </div>
   )
 }

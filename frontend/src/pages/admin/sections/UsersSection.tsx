@@ -62,7 +62,7 @@ export function UsersSection() {
   if (!token) return null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <p className="gf-page-muted text-sm">
         {t('adminDisableBanner').replace('{email}', contactEmail)}
       </p>
@@ -83,11 +83,17 @@ export function UsersSection() {
           const canApply =
             parsed != null && Number.isFinite(parsed) && parsed >= 0 && parsed !== u.daily_token_limit
           return (
-            <tr key={u.user_id} className="border-t border-[var(--gf-border)]">
+            <tr key={u.user_id} className="group border-t border-[var(--gf-border)]">
               <td className="px-4 py-3">{u.email}</td>
               <td className="gf-page-muted px-4 py-3 font-mono text-xs">{u.role}</td>
               <td className="px-4 py-3 text-xs">
-                <span className={u.disabled ? 'text-red-500' : 'text-emerald-500'}>
+                <span
+                  className={
+                    u.disabled
+                      ? 'inline-flex items-center rounded-full bg-rose-500/10 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-inset ring-rose-500/20'
+                      : 'inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/20'
+                  }
+                >
                   {u.disabled ? t('adminStatusDisabled') : t('adminStatusActive')}
                 </span>
               </td>

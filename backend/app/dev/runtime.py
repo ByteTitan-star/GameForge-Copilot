@@ -17,13 +17,12 @@ from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.messaging.factory import use_memory
 from app.messaging.memory import MemoryTaskPublisher
+from app.forge.queue import enqueue_resume
 from app.messaging.outbox import add_task
 from app.messaging.rabbit import purge_task_queue, task_queue_stats
 from app.messaging.tasks import (
     TASK_EXECUTE_RUN,
     TASK_QUEUE,
-    TASK_RESUME_RUN,
-    resume_payload,
     run_id_payload,
 )
 from app.models.generation_run import GenerationRun
@@ -180,7 +179,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
     if run.status == RunStatus.PAUSED.value:
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
-        await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
+        await enqueue_resume(db, r, run_id, "approve", None)
         await db.commit()
         return {
             "run_id": run_id,
@@ -191,7 +190,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
 
     if run.status == RunStatus.RUNNING.value:
         if state:
-            await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
+            await enqueue_resume(db, r, run_id, "approve", None)
             task = "resume_run"
         else:
             await add_task(db, TASK_EXECUTE_RUN, run_id_payload(run_id))
@@ -209,7 +208,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
             raise AppError(ErrorCode.INVALID_STATE, "failed run 无可用检查点，不可 requeue")
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
-        await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
+        await enqueue_resume(db, r, run_id, "approve", None)
         await db.commit()
         return {
             "run_id": run_id,

@@ -5,7 +5,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.config import settings
@@ -14,11 +14,12 @@ from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, RunPhase, RunStatus
 from app.forge import state as ckpt
 from app.forge.event_log import list_events
+from app.forge.messages import add_message, list_messages, stable_payload_key
+from app.forge.queue import enqueue_resume
 from app.games import services
-from app.messaging.outbox import add_task
-from app.messaging.tasks import TASK_RESUME_RUN, resume_payload
 from app.models.generation_run import GenerationRun
 from app.schemas.active_run import ActiveRunItem
+from app.schemas.forge_message import ForgeMessageItem
 from app.schemas.run import (
     HitlResolveReq,
     HitlResolveResp,
@@ -104,6 +105,37 @@ async def list_runs(
                 ended_at=run.ended_at,
             )
             for run in rows
+        ]
+    )
+
+
+@router.get(
+    "/games/{game_id}/messages",
+    response_model=ApiResponse[list[ForgeMessageItem]],
+    responses=ERR_404,
+)
+async def get_forge_messages(
+    game_id: UUID,
+    user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(50, ge=1, le=100),
+    before: UUID | None = None,
+) -> ApiResponse[list[ForgeMessageItem]]:
+    await services.get_owned_game(db, user, game_id)
+    rows = await list_messages(db, game_id, limit=limit, before=before)
+    return ApiResponse(
+        data=[
+            ForgeMessageItem(
+                message_id=row.id,
+                game_id=row.game_id,
+                run_id=row.run_id,
+                role=row.role,
+                kind=row.kind,
+                content=row.content,
+                metadata=row.metadata_json,
+                created_at=row.created_at,
+            )
+            for row in rows
         ]
     )
 
@@ -275,7 +307,23 @@ async def resolve_hitl(
         raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
     run.status = RunStatus.RUNNING.value
     run.ended_at = None
-    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, req.decision, req.modify_text))
+    decision_text = req.modify_text.strip() if req.modify_text else "已确认设计方案"
+    await add_message(
+        db,
+        game_id=run.game_id,
+        run_id=run.id,
+        user_id=user.id,
+        role="user",
+        kind="hitl_modify" if req.decision == "modify" else "hitl_approve",
+        content=decision_text,
+        metadata={"node": req.node, "decision": req.decision},
+        dedupe_key=stable_payload_key(
+            run.id,
+            f"hitl:{req.node}:{req.decision}",
+            {"design_doc": state.get("design_doc"), "content": decision_text},
+        ),
+    )
+    await enqueue_resume(db, r, run_id, req.decision, req.modify_text)
     await db.commit()
     next_phase = RunPhase.ART if state.get("phase") == "plan_confirm" else RunPhase.CODE
     return ApiResponse(

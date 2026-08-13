@@ -40,8 +40,13 @@ export function PublicGameCard({
   const t = useT()
   const locale = useLocaleStore((s) => s.locale)
   const reduce = useReducedMotion()
-  const cover = officialCoverUrl(game.slug)
-  const [imgFailed, setImgFailed] = useState(false)
+  // 封面优先级链：真截图 cover_url → 官方静态 PNG officialCoverUrl → 渐变。
+  // 任一级 onError 即降级到下一级。
+  const [shotFailed, setShotFailed] = useState(false)
+  const [officialFailed, setOfficialFailed] = useState(false)
+  const official = officialCoverUrl(game.slug)
+  const showShot = Boolean(game.cover_url) && !shotFailed
+  const showOfficial = !showShot && Boolean(official) && !officialFailed
   const showFeatured = showFeaturedBadge && game.featured
   const theme = variant === 'theme'
 
@@ -76,13 +81,21 @@ export function PublicGameCard({
           compact ? 'h-full w-28 min-h-[88px]' : 'aspect-[16/10] w-full min-h-[160px]',
         )}
       >
-        {cover && !imgFailed ? (
+        {showShot ? (
           <img
-            src={cover}
+            src={game.cover_url!}
             alt=""
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"
-            onError={() => setImgFailed(true)}
+            onError={() => setShotFailed(true)}
+          />
+        ) : showOfficial ? (
+          <img
+            src={official!}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={() => setOfficialFailed(true)}
           />
         ) : (
           <div className={cn('absolute inset-0', coverFor(game.game_id))}>

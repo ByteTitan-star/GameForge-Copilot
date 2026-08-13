@@ -7,7 +7,7 @@ docs/04：/play/{slug} 公开仅 published；/draft/{game_id}/{version} owner on
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 
 from app.analytics import store as analytics_store
@@ -90,3 +90,26 @@ async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSessi
             "Cache-Control": _cache_control("private, max-age=60"),
         },
     )
+
+
+def _png_response(data: bytes | None, prod_cache: str) -> Response:
+    """封面 png：读不到时 404（让前端 <img onError> 触发渐变降级），不返回占位图。"""
+    if data is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "封面不存在")
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": _cache_control(prod_cache)},
+    )
+
+
+@router.get("/play/{slug}/thumb.png")
+async def play_thumb(slug: str, db: DbSession) -> Response:
+    """已发布游戏封面截图，公开。不触发 PV 统计。"""
+    game = await db.scalar(
+        select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
+    )
+    if game is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或未发布")
+    data = await store.read_bytes(game.id, game.current_version, "thumb.png")
+    return _png_response(data, "public, max-age=31536000, immutable")

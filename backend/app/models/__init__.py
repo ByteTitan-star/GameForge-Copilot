@@ -4,6 +4,7 @@ from app.models.email_verification import EmailVerification
 from app.models.game import Game
 from app.models.game_reaction import GameReaction
 from app.models.game_version import GameVersion
+from app.models.forge_message import ForgeMessage
 from app.models.generation_run import GenerationRun
 from app.models.llm_config import UserLLMConfig
 from app.models.notification import Notification
@@ -24,6 +25,7 @@ __all__ = [
     "Game",
     "GameReaction",
     "GameVersion",
+    "ForgeMessage",
     "GenerationRun",
     "RunCheckpoint",
     "TaskOutbox",

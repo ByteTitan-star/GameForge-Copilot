@@ -15,6 +15,7 @@ import type {
   RunListItem,
   RunSummary,
 } from './types'
+import type { ForgeMessage } from './types'
 
 export const gamesApi = {
   list(accessToken: string, status?: string) {
@@ -90,6 +91,14 @@ export const gamesApi = {
 
   listRuns(gameId: string, accessToken: string) {
     return apiRequestList<RunListItem>(`/games/${gameId}/runs`, { token: accessToken })
+  },
+
+  listMessages(gameId: string, accessToken: string, limit = 50, before?: string) {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (before) params.set('before', before)
+    return apiRequest<ForgeMessage[]>(`/games/${gameId}/messages?${params}`, {
+      token: accessToken,
+    })
   },
 
   listVersions(gameId: string, accessToken: string) {

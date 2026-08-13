@@ -55,7 +55,7 @@ export function QueueSection() {
   if (!token) return null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AdminTable
         headers={[
           t('adminColGame'),
@@ -67,7 +67,7 @@ export function QueueSection() {
         loading={queue.isLoading}
         empty={t('adminQueueEmpty')}
         rows={pending.map((item) => (
-          <tr key={item.publish_request_id} className="border-t border-[var(--gf-border)]">
+          <tr key={item.publish_request_id} className="group border-t border-[var(--gf-border)]">
             <td className="px-4 py-3">{item.game_title}</td>
             <td className="gf-page-muted px-4 py-3 font-mono text-xs">v{item.version}</td>
             <td className="gf-text-accent px-4 py-3 font-mono text-xs">{item.status}</td>

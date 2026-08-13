@@ -17,4 +17,6 @@ class GameVersion(Base, TimestampMixin):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    # 该版本的封面截图相对路径（如 "thumb.png"）。QA 通过后由 qa_node 截图写入，可能为 NULL。
+    thumbnail_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     design_doc: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

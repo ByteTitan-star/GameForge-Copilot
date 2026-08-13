@@ -66,3 +66,18 @@ def _read_bytes_sync(base: Path, rel: str) -> bytes | None:
 async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None:
     """Read a single artifact file without exposing the hosting root to callers."""
     return await asyncio.to_thread(_read_bytes_sync, artifact_dir(game_id, version), rel)
+
+
+def _write_bytes_sync(base: Path, rel: str, data: bytes) -> None:
+    # 产物目录可能尚未存在（首版截图先于 index.html 落盘的场景不多，但这里不依赖外部保证）。
+    base.mkdir(parents=True, exist_ok=True)
+    target = _check_path(base.resolve(), rel)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+
+
+async def write_bytes(
+    game_id: uuid.UUID, version: int, rel: str, data: bytes
+) -> None:
+    """写入单个旁路产物文件（如 thumb.png），复用 _check_path 防穿越，不强制 index.html。"""
+    await asyncio.to_thread(_write_bytes_sync, artifact_dir(game_id, version), rel, data)

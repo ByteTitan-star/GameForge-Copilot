@@ -20,6 +20,13 @@ async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None
     return await get_hosting_backend().read_bytes(game_id, version, rel)
 
 
+async def write_bytes(
+    game_id: uuid.UUID, version: int, rel: str, data: bytes
+) -> None:
+    """写入单个旁路产物文件（如 thumb.png），不强制 index.html。"""
+    await get_hosting_backend().write_bytes(game_id, version, rel, data)
+
+
 def artifact_dir(game_id: uuid.UUID, version: int) -> Path:
     from app.hosting.local import artifact_dir as _local_dir
 

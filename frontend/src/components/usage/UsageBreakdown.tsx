@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,20 +13,28 @@ import {
 } from 'recharts'
 import type { UsageBreakdownItem } from '@/api/usage-breakdown'
 import { useT } from '@/i18n/use-t'
+import { useThemeColors } from '@/components/admin/useThemeColors'
+import { BarCrosshair } from './BarCrosshair'
 
 const CHART_FONT = '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif'
 
 const AXIS = {
-  light: { tick: '#64748b', tickMute: '#94a3b8', grid: 'rgba(15,23,42,0.08)' },
+  light: {
+    tick: '#64748b',
+    tickMute: '#94a3b8',
+    grid: 'rgba(15,23,42,0.08)',
+    cursor: 'rgba(15,23,42,0.22)',
+  },
   dark: {
     tick: 'rgba(255,255,255,0.55)',
     tickMute: 'rgba(255,255,255,0.45)',
     grid: 'rgba(255,255,255,0.06)',
+    cursor: 'rgba(255,255,255,0.28)',
   },
 }
 
 const TOOLTIP_STYLE = {
-  light: { background: '#ffffff', border: '1px solid rgba(15,23,42,0.1)', color: '#0f172a' },
+  light: { background: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', color: '#0f172a' },
   dark: { background: '#12151a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' },
 }
 
@@ -42,6 +51,7 @@ function fmtUsd(n: number) {
 export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
   const t = useT()
   const a = AXIS[tone]
+  const { primary, secondary } = useThemeColors()
   const chartData = items.map((it) => {
     const title = it.title ?? '-'
     return {
@@ -61,7 +71,7 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
     <div className="space-y-4">
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
             <CartesianGrid stroke={a.grid} vertical={false} />
             <XAxis
               dataKey="name"
@@ -76,14 +86,18 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
               width={48}
             />
             <Tooltip
+              cursor={<BarCrosshair color={a.cursor} />}
               contentStyle={{
                 ...TOOLTIP_STYLE[tone],
                 borderRadius: 12,
+                boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
                 fontFamily: CHART_FONT,
+                fontSize: 12,
               }}
             />
-            <Bar dataKey="input" name={t('usageInputTokens')} fill="#2dd4bf" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="output" name={t('usageOutputTokens')} fill="#38bdf8" radius={[4, 4, 0, 0]} />
+            <Legend wrapperStyle={{ fontFamily: CHART_FONT, fontSize: 12 }} />
+            <Bar dataKey="input" name={t('usageInputTokens')} fill={primary} radius={[6, 6, 0, 0]} maxBarSize={48} />
+            <Bar dataKey="output" name={t('usageOutputTokens')} fill={secondary} radius={[6, 6, 0, 0]} maxBarSize={48} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -126,13 +140,24 @@ type TrendProps = {
 export function AnalyticsTrendChart({ data, tone = 'dark' }: TrendProps) {
   const t = useT()
   const a = AXIS[tone]
+  const { primary, secondary } = useThemeColors()
   if (data.length === 0) {
     return <p className="text-sm gf-page-muted">{t('usageNoTrendData')}</p>
   }
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gf-trend-pv" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={primary} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={primary} stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gf-trend-uv" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={secondary} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={secondary} stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid stroke={a.grid} vertical={false} />
           <XAxis
             dataKey="date"
@@ -147,29 +172,41 @@ export function AnalyticsTrendChart({ data, tone = 'dark' }: TrendProps) {
             width={40}
           />
           <Tooltip
+            cursor={{
+              stroke: tone === 'light' ? 'rgba(15,23,42,0.2)' : 'rgba(255,255,255,0.2)',
+              strokeWidth: 1,
+              strokeDasharray: '4 4',
+            }}
             contentStyle={{
               ...TOOLTIP_STYLE[tone],
               borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
               fontFamily: CHART_FONT,
+              fontSize: 12,
             }}
           />
-          <Line
+          <Legend wrapperStyle={{ fontFamily: CHART_FONT, fontSize: 12 }} />
+          <Area
             type="monotone"
             dataKey="page_views"
             name={t('analyticsPageViews')}
-            stroke="#2dd4bf"
+            stroke={primary}
             strokeWidth={2}
+            fill="url(#gf-trend-pv)"
             dot={false}
+            activeDot={{ r: 4 }}
           />
-          <Line
+          <Area
             type="monotone"
             dataKey="unique_visitors"
             name={t('analyticsUniqueVisitors')}
-            stroke="#38bdf8"
+            stroke={secondary}
             strokeWidth={2}
+            fill="url(#gf-trend-uv)"
             dot={false}
+            activeDot={{ r: 4 }}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )
