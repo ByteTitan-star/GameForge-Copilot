@@ -1,4 +1,4 @@
-import { Bot, Send, UserRound } from "lucide-react";
+import { Bot, Loader2, Send, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
@@ -8,6 +8,7 @@ export type ChatMsg = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  persistenceKey?: string;
 };
 
 type Props = {
@@ -28,6 +29,9 @@ type Props = {
   scrollMode?: "panel" | "document";
   /** 对话消息之后、输入框之前的业务内容，例如 HITL、模板与试用提示 */
   conversationFooter?: ReactNode;
+  canLoadEarlier?: boolean;
+  loadingEarlier?: boolean;
+  onLoadEarlier?: () => void;
 };
 
 export function ChatPanel({
@@ -44,6 +48,9 @@ export function ChatPanel({
   variant = "light",
   scrollMode = "panel",
   conversationFooter,
+  canLoadEarlier,
+  loadingEarlier,
+  onLoadEarlier,
 }: Props) {
   const t = useT();
   const composerId = useId();
@@ -90,6 +97,19 @@ export function ChatPanel({
         )}
         aria-live="polite"
       >
+        {canLoadEarlier ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              disabled={loadingEarlier}
+              onClick={onLoadEarlier}
+              className="gf-interactive gf-page-muted inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingEarlier ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t("forgeLoadEarlier")}
+            </button>
+          </div>
+        ) : null}
         {messages.map((m) => (
           <div
             key={m.id}

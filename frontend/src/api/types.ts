@@ -38,6 +38,17 @@ export type HitlResolveRequest = S['HitlResolveReq']
 export type HitlResolveResponse = S['HitlResolveResp']
 export type RunControlResponse = S['RunControlResp']
 
+export type ForgeMessage = {
+  message_id: string
+  game_id: string
+  run_id: string | null
+  role: 'user' | 'assistant' | 'system'
+  kind: string
+  content: string
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
 export type PublishSubmitResponse = S['PublishSubmitResp']
 export type PublishQueueItem = S['PublishQueueItem']
 export type PublishApproveResponse = S['PublishApproveResp']
