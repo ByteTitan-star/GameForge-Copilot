@@ -6,6 +6,7 @@ import { GameStatus } from '@/api/enums'
 import type { GameSummary } from '@/api/types'
 import type { MessageKey } from '@/i18n/messages'
 import { formatRelativeTime } from '@/lib/relative-time'
+import { resolveHostingUrl } from '@/lib/hosting'
 import { cn } from '@/lib/cn'
 import { useT } from '@/i18n/use-t'
 import { useLocaleStore } from '@/stores/locale-store'
@@ -69,6 +70,8 @@ export function GameCard({
   const [renameTitle, setRenameTitle] = useState(g.title)
   const [flash, setFlash] = useState(false)
   const [burst, setBurst] = useState(false)
+  // cover_url 为后端真截图封面；加载失败回退渐变。无 cover_url 直接渐变。
+  const [coverFailed, setCoverFailed] = useState(false)
 
   const playTo =
     g.status === GameStatus.published && g.slug
@@ -76,6 +79,10 @@ export function GameCard({
       : g.current_version > 0
         ? `/draft/${g.game_id}/${g.current_version}`
         : null
+
+  // 草稿预览走新窗口：避免同窗口跳全屏页后用户「进退两难」（关掉新窗口即返回）。
+  // 已发布游戏保留同窗口跳转——/play/:slug 是公开页，自带返回，且常用于直接分享 URL。
+  const isDraftPlay = playTo?.startsWith('/draft/')
 
   const canPublish =
     !readOnly &&
@@ -156,6 +163,15 @@ export function GameCard({
       {burst ? <span className="card-burst" aria-hidden /> : null}
 
       <div className={cn('relative h-28 overflow-hidden', coverFor(g.game_id))}>
+        {g.cover_url && !coverFailed ? (
+          <img
+            src={resolveHostingUrl(g.cover_url)}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={() => setCoverFailed(true)}
+          />
+        ) : null}
         <div className="absolute inset-0 opacity-40 mix-blend-screen [background-image:linear-gradient(115deg,transparent_40%,rgba(255,255,255,0.18)_50%,transparent_60%)]" />
         {selectable ? (
           <label
@@ -212,13 +228,27 @@ export function GameCard({
             {readOnly ? t('view') : t('edit')}
           </Link>
           {playTo ? (
-            <Link
-              to={playTo}
-              className="inline-flex items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1.5 text-xs font-medium text-black transition hover:bg-white"
-            >
-              {g.status === GameStatus.published ? t('playable') : t('preview')}
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
+            isDraftPlay ? (
+              <button
+                type="button"
+                onClick={() =>
+                  playTo &&
+                  window.open(playTo, '_blank', 'noopener,noreferrer')
+                }
+                className="gf-interactive inline-flex cursor-pointer items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1.5 text-xs font-medium text-black transition hover:bg-white"
+              >
+                {g.status === GameStatus.published ? t('playable') : t('preview')}
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <Link
+                to={playTo}
+                className="inline-flex items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1.5 text-xs font-medium text-black transition hover:bg-white"
+              >
+                {g.status === GameStatus.published ? t('playable') : t('preview')}
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            )
           ) : null}
           {canPublish ? (
             <button
