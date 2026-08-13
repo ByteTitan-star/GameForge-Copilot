@@ -9,7 +9,7 @@
     />
     <title>GameForge | 产品展示</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="style.css?v=2" />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <a class="skip-link" href="#content">跳到主要内容</a>
@@ -18,29 +18,28 @@
       <a class="brand" href="#top" aria-label="GameForge 首页">GameForge</a>
       <nav aria-label="页面导航">
         <a href="#flow">产品链路</a>
-        <a href="#demos">真实 Demo</a>
+        <a href="#demos">游戏 Demo</a>
         <a href="#preview">产品界面</a>
       </nav>
-      <a class="header-action" href="../../README.md">查看 README</a>
+      <a class="header-action" href="https://github.com/ByteTitan-star/GameForge-Copilot#readme">了解项目</a>
     </header>
 
     <main id="content">
       <section class="hero" id="top" aria-labelledby="hero-title">
-        <img class="hero-media" src="assets/gameforge-home.gif" alt="GameForge 中文首页动态预览" />
+        <img class="hero-media" src="assets/gameforge-home.gif" alt="GameForge 产品首页" />
         <div class="hero-scrim" aria-hidden="true"></div>
         <div class="hero-copy reveal">
-          <p class="eyebrow">AI-ASSISTED BROWSER GAME CREATION</p>
+          <p class="eyebrow">浏览器游戏 AI 创作工作区</p>
           <p class="brand-mark">GameForge</p>
           <h1 id="hero-title">把游戏想法<br />推进到可试玩。</h1>
           <p class="hero-description">
             描述规则，确认策划，生成浏览器游戏。无需离开工作区，就能打开、试玩、下载或提交发布。
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#watch">观看完整录屏 <span aria-hidden="true">↓</span></a>
+            <a class="button button-primary" href="#watch">观看游戏演示 <span aria-hidden="true">↓</span></a>
             <a class="button button-quiet" href="#flow">了解产品链路 <span aria-hidden="true">→</span></a>
           </div>
         </div>
-        <p class="hero-note reveal">真实首页 GIF · 当前产品 UI 为简体中文</p>
       </section>
 
       <section class="section introduction" aria-labelledby="introduction-title">
@@ -54,9 +53,7 @@
             <p>
               GameForge 是面向浏览器游戏的 AI 辅助创作工作区。它把创作过程组织为可审阅的策划、可追踪的生成任务和可直接打开的游戏版本。
             </p>
-            <p>
-              本页仅展示当前主分支已有能力。下方视频中的两个作品是已发布、可实际操作的官方 Demo；规划功能会单独标记，不与现有能力混写。
-            </p>
+            <p>从想法、策划到试玩和交付，创作者可以在一个工作区内完成关键步骤。</p>
           </div>
         </div>
       </section>
@@ -64,47 +61,41 @@
       <section class="section flow-section" id="flow" aria-labelledby="flow-title">
         <div class="section-heading reveal">
           <div>
-            <p class="eyebrow">WORKFLOW</p>
+            <p class="eyebrow">产品链路</p>
             <h2 id="flow-title">从描述到试玩的六步链路</h2>
           </div>
-          <p>每一步都对应当前产品的实际工作流。</p>
+          <p>让创作过程清晰、可控，并且随时可以回到游戏本身。</p>
         </div>
         <ol class="flow-list" data-flow>
           <li class="flow-step reveal">
             <span class="step-index">01</span>
             <h3>描述想法</h3>
             <p>在 Forge 工作区用自然语言说明玩法、角色和规则。</p>
-            <span class="status implemented">已实现</span>
           </li>
           <li class="flow-step reveal">
             <span class="step-index">02</span>
             <h3>AI 策划</h3>
             <p>生成可查看的设计方案，将创作意图整理为游戏设计。</p>
-            <span class="status implemented">已实现</span>
           </li>
           <li class="flow-step reveal">
             <span class="step-index">03</span>
             <h3>人工确认</h3>
             <p>确认方案后，才进入后续生成流程。</p>
-            <span class="status implemented">已实现</span>
           </li>
           <li class="flow-step reveal">
             <span class="step-index">04</span>
             <h3>生成游戏</h3>
-            <p>Worker 执行生成、校验与阶段进度处理。</p>
-            <span class="status implemented">已实现</span>
+            <p>将设计转化为可运行的浏览器游戏，并反馈生成进度。</p>
           </li>
           <li class="flow-step reveal">
             <span class="step-index">05</span>
             <h3>浏览器试玩</h3>
             <p>草稿或已发布版本均可在浏览器中直接打开。</p>
-            <span class="status implemented">已实现</span>
           </li>
           <li class="flow-step reveal">
             <span class="step-index">06</span>
             <h3>下载或发布</h3>
             <p>下载自己的独立 HTML 版本，或提交进入发布审核流程。</p>
-            <span class="status implemented">已实现</span>
           </li>
         </ol>
       </section>
@@ -112,30 +103,30 @@
       <section class="section feature-section" aria-labelledby="feature-title">
         <div class="section-heading reveal">
           <div>
-            <p class="eyebrow">BUILT INTO THE PRODUCT</p>
-            <h2 id="feature-title">已实现的创作与交付能力</h2>
+            <p class="eyebrow">产品能力</p>
+            <h2 id="feature-title">从想法到交付，一处完成</h2>
           </div>
         </div>
         <div class="feature-grid">
           <article class="feature-card reveal">
             <span class="feature-number">A</span>
             <h3>自然语言创作</h3>
-            <p>在一个工作区内描述想法、查看消息与跟踪生成阶段。</p>
+            <p>用自然语言开始一款浏览器游戏。</p>
           </article>
           <article class="feature-card reveal">
             <span class="feature-number">B</span>
             <h3>策划先行</h3>
-            <p>先审阅 AI 策划，再决定是否继续生成，保留人为确认环节。</p>
+            <p>先确定玩法方向，再进入生成。</p>
           </article>
           <article class="feature-card reveal">
             <span class="feature-number">C</span>
             <h3>浏览器内试玩</h3>
-            <p>游戏版本在产品内的隔离页面中打开，不需要额外安装客户端。</p>
+            <p>生成结果打开即玩，无需额外安装。</p>
           </article>
           <article class="feature-card reveal">
             <span class="feature-number">D</span>
             <h3>版本与发布管理</h3>
-            <p>管理游戏草稿和版本，下载本人版本，提交并处理发布审核流程。</p>
+            <p>保存、整理并分享你的游戏作品。</p>
           </article>
         </div>
       </section>
@@ -143,19 +134,18 @@
       <section class="section video-section" id="watch" aria-labelledby="watch-title">
         <div class="section-heading reveal">
           <div>
-            <p class="eyebrow">REAL RECORDING</p>
-            <h2 id="watch-title">录屏中的真实试玩</h2>
+            <p class="eyebrow">游戏演示</p>
+            <h2 id="watch-title">游戏演示</h2>
           </div>
-          <p>像素跑酷与塔防雏形的实际浏览器操作，约 35 秒。</p>
+          <p>看看不同玩法如何在浏览器中运行。</p>
         </div>
         <figure class="video-frame reveal">
           <video controls preload="metadata" poster="assets/demo-tower-defense.png">
             <source src="assets/gameforge-demo.mp4" type="video/mp4" />
-            当前浏览器不支持视频播放。请打开 <a href="assets/gameforge-demo.mp4">MP4 文件</a>。
+            当前浏览器不支持视频播放。
           </video>
           <figcaption>
-            <span>视频展示</span>
-            <span>真实操作，不代表一次完整生成任务的等待过程。</span>
+            <span>像素跑酷 · 塔防</span>
           </figcaption>
         </figure>
       </section>
@@ -163,28 +153,26 @@
       <section class="section demos-section" id="demos" aria-labelledby="demos-title">
         <div class="section-heading reveal">
           <div>
-            <p class="eyebrow">TWO PLAYABLE DEMOS</p>
-            <h2 id="demos-title">视频中的两个真实 Demo</h2>
+            <p class="eyebrow">游戏系列</p>
+            <h2 id="demos-title">两款浏览器游戏</h2>
           </div>
-          <p>关键帧直接提取自本页 MP4 录屏。</p>
+          <p>从轻量跑酷到策略塔防，探索不同的创作方向。</p>
         </div>
         <div class="demo-grid">
           <article class="demo-card demo-runner reveal">
             <img src="assets/demo-pixel-runner.png" alt="像素跑酷的实机画面" />
             <div class="demo-card-copy">
-              <div class="demo-meta"><span>视频展示</span><span>01</span></div>
+              <div class="demo-meta"><span>跑酷</span><span>01</span></div>
               <h3>像素跑酷</h3>
               <p>霓虹重力跑酷。空格或点击反转重力，避开障碍并累计分数。</p>
-              <a href="http://127.0.0.1:5173/play/official-pixel-runner">打开本地试玩 <span aria-hidden="true">↗</span></a>
             </div>
           </article>
           <article class="demo-card demo-defense reveal">
             <img src="assets/demo-tower-defense.png" alt="塔防雏形的实机画面" />
             <div class="demo-card-copy">
-              <div class="demo-meta"><span>视频展示</span><span>02</span></div>
+              <div class="demo-meta"><span>塔防</span><span>02</span></div>
               <h3>塔防雏形</h3>
               <p>卡通塔防原型。选择并布置炮塔，阻击沿路径推进的敌人波次。</p>
-              <a href="http://127.0.0.1:5173/play/official-tower-stub">打开本地试玩 <span aria-hidden="true">↗</span></a>
             </div>
           </article>
         </div>
@@ -193,32 +181,32 @@
       <section class="section preview-section" id="preview" aria-labelledby="preview-title">
         <div class="section-heading reveal">
           <div>
-            <p class="eyebrow">PRODUCT PREVIEW</p>
-            <h2 id="preview-title">来自真实产品的三个界面</h2>
+            <p class="eyebrow">产品体验</p>
+            <h2 id="preview-title">产品体验</h2>
           </div>
-          <p>没有使用概念图或伪造页面。</p>
+          <p>从创作入口到游戏页面，关键体验一目了然。</p>
         </div>
         <div class="preview-grid">
           <figure class="preview-shot preview-home reveal">
-            <img src="assets/product-home.png" alt="真实 GameForge 首页" loading="lazy" />
-            <figcaption><span>01</span><strong>首页</strong><em>真实本地产品截图</em></figcaption>
+            <img src="assets/product-home.png" alt="GameForge 首页" loading="lazy" />
+            <figcaption><span>01</span><strong>首页</strong><em>发现与开始创作</em></figcaption>
           </figure>
           <figure class="preview-shot preview-forge reveal">
-            <img src="assets/product-forge.png" alt="真实 GameForge Forge 工作区试用预览" loading="lazy" />
-            <figcaption><span>02</span><strong>Forge 工作区</strong><em>试用预览状态，不可发起生成</em></figcaption>
+            <img src="assets/product-forge.png" alt="GameForge Forge 工作区" loading="lazy" />
+            <figcaption><span>02</span><strong>Forge 工作区</strong><em>描述想法与确认策划</em></figcaption>
           </figure>
           <figure class="preview-shot preview-play reveal">
-            <img src="assets/product-gameplay.png" alt="真实 GameForge 塔防试玩页" loading="lazy" />
-            <figcaption><span>03</span><strong>浏览器试玩</strong><em>已发布官方塔防 Demo</em></figcaption>
+            <img src="assets/product-gameplay.png" alt="GameForge 浏览器试玩页" loading="lazy" />
+            <figcaption><span>03</span><strong>浏览器试玩</strong><em>打开游戏并开始体验</em></figcaption>
           </figure>
         </div>
       </section>
 
       <section class="section roadmap-section" aria-labelledby="roadmap-title">
         <div class="roadmap-copy reveal">
-          <p class="eyebrow">NEXT, NOT NOW</p>
-          <h2 id="roadmap-title">规划中，不与现有能力混写。</h2>
-          <p>以下方向尚未作为当前主分支已完成功能展示。</p>
+          <p class="eyebrow">接下来</p>
+          <h2 id="roadmap-title">创作空间，持续扩展。</h2>
+          <p>更多工具与玩法正在加入 GameForge。</p>
         </div>
         <ul class="roadmap-list reveal">
           <li><span>01</span>通过对话迭代已有游戏</li>
@@ -230,9 +218,9 @@
 
     <footer class="site-footer">
       <p>GameForge · 浏览器游戏 AI 创作工作区</p>
-      <a href="../../README.md">返回 README <span aria-hidden="true">↑</span></a>
+      <a href="https://github.com/ByteTitan-star/GameForge-Copilot#readme">项目说明 <span aria-hidden="true">↑</span></a>
     </footer>
 
-    <script src="script.js?v=2"></script>
+    <script src="script.js"></script>
   </body>
 </html>

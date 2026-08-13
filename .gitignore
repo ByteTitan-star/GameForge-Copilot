@@ -21,6 +21,7 @@
 .vscode/
 .cursor/
 .claude/
+.playwright-cli/
 .superpowers/
 *.local
 *.log

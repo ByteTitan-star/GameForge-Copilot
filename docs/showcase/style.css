@@ -63,8 +63,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .button span { margin-left: .7rem; font-size: 1.15rem; }
 .button-primary { background: var(--accent); color: #062217; }
 .button-quiet { background: rgba(7, 14, 16, .74); border: 1px solid rgba(235, 250, 243, .42); color: var(--text); }
-.hero-note { position: absolute; bottom: 1.35rem; left: clamp(1rem, 4vw, 3rem); margin: 0; color: #dbebe4; font-size: .72rem; letter-spacing: .06em; }
-
 .section { width: min(var(--max), calc(100% - 2rem)); margin: 0 auto; padding: clamp(5rem, 10vw, 8.5rem) 0; }
 .section-kicker { display: flex; gap: .7rem; align-items: center; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
 .section-kicker span:first-child { color: var(--warm); }
@@ -83,9 +81,6 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
 .step-index { display: block; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
 .flow-step h3 { margin: 4rem 0 .75rem; font-size: 1.14rem; }
 .flow-step p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.65; }
-.status { display: inline-block; margin-top: 1.35rem; border: 1px solid currentColor; padding: .22rem .42rem; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
-.implemented { color: var(--accent); }
-
 .feature-section { padding-top: 1rem; }
 .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .feature-card { min-height: 260px; padding: 1.4rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #10191c; transition: background .22s ease; }
@@ -110,8 +105,6 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
 .demo-meta { display: flex; justify-content: space-between; color: var(--accent); font-size: .7rem; font-weight: 800; letter-spacing: .1em; }
 .demo-card h3 { margin: .9rem 0 .5rem; font-size: clamp(2rem, 3.5vw, 3.3rem); line-height: 1; }
 .demo-card p { max-width: 420px; margin: 0; color: #e1eae6; font-size: .95rem; line-height: 1.6; }
-.demo-card a { align-self: flex-start; margin-top: 1.4rem; border-bottom: 1px solid var(--accent); padding-bottom: .25rem; color: var(--accent); font-size: .85rem; font-weight: 800; }
-
 .preview-section { width: min(1440px, calc(100% - 2rem)); }
 .preview-grid { display: grid; grid-template-columns: 1.28fr .72fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .preview-shot { position: relative; overflow: hidden; margin: 0; background: #101719; }
@@ -136,6 +129,8 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
 .site-footer a { color: var(--accent); font-weight: 700; }
 
 .reveal { opacity: 1; transform: none; }
+.has-js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .72s ease, transform .72s cubic-bezier(.2, .75, .25, 1); }
+.has-js .reveal.is-visible { opacity: 1; transform: none; }
 
 @media (max-width: 1050px) {
   .flow-list { grid-template-columns: repeat(3, 1fr); }
@@ -150,7 +145,6 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
   .hero-scrim { background: rgba(4, 8, 9, .62); }
   .hero-copy { width: calc(100% - 2rem); margin-bottom: 5.4rem; }
   .hero h1 { font-size: clamp(3.1rem, 16vw, 4.7rem); }
-  .hero-note { left: 1rem; right: 1rem; font-size: .64rem; }
   .section { width: min(100% - 2rem, var(--max)); padding: 4.4rem 0; }
   .introduction-layout, .roadmap-section { grid-template-columns: 1fr; gap: 1.6rem; }
   .section-heading { display: block; margin-bottom: 2rem; }
@@ -166,11 +160,11 @@ h2 { margin: 0; font-size: clamp(2.1rem, 4.6vw, 4.7rem); line-height: 1.02; lett
   .preview-home { grid-row: auto; }
   .preview-shot img { min-height: 250px; }
   .video-frame figcaption { display: block; }
-  .video-frame figcaption span + span { display: block; margin-top: .25rem; }
   .site-footer { display: block; }
   .site-footer a { display: inline-block; margin-top: .8rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  .has-js .reveal, .has-js .reveal.is-visible { opacity: 1; transform: none; }
 }
