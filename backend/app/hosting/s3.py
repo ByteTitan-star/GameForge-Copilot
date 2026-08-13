@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 import uuid
 from pathlib import Path, PurePosixPath
 
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.hosting import local as local_store
+from app.hosting.backend import ArtifactFileMeta
 
 
 def _object_key(prefix: str, game_id: uuid.UUID, version: int, rel: str) -> str:
@@ -58,6 +60,15 @@ class S3HostingBackend:
 
     def _key(self, game_id: uuid.UUID, version: int, rel: str) -> str:
         return _object_key(self._prefix, game_id, version, rel)
+
+    def _dir_prefix(self, game_id: uuid.UUID, version: int) -> str:
+        """某版本产物目录的 OSS 前缀，末尾带 /。用于 list_objects。
+
+        末尾 / 不可省：否则 version=1 会字符串匹配到 version=10/11。
+        """
+        clean_prefix = self._prefix.strip("/")
+        head = f"{clean_prefix}/" if clean_prefix else ""
+        return f"{head}{game_id}/{version}/"
 
     async def write_artifact(
         self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
@@ -112,3 +123,47 @@ class S3HostingBackend:
             raise AppError(ErrorCode.SANDBOX_FAILED, "对象存储上传失败") from exc
         # 本地 cache 同步写一份，供 FileResponse / read_bytes 直出（与 write_artifact 行为一致）
         await local_store.write_bytes(game_id, version, rel, data)
+
+    async def list_files(
+        self, game_id: uuid.UUID, version: int
+    ) -> list[ArtifactFileMeta]:
+        """列出某版本产物下所有文件。真相源 = OSS（与 read_bytes 一致，不读本地 cache）。
+
+        Prefix 末尾必须带 /，否则 version=1 会字符串匹配到 version=10；
+        不设 Delimiter 以扁平列出全部文件（含子目录）；分页翻到 isTruncated=False。
+        """
+
+        def _list() -> list[ArtifactFileMeta]:
+            prefix = self._dir_prefix(game_id, version)
+            paginator: list[ArtifactFileMeta] = []
+            continuation: str | None = None
+            while True:
+                kwargs: dict[str, object] = {
+                    "Bucket": self._bucket,
+                    "Prefix": prefix,
+                }
+                if continuation:
+                    kwargs["ContinuationToken"] = continuation
+                resp = self._client.list_objects_v2(**kwargs)
+                for obj in resp.get("Contents", []) or []:
+                    key = obj["Key"]
+                    # 跳过目录占位对象（OSS/S3 常以 key 结尾 / 表示空目录）
+                    if key.endswith("/"):
+                        continue
+                    rel = key[len(prefix) :]
+                    mime, _ = mimetypes.guess_type(rel)
+                    paginator.append(
+                        ArtifactFileMeta(path=rel, size=int(obj.get("Size", 0)), mime=mime)
+                    )
+                if not resp.get("IsTruncated"):
+                    break
+                continuation = resp.get("NextContinuationToken")
+                if not continuation:
+                    break
+            paginator.sort(key=lambda m: m.path)
+            return paginator
+
+        try:
+            return await asyncio.to_thread(_list)
+        except Exception as exc:
+            raise AppError(ErrorCode.SANDBOX_FAILED, "对象存储列举失败") from exc

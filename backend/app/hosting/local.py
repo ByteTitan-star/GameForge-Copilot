@@ -1,11 +1,13 @@
 """本地托管实现（从 store 拆出，供 local/S3 复用）。"""
 
 import asyncio
+import mimetypes
 import uuid
 from pathlib import Path
 
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
+from app.hosting.backend import ArtifactFileMeta
 
 
 def _root() -> Path:
@@ -24,6 +26,17 @@ def _check_path(base_resolved: Path, rel: str) -> Path:
     if target != base_resolved and base_resolved not in target.parents:
         raise AppError(ErrorCode.SANDBOX_FAILED, "非法产物路径")
     return target
+
+
+def _is_within(base_resolved: Path, target: Path) -> bool:
+    """target 是否落在 base_resolved 内（含 base 自身）。供列目录等批量场景复用。
+
+    与 _check_path 同款校验逻辑，但不抛错、不读 rel——调用方已拿到真实 target。
+    防御符号链接/异常文件名泄漏到前端。
+    """
+    if target == base_resolved:
+        return True
+    return base_resolved in target.parents
 
 
 def _write_sync(base: Path, files: dict[str, str | bytes], limit: int) -> None:
@@ -81,3 +94,33 @@ async def write_bytes(
 ) -> None:
     """写入单个旁路产物文件（如 thumb.png），复用 _check_path 防穿越，不强制 index.html。"""
     await asyncio.to_thread(_write_bytes_sync, artifact_dir(game_id, version), rel, data)
+
+
+def _list_files_sync(base: Path) -> list[ArtifactFileMeta]:
+    if not base.is_dir():
+        # 目录不存在（版本未生成/已清理）视为空，不抛错——与空目录一视同仁。
+        return []
+    base_r = base.resolve()
+    metas: list[ArtifactFileMeta] = []
+    for target in base.rglob("*"):
+        if not target.is_file():
+            continue
+        resolved = target.resolve()
+        if not _is_within(base_r, resolved):
+            continue
+        rel = resolved.relative_to(base_r).as_posix()
+        size = resolved.stat().st_size
+        mime, _ = mimetypes.guess_type(rel)
+        metas.append(ArtifactFileMeta(path=rel, size=size, mime=mime))
+    metas.sort(key=lambda m: m.path)
+    return metas
+
+
+async def list_files(
+    game_id: uuid.UUID, version: int
+) -> list[ArtifactFileMeta]:
+    """列出某版本产物下所有文件（扁平，含相对路径/大小/mime）。
+
+    仅供 owner 端点消费；防御性过滤越界文件。目录不存在返回 []。
+    """
+    return await asyncio.to_thread(_list_files_sync, artifact_dir(game_id, version))

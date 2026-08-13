@@ -32,15 +32,16 @@ from app.forge.design_doc import (
     parse_design_doc,
     validate_design_doc,
 )
+from app.forge.engine_router import engine_scaffold
 from app.forge.events import publish_event
 from app.forge.messages import add_message, design_message_content, stable_design_key
 from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
-    CODE_PROMPT,
-    CODE_REPAIR_PROMPT,
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
     QA_PROMPT,
+    build_code_prompt,
+    build_repair_prompt,
 )
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import store
@@ -508,6 +509,15 @@ def _build_graph(ctx: _Ctx) -> Any:
             generation_user_msg = base_user_msg
             if assets_block:
                 generation_user_msg += f"\n\n【可用内置素材】{assets_block}"
+            # 引擎最小骨架作为参考起点（仅首次生成；修复分支走 previous_html 基线）。
+            # canvas 无骨架；phaser3/pixijs 注入以降低 Scene/Application 结构出错率。
+            scaffold = engine_scaffold(design_doc["engine"]["id"])
+            if scaffold:
+                generation_user_msg += (
+                    "\n\n【所选引擎最小可运行骨架（参考起点，在此基础上实现设计稿，"
+                    "不要照搬玩法，须替换为设计稿的实体/关卡/规则）】\n"
+                    f"{scaffold}"
+                )
 
             # QA 失败或对已有版本做修改时，以当前可运行版本为修复基线，避免每次
             # 都从零生成造成已通过功能回归。首次构建则仍走完整生成提示词。
@@ -558,13 +568,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                         f"【当前完整 index.html】\n{masked_html}"
                     )
                     user_msg = "\n\n".join(repair_parts)
-                    system_prompt = CODE_REPAIR_PROMPT
+                    system_prompt = build_repair_prompt(design_doc["engine"]["id"])
                 else:
                     data_uris = {}
                     user_msg = generation_user_msg
                     if last_error:
                         user_msg += f"\n\n【上次构建错误】\n{last_error}"
-                    system_prompt = CODE_PROMPT
+                    system_prompt = build_code_prompt(design_doc["engine"]["id"])
 
                 html = normalize_html(await _llm(ctx, system_prompt, user_msg))
                 for token, data_uri in data_uris.items():

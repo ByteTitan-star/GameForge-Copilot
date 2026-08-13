@@ -135,12 +135,17 @@ export function UsageBreakdownChart({ items, tone = 'dark' }: Props) {
 type TrendProps = {
   data: { date: string; page_views: number; unique_visitors: number }[]
   tone?: 'light' | 'dark'
+  /** 显式主/辅色 hex（admin 橙色旁路，理由同 UsageChart） */
+  primaryHex?: string
+  secondaryHex?: string
 }
 
-export function AnalyticsTrendChart({ data, tone = 'dark' }: TrendProps) {
+export function AnalyticsTrendChart({ data, tone = 'dark', primaryHex, secondaryHex }: TrendProps) {
   const t = useT()
   const a = AXIS[tone]
-  const { primary, secondary } = useThemeColors()
+  const themeColors = useThemeColors()
+  const primary = primaryHex ?? themeColors.primary
+  const secondary = secondaryHex ?? themeColors.secondary
   if (data.length === 0) {
     return <p className="text-sm gf-page-muted">{t('usageNoTrendData')}</p>
   }

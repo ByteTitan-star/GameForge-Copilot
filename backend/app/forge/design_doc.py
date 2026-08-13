@@ -10,6 +10,8 @@ import copy
 import json
 from typing import Any
 
+from app.forge.engine_router import DEFAULT_ENGINE, SUPPORTED_ENGINES, normalize_engine_id
+
 SCHEMA_VERSION = "2.0"
 REQUIRED_STATE_IDS = {
     "menu",
@@ -87,6 +89,12 @@ def _empty_doc(title: str) -> dict[str, Any]:
             "同时支持键盘和触控操作",
             "画面随视口自适应且核心玩法区域保持可见",
         ],
+        "engine": {
+            "id": DEFAULT_ENGINE,
+            "rationale": "",
+            "version": "",
+            "library_notes": [],
+        },
         "acceptance_criteria": [],
     }
 
@@ -313,6 +321,14 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
             }
         )
     doc["acceptance_criteria"] = criteria
+
+    engine = doc.get("engine") if isinstance(doc.get("engine"), dict) else {}
+    doc["engine"] = {
+        "id": normalize_engine_id(engine.get("id")),
+        "rationale": _text(engine.get("rationale")),
+        "version": _text(engine.get("version")),
+        "library_notes": _text_list(engine.get("library_notes")),
+    }
     return doc
 
 
@@ -396,6 +412,17 @@ def validate_design_doc(value: Any) -> list[str]:
         errors.append("presentation.visual_style 不能为空")
     if not doc["technical_constraints"]:
         errors.append("technical_constraints 至少需要一项")
+
+    engine = doc["engine"]
+    if engine["id"] not in SUPPORTED_ENGINES:
+        errors.append(
+            f"engine.id 必须是受控枚举之一：{', '.join(sorted(SUPPORTED_ENGINES))}"
+        )
+    if not engine["rationale"]:
+        errors.append("engine.rationale 必须说明引擎选择理由")
+    # canvas 无外部 CDN，不要求 version；phaser3/pixijs 必须钉死版本号防 CDN 404。
+    if engine["id"] != DEFAULT_ENGINE and not engine["version"]:
+        errors.append(f"engine.version 不能为空（{engine['id']} 需精确版本号）")
 
     criteria = doc["acceptance_criteria"]
     if len(criteria) < 8:

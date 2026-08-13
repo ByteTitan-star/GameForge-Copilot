@@ -188,3 +188,11 @@ export async function apiRequestFile(
     filename: filenameFromContentDisposition(res.headers.get('Content-Disposition')),
   }))
 }
+
+/** 拉取非 JSON 纯文本响应体（如产物源码），复用 request 的统一 401 refresh。 */
+export async function apiRequestText(
+  path: string,
+  options: RequestOptions = {},
+): Promise<string> {
+  return request(path, options, (res) => res.text())
+}

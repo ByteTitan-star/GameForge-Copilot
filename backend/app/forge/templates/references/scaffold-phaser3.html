@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Phaser 最小骨架</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+    #game { display: flex; align-items: center; justify-content: center; height: 100%; }
+    #fallback { color: #ddd; font-family: sans-serif; text-align: center; padding: 2rem; }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <!-- 引擎 UMD：版本号与 design_doc.engine.version 保持一致，不得更改 -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script>
+    // CDN 加载失败回退：不阻塞，给出可读提示。
+    if (typeof Phaser === 'undefined') {
+      document.getElementById('game').innerHTML =
+        '<div id="fallback">游戏引擎加载失败，请检查网络后刷新。</div>';
+    } else {
+      // type: AUTO 允许在无 WebGL（含 headless 试玩）环境降级 Canvas。
+      new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: 'game',
+        width: 800, height: 600,
+        backgroundColor: '#111',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        physics: { default: 'arcade', arcade: { debug: false } },
+        scene: [BootScene, MenuScene, PlayScene],
+      });
+
+      // 状态机映射 design_doc.game_states：menu / playing / paused / ...
+      function BootScene() { Phaser.Scene.call(this, 'boot'); }
+      BootScene.prototype = Object.create(Phaser.Scene.prototype);
+      BootScene.prototype.preload = function () { /* 在此 load.image/spritesheet/audio */ };
+      BootScene.prototype.create = function () { this.scene.start('menu'); };
+
+      function MenuScene() { Phaser.Scene.call(this, 'menu'); }
+      MenuScene.prototype = Object.create(Phaser.Scene.prototype);
+      MenuScene.prototype.create = function () {
+        this.add.text(400, 300, '点击或按空格开始', { fill: '#fff' }).setOrigin(0.5);
+        this.input.keyboard.on('keydown-SPACE', () => this.scene.start('playing'));
+        this.input.on('pointerdown', () => this.scene.start('playing'));
+      };
+
+      function PlayScene() { Phaser.Scene.call(this, 'playing'); }
+      PlayScene.prototype = Object.create(Phaser.Scene.prototype);
+      PlayScene.prototype.create = function () {
+        // 构建玩家、敌人、HUD；绑定输入；注册碰撞。
+        this.scoreText = this.add.text(16, 16, '分数 0', { fill: '#fff' });
+      };
+      PlayScene.prototype.update = function (time, deltaMs) {
+        // 每帧逻辑：deltaMs 已由引擎提供，禁止再叠加 requestAnimationFrame。
+      };
+    }
+  </script>
+</body>
+</html>

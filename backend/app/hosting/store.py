@@ -3,6 +3,7 @@
 import uuid
 from pathlib import Path
 
+from app.hosting.backend import ArtifactFileMeta
 from app.hosting.factory import get_hosting_backend
 
 
@@ -25,6 +26,13 @@ async def write_bytes(
 ) -> None:
     """写入单个旁路产物文件（如 thumb.png），不强制 index.html。"""
     await get_hosting_backend().write_bytes(game_id, version, rel, data)
+
+
+async def list_files(
+    game_id: uuid.UUID, version: int
+) -> list[ArtifactFileMeta]:
+    """列出某版本产物下所有文件（扁平路径/大小/mime），目录不存在返回 []。"""
+    return await get_hosting_backend().list_files(game_id, version)
 
 
 def artifact_dir(game_id: uuid.UUID, version: int) -> Path:

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>PixiJS 最小骨架</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+    #fallback { color: #ddd; font-family: sans-serif; text-align: center; padding: 2rem; }
+  </style>
+</head>
+<body>
+  <!-- 引擎 UMD：版本号与 design_doc.engine.version 保持一致，不得更改 -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.0/dist/pixi.min.js"></script>
+  <script>
+    // CDN 加载失败回退：不阻塞，给出可读提示。
+    if (typeof PIXI === 'undefined') {
+      var fb = document.createElement('div');
+      fb.id = 'fallback';
+      fb.textContent = '游戏引擎加载失败，请检查网络后刷新。';
+      document.body.appendChild(fb);
+    } else {
+      var app = new PIXI.Application({
+        width: 800, height: 600,
+        background: '#111',
+        antialias: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      });
+      document.body.appendChild(app.view);
+
+      // 分层容器：背景 / 实体 / 特效 / UI，便于整体清空与重排。
+      var entityLayer = new PIXI.Container();
+      var uiLayer = new PIXI.Container();
+      app.stage.addChild(entityLayer, uiLayer);
+
+      // 状态机映射 design_doc.game_states；初始 menu。
+      var state = 'menu';
+      var scoreText = new PIXI.Text('分数 0', { fill: 0xffffff });
+      scoreText.x = 16; scoreText.y = 16;
+      uiLayer.addChild(scoreText);
+
+      // 主循环用 Ticker；禁止再叠加 requestAnimationFrame。
+      app.ticker.add(function (delta) {
+        if (state === 'playing') update(delta);
+      });
+
+      function update(delta) {
+        // 每帧逻辑：移动、碰撞（自己写 AABB/圆形）、状态切换。
+      }
+
+      // 输入：键盘 + 触控统一映射到动作语义。
+      function onAction() { if (state === 'menu') startPlaying(); }
+      window.addEventListener('keydown', function (e) {
+        if (e.code === 'Space') onAction();
+      });
+      app.view.addEventListener('pointerdown', onAction);
+      app.view.style.touchAction = 'none';
+
+      function startPlaying() {
+        state = 'playing';
+        entityLayer.removeChildren(); // 重开时清空实体，防上一局残留。
+      }
+
+      // 响应式：resize 重算画布。
+      window.addEventListener('resize', function () {
+        app.renderer.resize(window.innerWidth, window.innerHeight);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import { RequireAdmin } from '@/components/layout/RequireAdmin'
 import { RequireAuth } from '@/components/layout/RequireAuth'
 import { AnalyticsSection } from '@/pages/admin/sections/AnalyticsSection'
 import { AuditSection } from '@/pages/admin/sections/AuditSection'
+import { OverviewSection } from '@/pages/admin/sections/OverviewSection'
 import { PublishedSection } from '@/pages/admin/sections/PublishedSection'
 import { QueueSection } from '@/pages/admin/sections/QueueSection'
 import { SettingsSection } from '@/pages/admin/sections/SettingsSection'
@@ -55,7 +56,7 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<RequireAdmin />}>
           <Route path="/admin" element={<AdminShell />}>
-            <Route index element={<Navigate to="/admin/queue" replace />} />
+            <Route index element={<OverviewSection />} />
             <Route path="queue" element={<QueueSection />} />
             <Route path="published" element={<PublishedSection />} />
             <Route path="users" element={<UsersSection />} />

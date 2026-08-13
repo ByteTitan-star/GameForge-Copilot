@@ -33,7 +33,7 @@ export function PublishedSection() {
       await qc.invalidateQueries({ queryKey: ['featured-games'] })
       onToast(t('adminFeaturedOk'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminOpFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminOpFail')), 'error'),
   })
 
   const takeDownMu = useMutation({
@@ -45,7 +45,7 @@ export function PublishedSection() {
       await qc.invalidateQueries({ queryKey: ['admin', 'games', 'published'] })
       onToast(t('adminTakeDownOk'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminTakeDownFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminTakeDownFail')), 'error'),
   })
 
   if (!token) return null
