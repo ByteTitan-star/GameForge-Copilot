@@ -1,13 +1,15 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ShieldOff, Star } from 'lucide-react'
+import { Package, ShieldOff, Star } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { formatApiError } from '@/api/error-message'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { AdminTable } from '@/components/admin/AdminTable'
+import { EmptyState } from '@/components/admin/EmptyState'
 import { ConfirmModal } from '@/components/admin/ConfirmModal'
-import { btnDanger, btnNeutral } from '@/components/admin/buttonStyles'
+import { btnDanger, btnNeutral, btnPrimary } from '@/components/admin/buttonStyles'
 import { useAdminToast } from '../adminToast'
 
 export function PublishedSection() {
@@ -51,7 +53,7 @@ export function PublishedSection() {
   const rows = games.data?.data ?? []
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AdminTable
         headers={[
           t('adminColGame'),
@@ -61,11 +63,22 @@ export function PublishedSection() {
           t('adminColAction'),
         ]}
         loading={games.isLoading}
-        empty={t('adminPublishedEmpty')}
+        empty={
+          <EmptyState
+            icon={Package}
+            title={t('adminPublishedEmpty')}
+            description={t('adminPublishedEmptyDesc')}
+            action={
+              <Link to="/discover" className={`${btnPrimary} !h-9`}>
+                {t('adminPublishedEmptyCta')}
+              </Link>
+            }
+          />
+        }
         rows={rows.map((g) => {
           const featured = g.featured
           return (
-            <tr key={g.game_id} className="border-t border-[var(--gf-border)]">
+            <tr key={g.game_id} className="group border-t border-[var(--gf-border)]">
               <td className="px-4 py-3">{g.title}</td>
               <td className="gf-text-accent px-4 py-3 font-mono text-xs">{g.slug ?? '—'}</td>
               <td className="gf-page-muted px-4 py-3 font-mono text-xs">v{g.current_version}</td>

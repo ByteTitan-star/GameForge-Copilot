@@ -19,11 +19,7 @@ export function AnalyticsSection() {
   const data = q.data
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-lg text-[var(--gf-text)]">{t('adminAnalyticsTitle')}</h2>
-        <p className="gf-page-subtitle mt-1">{t('adminAnalyticsSubtitle')}</p>
-      </div>
+    <div className="space-y-5">
       {q.isLoading ? <p className="gf-page-muted text-sm">{t('loading')}</p> : null}
       {q.isError ? (
         <p className="flex items-center gap-2 text-sm text-rose-500">{t('loadFailed')}</p>
@@ -44,11 +40,11 @@ export function AnalyticsSection() {
               </tr>
             ))}
           />
-          <section className="gf-glass rounded-2xl p-4">
+          <section className="gf-admin-card rounded-xl p-4">
             <p className="gf-page-muted mb-3 text-[11px] font-medium uppercase tracking-wider">
               {t('adminAnalyticsTrend')}
             </p>
-            <AnalyticsTrendChart data={data.trend} />
+            <AnalyticsTrendChart data={data.trend} tone="light" />
           </section>
         </>
       ) : null}
