@@ -53,6 +53,11 @@ class S3HostingBackend:
                 s3={"addressing_style": settings.s3_addressing_style},
                 connect_timeout=settings.s3_connect_timeout,
                 read_timeout=settings.s3_read_timeout,
+                # 阿里云 OSS 不支持新版 botocore 默认的 STREAMING-UNSIGNED-PAYLOAD-TRAILER
+                # 流式签名（put_object 会返回 NotImplemented）；改为按需计算校验和，
+                # 与 AWS S3 行为一致，OSS/MinIO 等兼容实现都能正常上传。
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
             ),
         )
         self._bucket = settings.s3_bucket
