@@ -18,12 +18,12 @@ from app.enums import EntryPhase, GameStatus, RunPhase, RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.entry_router import classify_entry_phase
+from app.forge.messages import add_message
+from app.forge.queue import enqueue_resume
 from app.hosting import store as hosting_store
 from app.messaging.outbox import add_task, cancel_run_tasks
 from app.messaging.tasks import (
     TASK_EXECUTE_RUN,
-    TASK_RESUME_RUN,
-    resume_payload,
     run_id_payload,
 )
 from app.models.game import Game
@@ -380,6 +380,17 @@ async def create_run(
         )
         db.add(run)
         await db.flush()
+        await add_message(
+            db,
+            game_id=game.id,
+            run_id=run.id,
+            user_id=user.id,
+            role="user",
+            kind="requirement",
+            content=req.requirement,
+            metadata={"entry_phase": entry.value},
+            dedupe_key=f"{run.id}:requirement",
+        )
         await add_task(db, TASK_EXECUTE_RUN, run_id_payload(run.id))
         await db.commit()
         await db.refresh(run)
@@ -458,7 +469,7 @@ async def resume_run_control(
     await run_ctrl.clear_control(r, run_id)
     run.status = RunStatus.RUNNING.value
     run.ended_at = None
-    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
+    await enqueue_resume(db, r, run_id, "approve", None)
     await db.commit()
     await db.refresh(run)
     return run
@@ -473,6 +484,17 @@ async def cancel_run(
     await run_ctrl.request_cancel(r, run_id)
     run.status = RunStatus.FAILED.value
     run.ended_at = datetime.now(UTC)
+    await add_message(
+        db,
+        game_id=run.game_id,
+        run_id=run.id,
+        user_id=user.id,
+        role="system",
+        kind="failed",
+        content="本轮生成已由用户取消。",
+        metadata={"code": "CANCELLED"},
+        dedupe_key=f"{run.id}:failed:CANCELLED",
+    )
     await cancel_run_tasks(db, run_id)
     await db.commit()
     await ckpt.clear_state(r, run_id, db)
@@ -516,6 +538,8 @@ async def activate_version(
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
     game.current_version = version
+    # 封面随当前版本走：该版本有截图则指向它，否则置空（卡片回退渐变）。
+    game.cover_path = "thumb.png" if gv.thumbnail_path else None
     if isinstance(gv.design_doc, dict):
         gameplay = gv.design_doc.get("gameplay") or gv.design_doc.get("design")
         if isinstance(gameplay, str) and gameplay.strip():
@@ -541,7 +565,17 @@ async def retry_run(
     run.status = RunStatus.RUNNING.value
     run.phase = RunPhase.CODE.value
     run.ended_at = None
-    await add_task(db, TASK_RESUME_RUN, resume_payload(run_id, "approve", None))
+    await add_message(
+        db,
+        game_id=run.game_id,
+        run_id=run.id,
+        user_id=user.id,
+        role="system",
+        kind="retry",
+        content="正在从失败阶段重试本轮生成。",
+        dedupe_key=f"{run.id}:retry:{phase}",
+    )
+    await enqueue_resume(db, r, run_id, "approve", None)
     await db.commit()
     await db.refresh(run)
     return run

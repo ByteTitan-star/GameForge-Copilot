@@ -33,12 +33,14 @@ class GameListItem(BaseModel):
     status: GameStatus
     current_version: int
     slug: str | None = None
+    cover_url: str | None = None
     updated_at: datetime
 
 
 class VersionItem(BaseModel):
     version: int
     artifact_path: str
+    thumbnail_path: str | None = None
     created_at: datetime
 
 

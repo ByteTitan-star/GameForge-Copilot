@@ -6,11 +6,29 @@ import fakeredis.aioredis
 import httpx
 import pytest
 
+from app.core import db as db_module
+from app.forge import state as ckpt
 from app.forge.graph import run_generation
 from app.forge.runner import execute_run
 
 GAME_BODY = {"title": "贪吃蛇", "requirement": "方向键"}
 RUN_BODY = {"requirement": "加入加速道具"}
+
+
+async def _grant_resume(
+    redis_client: fakeredis.aioredis.FakeRedis, run_id: uuid.UUID
+) -> None:
+    """模拟合法入口（resolve_hitl / resume / retry）写入的一次性推进凭据。
+
+    生产路径由 app.forge.queue.enqueue_resume 写入；测试直接调 run_generation
+    绕过该入口，故手动预置，否则 _run_body 会按陈旧消息跳过。
+    """
+    async with db_module.SessionLocal() as s:
+        st = await ckpt.load_state(redis_client, run_id, s) or {}
+        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
+        await ckpt.save_state(redis_client, run_id, granted, s)
+        await s.commit()
+
 
 
 async def _make_game(client: httpx.AsyncClient) -> uuid.UUID:
@@ -83,6 +101,7 @@ async def test_full_generation_with_hitl(
     assert d["current_hitl"] == {"node": "plan_confirm"}
 
     # resume 继续
+    await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
@@ -97,6 +116,71 @@ async def test_full_generation_with_hitl(
 
     r = await verified_client.get(f"/draft/{gid}/1")
     assert r.status_code == 200 and "canvas" in r.text
+
+
+async def test_stale_resume_without_grant_is_skipped(
+    verified_client: httpx.AsyncClient,
+    redis_client: fakeredis.aioredis.FakeRedis,
+    _fake_llm,
+) -> None:
+    """HITL 等待态下，没有 resume_grant 的陈旧 resume 必须被跳过，run 不自动推进。
+
+    钉死 app.forge.graph._run_body 的 stale-skip 分支：at-least-once 投递下的旧
+    resume 消息读不到凭据，在 plan_confirm 直接 return，堵住「用户没点确认 art/code
+    却自己跑起来」。合法入口（resolve_hitl/resume/retry）由 enqueue_resume 写 grant，
+    测试里用 _grant_resume 模拟；本用例刻意不写，验证拦截。
+    """
+    gid = await _make_game(verified_client)
+    rid = await _make_run(verified_client, gid)
+    ctx = {"redis": redis_client}
+    await execute_run(ctx, rid)
+
+    # 首次跑到 HITL 中断：paused/plan，current_hitl=plan_confirm
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    assert r.json()["data"]["status"] == "paused"
+    assert r.json()["data"]["current_hitl"] == {"node": "plan_confirm"}
+
+    # 不预置 grant，直接 resume（模拟陈旧消息重投）
+    await run_generation(ctx, rid, resume=True, decision="approve")
+
+    # 仍停在 HITL：未推进到 art，未产生版本
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    d = r.json()["data"]
+    assert d["status"] == "paused"
+    assert d["phase"] == "plan"
+    assert d["current_hitl"] == {"node": "plan_confirm"}
+
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions")
+    assert r.json()["data"] == []
+
+
+async def test_grant_consumed_after_done_prevents_replay(
+    verified_client: httpx.AsyncClient,
+    redis_client: fakeredis.aioredis.FakeRedis,
+    _fake_llm,
+) -> None:
+    """resume 跑到 done 后，重投同一条 resume 消息被终态守卫跳过，不产生副作用。
+
+    钉死 run_generation 的终态守卫（status=DONE 直接 return）：grant 在第一次 resume
+    被 pop 消费，done_node 又 clear_state；消息重投时既无 grant 也已是终态。
+    """
+    gid = await _make_game(verified_client)
+    rid = await _make_run(verified_client, gid)
+    ctx = {"redis": redis_client}
+    await execute_run(ctx, rid)
+    await _grant_resume(redis_client, rid)
+    await run_generation(ctx, rid, resume=True, decision="approve")
+
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    assert r.json()["data"]["status"] == "done"
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions")
+    versions_after_done = r.json()["data"]
+    assert len(versions_after_done) == 1
+
+    # 模拟消息重投：再次 resume，终态守卫应直接跳过，版本数不增长
+    await run_generation(ctx, rid, resume=True, decision="approve")
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions")
+    assert r.json()["data"] == versions_after_done
 
 
 async def test_qa_playtest_failure_retries_then_fails(
@@ -115,7 +199,7 @@ async def test_qa_playtest_failure_retries_then_fails(
 
     calls = {"n": 0}
 
-    async def _fail_playtest(_html: str) -> PlaytestResult:
+    async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
         calls["n"] += 1
         return PlaytestResult(ok=False, errors=["mock js error"], console_logs=["err"])
 
@@ -128,6 +212,7 @@ async def test_qa_playtest_failure_retries_then_fails(
     rid = await _make_run(verified_client, gid)
     ctx = {"redis": redis_client}
     await execute_run(ctx, rid)
+    await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")

@@ -397,6 +397,32 @@ docker compose --profile build-sandbox build sandbox
 
 ---
 
+## Worker 运行时依赖（封面截图）
+
+生成游戏时，QA 通过后会用 **Playwright + chromium** 截当前版本画面，存为 `thumb.png` 作为卡片封面（已发布游戏在「我的游戏」和「公开发现页」共用；草稿无鉴权可访问的封面 URL，回退渐变）。
+
+这是一项**可选增强**：未装 chromium 时不影响生成，只是卡片没有真截图封面（回退 CSS 渐变）。受两个开关共同控制：
+
+- `thumbnail_enabled`（`backend/.env`，默认 `true`）—— 运行时熔断，关掉则完全跳过截图。
+- `PLAYTEST_USE_PLAYWRIGHT=1`（环境变量）—— 启用真实浏览器试玩 + 截图；未设则走静态检测模式，`thumbnail=None`。
+
+两者**同时满足**才真截图，否则降级。
+
+**启用封面截图（worker 所在机器）：**
+
+```bash
+cd backend
+uv sync --extra playwright                 # 装 playwright（不在默认依赖里）
+uv run playwright install chromium --with-deps   # 装 chromium 浏览器 + 系统依赖
+export PLAYTEST_USE_PLAYWRIGHT=1           # 写进 worker 进程的环境（如 systemd unit / compose env）
+```
+
+> Docker 化时把 `chromium` 与 `PLAYTEST_USE_PLAYWRIGHT=1` 落到 worker 镜像 / compose env 即可（项目当前未容器化 worker，本节先记录依赖）。
+
+**为什么 playwright 是可选 extra？** 避免 API 进程和本地联调强依赖 chromium；只有负责生成任务的 worker 需要。worker 外网受限时截图可能白屏（外部 CDN 加载不全），由卡片渐变兜底，不阻断生成。
+
+---
+
 ### 常见问题
 
 | 现象 | 处理 |

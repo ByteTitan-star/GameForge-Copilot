@@ -23,6 +23,8 @@ class PlaytestResult:
     ok: bool
     errors: list[str] = field(default_factory=list)
     console_logs: list[str] = field(default_factory=list)
+    # QA 通过分支顺带截的封面图（PNG bytes）。want_thumb=False / 静态模式 / 截图失败时均为 None。
+    thumbnail: bytes | None = None
 
 
 class _DomScanner(HTMLParser):
@@ -85,11 +87,12 @@ def _static_playtest(html: str) -> PlaytestResult:
     return PlaytestResult(ok=not errors, errors=errors, console_logs=logs)
 
 
-async def _playwright_playtest(html_path: Path) -> PlaytestResult:
+async def _playwright_playtest(html_path: Path, want_thumb: bool = False) -> PlaytestResult:
     from playwright.async_api import async_playwright
 
     errors: list[str] = []
     logs: list[str] = ["playtest: playwright mode"]
+    thumbnail: bytes | None = None
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -117,22 +120,41 @@ async def _playwright_playtest(html_path: Path) -> PlaytestResult:
         except Exception as e:  # noqa: BLE001 input sim
             errors.append(f"模拟按键失败: {e}")
 
+        # 封面截图：仅在本次校验通过且调用方需要时截。复用已 warm 的浏览器会话，
+        # 不二次冷启。16:9 视口对齐卡片比例；full_page=False 避免截到滚动区。
+        # 截图是封面增强项，任何异常都降级为 None，不影响 QA 结论。
+        if want_thumb and not errors:
+            try:
+                await page.set_viewport_size({"width": 1024, "height": 576})
+                # 给 canvas/外部 CDN（tailwind/three.js）一点渲染时间；外网受限时画面可能不全，
+                # 由调用方接受白屏降级。
+                await page.wait_for_timeout(500)
+                thumbnail = await page.screenshot(type="png", full_page=False)
+            except Exception as e:  # noqa: BLE001 playwright screenshot
+                logs.append(f"thumbnail: 截图失败，已降级无封面: {e}")
+                thumbnail = None
+
         await browser.close()
 
-    return PlaytestResult(ok=not errors, errors=errors, console_logs=logs)
+    return PlaytestResult(
+        ok=not errors, errors=errors, console_logs=logs, thumbnail=thumbnail
+    )
 
 
-async def run_playtest(html: str) -> PlaytestResult:
+async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
     """加载 index.html 做可玩性校验，并独立检查 CDN 白名单。
+
+    want_thumb=True 时，在浏览器模式下校验通过分支顺带截封面图（见 _playwright_playtest）；
+    静态模式或截图失败返回 thumbnail=None。
 
     CDN 校验与浏览器/静态检测分离：CSP 收紧后，非白名单 CDN 会被浏览器拦截，
     在此提前抓出并置顶报错，触发 QA 修复，避免产物上线后白屏。
     """
-    result = await _browser_playtest(html)
+    result = await _browser_playtest(html, want_thumb=want_thumb)
     return _with_cdn_check(html, result)
 
 
-async def _browser_playtest(html: str) -> PlaytestResult:
+async def _browser_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
     use_pw = os.environ.get("PLAYTEST_USE_PLAYWRIGHT", "").lower() in ("1", "true", "yes")
     if use_pw:
         try:
@@ -147,7 +169,7 @@ async def _browser_playtest(html: str) -> PlaytestResult:
         path = Path(tmp) / "index.html"
         path.write_text(html, encoding="utf-8")
         try:
-            return await _playwright_playtest(path)
+            return await _playwright_playtest(path, want_thumb=want_thumb)
         except Exception as e:  # noqa: BLE001 playwright runtime
             fallback = _static_playtest(html)
             fallback.errors.insert(0, f"Playwright 失败，已降级静态检测: {e}")

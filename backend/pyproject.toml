@@ -39,6 +39,13 @@ dev = [
     "httpx2>=2.0",
 ]
 
+# 封面截图（QA 通过后用 chromium 截当前版本画面）：仅 worker 需要，不进默认依赖，
+# 避免 API 进程 / 本地联调强依赖 chromium。启用：uv sync --extra playwright
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.45",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

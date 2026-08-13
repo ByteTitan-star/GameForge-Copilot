@@ -17,7 +17,7 @@ from typing import Any, Literal, TypedDict
 
 import redis.asyncio as redis
 from langgraph.graph import END, START, StateGraph
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -33,6 +33,7 @@ from app.forge.design_doc import (
     validate_design_doc,
 )
 from app.forge.events import publish_event
+from app.forge.messages import add_message, design_message_content, stable_design_key
 from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
     CODE_PROMPT,
@@ -52,6 +53,9 @@ from app.sandbox.playtest import run_playtest
 
 PLAN_MAX_ATTEMPTS = 2
 
+# resume 时需要推进凭据 resume_grant 的 HITL 检查点阶段；与 app.api.runs._HITL_PHASES 对齐。
+_HITL_RESUME_PHASES = frozenset({"plan_confirm", "sandbox_failed", "qa_failed"})
+
 log = logging.getLogger(__name__)
 
 
@@ -67,6 +71,32 @@ def _read_html(path: Path) -> str:
         return data.decode("utf-8")
     except UnicodeDecodeError:
         return data.decode("gbk", errors="replace")
+
+
+async def _save_thumbnail(
+    s: AsyncSession, game: Game, version: int, png: bytes
+) -> None:
+    """把 QA 通过时截的封面落盘并写库（GameVersion.thumbnail_path + Game.cover_path）。
+
+    截图是封面增强项：任何异常只 log、不 raise，run 继续进 done（静默降级，卡片回退渐变）。
+    """
+    try:
+        await store.write_bytes(game.id, version, "thumb.png", png)
+        await s.execute(
+            update(GameVersion)
+            .where(GameVersion.game_id == game.id, GameVersion.version == version)
+            .values(thumbnail_path="thumb.png")
+        )
+        # cover_path 冗余在 Game 上，供列表查询零 join 取当前封面；截图发生在 current_version
+        # 刚 inc、即将进 done 的窗口，此时封面就该指向这版。
+        game.cover_path = "thumb.png"
+        await s.commit()
+    except Exception:  # noqa: BLE001 封面为增强项，失败不阻断 run
+        log.warning(
+            "thumbnail save failed, degrading to no cover",
+            extra={"game_id": str(game.id), "version": version},
+            exc_info=True,
+        )
 
 
 def normalize_html(raw: str) -> str:
@@ -209,6 +239,17 @@ async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> Non
         return
     ctx.run.status = RunStatus.FAILED.value
     ctx.run.ended_at = datetime.now(UTC)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="failed",
+        content=f"本轮生成失败：{message}",
+        metadata={"code": code, "phase": ctx.run.phase},
+        dedupe_key=f"{ctx.run.id}:failed:{code}",
+    )
     await ctx.s.commit()
     await publish_event(
         ctx.run.id,
@@ -224,6 +265,17 @@ async def _pause_hitl(
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
     ctx.run.status = RunStatus.PAUSED.value
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="design",
+        content=design_message_content(design_doc),
+        metadata={"node": node, "design_doc": design_doc},
+        dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
+    )
     await ctx.s.commit()
     payload = {
         "node": node,
@@ -616,7 +668,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 console_logs: list[str] = []
             else:
                 html = _read_html(html_path)
-                pt = await run_playtest(html)
+                pt = await run_playtest(html, want_thumb=settings.thumbnail_enabled)
                 result_ok = pt.ok
                 errors = pt.errors
                 console_logs = pt.console_logs
@@ -636,6 +688,11 @@ def _build_graph(ctx: _Ctx) -> Any:
 
             if result_ok:
                 # 自动试玩已给出确定性通过结果，无需再调用 LLM 做无效摘要。
+                # 通过分支顺带把截好的封面落盘（复用刚才浏览器会话截的图）。
+                if pt.thumbnail:
+                    await _save_thumbnail(
+                        ctx.s, ctx.game, ctx.game.current_version, pt.thumbnail
+                    )
                 return {
                     "qa_ok": True,
                     "qa_retry": False,
@@ -729,6 +786,20 @@ def _build_graph(ctx: _Ctx) -> Any:
             ctx.run.status = RunStatus.DONE.value
             ctx.run.phase = RunPhase.DONE.value
             ctx.run.ended_at = datetime.now(UTC)
+            await add_message(
+                ctx.s,
+                game_id=ctx.game.id,
+                run_id=ctx.run.id,
+                user_id=ctx.run.user_id,
+                role="assistant",
+                kind="completed",
+                content=f"游戏已生成完成，版本 v{ctx.game.current_version} 可以试玩。",
+                metadata={
+                    "version": ctx.game.current_version,
+                    "preview_url": f"/draft/{ctx.game.id}/{ctx.game.current_version}",
+                },
+                dedupe_key=f"{ctx.run.id}:completed:{ctx.game.current_version}",
+            )
             await ctx.s.commit()
             await ckpt.clear_state(ctx.r, ctx.run.id, ctx.s)
             await run_ctrl.clear_control(ctx.r, ctx.run.id)
@@ -867,6 +938,17 @@ async def run_generation(
                 if run.ended_at is None:
                     run.status = RunStatus.FAILED.value
                     run.ended_at = datetime.now(UTC)
+                    await add_message(
+                        s,
+                        game_id=run.game_id,
+                        run_id=run.id,
+                        user_id=run.user_id,
+                        role="assistant",
+                        kind="failed",
+                        content=f"本轮生成失败：{e}",
+                        metadata={"code": "RUN_FAILED", "phase": run.phase},
+                        dedupe_key=f"{run.id}:failed:RUN_FAILED",
+                    )
                     await s.commit()
                     await publish_event(
                         run_id,
@@ -892,6 +974,22 @@ async def _run_body(
     entry_requirement: str | None = None
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
+        # 一次性推进凭据：只有 resolve_hitl / resume_run_control / retry_run /
+        # dev_requeue 这些合法入口会写入（见 app.forge.queue.enqueue_resume）。
+        # at-least-once 投递下的陈旧 resume 消息读不到凭据，在 HITL 等待态直接跳过，
+        # 堵住「用户没点确认 art/code 却自己跑起来」。
+        grant = st.pop("resume_grant", None)
+        phase = st.get("phase")
+        if phase in _HITL_RESUME_PHASES and not grant:
+            log.warning(
+                "skip stale resume: hitl phase without grant",
+                extra={"stage": "resume_run", "phase": phase},
+            )
+            return
+        if grant:
+            decision = grant.get("decision") or decision
+            modify_text = grant.get("modify_text")
+        await ckpt.save_state(r, run_id, st, s)
         design_doc = st.get("design_doc") or run.requirement
         run.status = RunStatus.RUNNING.value
         await s.commit()

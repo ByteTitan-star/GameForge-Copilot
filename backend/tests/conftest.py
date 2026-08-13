@@ -55,7 +55,7 @@ def _playtest_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     """默认试玩通过；个别测试单独 mock 失败。"""
     from app.sandbox.playtest import PlaytestResult
 
-    async def _ok(_html: str) -> PlaytestResult:
+    async def _ok(_html: str, **_kwargs: object) -> PlaytestResult:
         return PlaytestResult(ok=True, errors=[], console_logs=["mock playtest ok"])
 
     monkeypatch.setattr("app.forge.graph.run_playtest", _ok)

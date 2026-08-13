@@ -57,6 +57,26 @@ async def test_store_size_limit() -> None:
         await store.write_artifact(gid, 1, big)
 
 
+async def test_write_bytes_roundtrip() -> None:
+    """write_bytes 写旁路产物（thumb.png）→ read_bytes 读回一致；不要求 index.html。"""
+    gid = uuid.uuid4()
+    png = b"\x89PNG\r\n\x1a\n fake thumbnail bytes"
+    await store.write_bytes(gid, 1, "thumb.png", png)
+    assert await store.read_bytes(gid, 1, "thumb.png") == png
+
+
+async def test_write_bytes_rejects_traversal() -> None:
+    """write_bytes 复用 _check_path，禁止 .. 路径穿越。"""
+    gid = uuid.uuid4()
+    with pytest.raises(AppError):
+        await store.write_bytes(gid, 1, "../escape.png", b"x")
+
+
+async def test_read_bytes_missing_returns_none() -> None:
+    gid = uuid.uuid4()
+    assert await store.read_bytes(gid, 1, "thumb.png") is None
+
+
 async def test_draft_owner_200(verified_client: httpx.AsyncClient) -> None:
     gid = await _make_game(verified_client)
     await _make_version(gid, 1)

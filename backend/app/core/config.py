@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     code_max_retries: int = 3  # code/qa 失败重试上限（docs/03）
     qa_max_retries: int = 2  # QA 试玩失败回退 code 重试上限
+    # 封面截图开关：QA 通过后用 Playwright 截当前版本画面当封面。
+    # 实际是否产出还依赖 PLAYTEST_USE_PLAYWRIGHT=1 且 worker 装了 chromium；否则降级无封面。
+    thumbnail_enabled: bool = True
     models_cache_ttl_s: int = 600  # /models 短期缓存（docs/05）
 
     # langfuse（SaaS Cloud，trace 上报）

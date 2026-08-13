@@ -6,9 +6,25 @@ import fakeredis.aioredis
 import httpx
 import pytest
 
+from app.core import db as db_module
 from app.forge import state as ckpt
 from app.forge.graph import run_generation
 from app.forge.runner import execute_run
+
+
+async def _grant_resume(
+    redis_client: fakeredis.aioredis.FakeRedis, run_id: uuid.UUID
+) -> None:
+    """模拟合法入口（resolve_hitl / resume / retry）写入的一次性推进凭据。
+
+    生产路径由 app.forge.queue.enqueue_resume 写入；测试直接调 run_generation
+    绕过该入口，故手动预置，否则 _run_body 会按陈旧消息跳过。
+    """
+    async with db_module.SessionLocal() as s:
+        st = await ckpt.load_state(redis_client, run_id, s) or {}
+        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
+        await ckpt.save_state(redis_client, run_id, granted, s)
+        await s.commit()
 
 
 async def _make_game(client: httpx.AsyncClient) -> uuid.UUID:
@@ -26,7 +42,7 @@ async def test_retry_run_from_qa_failed(
 ) -> None:
     from app.sandbox.playtest import PlaytestResult
 
-    async def _fail(_html: str) -> PlaytestResult:
+    async def _fail(_html: str, **_kwargs: object) -> PlaytestResult:
         return PlaytestResult(ok=False, errors=["mock"], console_logs=[])
 
     monkeypatch.setattr("app.forge.graph.run_playtest", _fail)
@@ -44,6 +60,7 @@ async def test_retry_run_from_qa_failed(
     )
     ctx = {"redis": redis_client}
     await execute_run(ctx, rid)
+    await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
 
     st = await ckpt.load_state(redis_client, rid)

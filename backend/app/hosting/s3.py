@@ -60,3 +60,15 @@ class S3HostingBackend:
                 return None
 
         return await asyncio.to_thread(_get)
+
+    async def write_bytes(
+        self, game_id: uuid.UUID, version: int, rel: str, data: bytes
+    ) -> None:
+        def _upload() -> None:
+            self._client.put_object(
+                Bucket=self._bucket, Key=self._key(game_id, version, rel), Body=data
+            )
+
+        await asyncio.to_thread(_upload)
+        # 本地 cache 同步写一份，供 FileResponse / read_bytes 直出（与 write_artifact 行为一致）
+        await local_store.write_bytes(game_id, version, rel, data)
