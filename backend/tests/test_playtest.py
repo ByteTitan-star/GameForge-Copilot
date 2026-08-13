@@ -60,6 +60,43 @@ async def test_playtest_fails_unbalanced_braces() -> None:
 
 
 @pytest.mark.asyncio
+async def test_playtest_fails_when_screen_state_has_no_matching_dom() -> None:
+    html = """
+    <html><body>
+    <div id="screen-menu"><button>开始</button></div>
+    <div id="screen-game"></div>
+    <script>
+    function setScreen(next) {
+      document.getElementById(`screen-${next}`);
+    }
+    setScreen('playing');
+    </script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert not r.ok
+    assert any("#screen-playing" in e for e in r.errors)
+
+
+@pytest.mark.asyncio
+async def test_playtest_accepts_matching_screen_state_dom() -> None:
+    html = """
+    <html><body>
+    <div id="screen-menu"><button>开始</button></div>
+    <div id="screen-playing"></div>
+    <script>
+    function setScreen(next) {
+      document.getElementById(`screen-${next}`);
+    }
+    setScreen('playing');
+    </script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert r.ok, r.errors
+
+
+@pytest.mark.asyncio
 async def test_static_mode_never_returns_thumbnail(monkeypatch: pytest.MonkeyPatch) -> None:
     """默认无 PLAYTEST_USE_PLAYWRIGHT → 静态模式，want_thumb 也无法截图，thumbnail 恒 None。
 

@@ -36,7 +36,7 @@ describe('forge resume helpers', () => {
     const run: RunDetail = {
       run_id: 'r1',
       game_id: 'g1',
-      status: 'running',
+      status: 'paused',
       phase: 'plan',
       entry_phase: 'plan',
       ws_url: '/ws/runs/r1',
@@ -51,6 +51,24 @@ describe('forge resume helpers', () => {
         : ''
     expect(docTitle || hitl?.node).toContain('霓虹蛇')
     expect(hitl?.action_url).toContain('/hitl/resolve')
+  })
+
+  it('running 态即使带有残留 HITL 也不生成可点击卡片', () => {
+    const run = {
+      run_id: 'r-stale',
+      game_id: 'g1',
+      status: 'running',
+      phase: 'art',
+      entry_phase: 'plan',
+      ws_url: '/ws/runs/r-stale',
+      current_hitl: { node: 'plan_confirm' },
+      hitl_wait: {
+        node: 'plan_confirm',
+        design_doc: { title: '旧策划', gameplay: 'g', controls: 'c', levels: [] },
+        action_url: '/hitl/resolve',
+      },
+    } as RunDetail
+    expect(buildResumeHitl(run, '霓虹蛇')).toBeNull()
   })
 
   it('failed 终态即使残留 current_hitl 也不浮出 HITL 卡', () => {

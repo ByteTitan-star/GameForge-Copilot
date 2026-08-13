@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { fetchDraftHtml } from "@/lib/hosting";
 import { useT } from "@/i18n/use-t";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,15 +28,18 @@ export function GamePlayer({
 }: Props) {
   const console = variant === "console";
   const stage = variant === "stage";
-  const [iframeSrc, setIframeSrc] = useState(src);
+  const needsInitialAuthFetch = isDraftUrl(src) && Boolean(accessToken);
+  const [iframeSrc, setIframeSrc] = useState(() =>
+    needsInitialAuthFetch ? "" : src,
+  );
+  const [iframeHtml, setIframeHtml] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // 初始即显示 iframe：跨域/sandbox 下 onLoad 可能不触发，避免 loading 覆盖层永久挡住内容
-  const [loading, setLoading] = useState(false);
+  // 公开地址可直接挂载；受保护草稿必须等 Bearer fetch 转成 blob 后再挂载。
+  const [loading, setLoading] = useState(needsInitialAuthFetch);
   const [retryVersion, setRetryVersion] = useState(0);
   const t = useT();
 
   useEffect(() => {
-    let revoked: string | null = null;
     let cancelled = false;
     // 兜底：跨域 iframe 的 onLoad 在外部 CDN（字体等）慢时可能迟迟不触发，
     // 8s 后强制关 loading，避免一直转圈把用户挡在外面。
@@ -47,23 +51,30 @@ export function GamePlayer({
       setError(null);
       const needsAuthFetch = isDraftUrl(src) && Boolean(accessToken);
       if (!needsAuthFetch) {
+        setIframeHtml("");
         setIframeSrc(src);
+        setLoading(false);
         return;
       }
+      // 不能先把受保护的 draft URL 交给 iframe；iframe 无法附带 Bearer，
+      // 会制造一次必然 401 的请求。先鉴权 fetch，完成后只挂载 blob URL。
+      setIframeSrc("");
+      setIframeHtml("");
+      setLoading(true);
       try {
-        const res = await fetch(src, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "text/html",
-          },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const html = await res.text();
-        const blobUrl = URL.createObjectURL(
-          new Blob([html], { type: "text/html" }),
+        const match = src.match(/\/draft\/([^/]+)\/([^/?#]+)/);
+        if (!match) throw new Error("草稿地址无效");
+        const html = await fetchDraftHtml(
+          decodeURIComponent(match[1]),
+          decodeURIComponent(match[2]),
+          accessToken!,
         );
-        revoked = blobUrl;
-        if (!cancelled) setIframeSrc(blobUrl);
+        if (!cancelled) {
+          setIframeHtml(html);
+          // srcDoc 不依赖 Blob URL 生命周期，避免 HMR/effect cleanup 撤销正在
+          // 加载的文档。sandbox 仍不含 allow-same-origin，隔离级别不变。
+          setLoading(false);
+        }
       } catch (e) {
         if (!cancelled) {
           setLoading(false);
@@ -76,9 +87,8 @@ export function GamePlayer({
     return () => {
       cancelled = true;
       window.clearTimeout(fallbackTimer);
-      if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [src, accessToken, retryVersion, t]);
+  }, [src, accessToken, retryVersion]);
 
   return (
     <div
@@ -145,22 +155,25 @@ export function GamePlayer({
               </div>
             </div>
           ) : null}
-          <iframe
-            title={title}
-            src={iframeSrc}
-            sandbox="allow-scripts"
-            loading="eager"
-            referrerPolicy="no-referrer"
-            onLoad={() => setLoading(false)}
-            className={cn(
-              "w-full bg-white",
-              stage
-                ? "h-full min-h-0"
-                : console
-                  ? "h-[calc(100%-2.25rem)] min-h-[280px]"
-                  : "h-[70vh]",
-            )}
-          />
+          {iframeSrc || iframeHtml ? (
+            <iframe
+              title={title}
+              src={iframeSrc || undefined}
+              srcDoc={iframeHtml || undefined}
+              sandbox="allow-scripts"
+              loading="eager"
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoading(false)}
+              className={cn(
+                "w-full bg-white",
+                stage
+                  ? "h-full min-h-0"
+                  : console
+                    ? "h-[calc(100%-2.25rem)] min-h-[280px]"
+                    : "h-[70vh]",
+              )}
+            />
+          ) : null}
         </>
       )}
     </div>

@@ -44,9 +44,14 @@ class Settings(BaseSettings):
     hosting_backend: str = "local"  # local | s3
     artifact_max_size_mb: int = 50
     s3_endpoint: str = ""
+    s3_region: str = ""
     s3_bucket: str = ""
     s3_ak: str = ""
     s3_sk: str = ""
+    s3_prefix: str = ""
+    s3_addressing_style: str = "path"
+    s3_connect_timeout: int = 10
+    s3_read_timeout: int = 60
 
     # 沙箱（local=子进程联调；docker=生产隔离，docs/09）
     sandbox_backend: str = "local"

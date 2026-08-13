@@ -29,7 +29,7 @@ type Props = {
 }
 
 const HEIGHT_KEY = 'gf-forge-log-height'
-const DEFAULT_HEIGHT = 260
+const DEFAULT_HEIGHT = 240
 const MIN_HEIGHT = 120
 /** 占视口高度的上限，避免日志长期挤占主工作区 */
 const MAX_HEIGHT_RATIO = 0.45
@@ -51,7 +51,7 @@ function readStoredHeight(): number {
 /**
  * 底部横跨的「执行日志带」：标题栏常驻（折叠时仅 44px，显示最新事件与错误数），
  * 展开后顶部可垂直拖拽调整高度（120px ~ 45vh，持久化）。失败恢复条固定可见；
- * 4 阶段进度（sticky 置顶）与事件流共享同一滚动容器，内容再多也能向下滚动到底。
+ * 紧凑阶段条（sticky 置顶）与事件流共享同一滚动容器，内容再多也能向下滚动到底。
  */
 export function ForgeLogDock({
   open,
@@ -172,7 +172,7 @@ export function ForgeLogDock({
           <div className="gf-forge-log-dock-scroll">
             {showPipeline ? (
               <div className="gf-forge-log-dock-sticky">
-                <StagePipeline runPhase={runPhase} stages={stages} columns={4} />
+                <StagePipeline runPhase={runPhase} stages={stages} variant="bar" />
               </div>
             ) : null}
             <RunTimeline
