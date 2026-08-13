@@ -6,7 +6,12 @@
 
 ---
 
+- ADDED: `GET /games/{game_id}/messages` — 按游戏读取持久化的 Forge 用户可见对话历史，支持 `limit` / `before` 游标分页。
+
 - ADDED: `GET /games/{game_id}/versions/{version}/download` — 仅游戏所有者可下载指定版本的独立 HTML 附件；版本、产物缺失或非所有者均返回 404，前端以 Bearer 请求后保存 Blob。
+
+- ADDED: `GET /play/{slug}/thumb.png` — 已发布游戏的生成时截图封面（公开，不触发 PV 统计）。
+- MODIFIED: `GameListItem` 增 `cover_url`（仅 published 指向 `/play/{slug}/thumb.png`；草稿不拼——`<img>` 带不了 Bearer 会 401，回退渐变即可）；`VersionItem` 增 `thumbnail_path`；`PublicGameMeta.cover_url` 由硬编码 None 改为按 `cover_path` 填充。
 
 ## 未发布（working copy）
 

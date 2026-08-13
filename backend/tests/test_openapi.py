@@ -35,6 +35,7 @@ REQUIRED_PATHS = {
     "/api/v1/games/{game_id}",
     "/api/v1/games/{game_id}/versions",
     "/api/v1/games/{game_id}/runs",
+    "/api/v1/games/{game_id}/messages",
     "/api/v1/games/{game_id}/runs/{run_id}/hitl/resolve",
     "/api/v1/games/{game_id}/publish/submit",
     "/api/v1/games/{game_id}/take-down",

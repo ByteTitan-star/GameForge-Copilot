@@ -876,6 +876,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/{game_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Forge Messages */
+        get: operations["get_forge_messages_api_v1_games__game_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/runs/active": {
         parameters: {
             query?: never;
@@ -1429,6 +1446,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/play/{slug}/thumb.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play Thumb
+         * @description 已发布游戏封面截图，公开。不触发 PV 统计。
+         */
+        get: operations["play_thumb_play__slug__thumb_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1806,6 +1843,11 @@ export interface components {
             /** Data */
             data: components["schemas"]["ActiveRunItem"][];
         };
+        /** ApiResponse[list[ForgeMessageItem]] */
+        ApiResponse_list_ForgeMessageItem__: {
+            /** Data */
+            data: components["schemas"]["ForgeMessageItem"][];
+        };
         /** ApiResponse[list[LLMConfigResp]] */
         ApiResponse_list_LLMConfigResp__: {
             /** Data */
@@ -1982,6 +2024,39 @@ export interface components {
              */
             favorited_at: string;
         };
+        /** ForgeMessageItem */
+        ForgeMessageItem: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /**
+             * Game Id
+             * Format: uuid
+             */
+            game_id: string;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant" | "system";
+            /** Kind */
+            kind: string;
+            /** Content */
+            content: string;
+            /** Metadata */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** GameAnalyticsResp */
         GameAnalyticsResp: {
             /**
@@ -2086,6 +2161,8 @@ export interface components {
             current_version: number;
             /** Slug */
             slug?: string | null;
+            /** Cover Url */
+            cover_url?: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -3014,6 +3091,8 @@ export interface components {
             version: number;
             /** Artifact Path */
             artifact_path: string;
+            /** Thumbnail Path */
+            thumbnail_path?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5177,6 +5256,49 @@ export interface operations {
             };
         };
     };
+    get_forge_messages_api_v1_games__game_id__messages_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_list_ForgeMessageItem__"];
+                };
+            };
+            /** @description run 或游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_active_runs_api_v1_me_runs_active_get: {
         parameters: {
             query?: never;
@@ -6446,6 +6568,37 @@ export interface operations {
             path: {
                 game_id: string;
                 version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    play_thumb_play__slug__thumb_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
             };
             cookie?: never;
         };
