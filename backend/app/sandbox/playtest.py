@@ -55,6 +55,25 @@ def _extract_scripts(html: str) -> list[str]:
     return re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.I | re.S)
 
 
+def _screen_target_errors(html: str, scripts: list[str]) -> list[str]:
+    """Detect the generated-game convention where state targets have no matching screen DOM."""
+    source = "\n".join(scripts)
+    if not re.search(r"screen-\$\{[^}]+\}", source):
+        return []
+
+    screen_ids = set(re.findall(r'id=["\']screen-([^"\']+)["\']', html, flags=re.I))
+    targets = set(
+        re.findall(r"\bsetScreen\(\s*[\"']([^\"']+)[\"']\s*\)", source)
+    )
+    missing = sorted(targets - screen_ids)
+    if not missing:
+        return []
+    return [
+        "状态切换目标缺少对应 DOM："
+        + ", ".join(f"setScreen('{state}') -> #screen-{state}" for state in missing)
+    ]
+
+
 def _static_playtest(html: str) -> PlaytestResult:
     """Fast checks without a browser: structure + basic script sanity."""
     errors: list[str] = []
@@ -71,6 +90,7 @@ def _static_playtest(html: str) -> PlaytestResult:
         errors.append("缺少 canvas 或可交互元素（button/input/onclick）")
 
     scripts = _extract_scripts(html)
+    errors.extend(_screen_target_errors(html, scripts))
     for i, block in enumerate(scripts, start=1):
         src = block.strip()
         if not src:

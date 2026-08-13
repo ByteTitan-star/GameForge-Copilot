@@ -23,6 +23,7 @@ dependencies = [
     "prometheus-client>=0.26.0",
     "aiodocker>=0.27.0",
     "aio-pika>=10.0.1",
+    "boto3>=1.35",
     # zoneinfo 在 Windows 上无系统时区库，需 tzdata 提供 IANA 时区（如 Asia/Shanghai）
     "tzdata>=2024.1",
 ]

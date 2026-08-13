@@ -146,7 +146,9 @@ _HITL_PHASES = {"plan_confirm", "sandbox_failed", "qa_failed"}
 def _hitl_from_state(
     run: GenerationRun, state: dict | None
 ) -> tuple[HitlState | None, HitlWaitDetail | None]:
-    if not state:
+    # checkpoint 只描述“曾停在哪里”；run.status=paused 才表示当前仍可交互。
+    # 任务已推进/结束时即使缓存残留，也不能向前端暴露可点击的 HITL 卡。
+    if not state or run.status != RunStatus.PAUSED.value:
         return None, None
     phase = state.get("phase")
     if phase not in _HITL_PHASES:
@@ -292,17 +294,22 @@ async def resolve_hitl(
     r: RedisClient,
 ) -> ApiResponse[HitlResolveResp]:
     """解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。"""
-    _ = game_id
     run = await services.get_run(db, user, run_id)
+    if run.game_id != game_id:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏或 run 不存在")
     # TTL 收窄到 60s：仅用于拦截同一次 HITL 的并发双击；同一 run 后续 HITL 阶段
     # （如 plan_confirm→qa_failed）不会被遗留锁误阻塞。执行层的重复由 run:executing 兜底。
     if not await r.set(f"run:hitl:{run_id}", "1", nx=True, ex=60):
         raise AppError(ErrorCode.INVALID_STATE, "run 正在处理或已处理")
     state = await ckpt.load_state(r, run_id, db)
-    if state is None or state.get("phase") not in _HITL_PHASES:
+    if (
+        state is None
+        or state.get("phase") not in _HITL_PHASES
+        or state.get("phase") != req.node
+    ):
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 不在 HITL 等待态")
-    if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
+    if run.status != RunStatus.PAUSED.value:
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
     run.status = RunStatus.RUNNING.value

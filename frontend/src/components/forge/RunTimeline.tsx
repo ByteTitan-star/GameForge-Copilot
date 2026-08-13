@@ -76,8 +76,10 @@ export function RunTimeline({
   return (
     <section
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white",
-        scrollable ? "h-full min-h-0" : "h-auto",
+        "flex flex-col rounded-xl border border-black/[0.08] bg-white",
+        scrollable
+          ? "h-full min-h-0 overflow-hidden"
+          : "h-auto shrink-0 overflow-visible",
         className,
       )}
     >
@@ -117,7 +119,14 @@ export function RunTimeline({
         </header>
       ) : null}
 
-      <div className={cn("flex-1 px-3 py-3", scrollable ? "overflow-y-auto" : "overflow-visible")}>
+      <div
+        className={cn(
+          "px-3 py-2",
+          scrollable
+            ? "min-h-0 flex-1 overflow-y-auto"
+            : "flex-none overflow-visible",
+        )}
+      >
         {items.length === 0 ? (
           <p className="px-1 py-8 text-center text-sm text-[#9099a1]">
             {t("timelineEmpty")}

@@ -33,6 +33,19 @@ def _cache_control(prod: str) -> str:
     return "no-store" if settings.env == "development" else prod
 
 
+async def _html_response(
+    game_id: uuid.UUID, version: int, headers: dict[str, str]
+) -> Response:
+    """本地文件优先；无本地缓存时从对象存储读取。"""
+    path = store.index_path(game_id, version)
+    if path is not None:
+        return FileResponse(path, headers=headers)
+    data = await store.read_bytes(game_id, version, "index.html")
+    if data is None:
+        raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
+    return Response(content=data, media_type="text/html; charset=utf-8", headers=headers)
+
+
 @router.get("/play/{slug}")
 async def play(
     slug: str,
@@ -40,25 +53,23 @@ async def play(
     background: BackgroundTasks,
     db: DbSession,
     r: RedisClient,
-) -> FileResponse:
+) -> Response:
     """已发布游戏入口，公开。非 published 一律 404。"""
     game = await db.scalar(
         select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
     )
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或未发布")
-    path = store.index_path(game.id, game.current_version)
-    if path is None:
-        raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
     visitor = request.headers.get("x-forwarded-for") or (
         request.client.host if request.client else "anon"
     )
     background.add_task(
         analytics_store.record_play, r, db, slug=slug, game_id=game.id, visitor_id=visitor
     )
-    return FileResponse(
-        path,
-        headers={
+    return await _html_response(
+        game.id,
+        game.current_version,
+        {
             "Content-Security-Policy": _CSP,
             "Cache-Control": _cache_control("public, max-age=31536000, immutable"),
         },
@@ -66,7 +77,7 @@ async def play(
 
 
 @router.get("/draft/{game_id}/{version}")
-async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSession) -> FileResponse:
+async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSession) -> Response:
     """草稿试玩，仅 owner。非 owner/不存在 → 404 不泄露。"""
     game = await db.scalar(
         select(Game).where(Game.id == game_id, Game.owner_id == user.id)
@@ -80,12 +91,10 @@ async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSessi
     )
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
-    path = store.index_path(game_id, version)
-    if path is None:
-        raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
-    return FileResponse(
-        path,
-        headers={
+    return await _html_response(
+        game_id,
+        version,
+        {
             "Content-Security-Policy": _CSP,
             "Cache-Control": _cache_control("private, max-age=60"),
         },

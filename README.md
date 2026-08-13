@@ -160,6 +160,11 @@ cp frontend/.env.example frontend/.env
 | 变量 | 说明 |
 |---|---|
 | `HOSTING_ROOT` | 游戏产物目录，默认 `.hosting`（相对 `backend/`） |
+| `HOSTING_BACKEND` | `local`（默认）或 `s3`；启用 `s3` 后生成产物会上传对象存储 |
+| `S3_ENDPOINT` / `S3_REGION` | OSS Endpoint（如 `https://oss-cn-hangzhou.aliyuncs.com`）与地域（如 `cn-hangzhou`） |
+| `S3_BUCKET` | 阿里云 OSS Bucket 名称（必须填写） |
+| `S3_AK` / `S3_SK` | 后端专用 RAM 子账号密钥；只放在 `backend/.env` 或部署平台密钥管理中 |
+| `S3_PREFIX` | 可选对象前缀，默认 `gameforge` |
 | `SANDBOX_BACKEND` | 联调 `local`（子进程）；Docker 整栈为 `docker` |
 | `ENV` / `LOG_LEVEL` | 开发 `development` + `INFO` |
 
@@ -394,6 +399,27 @@ docker compose --profile build-sandbox build sandbox
 | RabbitMQ AMQP | `localhost:5672` |
 | RabbitMQ 管理台 | http://127.0.0.1:15672 |
 | 本地产物目录 | `backend/.hosting/`（`HOSTING_ROOT`） |
+
+### 生成产物在哪里查看？
+
+生成完成后，Forge 页面会显示“试玩”入口：草稿使用需要登录且仅限拥有者访问的 `/draft/{game_id}/{version}`；发布后使用公开的 `/play/{slug}`。本地托管时文件位于 `backend/.hosting/{game_id}/{version}/index.html`。启用 OSS 后，文件会按 `S3_PREFIX/{game_id}/{version}/...` 上传，应用仍通过后端鉴权路由提供草稿试玩，不会把私有 Bucket 直接暴露给浏览器。
+
+### 阿里云 OSS 配置
+
+不要把 AccessKey 写入代码、README、`.env.example` 或 Git。你在聊天中粘贴的密钥已经暴露，请立即在阿里云控制台禁用/删除并轮换新密钥，建议使用只授权目标 Bucket 的 RAM 子账号。然后在本机 `backend/.env` 填写：
+
+```dotenv
+HOSTING_BACKEND=s3
+S3_ENDPOINT=https://oss-cn-<region>.aliyuncs.com
+S3_REGION=<region>
+S3_BUCKET=<bucket-name>
+S3_AK=<ram-access-key-id>
+S3_SK=<ram-access-key-secret>
+S3_PREFIX=gameforge
+S3_ADDRESSING_STYLE=path
+```
+
+至少需要 Bucket、Endpoint、Region 和密钥四项；缺失时后端会拒绝启用 S3。首次切换前请先确认 RAM 账号拥有目标 Bucket 的对象读写权限。
 
 ---
 

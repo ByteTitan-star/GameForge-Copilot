@@ -192,8 +192,8 @@ async def test_qa_playtest_failure_retries_then_fails(
     """QA 试玩失败 → 自动回退 code 修复；预算耗尽后直接 FAILED（不再进 HITL）。
 
     新版流程在策划确认后不再为 sandbox/qa 失败插入人工确认点：重试耗尽即终态
-    失败，但 checkpoint 仍写 qa_failed，便于 /retry 重投。failed run 经
-    _hitl_from_state 仍可见 current_hitl，但 resolve_hitl 会以 409 拒绝。
+    失败，但 checkpoint 仍写 qa_failed，便于 /retry 重投。failed run 不再暴露
+    可点击的 current_hitl。
     """
     from app.sandbox.playtest import PlaytestResult
 
@@ -217,7 +217,7 @@ async def test_qa_playtest_failure_retries_then_fails(
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     assert r.json()["data"]["status"] == "failed"
-    assert r.json()["data"]["current_hitl"]["node"] == "qa_failed"
+    assert r.json()["data"]["current_hitl"] is None
     assert calls["n"] >= 1
 
 

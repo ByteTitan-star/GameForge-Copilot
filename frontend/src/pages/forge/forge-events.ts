@@ -20,6 +20,7 @@ export type ForgeEventHandlers = {
   setBusy: (v: boolean) => void
   setRunStatus?: (status: RunStatus) => void
   setPreviewUrl: (url: string | null) => void
+  setPreviewVersion?: (version: number | null) => void
   setSideTab: (t: 'log' | 'play') => void
   appendMessages: (msgs: ChatMsg[], kind?: 'design' | 'completed') => void
   setQuotaHint?: (text: string | null) => void
@@ -62,7 +63,12 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
   switch (ev.type) {
     case WSEventType.phase_start: {
       const phase = p.phase as RunPhase
+      // phase_start 表示后端已经离开人工确认检查点。WS 重放时也必须清除先前
+      // replay 出来的 hitl_wait，否则任务完成后页面仍会保留一张点击必 409 的旧卡。
+      h.setHitl(null)
       h.setPhase(phase)
+      h.setBusy(true)
+      h.setRunStatus?.(RunStatus.running)
       const humanLabel = typeof p.human_label === 'string' ? p.human_label : undefined
       const etaSeconds = typeof p.eta_seconds === 'number' ? p.eta_seconds : undefined
       h.setStagePipeline?.((prev) => applyPhaseStart(prev, phase, humanLabel, etaSeconds))
@@ -130,6 +136,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     case WSEventType.build_done: {
       const url = previewFromPayload(p, h.gameId, p.version)
       if (url) h.setPreviewUrl(url)
+      if (typeof p.version === 'number') h.setPreviewVersion?.(p.version)
       h.pushItem({
         label: `${h.t('buildComplete')} · v${String(p.version)}`,
         tone: 'ok',
@@ -167,6 +174,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       applyDone(ev, h)
       return
     case WSEventType.error:
+      h.setHitl(null)
       h.setBusy(false)
       h.setRunStatus?.(RunStatus.failed)
       h.setPhase('idle')
@@ -187,6 +195,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
 
 function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
+  h.setHitl(null)
   h.setPhase(RunPhase.done)
   h.setBusy(false)
   h.setRunStatus?.(RunStatus.done)
@@ -197,6 +206,7 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const gid = String(p.game_id ?? h.gameId ?? '')
   const url = previewFromPayload(p, gid || h.gameId, ver)
   if (url) h.setPreviewUrl(url)
+  h.setPreviewVersion?.(ver)
   // 四阶段全部跑完，触发「自动打开试玩区」；是否真正打开由调用方按用户手动操作记录决定。
   h.onStageAutoOpen?.()
   h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts })
