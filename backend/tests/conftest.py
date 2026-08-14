@@ -175,33 +175,96 @@ def _valid_design_doc_json() -> str:
     )
 
 
+def _valid_art_options_json() -> str:
+    return json.dumps(
+        {
+            "options": [
+                {
+                    "id": "A",
+                    "name": "清透霓虹",
+                    "summary": "Canvas 几何实体配合青色轨迹、命中粒子和高对比 HUD。",
+                    "recommended": True,
+                },
+                {
+                    "id": "B",
+                    "name": "纸雕街机",
+                    "summary": "CSS 层叠纸片、硬边阴影与逐帧形变构成轻量手作视觉。",
+                    "recommended": False,
+                },
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+
+def _valid_art_detail_json() -> str:
+    return json.dumps(
+        {
+            "selected_option": "A",
+            "name": "清透霓虹",
+            "visual_concept": "用高对比几何轮廓和短促粒子强化移动、得分与碰撞反馈。",
+            "implementation_principles": ["全部视觉由 Canvas 与 CSS 程序化绘制"],
+            "palette": {"background": ["#07181c"], "accent": ["#25e6cf"]},
+            "typography": {"display": "system-ui 700", "body": "system-ui 400"},
+            "screens": [{"state": "playing", "layout": "HUD 顶置，游戏区居中"}],
+            "hud": ["分数与关卡始终位于安全区"],
+            "entities": [{"id": "player", "rendering": "Canvas 圆角几何体"}],
+            "effects": ["得分时产生最多 16 个青色粒子"],
+            "responsive": ["触屏时底部保留 72px 操作区"],
+            "accessibility": ["状态变化同时使用形状和文本"],
+            "performance": ["粒子对象池上限 48"],
+            "avoid": ["不使用外部图片"],
+            "acceptance_criteria": ["菜单、游玩和结算状态视觉可明确区分"],
+        },
+        ensure_ascii=False,
+    )
+
+
 @pytest.fixture
 def _fake_llm(monkeypatch: pytest.MonkeyPatch):
-    """mock call_llm：plan/revise 返合法 v2 设计稿 JSON，code/repair 返 HTML。
+    """mock call_llm + call_llm_stream：plan/revise 返合法 v2 设计稿 JSON，code/repair 返 HTML。
 
     新版 plan 节点会用 validate_design_doc 真实校验策划稿，最小四字段 JSON 会被
     拒绝并重试耗尽后抛错，因此这里必须返回结构完整的 v2 设计稿。QA 失败诊断在
     新版改走 HTML5 工程师视角的 QA_PROMPT，命中下方 HTML5 分支返回 HTML 字符串，
     诊断结果仅作为字符串透传给修复节点，不做解析。
+
+    call_llm_stream 是流式门面，把 _fake 的完整内容切成 10 字一块 yield，末帧带 usage。
     """
     from app.enums import LLMProvider
-    from app.llm.provider import Usage
+    from app.llm.provider import StreamChunk, Usage
 
-    async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
-        if "JSON" in system or "策划" in system:
-            return _valid_design_doc_json(), Usage(10, 5), LLMProvider.ANTHROPIC
-        if "HTML5" in system:
+    def _decide(system: str):
+        """按 system prompt 决定返回内容 + usage。流式/非流式共用。"""
+        if "方向提案" in system or "上一轮两个视觉方向" in system:
+            return _valid_art_options_json(), Usage(10, 5)
+        if "前端动效负责人" in system:
+            return _valid_art_detail_json(), Usage(20, 10)
+        if "只生成一个自包含的 index.html" in system or "故障修复工程师" in system:
             return (
                 "<html><body><canvas id='c'></canvas>"
                 "<button>play</button><script></script></body></html>",
                 Usage(20, 10),
-                LLMProvider.ANTHROPIC,
             )
-        return "stub design doc", Usage(10, 5), LLMProvider.ANTHROPIC
+        if "JSON" in system or "策划" in system:
+            return _valid_design_doc_json(), Usage(10, 5)
+        return "stub design doc", Usage(10, 5)
+
+    async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
+        content, usage = _decide(system)
+        return content, usage, LLMProvider.ANTHROPIC
+
+    async def _fake_stream(db, r, user_id, config_id, system, user_msg, **kwargs):
+        content, usage = _decide(system)
+        # 切成 10 字一块逐块 yield，末帧带 usage（对齐 provider.complete_stream 协议）
+        for i in range(0, max(len(content), 1), 10):
+            yield StreamChunk(delta=content[i : i + 10], usage=None)
+        yield StreamChunk(delta="", usage=usage)
 
     from app.llm import client as llm_client
 
     monkeypatch.setattr(llm_client, "call_llm", _fake)
+    monkeypatch.setattr(llm_client, "call_llm_stream", _fake_stream)
     return _fake
 
 
