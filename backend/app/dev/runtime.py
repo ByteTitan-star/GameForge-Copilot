@@ -50,7 +50,9 @@ _ALL_EPHEMERAL: tuple[RedisScope, ...] = (
     "models_cache",
 )
 
-_HITL_PHASES = frozenset({"plan_confirm", "sandbox_failed", "qa_failed", "user_pause"})
+_HITL_PHASES = frozenset(
+    {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed", "user_pause"}
+)
 _RETRY_PHASES = frozenset({"sandbox_failed", "qa_failed"})
 
 

@@ -2962,6 +2962,73 @@
         }
       }
     },
+    "/api/v1/me/feedback": {
+      "post": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Submit Feedback",
+        "description": "代发一封反馈邮件给管理员；run 必须属于当前用户。",
+        "operationId": "submit_feedback_api_v1_me_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_FeedbackResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "run 不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/games/{game_id}/runs": {
       "post": {
         "tags": [
@@ -3616,7 +3683,7 @@
           "runs"
         ],
         "summary": "Resolve Hitl",
-        "description": "解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。",
+        "description": "解决策划或美术 HITL，并把一次性恢复凭据写入队列。",
         "operationId": "resolve_hitl_api_v1_games__game_id__runs__run_id__hitl_resolve_post",
         "security": [
           {
@@ -5704,6 +5771,18 @@
         ],
         "title": "ApiResponse[DevResetResp]"
       },
+      "ApiResponse_FeedbackResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FeedbackResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[FeedbackResp]"
+      },
       "ApiResponse_GameAnalyticsResp_": {
         "properties": {
           "data": {
@@ -6760,6 +6839,45 @@
         ],
         "title": "FavoriteGameItem"
       },
+      "FeedbackReq": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Run Id"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Message",
+            "default": ""
+          },
+          "error_summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Error Summary",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "FeedbackReq",
+        "description": "用户在 forge 失败时通过「联系管理员」提交的反馈。\n\nmessage 可空（纯错误上报）；error_summary 为前端运行时错误摘要，仅作邮件上下文。"
+      },
+      "FeedbackResp": {
+        "properties": {
+          "submitted": {
+            "type": "boolean",
+            "title": "Submitted",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "FeedbackResp"
+      },
       "ForgeMessageItem": {
         "properties": {
           "message_id": {
@@ -7254,7 +7372,8 @@
           "modify_text": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2000
               },
               {
                 "type": "null"
@@ -7336,6 +7455,18 @@
               }
             ],
             "title": "Action Url"
+          },
+          "art_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Art Options"
           }
         },
         "type": "object",
@@ -8722,6 +8853,7 @@
         "properties": {
           "requirement": {
             "type": "string",
+            "maxLength": 2000,
             "title": "Requirement"
           },
           "llm_config_id": {
@@ -9372,12 +9504,14 @@
         "enum": [
           "phase_start",
           "llm_call",
+          "llm_delta",
           "tool_call",
           "build_done",
           "qa_report",
           "hitl_wait",
           "usage",
           "done",
+          "attacked",
           "error"
         ],
         "title": "WSEventType"

@@ -16,7 +16,10 @@ RUN_BODY = {"requirement": "加入加速道具"}
 
 
 async def _grant_resume(
-    redis_client: fakeredis.aioredis.FakeRedis, run_id: uuid.UUID
+    redis_client: fakeredis.aioredis.FakeRedis,
+    run_id: uuid.UUID,
+    decision: str = "approve",
+    modify_text: str | None = None,
 ) -> None:
     """模拟合法入口（resolve_hitl / resume / retry）写入的一次性推进凭据。
 
@@ -25,7 +28,10 @@ async def _grant_resume(
     """
     async with db_module.SessionLocal() as s:
         st = await ckpt.load_state(redis_client, run_id, s) or {}
-        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
+        granted = {
+            **st,
+            "resume_grant": {"decision": decision, "modify_text": modify_text},
+        }
         await ckpt.save_state(redis_client, run_id, granted, s)
         await s.commit()
 
@@ -87,7 +93,7 @@ async def test_full_generation_with_hitl(
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
 ) -> None:
-    """execute_run→plan→HITL 中断；resume→art/code/qa→done + version + /draft 200。"""
+    """策划确认→美术方向确认→详细美术稿→code/qa→done。"""
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
 
@@ -100,9 +106,22 @@ async def test_full_generation_with_hitl(
     assert d["status"] == "paused"
     assert d["current_hitl"] == {"node": "plan_confirm"}
 
-    # resume 继续
+    # 策划确认后严格串行进入美术方向 HITL，不应直接编码。
     await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
+
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    art_wait = r.json()["data"]
+    assert art_wait["status"] == "paused"
+    assert art_wait["current_hitl"] == {"node": "art_confirm"}
+    assert [item["id"] for item in art_wait["hitl_wait"]["art_options"]["options"]] == [
+        "A",
+        "B",
+    ]
+
+    # 只有选定方向后才生成详细美术稿并进入代码阶段。
+    await _grant_resume(redis_client, rid, "select_a")
+    await run_generation(ctx, rid, resume=True, decision="select_a")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     d = r.json()["data"]
@@ -170,6 +189,8 @@ async def test_grant_consumed_after_done_prevents_replay(
     await execute_run(ctx, rid)
     await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
+    await _grant_resume(redis_client, rid, "select_a")
+    await run_generation(ctx, rid, resume=True, decision="select_a")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     assert r.json()["data"]["status"] == "done"
@@ -214,6 +235,8 @@ async def test_qa_playtest_failure_retries_then_fails(
     await execute_run(ctx, rid)
     await _grant_resume(redis_client, rid)
     await run_generation(ctx, rid, resume=True, decision="approve")
+    await _grant_resume(redis_client, rid, "select_a")
+    await run_generation(ctx, rid, resume=True, decision="select_a")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     assert r.json()["data"]["status"] == "failed"
@@ -237,6 +260,63 @@ async def test_hitl_resolve_endpoint(
     )
     assert r.status_code == 200, r.text
     assert r.json()["data"]["phase"] == "art"
+
+
+async def test_art_options_retry_exhaustion_falls_back_and_finishes(
+    verified_client: httpx.AsyncClient,
+    redis_client: fakeredis.aioredis.FakeRedis,
+    _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """美术 Agent 连续失败时使用内置素材，不把可恢复问题升级为 run 失败。"""
+    from app.core.config import settings
+    from app.llm import client as llm_client
+
+    calls = {"art": 0}
+
+    async def fail_art_options(*args, **kwargs):
+        system = args[4]
+        if "方向提案" in system:
+            calls["art"] += 1
+            from app.enums import LLMProvider
+            from app.llm.provider import Usage
+
+            return "not-json", Usage(1, 1), LLMProvider.ANTHROPIC
+        return await _fake_llm(*args, **kwargs)
+
+    async def fail_art_options_stream(*args, **kwargs):
+        # art 节点切流式后走 call_llm_stream；匹配方向提案让连续失败触发重试耗尽兜底。
+        system = args[4]
+        if "方向提案" in system:
+            calls["art"] += 1
+            from app.llm.provider import StreamChunk, Usage
+
+            yield StreamChunk(delta="not-json", usage=None)
+            yield StreamChunk(delta="", usage=Usage(1, 1))
+            return
+        # 非 art 方向提案节点：用原非流式 mock 拿内容，切块 yield，保证 run 正常完成
+        content, _usage, _prov = await _fake_llm(*args, **kwargs)
+        from app.llm.provider import StreamChunk, Usage
+
+        for i in range(0, len(content), 10):
+            yield StreamChunk(delta=content[i : i + 10], usage=None)
+        yield StreamChunk(delta="", usage=Usage(10, 5))
+
+    monkeypatch.setattr(settings, "art_max_retries", 2)
+    monkeypatch.setattr(llm_client, "call_llm", fail_art_options)
+    monkeypatch.setattr(llm_client, "call_llm_stream", fail_art_options_stream)
+    gid = await _make_game(verified_client)
+    rid = await _make_run(verified_client, gid)
+    ctx = {"redis": redis_client}
+    await execute_run(ctx, rid)
+    await _grant_resume(redis_client, rid)
+    await run_generation(ctx, rid, resume=True, decision="approve")
+
+    run = (await verified_client.get(f"/api/v1/runs/{rid}")).json()["data"]
+    assert calls["art"] == 2
+    assert run["status"] == "done"
+    versions = (await verified_client.get(f"/api/v1/games/{gid}/versions")).json()["data"]
+    assert len(versions) == 1
 
 
 async def test_hitl_resolve_wrong_state_409(

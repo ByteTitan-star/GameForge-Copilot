@@ -4,6 +4,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
@@ -18,6 +19,7 @@ from app.core.langfuse import observe_generation
 from app.core.metrics import LLM_CALLS, LLM_TOKENS
 from app.enums import LLMProvider, Role
 from app.llm import crypto, provider
+from app.llm.provider import StreamChunk
 from app.models.llm_config import UserLLMConfig
 from app.models.user import User
 from app.notify import services as notify_services
@@ -175,3 +177,84 @@ async def call_llm(
     await _maybe_system_alert(db, r)
     # 返回 provider，供调用方在事件/日志里如实记录用户配置的 provider，而非硬编码。
     return content, usage, prov
+
+
+async def call_llm_stream(
+    db: AsyncSession,
+    r: redis.Redis,
+    user_id: uuid.UUID,
+    config_id: uuid.UUID | None,
+    system: str,
+    user_msg: str,
+    *,
+    game_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
+) -> AsyncIterator[StreamChunk]:
+    """流式版 call_llm：逐 token yield StreamChunk（末帧带 usage）。
+
+    与 call_llm 对齐：限流在流开始前；record_usage/配额告警在流正常结束后（usage 末尾才确定）。
+    observe_generation 包整个流循环，末尾填 output+usage。CancelledError（审核中断）
+    会进 BaseException 分支标 gen=ERROR 后重新抛出——不吞，保证取消语义不被破坏。
+
+    注意：审核中断（CancelledError）时不记 usage，provider 端已计部分 output token，
+    业务侧按「内容被截断」接受不记账。
+    """
+    _, _, rate = await admin_services.get_effective_limits(db)
+    await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
+
+    cfg = await _get_config(db, user_id, config_id)
+    apikey = crypto.decrypt_apikey(cfg.apikey_enc)
+    prov = LLMProvider(cfg.provider)
+    trace_meta: dict[str, str] = {"user_id": str(user_id)}
+    if game_id is not None:
+        trace_meta["game_id"] = str(game_id)
+    if run_id is not None:
+        trace_meta["run_id"] = str(run_id)
+
+    accumulated: list[str] = []
+    usage_acc = provider.Usage()
+    gen: object = None
+    try:
+        with observe_generation(
+            model=cfg.model,
+            provider=prov.value,
+            system=system,
+            user_msg=user_msg,
+            metadata=trace_meta,
+        ) as gen:
+            async for chunk in provider.complete_stream(
+                prov, apikey, cfg.model, system, user_msg, cfg.base_url
+            ):
+                if chunk.delta:
+                    accumulated.append(chunk.delta)
+                    yield chunk
+                if chunk.usage is not None:
+                    usage_acc = chunk.usage
+            if gen is not None:
+                gen.update(
+                    output="".join(accumulated),
+                    usage_details={
+                        "input": usage_acc.input_tokens,
+                        "output": usage_acc.output_tokens,
+                    },
+                )
+        # 流正常结束才记账（usage 此刻才确定）
+        LLM_CALLS.labels(prov.value, "ok").inc()
+        LLM_TOKENS.labels(prov.value, "input").inc(usage_acc.input_tokens)
+        LLM_TOKENS.labels(prov.value, "output").inc(usage_acc.output_tokens)
+        await record_usage(
+            r,
+            user_id,
+            input_tokens=usage_acc.input_tokens,
+            output_tokens=usage_acc.output_tokens,
+            game_id=game_id,
+            run_id=run_id,
+        )
+        await _maybe_quota_alert(db, r, user_id)
+        await _maybe_system_alert(db, r)
+    except BaseException:
+        # CancelledError（审核中断）与 httpx 异常都走这里；不记账，标 trace 失败。
+        LLM_CALLS.labels(prov.value, "error").inc()
+        if gen is not None:
+            gen.update(level="ERROR", status_message="llm stream aborted")
+        raise

@@ -11,6 +11,7 @@ from app.api import (
     creator,
     dev,
     favorites,
+    feedback,
     games,
     health,
     llm_config,
@@ -104,6 +105,7 @@ app.include_router(templates.router, prefix=API_V1)
 app.include_router(profile.router, prefix=API_V1)
 app.include_router(creator.router, prefix=API_V1)
 app.include_router(favorites.router, prefix=API_V1)
+app.include_router(feedback.router, prefix=API_V1)
 app.include_router(runs.router, prefix=API_V1)
 app.include_router(publish.router, prefix=API_V1)
 app.include_router(usage.router, prefix=API_V1)

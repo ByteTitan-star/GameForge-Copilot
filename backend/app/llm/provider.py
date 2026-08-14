@@ -6,6 +6,7 @@ complete() 返回 (content, usage)，usage 取响应真实字段，不估算（d
 
 import logging
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 import httpx
@@ -39,6 +40,16 @@ _MODEL_WHITELIST: dict[LLMProvider, list[str]] = {
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+
+
+@dataclass
+class StreamChunk:
+    """complete_stream 的单帧：delta 为增量文本（可能为 ""，如纯 usage 帧），
+    usage 仅在流末尾/usage 帧非 None。调用方累加 usage 即得最终用量。
+    """
+
+    delta: str
+    usage: Usage | None = None
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
@@ -204,21 +215,21 @@ async def list_models(
     return list(_MODEL_WHITELIST[provider])
 
 
-async def complete(
+def _build_body(
     provider: LLMProvider,
-    apikey: str,
     model: str,
     system: str,
     user_msg: str,
-    base_url: str | None = None,
+    base_url: str | None,
     *,
-    max_tokens: int | None = None,
-) -> tuple[str, Usage]:
-    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
-    if max_tokens is None:
-        max_tokens = settings.llm_max_tokens
-    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
-    url = _messages_url(provider, base_url)
+    max_tokens: int,
+    stream: bool,
+) -> dict:
+    """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
+
+    Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
+    qwen3 关 thinking 仅对 OpenAI 兼容路径生效（见 _is_qwen_thinking_model 注释）。
+    """
     if _uses_anthropic_native_api(provider, base_url):
         body = {
             "model": model,
@@ -235,6 +246,10 @@ async def complete(
                 {"role": "user", "content": user_msg},
             ],
         }
+        # OpenAI 兼容流式：请求末帧带 usage（标准约定）；部分 compat 实现不支持，
+        # 缺失时由 complete_stream 兜底估算。
+        if stream:
+            body["stream_options"] = {"include_usage": True}
     # qwen3 默认开 thinking 会拉长代码生成、易触发读超时；DashScope 非流式调用也要求
     # enable_thinking=false。命中 qwen3 则按配置关闭（仅 OpenAI 兼容路径）。
     if (
@@ -243,13 +258,40 @@ async def complete(
         and _is_qwen_thinking_model(model)
     ):
         body["enable_thinking"] = False
-    # 读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败
-    timeout = httpx.Timeout(
+    if stream:
+        body["stream"] = True
+    return body
+
+
+def _llm_timeout() -> httpx.Timeout:
+    """读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败。"""
+    return httpx.Timeout(
         connect=settings.llm_connect_timeout,
         read=settings.llm_request_timeout,
         write=settings.llm_connect_timeout,
         pool=settings.llm_connect_timeout,
     )
+
+
+async def complete(
+    provider: LLMProvider,
+    apikey: str,
+    model: str,
+    system: str,
+    user_msg: str,
+    base_url: str | None = None,
+    *,
+    max_tokens: int | None = None,
+) -> tuple[str, Usage]:
+    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
+    if max_tokens is None:
+        max_tokens = settings.llm_max_tokens
+    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
+    url = _messages_url(provider, base_url)
+    body = _build_body(
+        provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=False
+    )
+    timeout = _llm_timeout()
     # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
     started = time.monotonic()
     log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
@@ -300,3 +342,185 @@ async def complete(
             output_tokens=data.get("usage", {}).get("completion_tokens", 0),
         )
     return content or "", usage
+
+
+async def _iter_sse(resp: httpx.Response) -> AsyncIterator[tuple[str | None, str]]:
+    """按 SSE 协议把响应流切成 (event_name, data_json) 事件。
+
+    一个 SSE 事件由若干行组成、以空行分隔；`event:` 行可选，`data:` 行可有多个。
+    返回 (event_name, data) —— event_name 为 None 表示协议未给（OpenAI 仅有 data）。
+    仅提取 data 行（多行按 \n 拼接），`[DONE]` 作为 data 原样返回交给上层判定。
+    """
+    event_name: str | None = None
+    data_lines: list[str] = []
+    async for raw_line in resp.aiter_lines():
+        # aiter_lines 已去换行，但兼容 \r\n 残留的 \r
+        line = raw_line.rstrip("\r")
+        if line == "":
+            if data_lines:
+                yield event_name, "\n".join(data_lines)
+            event_name = None
+            data_lines = []
+            continue
+        if line.startswith(":"):
+            continue  # SSE 注释
+        if line.startswith("event:"):
+            event_name = line[len("event:") :].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:") :].lstrip())
+        # 其余字段（id:/retry: 等）忽略
+    # 流末尾若仍有未 flush 的事件（无结尾空行）补发一次
+    if data_lines:
+        yield event_name, "\n".join(data_lines)
+
+
+def _parse_json(data: str) -> dict:
+    import json
+
+    return json.loads(data)
+
+
+async def _parse_anthropic_stream(
+    resp: httpx.Response,
+) -> AsyncIterator[StreamChunk]:
+    """Anthropic 原生 /messages 流式解析。
+
+    关键事件：
+    - message_start：data.message.usage.input_tokens（input 在此帧）
+    - content_block_delta：delta.text（正文增量）
+    - message_delta：usage.output_tokens（output 在此帧，注意是累计终值）
+    - message_stop：流结束
+    """
+    input_tokens = 0
+    output_tokens = 0
+    async for event_name, data in _iter_sse(resp):
+        if data == "[DONE]":
+            break
+        try:
+            obj = _parse_json(data)
+        except (ValueError, TypeError):
+            continue
+        etype = obj.get("type") or event_name
+        if etype == "message_start":
+            msg_usage = (obj.get("message") or {}).get("usage") or {}
+            input_tokens = msg_usage.get("input_tokens", 0)
+            output_tokens = msg_usage.get("output_tokens", 0)
+        elif etype == "content_block_delta":
+            delta = obj.get("delta") or {}
+            # text_delta 才是正文；thinking_delta/其他丢弃（见 qwen 关 thinking 注释）
+            if delta.get("type") == "text_delta":
+                text = delta.get("text", "")
+                if text:
+                    yield StreamChunk(delta=text)
+        elif etype == "message_delta":
+            usage = obj.get("usage") or {}
+            if "output_tokens" in usage:
+                output_tokens = usage["output_tokens"]
+        elif etype == "message_stop":
+            yield StreamChunk(delta="", usage=Usage(input_tokens, output_tokens))
+            return
+
+
+async def _parse_openai_stream(
+    resp: httpx.Response,
+) -> AsyncIterator[StreamChunk]:
+    """OpenAI 兼容 /chat/completions 流式解析。
+
+    - data.choices[0].delta.content：正文增量（reasoning_content 丢弃）。
+    - usage 单独成帧（choices 为空，需请求带 stream_options.include_usage）。
+    - data: [DONE] 终止。
+
+    若 provider 不返回 usage 帧（部分 compat 实现），上层 complete_stream 会兜底估算。
+    """
+    chunk_count = 0
+    final_usage: Usage | None = None
+    async for _event_name, data in _iter_sse(resp):
+        if data == "[DONE]":
+            break
+        try:
+            obj = _parse_json(data)
+        except (ValueError, TypeError):
+            continue
+        usage = obj.get("usage")
+        if isinstance(usage, dict):
+            # 兼容 OpenAI(prompt/completion_tokens) 与部分实现(input/output_tokens)
+            final_usage = Usage(
+                input_tokens=usage.get("input_tokens") or usage.get("prompt_tokens") or 0,
+                output_tokens=usage.get("output_tokens") or usage.get("completion_tokens") or 0,
+            )
+        choices = obj.get("choices") or []
+        if not choices:
+            continue
+        delta = choices[0].get("delta") or {}
+        # content 才是正文；reasoning_content（思考链）丢弃
+        text = delta.get("content")
+        if text:
+            chunk_count += 1
+            yield StreamChunk(delta=text)
+    if final_usage is not None:
+        yield StreamChunk(delta="", usage=final_usage)
+    elif chunk_count:
+        # 兜底：provider 没给 usage，用 chunk 计数粗估 output，input 记 0。
+        # 与 docs「不估算」原则的已知例外（compat 流式 usage 缺失），上层会 log warning。
+        est = Usage(input_tokens=0, output_tokens=chunk_count)
+        yield StreamChunk(delta="", usage=est)
+        log.warning(
+            "llm stream usage missing, estimated by chunk count",
+            extra={"stage": "http", "chunks": chunk_count},
+        )
+
+
+async def complete_stream(
+    provider: LLMProvider,
+    apikey: str,
+    model: str,
+    system: str,
+    user_msg: str,
+    base_url: str | None = None,
+    *,
+    max_tokens: int | None = None,
+) -> AsyncIterator[StreamChunk]:
+    """流式补全：逐 token yield StreamChunk，末帧带 usage。
+
+    与 complete() 共享请求体构造（_build_body），双协议 SSE 解析各自一套。
+    httpx stream 在 generator 退出（含被 aclose/cancel）时自动 aclose 连接。
+    """
+    if max_tokens is None:
+        max_tokens = settings.llm_max_tokens
+    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
+    url = _messages_url(provider, base_url)
+    body = _build_body(
+        provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=True
+    )
+    timeout = _llm_timeout()
+    started = time.monotonic()
+    log.info("llm stream request", extra={"stage": "http", "model": model, "url": url})
+    try:
+        async with (
+            _build_llm_client(url, timeout) as client,
+            client.stream("POST", url, headers=headers, json=body) as resp,
+        ):
+            if resp.status_code != 200:
+                err = (await resp.aread()).decode("utf-8", "replace")[:200]
+                raise AppError(
+                    ErrorCode.LLM_CONFIG_INVALID,
+                    f"LLM 流式调用失败 HTTP {resp.status_code}: {err}",
+                )
+            if _uses_anthropic_native_api(provider, base_url):
+                parser = _parse_anthropic_stream(resp)
+            else:
+                parser = _parse_openai_stream(resp)
+            async for chunk in parser:
+                yield chunk
+    except httpx.HTTPError:
+        duration = round(time.monotonic() - started, 3)
+        log.exception(
+            "llm stream failed",
+            extra={"stage": "http", "model": model, "duration": duration},
+        )
+        raise
+    duration = round(time.monotonic() - started, 3)
+    log.info(
+        "llm stream response done",
+        extra={"stage": "http", "model": model, "duration": duration},
+    )

@@ -1,13 +1,15 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.enums import EntryPhase, RunPhase, RunStatus
 
 
 class RunCreate(BaseModel):
-    requirement: str
+    # max_length 既是输入校验，也是 prompt injection 的防线之一：拒绝超长 jailbreak payload。
+    # 非空校验由 services 层 .strip() 兜底，这里不强制 min_length 以兼容最小 input 的测试。
+    requirement: str = Field(..., max_length=2000)
     llm_config_id: uuid.UUID | None = None
 
 
@@ -36,6 +38,7 @@ class HitlWaitDetail(BaseModel):
     node: str
     design_doc: dict | str | None = None
     action_url: str | None = None
+    art_options: dict | None = None
 
 
 class RunStatusResp(BaseModel):
@@ -51,8 +54,8 @@ class RunStatusResp(BaseModel):
 
 class HitlResolveReq(BaseModel):
     node: str
-    decision: str  # "approve" | "modify"
-    modify_text: str | None = None
+    decision: str  # plan: approve/modify; art: select_a/select_b/modify
+    modify_text: str | None = Field(default=None, max_length=2000)
 
 
 class HitlResolveResp(BaseModel):

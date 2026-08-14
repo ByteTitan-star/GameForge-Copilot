@@ -1,0 +1,8 @@
+// pnpm-workspace.yaml（docs/build-pipeline 硬约束④）
+// pnpm 11 的非 registry 配置（allowBuilds 等）放这里，不放 .npmrc。
+//
+// allowBuilds：业务依赖默认无 build script 权限；仅授权 Builder Toolchain 实际需要的包。
+// esbuild 是 Vite 的构建器，需在安装期执行 build script 下载平台二进制，否则 vite build 失败。
+// P1 验证后据实补全；此处先放 esbuild，其余经 build 失败提示由 pnpm 自动追加 placeholder 后人工核定。
+allowBuilds:
+  esbuild: true

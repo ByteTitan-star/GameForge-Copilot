@@ -15,7 +15,9 @@ from app.forge.runner import execute_run
 
 
 async def _grant_resume(
-    redis_client: fakeredis.aioredis.FakeRedis, run_id: uuid.UUID
+    redis_client: fakeredis.aioredis.FakeRedis,
+    run_id: uuid.UUID,
+    decision: str = "approve",
 ) -> None:
     """模拟合法入口（resolve_hitl / resume / retry）写入的一次性推进凭据。
 
@@ -24,7 +26,7 @@ async def _grant_resume(
     """
     async with db_module.SessionLocal() as s:
         st = await ckpt.load_state(redis_client, run_id, s) or {}
-        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
+        granted = {**st, "resume_grant": {"decision": decision, "modify_text": None}}
         await ckpt.save_state(redis_client, run_id, granted, s)
         await s.commit()
 
@@ -67,6 +69,8 @@ async def test_create_run_small_change_entry_code(
     await execute_run(ctx, rid1)
     await _grant_resume(redis_client, rid1)
     await run_generation(ctx, rid1, resume=True, decision="approve")
+    await _grant_resume(redis_client, rid1, "select_a")
+    await run_generation(ctx, rid1, resume=True, decision="select_a")
 
     run2 = await verified_client.post(
         f"/api/v1/games/{gid}/runs",

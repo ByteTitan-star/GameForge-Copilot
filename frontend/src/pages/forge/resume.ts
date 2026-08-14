@@ -14,6 +14,7 @@ type HitlWaitDetail = {
   node: string
   design_doc?: HitlWaitPayload['design_doc']
   action_url?: string | null
+  art_options?: HitlWaitPayload['art_options']
 }
 
 /** 从 API hitl_wait 或 current_hitl 恢复 HITL 卡片 */
@@ -37,6 +38,7 @@ export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayl
       action_url:
         hw.action_url ??
         `/api/v1/games/${run.game_id}/runs/${run.run_id}/hitl/resolve`,
+      art_options: hw.art_options,
     }
   }
   // current_hitl 兜底仅对仍可交互的 paused 态生效。新版流程下
