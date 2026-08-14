@@ -1,5 +1,9 @@
 # GameForge
 
+<p align="right">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
+
 > 用自然语言把一个浏览器游戏从想法推进到可试玩版本。
 
 <p align="center">
@@ -9,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/showcase/assets/gameforge-demo.mp4">观看游戏演示</a>
+  <a href="docs/showcase/assets/gameforge-demo.mp4">查看开发游戏展示</a>
   &nbsp;·&nbsp;
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开产品展示</a>
 </p>
@@ -22,23 +26,55 @@ GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者
 
 ```mermaid
 flowchart LR
-    A[描述游戏想法] --> B[AI 生成策划]
-    B --> C[人工确认方案]
-    C --> D[生成浏览器游戏]
-    D --> E[浏览器试玩]
-    E --> F[下载版本或提交发布]
+    subgraph S1["01 · 创意输入"]
+        A["描述游戏想法<br/>玩法 · 角色 · 规则"]
+    end
+
+    subgraph S2["02 · 策划确认"]
+        B["AI 生成策划<br/>玩法结构 · 关卡 · 视觉"]
+        C{"人工确认方案"}
+        B --> C
+        C -.->|继续调整| B
+    end
+
+    subgraph S3["03 · 游戏生成"]
+        D["生成浏览器游戏<br/>实时反馈生成进度"]
+        E["保存可运行版本<br/>草稿 · 版本管理"]
+        D --> E
+    end
+
+    subgraph S4["04 · 体验交付"]
+        F["浏览器内试玩<br/>直接验证玩法体验"]
+        G["下载 HTML<br/>或提交发布"]
+        F --> G
+    end
+
+    A ==> B
+    C ==>|确认通过| D
+    E ==> F
+
+    classDef primary fill:#e8fff6,stroke:#18a875,stroke-width:2px,color:#092018
+    classDef decision fill:#fff7d6,stroke:#d7a719,stroke-width:2px,color:#332600
+    classDef output fill:#f4f7f6,stroke:#83958f,stroke-width:1.5px,color:#17211e
+    class A,B,D,F primary
+    class C decision
+    class E,G output
+    style S1 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
+    style S2 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
+    style S3 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
+    style S4 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
 ```
 
-| 步骤 | 体验 |
-| --- | --- |
-| 描述想法 | 在 Forge 工作区用自然语言说明玩法、角色和规则。 |
-| AI 策划 | 获得结构化的游戏设计方案。 |
-| 确认方案 | 在生成前查看并确认设计方向。 |
-| 生成游戏 | 将设计转化为可运行的浏览器游戏。 |
-| 浏览器试玩 | 直接打开游戏，观察并体验生成结果。 |
-| 下载或发布 | 保存独立 HTML 版本，或提交到游戏库。 |
+| 阶段 | 关键动作 | 阶段结果 |
+| --- | --- | --- |
+| 创意输入 | 在 Forge 工作区用自然语言说明玩法、角色和规则。 | 清晰的玩法描述 |
+| AI 策划 | 将创作意图整理为可查看、可确认的游戏设计。 | 结构化策划方案 |
+| 人工确认 | 在生成前审阅设计方向，不满意可继续调整。 | 已确认的生成方案 |
+| 游戏生成 | 将方案转化为可运行的浏览器游戏并反馈进度。 | 可管理的游戏版本 |
+| 浏览器试玩 | 直接打开游戏，验证玩法与操作体验。 | 真实试玩反馈 |
+| 下载或发布 | 下载独立 HTML，或提交进入发布流程。 | 可交付的游戏作品 |
 
-## 游戏 Demo
+## 开发游戏展示
 
 ### 像素跑酷
 
@@ -69,9 +105,9 @@ flowchart LR
 - 支持浏览器试玩、独立 HTML 下载与发布流程。
 - 支持收藏、点赞、分享和发现更多游戏作品。
 
-## 游戏演示
+## 开发游戏展示视频
 
-本仓库附带的 [游戏演示](docs/showcase/assets/gameforge-demo.mp4) 展示像素跑酷和塔防作品在浏览器中的操作体验。
+本仓库附带的 [开发游戏展示视频](docs/showcase/assets/gameforge-demo.mp4) 展示像素跑酷和塔防作品在浏览器中的操作体验。
 
 ## 接下来
 
@@ -81,68 +117,7 @@ flowchart LR
 
 ## 可视化展示页
 
-打开[在线产品展示](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html)，查看产品流程、游戏 Demo 和界面体验。
-
-## 开始使用
-
-准备 Docker Desktop、Node.js、pnpm 与 [uv](https://docs.astral.sh/uv/)，然后：
-
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-docker compose up -d postgres redis rabbitmq
-
-cd backend
-uv sync
-uv run alembic upgrade head
-uv run python -m scripts.seed_official_games
-```
-
-分别启动后端服务和前端：
-
-```bash
-# 终端 1
-cd backend
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-
-# 终端 2
-cd backend
-uv run python -m app.messaging.worker
-
-# 终端 3
-cd frontend
-pnpm install
-pnpm run dev
-```
-
-打开前端地址，注册账号并在设置页配置可用的模型服务，即可体验完整创作流程。
-
-更完整的环境变量、Docker 模式、排错与验证说明请见 [docs/development.zh-CN.md](docs/development.zh-CN.md)。
-
-## 开发者入口
-
-| 层 | 当前实现 |
-| --- | --- |
-| Web 客户端 | React、TypeScript、Vite |
-| API | FastAPI |
-| 数据与缓存 | PostgreSQL、Redis |
-| 后台任务 | 异步任务与实时进度 |
-| 生成编排 | 可配置的 AI 工作流 |
-| 构建隔离 | 独立沙箱环境 |
-
-## 项目结构
-
-```text
-frontend/          React 应用
-backend/           后端服务与生成流程
-contracts/         OpenAPI 契约与联调说明
-docs/showcase/     产品展示页及媒体素材
-docs/development*  开发与排错文档
-```
-
-## 参与贡献
-
-请保持每个改动聚焦。涉及 API 的改动同步更新 OpenAPI 契约，涉及行为的改动补充针对性测试。
+打开[在线产品展示](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html)，查看产品流程、开发游戏展示和界面体验，并可在页面右上角切换中文或 English。
 
 ## 许可证
 
