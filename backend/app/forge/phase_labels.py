@@ -5,7 +5,7 @@ from app.enums import RunPhase
 # phase -> (human_label, eta_seconds)
 _PHASE_META: dict[str, tuple[str, int]] = {
     RunPhase.PLAN.value: ("正在整理玩法说明", 120),
-    RunPhase.ART.value: ("正在挑选美术素材", 60),
+    RunPhase.ART.value: ("正在设计视觉方案", 60),
     RunPhase.CODE.value: ("正在编写游戏代码", 180),
     RunPhase.QA.value: ("正在自动试玩质检", 90),
     RunPhase.DONE.value: ("生成完成", 0),
