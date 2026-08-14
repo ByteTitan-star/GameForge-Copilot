@@ -54,19 +54,16 @@ A colorful tower defense prototype. Place defensive towers, stop enemy waves, an
 | <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge workspace" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge browser playtest" width="100%" /> |
 | Describe an idea, review the AI plan, and confirm the generation direction. | Open the generated result and validate the gameplay and controls directly. |
 
-## Product capabilities
+## Core features
 
-| Create and generate | Manage and deliver |
+| Core feature | Description |
 | --- | --- |
-| **AI planning with human review**<br/>Turn natural-language requirements into a game plan that can be reviewed. | **Versions and game library**<br/>Manage drafts, previous versions, and public creations in one place. |
-| **Browser game generation**<br/>Generate a directly runnable game with live progress feedback. | **Play, download, and publish**<br/>Play in the browser, download standalone HTML, or submit for publishing. |
-| **End-to-end creation flow**<br/>Move continuously from an initial idea to a playable game result. | **Discovery and interaction**<br/>Discover, favorite, like, and share more game creations. |
-
-## Expanding next
-
-- Iterate on an existing game through conversation.
-- Upload custom character, background, and audio assets.
-- Add more game genres, templates, and creation capabilities.
+| Natural-language driven | Start creating by describing the gameplay instead of writing code. |
+| Human-guided AI | AI handles planning and generation while the creator controls the final direction. |
+| Browser native | Open and play generated results immediately without extra installation. |
+| Standalone delivery | Download, save, and share games as independent HTML files. |
+| Traceable versions | Manage drafts, previous versions, and public creations in one place. |
+| Creation ecosystem | Publish, discover, favorite, like, and share game creations. |
 
 <p align="center">
   <strong>Experience the complete product flow</strong><br /><br />
