@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">
-    <img src="docs/showcase/assets/gameforge-home.gif" alt="GameForge product home" width="100%" />
+    <img src="docs/showcase/assets/gameforge-home-v2.gif" alt="GameForge product home" width="100%" />
   </a>
 </p>
 
@@ -37,13 +37,13 @@ GameForge is an AI-assisted workspace for creating browser games. Creators start
 
 ### Pixel Runner
 
-<img src="docs/showcase/assets/demo-pixel-runner.gif" alt="Animated Pixel Runner gameplay" width="100%" />
+<img src="docs/showcase/assets/demo-pixel-runner-v2.gif" alt="Animated Pixel Runner gameplay" width="100%" />
 
 A neon gravity runner. Press Space or click to reverse gravity, avoid obstacles, and build your score.
 
 ### Tower Defense Prototype
 
-<img src="docs/showcase/assets/demo-tower-defense.gif" alt="Animated tower defense gameplay" width="100%" />
+<img src="docs/showcase/assets/demo-tower-defense-v2.gif" alt="Animated tower defense gameplay" width="100%" />
 
 A colorful tower defense prototype. Place defensive towers, stop enemy waves, and track level progress.
 
