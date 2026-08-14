@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     code_max_retries: int = 3  # code/qa 失败重试上限（docs/03）
     qa_max_retries: int = 2  # QA 试玩失败回退 code 重试上限
+    art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图开关：QA 通过后用 Playwright 截当前版本画面当封面。
     # 实际是否产出还依赖 PLAYTEST_USE_PLAYWRIGHT=1 且 worker 装了 chromium；否则降级无封面。
     thumbnail_enabled: bool = True
@@ -104,6 +105,26 @@ class Settings(BaseSettings):
     # DashScope 约定「非流式调用必须 enable_thinking=false」，而 complete() 为非流式；
     # 关后既合规又省时省 token，避免思考链拉长触发读超时。需深度推理置 false（且需切到流式）。
     llm_disable_thinking: bool = True
+
+    # 流式输出（打字机）：complete_stream 微批 LLM_DELTA 事件给前端。关闭则 run_streamed_llm
+    # 退化为非流式 _llm（流式体验与输出审核都停）。docs/护栏机制设计。
+    stream_enabled: bool = True
+    stream_batch_chars: int = 4  # 微批字符数：攒够这么多字发一个 LLM_DELTA
+    stream_batch_ms: int = 80  # 微批时间窗（ms）：超时强制 flush，避免末批滞留
+
+    # 平台预设审核模型：护栏用，与用户 LLM 配置无关，明文 env（同 s3_sk/smtp_pass）。
+    # audit_enabled=False 或 audit_model 空 → build_guard 返回 NoopGuard（审核完全不生效）。
+    audit_enabled: bool = True
+    audit_provider: str = "openai_compat"  # 审核走哪个 provider（默认兼容协议，运营自填 base_url）
+    audit_model: str = ""  # 必填，如 gpt-4o-mini / qwen-plus；空则审核降级为仅正则快筛
+    audit_apikey: str = ""  # 平台 key，单独 env，不进用户配置表
+    audit_base_url: str = ""  # compat 必填
+    audit_interval_ms: int = 500  # 输出审核最小间隔（ms）：两次审核间最小时间窗
+    audit_min_chars_between: int = 80  # 输出审核最小字符增量：攒够这么多字才触发一次
+    audit_max_buffer_chars: int = 1500  # 审核滑窗上限：只取最近这么多字，避免越审越贵
+    audit_max_tokens: int = 256  # 审核调用 max_tokens（小，省钱）
+    audit_request_timeout: int = 20  # 审核读超时（秒，短，避免拖垮打字机体验）
+    audit_quick_filter: bool = True  # 正则前置快筛开关：命中即决，不调 LLM
 
     # 全局
     env: str = "development"
