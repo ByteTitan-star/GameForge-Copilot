@@ -24,46 +24,14 @@ GameForge is an AI-assisted workspace for creating browser games. Creators start
 
 ## Product flow
 
-```mermaid
-flowchart TB
-    subgraph S1["01 · Creative input"]
-        direction LR
-        A["Describe the game idea<br/>Gameplay · Characters · Rules"] --> B["Generate an AI plan<br/>Structure · Levels · Visuals"]
-    end
-
-    subgraph S2["02 · Plan and review"]
-        C{"Review the plan<br/>Approve or keep refining"}
-    end
-
-    subgraph S3["03 · Game generation"]
-        direction LR
-        D["Generate a browser game<br/>Track progress in real time"]
-        E["Save a runnable build<br/>Drafts · Version management"]
-        D --> E
-    end
-
-    subgraph S4["04 · Play and deliver"]
-        direction LR
-        F["Play in the browser<br/>Validate gameplay and controls"]
-        G["Download HTML<br/>or submit for publishing"]
-        F --> G
-    end
-
-    B ==> C
-    C ==>|Approved| D
-    E ==> F
-
-    classDef primary fill:#e8fff6,stroke:#18a875,stroke-width:2px,color:#092018
-    classDef decision fill:#fff7d6,stroke:#d7a719,stroke-width:2px,color:#332600
-    classDef output fill:#f4f7f6,stroke:#83958f,stroke-width:1.5px,color:#17211e
-    class A,B,D,F primary
-    class C decision
-    class E,G output
-    style S1 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
-    style S2 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
-    style S3 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
-    style S4 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
-```
+| Stage | Key action | Stage output |
+| --- | --- | --- |
+| Creative input | Describe the gameplay, characters, and rules in natural language in the Forge workspace. | A clear gameplay brief |
+| AI planning | Turn the creative direction into a game design that can be reviewed and confirmed. | A structured design plan |
+| Human review | Review the direction before generation and continue refining it when needed. | An approved generation plan |
+| Game generation | Turn the plan into a runnable browser game with live progress feedback. | A manageable game version |
+| Browser playtest | Open the game directly and validate the gameplay and controls. | Real playtest feedback |
+| Download or publish | Download a standalone HTML build or submit the game for publishing. | A deliverable game |
 
 ## Created game showcase
 

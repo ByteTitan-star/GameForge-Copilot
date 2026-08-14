@@ -24,46 +24,14 @@ GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者
 
 ## 产品链路
 
-```mermaid
-flowchart TB
-    subgraph S1["01 · 创意输入"]
-        direction LR
-        A["描述游戏想法<br/>玩法 · 角色 · 规则"] --> B["AI 生成策划<br/>结构 · 关卡 · 视觉"]
-    end
-
-    subgraph S2["02 · 策划确认"]
-        C{"人工审阅方案<br/>确认或继续调整"}
-    end
-
-    subgraph S3["03 · 游戏生成"]
-        direction LR
-        D["生成浏览器游戏<br/>实时反馈生成进度"]
-        E["保存可运行版本<br/>草稿 · 版本管理"]
-        D --> E
-    end
-
-    subgraph S4["04 · 体验交付"]
-        direction LR
-        F["浏览器内试玩<br/>验证玩法与操作"]
-        G["下载 HTML<br/>或提交发布"]
-        F --> G
-    end
-
-    B ==> C
-    C ==>|确认通过| D
-    E ==> F
-
-    classDef primary fill:#e8fff6,stroke:#18a875,stroke-width:2px,color:#092018
-    classDef decision fill:#fff7d6,stroke:#d7a719,stroke-width:2px,color:#332600
-    classDef output fill:#f4f7f6,stroke:#83958f,stroke-width:1.5px,color:#17211e
-    class A,B,D,F primary
-    class C decision
-    class E,G output
-    style S1 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
-    style S2 fill:#f8fffc,stroke:#b7ded0,stroke-width:1px
-    style S3 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
-    style S4 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
-```
+| 阶段 | 关键动作 | 阶段结果 |
+| --- | --- | --- |
+| 创意输入 | 在 Forge 工作区用自然语言说明玩法、角色和规则。 | 清晰的玩法描述 |
+| AI 策划 | 将创作意图整理为可查看、可确认的游戏设计。 | 结构化策划方案 |
+| 人工确认 | 在生成前审阅设计方向，不满意可继续调整。 | 已确认的生成方案 |
+| 游戏生成 | 将方案转化为可运行的浏览器游戏并反馈进度。 | 可管理的游戏版本 |
+| 浏览器试玩 | 直接打开游戏，验证玩法与操作体验。 | 真实试玩反馈 |
+| 下载或发布 | 下载独立 HTML，或提交进入发布流程。 | 可交付的游戏作品 |
 
 ## 开发游戏展示
 
