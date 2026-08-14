@@ -7,15 +7,15 @@
 > 用自然语言，把游戏想法推进为可在浏览器直接试玩、管理与交付的作品。
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">
     <img src="docs/showcase/assets/gameforge-home.gif" alt="GameForge 产品首页" width="100%" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开产品展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">打开产品展示</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">观看试玩展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html#watch">观看试玩展示</a>
 </p>
 
 ## GameForge 是什么
@@ -102,9 +102,9 @@ flowchart TB
 
 <p align="center">
   <strong>体验完整产品链路</strong><br /><br />
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开在线产品展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">打开在线产品展示</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">观看试玩视频</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html#watch">观看试玩视频</a>
 </p>
 
 ## 许可证

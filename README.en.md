@@ -7,15 +7,15 @@
 > Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">
     <img src="docs/showcase/assets/gameforge-home.gif" alt="GameForge product home" width="100%" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">Open product showcase</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">Open product showcase</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en#watch">Watch game showcases</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en#watch">Watch game showcases</a>
 </p>
 
 ## What is GameForge?
@@ -102,9 +102,9 @@ A colorful tower defense prototype. Place defensive towers, stop enemy waves, an
 
 <p align="center">
   <strong>Experience the complete product flow</strong><br /><br />
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">Open the online product showcase</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">Open the online product showcase</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en#watch">Watch the game showcase video</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en#watch">Watch the game showcase video</a>
 </p>
 
 ## License
