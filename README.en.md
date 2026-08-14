@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/showcase/assets/gameforge-demo.mp4">View game showcases</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">View game showcases</a>
   &nbsp;·&nbsp;
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">Open product showcase</a>
 </p>
@@ -107,7 +107,7 @@ These interfaces show the creation entry point, the game design workspace, and t
 
 ## Game showcase video
 
-The included [game showcase video](docs/showcase/assets/gameforge-demo.mp4) presents Pixel Runner and Tower Defense running in the browser.
+Watch the complete game showcase on the [product showcase page](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch).
 
 ## What's next
 

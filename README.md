@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/showcase/assets/gameforge-demo.mp4">查看开发游戏展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">查看开发游戏展示</a>
   &nbsp;·&nbsp;
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开产品展示</a>
 </p>
@@ -107,7 +107,7 @@ flowchart LR
 
 ## 开发游戏展示视频
 
-本仓库附带的 [开发游戏展示视频](docs/showcase/assets/gameforge-demo.mp4) 展示像素跑酷和塔防作品在浏览器中的操作体验。
+完整开发游戏展示可在[产品展示页面](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch)中观看。
 
 ## 接下来
 
