@@ -7372,7 +7372,8 @@
           "modify_text": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2000
               },
               {
                 "type": "null"
@@ -8852,6 +8853,7 @@
         "properties": {
           "requirement": {
             "type": "string",
+            "maxLength": 2000,
             "title": "Requirement"
           },
           "llm_config_id": {
@@ -9502,12 +9504,14 @@
         "enum": [
           "phase_start",
           "llm_call",
+          "llm_delta",
           "tool_call",
           "build_done",
           "qa_report",
           "hitl_wait",
           "usage",
           "done",
+          "attacked",
           "error"
         ],
         "title": "WSEventType"
