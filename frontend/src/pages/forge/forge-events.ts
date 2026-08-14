@@ -1,5 +1,5 @@
 import { RunPhase, RunStatus, WSEventType } from '@/api/enums'
-import type { HitlWaitPayload, WsEnvelope } from '@/api/ws-types'
+import type { AttackedPayload, HitlWaitPayload, WsEnvelope } from '@/api/ws-types'
 import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { ChatMsg } from '@/components/forge/ChatPanel'
 import type { MessageKey } from '@/i18n/messages'
@@ -23,6 +23,12 @@ export type ForgeEventHandlers = {
   setPreviewVersion?: (version: number | null) => void
   setSideTab: (t: 'log' | 'play') => void
   appendMessages: (msgs: ChatMsg[], kind?: 'design' | 'completed') => void
+  /** LLM 流式微批增量：把 delta 追加到正在生成的 assistant 消息（打字机效果）。 */
+  appendLlmDelta?: (phase: RunPhase, text: string) => void
+  /** 把「正在生成」的流式消息落定为正式消息（阶段切换/done/attacked 时调用）。 */
+  flushStreamingMessage?: () => void
+  /** 内容审核命中：断 WS + 弹友好提示 + 清理 run 状态。 */
+  onAttacked?: (p: AttackedPayload) => void
   setQuotaHint?: (text: string | null) => void
   setCurrentModel?: (model: string | null) => void
   setRunError?: (runId: string, message: string) => void
@@ -62,6 +68,8 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
   }
   switch (ev.type) {
     case WSEventType.phase_start: {
+      // 新阶段开始：把上一阶段打字机攒的流式消息落定，避免串到新阶段。
+      h.flushStreamingMessage?.()
       const phase = p.phase as RunPhase
       // phase_start 表示后端已经离开人工确认检查点。WS 重放时也必须清除先前
       // replay 出来的 hitl_wait，否则任务完成后页面仍会保留一张点击必 409 的旧卡。
@@ -92,6 +100,8 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       return
     }
     case WSEventType.llm_call:
+      // 一轮 LLM 调用结束：把打字机攒的流式消息落定，再记一条用量日志。
+      h.flushStreamingMessage?.()
       h.setCurrentModel?.(String(p.model ?? ''))
       h.pushItem({
         label: h.t('modelCall'),
@@ -100,6 +110,14 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         at: ev.ts,
       })
       return
+    case WSEventType.llm_delta: {
+      // LLM 流式微批增量：追加到正在生成的 assistant 消息（打字机效果）。
+      // 不记入 RunTimeline（会瞬间吃满额度 + 倒序展示不符阅读直觉）。
+      const phase = p.phase as RunPhase
+      const delta = typeof p.delta === 'string' ? p.delta : ''
+      if (delta) h.appendLlmDelta?.(phase, delta)
+      return
+    }
     case WSEventType.tool_call:
       h.pushItem({
         label: h.t('toolCall'),
@@ -109,15 +127,19 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       })
       return
     case WSEventType.hitl_wait: {
+      // 进入人工确认：把打字机攒的流式消息落定为正式消息。
+      h.flushStreamingMessage?.()
       const payload = p as unknown as HitlWaitPayload
       h.setHitl(payload)
       h.setPhase('paused')
       h.setBusy(false)
       h.setRunStatus?.(RunStatus.paused)
       const doc = parseDesignDoc(payload.design_doc)
+      const isArtReview = payload.node === 'art_confirm'
+      const artNames = payload.art_options?.options.map((option) => option.name).join(' / ')
       h.pushItem({
         label: h.t('humanReviewWaiting'),
-        detail: doc.title || payload.node,
+        detail: isArtReview ? artNames || payload.node : doc.title || payload.node,
         tone: 'warn',
         at: ev.ts,
       })
@@ -126,7 +148,9 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
           {
             id: mid('m'),
             role: 'assistant',
-            content: `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
+            content: isArtReview
+              ? `${h.t('chooseArtDirection')}：${artNames || payload.node}`
+              : `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
           },
         ],
         'design',
@@ -173,6 +197,22 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     case WSEventType.done:
       applyDone(ev, h)
       return
+    case WSEventType.attacked: {
+      // 内容审核命中：落定流式消息 → 交给 onAttacked 断 WS + 弹友好提示 + 清理 run。
+      // 后端紧随会发 ERROR(CONTENT_BLOCKED, fatal)，error case 会再做一次幂等清理。
+      h.flushStreamingMessage?.()
+      h.setBusy(false)
+      h.setRunStatus?.(RunStatus.failed)
+      const payload = p as unknown as AttackedPayload
+      h.onAttacked?.(payload)
+      h.pushItem({
+        label: h.t('contentBlocked'),
+        detail: payload.message,
+        tone: 'err',
+        at: ev.ts,
+      })
+      return
+    }
     case WSEventType.error:
       h.setHitl(null)
       h.setBusy(false)
@@ -195,6 +235,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
 
 function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   const p = ev.payload
+  h.flushStreamingMessage?.()
   h.setHitl(null)
   h.setPhase(RunPhase.done)
   h.setBusy(false)

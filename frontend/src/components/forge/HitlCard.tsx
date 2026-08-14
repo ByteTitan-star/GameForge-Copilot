@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronRight, MessageSquareText, Palette, ShieldCheck, X } from "lucide-react";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { Button } from "@/components/ui/button";
 import { parseDesignDoc, type ParsedDesignDoc } from "@/lib/hitl-design-doc";
@@ -7,15 +7,64 @@ import { useT } from "@/i18n/use-t";
 
 type Props = {
   payload: HitlWaitPayload;
-  onApprove: (
-    doc: HitlWaitPayload["design_doc"],
+  onResolve: (
+    decision: string,
     modifyText?: string | null,
+    doc?: HitlWaitPayload["design_doc"],
   ) => void;
   onReject: () => void;
   busy?: boolean;
 };
 
-export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
+function ReviewHeader({ art, title }: { art: boolean; title: string }) {
+  const t = useT();
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-black/[0.08] px-4 py-3.5 sm:px-5">
+      <div className="flex min-w-0 items-start gap-3">
+        <span
+          className={`grid h-8 w-8 shrink-0 place-items-center border ${
+            art
+              ? "border-[#b9d9d4] bg-[#eef8f6] text-[#17665f]"
+              : "border-[#e5d5b1] bg-[#fff8e8] text-[#8b641c]"
+          }`}
+        >
+          {art ? (
+            <Palette className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-black/45">
+              {t("manualReview")}
+            </span>
+            <span className="text-black/20" aria-hidden="true">
+              /
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-black/45">
+              {art ? "02 / 03" : "01 / 03"}
+            </span>
+          </div>
+          <h3 className="mt-1 truncate text-[15px] font-semibold tracking-[-0.01em] text-[#20262d]">
+            {title}
+          </h3>
+        </div>
+      </div>
+      <span
+        className={`shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] ${
+          art
+            ? "border-[#b9d9d4] bg-[#f3fbf9] text-[#17665f]"
+            : "border-[#e5d5b1] bg-[#fffaf0] text-[#8b641c]"
+        }`}
+      >
+        {t("awaitingInput")}
+      </span>
+    </div>
+  );
+}
+
+export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
   const t = useT();
   const parsed = useMemo(
     () =>
@@ -29,23 +78,27 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
       ),
     [payload.design_doc],
   );
-
   const [gameplay, setGameplay] = useState(parsed.gameplay);
   const [controls, setControls] = useState(parsed.controls);
   const [modifyFeedback, setModifyFeedback] = useState("");
+  const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null);
+  const isArtReview = payload.node === "art_confirm";
 
   useEffect(() => {
     setGameplay(parsed.gameplay);
     setControls(parsed.controls);
   }, [parsed.gameplay, parsed.controls]);
 
-  // 当前唯一 HITL 节点是 plan_confirm（策划确认）；sandbox_failed/qa_failed 在新版
-  // 流程里是 FAILED 终态，不再走人工确认，因此本卡只呈现「确认/修改策划」编辑面板。
+  useEffect(() => {
+    setModifyFeedback("");
+    setSelectedOption(null);
+  }, [payload.node, payload.art_options]);
+
   function buildDoc(): ParsedDesignDoc {
     return { ...parsed, gameplay, controls };
   }
 
-  function handleApprove() {
+  function handlePlanResolve() {
     const doc = buildDoc();
     const modified =
       gameplay !== parsed.gameplay ||
@@ -54,114 +107,193 @@ export function HitlCard({ payload, onApprove, onReject, busy }: Props) {
     const modifyText = modified
       ? modifyFeedback.trim() || `gameplay: ${gameplay}\ncontrols: ${controls}`
       : null;
-    onApprove(doc as HitlWaitPayload["design_doc"], modifyText);
+    onResolve(
+      modified ? "modify" : "approve",
+      modifyText,
+      doc as HitlWaitPayload["design_doc"],
+    );
   }
+
+  function handleArtResolve() {
+    if (selectedOption) {
+      onResolve(`select_${selectedOption.toLowerCase()}`);
+      return;
+    }
+    if (modifyFeedback.trim()) onResolve("modify", modifyFeedback.trim());
+  }
+
+  const artOptions = payload.art_options?.options ?? [];
+  const artActionReady = Boolean(selectedOption || modifyFeedback.trim());
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border border-amber-200/80 bg-white shadow-sm"
-      aria-label={t("manualReview")}
+      className="overflow-hidden border border-black/[0.1] bg-[#fffdfa] shadow-[0_8px_28px_rgba(38,48,56,0.08)]"
+      aria-label={isArtReview ? t("chooseArtDirection") : t("manualReview")}
     >
-      <div className="h-1 bg-amber-400" aria-hidden="true" />
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-              <ShieldCheck className="h-4.5 w-4.5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
-                {t("manualReview")}
-              </p>
-              <h3 className="mt-1 break-words text-base font-semibold text-[#3d3219]">
-                {t("confirmDesign")} · {parsed.title || payload.node}
-              </h3>
-              <p className="mt-1 text-xs leading-relaxed text-[#786532]">
-                {t("continueAfterApproval")}
-              </p>
-            </div>
-          </div>
-        </div>
+      <ReviewHeader
+        art={isArtReview}
+        title={isArtReview ? t("chooseArtDirection") : `${t("confirmDesign")} · ${parsed.title || payload.node}`}
+      />
 
-        <div className="mt-4 space-y-3">
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
-              {t("gameplay")}
+      {isArtReview ? (
+        <div className="p-4 sm:p-5">
+          <p className="max-w-2xl text-[13px] leading-5 text-black/60">
+            {t("chooseArtDirectionHint")}
+          </p>
+
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+            {artOptions.map((option) => {
+              const active = selectedOption === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={active}
+                  onClick={() => setSelectedOption(option.id)}
+                  className={`group flex min-h-[156px] flex-col border p-3.5 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#23877d]/35 ${
+                    active
+                      ? "border-[#23877d] bg-[#f2faf8] shadow-[inset_3px_0_0_#23877d]"
+                      : "border-black/[0.1] bg-white hover:border-[#8dbdb7] hover:bg-[#fbfefd]"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={`grid h-6 w-6 place-items-center border font-mono text-[11px] font-semibold ${
+                          active
+                            ? "border-[#23877d] bg-[#23877d] text-white"
+                            : "border-black/15 text-black/55"
+                        }`}
+                      >
+                        {active ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : option.id}
+                      </span>
+                      <span className="text-[13px] font-semibold text-[#20262d]">{option.name}</span>
+                    </span>
+                    {option.recommended ? (
+                      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#17665f]">
+                        {t("recommended")}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-3 flex-1 text-[12px] leading-5 text-black/58">{option.summary}</span>
+                  <span className="mt-3 flex items-center gap-1 text-[11px] font-medium text-[#17665f] opacity-0 transition-opacity group-hover:opacity-100">
+                    {active ? t("selected") : t("selectDirection")}
+                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="mt-4 block">
+            <span className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-black/45">
+              <MessageSquareText className="h-3 w-3" aria-hidden="true" />
+              {t("artFeedback")}
             </span>
             <textarea
-              value={gameplay}
-              onChange={(e) => setGameplay(e.target.value)}
-              rows={3}
-              name="hitl-gameplay"
-              autoComplete="off"
-              className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-3 py-2.5 text-sm text-[#3d3219] outline-none transition-[border-color,box-shadow] focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-200"
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
-              {t("controls")}
-            </span>
-            <textarea
-              value={controls}
-              onChange={(e) => setControls(e.target.value)}
+              aria-label={t("artFeedback")}
+              value={modifyFeedback}
+              onChange={(event) => {
+                setModifyFeedback(event.target.value);
+                if (event.target.value.trim()) setSelectedOption(null);
+              }}
               rows={2}
-              name="hitl-controls"
+              name="art-feedback"
               autoComplete="off"
-              className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-3 py-2.5 text-sm text-[#3d3219] outline-none transition-[border-color,box-shadow] focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-200"
+              placeholder={t("artFeedback")}
+              className="w-full resize-none border border-black/[0.1] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#20262d] outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-[#23877d] focus:ring-2 focus:ring-[#23877d]/12"
             />
           </label>
+        </div>
+      ) : (
+        <div className="space-y-3 p-4 sm:p-5">
+          <p className="text-[13px] leading-5 text-black/60">{t("continueAfterApproval")}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-black/45">
+                {t("gameplay")}
+              </span>
+              <textarea
+                value={gameplay}
+                onChange={(event) => setGameplay(event.target.value)}
+                rows={4}
+                name="hitl-gameplay"
+                autoComplete="off"
+                className="w-full resize-none border border-black/[0.1] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#20262d] outline-none focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-black/45">
+                {t("controls")}
+              </span>
+              <textarea
+                value={controls}
+                onChange={(event) => setControls(event.target.value)}
+                rows={4}
+                name="hitl-controls"
+                autoComplete="off"
+                className="w-full resize-none border border-black/[0.1] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#20262d] outline-none focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12"
+              />
+            </label>
+          </div>
           {parsed.levels.length > 0 ? (
-            <div>
-              <p className="font-mono text-[10px] text-[#a17f31] uppercase">
-                {t("levels")}
-              </p>
-              <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                {parsed.levels.map((lv) => (
-                  <li
-                    key={lv}
-                    className="rounded-md bg-amber-50 px-2 py-1 text-[12px] text-[#7f631c] ring-1 ring-amber-200"
-                  >
-                    {lv}
-                  </li>
+            <div className="border-t border-black/[0.07] pt-3">
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-black/45">{t("levels")}</span>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {parsed.levels.map((level) => (
+                  <span key={level} className="border border-black/[0.09] bg-white px-2 py-1 text-[11px] text-black/60">
+                    {level}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           ) : null}
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#a17f31]">
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-black/45">
+              <MessageSquareText className="h-3 w-3" aria-hidden="true" />
               {t("hitlModifyFeedback")}
             </span>
             <textarea
+              aria-label={t("hitlModifyFeedback")}
               value={modifyFeedback}
-              onChange={(e) => setModifyFeedback(e.target.value)}
+              onChange={(event) => setModifyFeedback(event.target.value)}
               rows={2}
               placeholder={t("describeIteration")}
               name="hitl-feedback"
               autoComplete="off"
-              className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-3 py-2.5 text-sm text-[#3d3219] outline-none transition-[border-color,box-shadow] placeholder:text-black/35 focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-200"
+              className="w-full resize-none border border-black/[0.1] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#20262d] outline-none focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12"
             />
           </label>
         </div>
+      )}
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-black/[0.06] pt-3">
-          <Button
-            variant="ghost"
-            className="!min-h-10 !rounded-lg !px-3 !py-2 !text-[#6f5a25] hover:!bg-amber-50"
-            disabled={busy}
-            onClick={onReject}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-            {t("rejectAndStop")}
-          </Button>
-          <Button
-            className="!min-h-10 !rounded-lg !bg-[#e5a817] !px-4 !py-2 !text-white hover:!bg-[#cc9410]"
-            disabled={busy}
-            onClick={handleApprove}
-          >
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            {t("approveAndContinue")}
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.08] bg-[#faf8f3] px-4 py-3 sm:px-5">
+        <Button
+          variant="ghost"
+          className="!min-h-9 !rounded-md !px-2.5 !text-[12px] !text-black/50 hover:!bg-black/[0.04] hover:!text-black/75"
+          disabled={busy}
+          onClick={onReject}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("rejectAndStop")}
+        </Button>
+        <Button
+          className={`!min-h-9 !rounded-md !px-3.5 !text-[12px] !font-semibold !text-white ${
+            isArtReview
+              ? "!bg-[#17665f] hover:!bg-[#12534e]"
+              : "!bg-[#a87516] hover:!bg-[#8d6212]"
+          }`}
+          disabled={busy || (isArtReview ? !artActionReady : false)}
+          onClick={isArtReview ? handleArtResolve : handlePlanResolve}
+        >
+          {isArtReview
+            ? selectedOption
+              ? `${t("selectDirection")} · ${selectedOption}`
+              : t("regenerateArtOptions")
+            : t("approveAndContinue")}
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
       </div>
     </section>
   );

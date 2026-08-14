@@ -52,12 +52,16 @@ export type LLMProvider = (typeof LLMProvider)[keyof typeof LLMProvider]
 export const WSEventType = {
   phase_start: 'phase_start',
   llm_call: 'llm_call',
+  // LLM 流式微批增量：payload 含 phase + delta（打字机文本，3-5 字一批）
+  llm_delta: 'llm_delta',
   tool_call: 'tool_call',
   build_done: 'build_done',
   qa_report: 'qa_report',
   hitl_wait: 'hitl_wait',
   usage: 'usage',
   done: 'done',
+  // 内容审核命中（输入注入/输出恶意）：前端断 WS + 弹友好提示
+  attacked: 'attacked',
   error: 'error',
 } as const
 export type WSEventType = (typeof WSEventType)[keyof typeof WSEventType]

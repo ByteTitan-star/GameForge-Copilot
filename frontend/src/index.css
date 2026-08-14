@@ -190,6 +190,22 @@ body {
   box-shadow: 1px 0 0 rgba(15, 23, 42, 0.04);
 }
 
+/* —— 侧边栏折叠态（桌面端）——
+   折叠时把 --gf-sidebar-w 缩到 64px，侧栏 width 与主区 margin-left
+   都引用同一变量，故整页自动重排，无需 JS 重算。 */
+.gf-workshop[data-collapsed='true'] {
+  --gf-sidebar-w: 64px;
+}
+
+.gf-workshop[data-collapsed='true'] .gf-sidebar {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.gf-workshop[data-collapsed='true'] .gf-collapsed-hide {
+  display: none;
+}
+
 [data-gf-style='taskly'] .gf-sidebar {
   backdrop-filter: blur(50px);
   -webkit-backdrop-filter: blur(50px);

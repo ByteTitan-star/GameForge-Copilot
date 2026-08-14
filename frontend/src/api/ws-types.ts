@@ -23,6 +23,22 @@ export type LlmCallPayload = {
   input_tokens: number
   output_tokens: number
 }
+/** LLM 流式微批增量（打字机文本）。后端 run_streamed_llm 攒 3-5 字发一批。 */
+export type LlmDeltaPayload = {
+  phase: RunPhase
+  delta: string
+}
+/** 内容审核命中：后端护栏拦截后发，前端断 WS + 弹友好提示。 */
+export type AttackedPayload = {
+  phase: RunPhase
+  /** input=输入注入命中，output=生成内容命中 */
+  side: 'input' | 'output'
+  /** jailbreak|harmful_code|pii|politics */
+  category: string
+  reason: string
+  /** 给用户看的中文提示 */
+  message: string
+}
 export type ToolCallPayload = {
   phase: RunPhase
   tool: string
@@ -47,6 +63,17 @@ export type DesignDocPayload = {
   levels: string[] | Record<string, unknown>[]
 }
 
+export type ArtDirectionOption = {
+  id: 'A' | 'B'
+  name: string
+  summary: string
+  recommended: boolean
+}
+
+export type ArtOptionsPayload = {
+  options: ArtDirectionOption[]
+}
+
 export type HitlWaitPayload = {
   node: string
   design_doc: DesignDocPayload | string
@@ -55,6 +82,7 @@ export type HitlWaitPayload = {
   errors?: string[]
   issues?: string[]
   retries?: number
+  art_options?: ArtOptionsPayload
 }
 export type UsageEventPayload = {
   today_used: number

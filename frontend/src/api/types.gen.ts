@@ -903,6 +903,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Feedback
+         * @description 代发一封反馈邮件给管理员；run 必须属于当前用户。
+         */
+        post: operations["submit_feedback_api_v1_me_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}/runs": {
         parameters: {
             query?: never;
@@ -1077,7 +1097,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve Hitl
-         * @description 解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。
+         * @description 解决策划或美术 HITL，并把一次性恢复凭据写入队列。
          */
         post: operations["resolve_hitl_api_v1_games__game_id__runs__run_id__hitl_resolve_post"];
         delete?: never;
@@ -1713,6 +1733,10 @@ export interface components {
         ApiResponse_DevResetResp_: {
             data: components["schemas"]["DevResetResp"];
         };
+        /** ApiResponse[FeedbackResp] */
+        ApiResponse_FeedbackResp_: {
+            data: components["schemas"]["FeedbackResp"];
+        };
         /** ApiResponse[GameAnalyticsResp] */
         ApiResponse_GameAnalyticsResp_: {
             data: components["schemas"]["GameAnalyticsResp"];
@@ -2086,6 +2110,34 @@ export interface components {
              */
             favorited_at: string;
         };
+        /**
+         * FeedbackReq
+         * @description 用户在 forge 失败时通过「联系管理员」提交的反馈。
+         *
+         *     message 可空（纯错误上报）；error_summary 为前端运行时错误摘要，仅作邮件上下文。
+         */
+        FeedbackReq: {
+            /** Run Id */
+            run_id: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Error Summary
+             * @default
+             */
+            error_summary: string;
+        };
+        /** FeedbackResp */
+        FeedbackResp: {
+            /**
+             * Submitted
+             * @default true
+             */
+            submitted: boolean;
+        };
         /** ForgeMessageItem */
         ForgeMessageItem: {
             /**
@@ -2336,6 +2388,10 @@ export interface components {
             } | string | null;
             /** Action Url */
             action_url?: string | null;
+            /** Art Options */
+            art_options?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** LLMConfigCreate */
         LLMConfigCreate: {
@@ -5295,6 +5351,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_feedback_api_v1_me_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_FeedbackResp_"];
+                };
+            };
+            /** @description run 不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

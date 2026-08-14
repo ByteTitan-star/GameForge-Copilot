@@ -461,6 +461,40 @@ export function ForgePage() {
           })),
         ]);
       },
+      // LLM 流式打字机：把微批增量追加到末尾的「流式生成中」assistant 消息。
+      // 用固定 streaming id 标记，flush 时换成正式唯一 id。
+      appendLlmDelta: (_phase: RunPhase, text: string) => {
+        if (!text) return;
+        const sid = `streaming-${activeRunId ?? "anon"}`;
+        setMessages((m) => {
+          const last = m[m.length - 1];
+          if (last && last.id === sid) {
+            return [...m.slice(0, -1), { ...last, content: last.content + text }];
+          }
+          return [...m, { id: sid, role: "assistant", content: text }];
+        });
+      },
+      // 阶段切换/done/attacked：把流式消息落定为正式消息（换正式 id）。
+      flushStreamingMessage: () => {
+        const sid = `streaming-${activeRunId ?? "anon"}`;
+        setMessages((m) => {
+          const last = m[m.length - 1];
+          if (!last || last.id !== sid || !last.content.trim()) {
+            return m;
+          }
+          return [
+            ...m.slice(0, -1),
+            { ...last, id: `ai-${Date.now()}` },
+          ];
+        });
+      },
+      // 内容审核命中：不调 cancel API（后端已终止），只做本地清理 + 友好提示。
+      onAttacked: () => {
+        toast.error(t("contentBlockedHint"));
+        if (activeRunId) clearActiveRun(activeRunId);
+        closeHandle();
+        void qc.invalidateQueries({ queryKey: ["active-runs"] });
+      },
       setQuotaHint,
       setCurrentModel,
       setRunError: (rid: string, message: string) => {
@@ -614,19 +648,21 @@ export function ForgePage() {
     void stageRef.current.requestFullscreen();
   }
 
-  async function onApproveHitl(
-    doc: HitlWaitPayload["design_doc"],
+  async function onResolveHitl(
+    decision: string,
     modifyText?: string | null,
+    doc?: HitlWaitPayload["design_doc"],
   ) {
     if (trial || !runId || !gameId || !token || !hitl) return;
     setBusy(true);
+    const effectiveDoc = doc ?? hitl.design_doc;
     const parsedGameplay =
-      typeof doc === "object" && doc && "gameplay" in doc
-        ? String(doc.gameplay)
-        : String(doc);
+      typeof effectiveDoc === "object" && effectiveDoc && "gameplay" in effectiveDoc
+        ? String(effectiveDoc.gameplay)
+        : String(effectiveDoc);
     const parsedControls =
-      typeof doc === "object" && doc && "controls" in doc
-        ? String(doc.controls)
+      typeof effectiveDoc === "object" && effectiveDoc && "controls" in effectiveDoc
+        ? String(effectiveDoc.controls)
         : "";
     const origGameplay =
       typeof hitl.design_doc === "object" &&
@@ -640,22 +676,28 @@ export function ForgePage() {
       "controls" in hitl.design_doc
         ? String(hitl.design_doc.controls)
         : "";
-    const modified =
-      parsedGameplay !== origGameplay ||
-      parsedControls !== origControls ||
-      Boolean(modifyText?.trim());
-    const decisionText = modified
-      ? modifyText?.trim() ||
-        `gameplay: ${parsedGameplay}\ncontrols: ${parsedControls}`
-      : "已确认设计方案";
+    const planModified =
+      hitl.node === "plan_confirm" &&
+      (parsedGameplay !== origGameplay || parsedControls !== origControls);
+    const actualDecision = planModified ? "modify" : decision;
+    const selectedOption = hitl.art_options?.options.find(
+      (option) => `select_${option.id.toLowerCase()}` === actualDecision,
+    );
+    const decisionText =
+      modifyText?.trim() ||
+      (selectedOption
+        ? `已选择美术方案 ${selectedOption.id}：${selectedOption.name}`
+        : actualDecision === "approve"
+          ? "已确认设计方案"
+          : `gameplay: ${parsedGameplay}\ncontrols: ${parsedControls}`);
     try {
       await gamesApi.resolveHitl(
         gameId,
         runId,
         {
           node: hitl.node,
-          decision: modified ? "modify" : "approve",
-          modify_text: modified ? decisionText : null,
+          decision: actualDecision,
+          modify_text: actualDecision === "modify" ? decisionText : null,
         },
         token,
       );
@@ -668,12 +710,12 @@ export function ForgePage() {
           id: mid("m"),
           role: "user",
           content: decisionText,
-          persistenceKey: `${runId}:${modified ? "hitl_modify" : "hitl_approve"}`,
+          persistenceKey: `${runId}:hitl:${hitl.node}:${actualDecision}`,
         },
       ]);
       pushItem({
         label: t("hitlApproved"),
-        detail: parsedGameplay.slice(0, 32),
+        detail: (selectedOption?.name || decisionText).slice(0, 32),
         tone: "ok",
       });
       // real：继续复用已连接的 WS，后端 resume 后推事件
@@ -1050,7 +1092,7 @@ export function ForgePage() {
                   {hitl ? (
                     <HitlCard
                       payload={hitl}
-                      onApprove={onApproveHitl}
+                      onResolve={onResolveHitl}
                       onReject={onRejectHitl}
                       busy={busy || trial}
                     />

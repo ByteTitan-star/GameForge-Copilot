@@ -71,6 +71,31 @@ describe('forge resume helpers', () => {
     expect(buildResumeHitl(run, '霓虹蛇')).toBeNull()
   })
 
+  it('刷新后恢复美术 A/B 方案', () => {
+    const run = {
+      run_id: 'r-art',
+      game_id: 'g1',
+      status: 'paused',
+      phase: 'art',
+      entry_phase: 'plan',
+      ws_url: '/ws/runs/r-art',
+      current_hitl: { node: 'art_confirm' },
+      hitl_wait: {
+        node: 'art_confirm',
+        design_doc: { title: '霓虹蛇', gameplay: 'g', controls: [], levels: [] },
+        art_options: {
+          options: [
+            { id: 'A', name: '霓虹', summary: 'Canvas 粒子', recommended: true },
+            { id: 'B', name: '纸雕', summary: 'CSS 纸片', recommended: false },
+          ],
+        },
+      },
+    } as RunDetail
+    const hitl = buildResumeHitl(run, '霓虹蛇')
+    expect(hitl?.node).toBe('art_confirm')
+    expect(hitl?.art_options?.options).toHaveLength(2)
+  })
+
   it('failed 终态即使残留 current_hitl 也不浮出 HITL 卡', () => {
     // 新版流程：qa_failed/sandbox_failed 重试耗尽即 FAILED，checkpoint 仍写、
     // get_run 仍返回 current_hitl，但不再是人工确认点。重连到这种 run 必须返回
