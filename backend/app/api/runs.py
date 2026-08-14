@@ -140,7 +140,7 @@ async def get_forge_messages(
     )
 
 
-_HITL_PHASES = {"plan_confirm", "sandbox_failed", "qa_failed"}
+_HITL_PHASES = {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"}
 
 
 def _hitl_from_state(
@@ -158,6 +158,7 @@ def _hitl_from_state(
         node=str(phase),
         design_doc=state.get("design_doc"),
         action_url=f"/api/v1/games/{run.game_id}/runs/{run.id}/hitl/resolve",
+        art_options=state.get("art_options"),
     )
     return current, detail
 
@@ -293,7 +294,7 @@ async def resolve_hitl(
     db: DbSession,
     r: RedisClient,
 ) -> ApiResponse[HitlResolveResp]:
-    """解决 HITL：plan_confirm / sandbox_failed / qa_failed → enqueue resume。"""
+    """解决策划或美术 HITL，并把一次性恢复凭据写入队列。"""
     run = await services.get_run(db, user, run_id)
     if run.game_id != game_id:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏或 run 不存在")
@@ -312,9 +313,26 @@ async def resolve_hitl(
     if run.status != RunStatus.PAUSED.value:
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
+    allowed_decisions = {
+        "plan_confirm": {"approve", "modify"},
+        "art_confirm": {"select_a", "select_b", "modify"},
+        "sandbox_failed": {"approve", "modify"},
+        "qa_failed": {"approve", "modify"},
+    }
+    if req.decision not in allowed_decisions[state["phase"]]:
+        await r.delete(f"run:hitl:{run_id}")
+        raise AppError(ErrorCode.INVALID_STATE, "当前 HITL 节点不支持该决策")
+    if req.decision == "modify" and not (req.modify_text or "").strip():
+        await r.delete(f"run:hitl:{run_id}")
+        raise AppError(ErrorCode.INVALID_STATE, "修改意见不能为空")
     run.status = RunStatus.RUNNING.value
     run.ended_at = None
-    decision_text = req.modify_text.strip() if req.modify_text else "已确认设计方案"
+    selected_label = {"select_a": "已选择美术方案 A", "select_b": "已选择美术方案 B"}
+    decision_text = (
+        req.modify_text.strip()
+        if req.modify_text
+        else selected_label.get(req.decision, "已确认设计方案")
+    )
     await add_message(
         db,
         game_id=run.game_id,
@@ -332,7 +350,13 @@ async def resolve_hitl(
     )
     await enqueue_resume(db, r, run_id, req.decision, req.modify_text)
     await db.commit()
-    next_phase = RunPhase.ART if state.get("phase") == "plan_confirm" else RunPhase.CODE
+    # 锁只覆盖一次 resolve 的并发窗口；下一阶段可能立即出现新的合法 HITL。
+    await r.delete(f"run:hitl:{run_id}")
+    next_phase = (
+        RunPhase.ART
+        if state.get("phase") in {"plan_confirm", "art_confirm"}
+        else RunPhase.CODE
+    )
     return ApiResponse(
         data=HitlResolveResp(run_id=run.id, status=RunStatus.RUNNING, phase=next_phase)
     )
