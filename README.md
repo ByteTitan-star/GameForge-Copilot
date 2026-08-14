@@ -4,7 +4,7 @@
   <strong>简体中文</strong> · <a href="README.en.md">English</a>
 </p>
 
-> 用自然语言把一个浏览器游戏从想法推进到可试玩版本。
+> 用自然语言，把游戏想法推进为可在浏览器直接试玩、管理与交付的作品。
 
 <p align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">
@@ -13,43 +13,43 @@
 </p>
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">查看开发游戏展示</a>
-  &nbsp;·&nbsp;
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开产品展示</a>
+  &nbsp;·&nbsp;
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">观看试玩展示</a>
 </p>
 
 ## GameForge 是什么
 
-GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者描述游戏想法后，可以查看 AI 策划、确认方案、生成游戏，并在浏览器内直接试玩。生成后的游戏还可以在游戏库中管理、下载或提交发布。
+GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者从一句玩法描述开始，经过 AI 策划、人工确认和游戏生成，即可得到能够直接试玩的浏览器游戏，并继续完成版本管理、下载与发布。
 
 ## 产品链路
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph S1["01 · 创意输入"]
-        A["描述游戏想法<br/>玩法 · 角色 · 规则"]
+        direction LR
+        A["描述游戏想法<br/>玩法 · 角色 · 规则"] --> B["AI 生成策划<br/>结构 · 关卡 · 视觉"]
     end
 
     subgraph S2["02 · 策划确认"]
-        B["AI 生成策划<br/>玩法结构 · 关卡 · 视觉"]
-        C{"人工确认方案"}
-        B --> C
-        C -.->|继续调整| B
+        C{"人工审阅方案<br/>确认或继续调整"}
     end
 
     subgraph S3["03 · 游戏生成"]
+        direction LR
         D["生成浏览器游戏<br/>实时反馈生成进度"]
         E["保存可运行版本<br/>草稿 · 版本管理"]
         D --> E
     end
 
     subgraph S4["04 · 体验交付"]
-        F["浏览器内试玩<br/>直接验证玩法体验"]
+        direction LR
+        F["浏览器内试玩<br/>验证玩法与操作"]
         G["下载 HTML<br/>或提交发布"]
         F --> G
     end
 
-    A ==> B
+    B ==> C
     C ==>|确认通过| D
     E ==> F
 
@@ -64,15 +64,6 @@ flowchart LR
     style S3 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
     style S4 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
 ```
-
-| 阶段 | 关键动作 | 阶段结果 |
-| --- | --- | --- |
-| 创意输入 | 在 Forge 工作区用自然语言说明玩法、角色和规则。 | 清晰的玩法描述 |
-| AI 策划 | 将创作意图整理为可查看、可确认的游戏设计。 | 结构化策划方案 |
-| 人工确认 | 在生成前审阅设计方向，不满意可继续调整。 | 已确认的生成方案 |
-| 游戏生成 | 将方案转化为可运行的浏览器游戏并反馈进度。 | 可管理的游戏版本 |
-| 浏览器试玩 | 直接打开游戏，验证玩法与操作体验。 | 真实试玩反馈 |
-| 下载或发布 | 下载独立 HTML，或提交进入发布流程。 | 可交付的游戏作品 |
 
 ## 开发游戏展示
 
@@ -90,34 +81,31 @@ flowchart LR
 
 ## 产品界面
 
-| 首页 | Forge 工作区 | 浏览器试玩 |
-| --- | --- | --- |
-| <img src="docs/showcase/assets/product-home.png" alt="GameForge 首页" width="100%" /> | <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge 工作区" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge 浏览器试玩页" width="100%" /> |
-
-三个界面分别展示创作入口、游戏设计工作区和浏览器试玩体验。
+| Forge 工作区 | 浏览器试玩 |
+| --- | --- |
+| <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge 工作区" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge 浏览器试玩页" width="100%" /> |
+| 描述创意、查看 AI 策划并确认生成方向。 | 打开生成结果，直接验证玩法与操作体验。 |
 
 ## 产品能力
 
-- 自然语言描述游戏需求，获得 AI 游戏策划。
-- 在生成前确认设计方向，掌握创作节奏。
-- 自动生成可在浏览器运行的游戏版本，并提供进度反馈。
-- 在游戏库中管理草稿、版本和公开作品。
-- 支持浏览器试玩、独立 HTML 下载与发布流程。
-- 支持收藏、点赞、分享和发现更多游戏作品。
+| 创作与生成 | 管理与交付 |
+| --- | --- |
+| **AI 策划与人工确认**<br/>把自然语言需求整理为可审阅的游戏方案。 | **版本与作品管理**<br/>统一管理草稿、历史版本和公开作品。 |
+| **浏览器游戏生成**<br/>生成可直接运行的游戏，并实时反馈进度。 | **试玩、下载与发布**<br/>浏览器内试玩，下载独立 HTML 或提交发布。 |
+| **完整创作闭环**<br/>从创意输入持续推进到可玩的游戏结果。 | **作品发现与互动**<br/>发现、收藏、点赞和分享更多游戏作品。 |
 
-## 开发游戏展示视频
-
-完整开发游戏展示可在[产品展示页面](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch)中观看。
-
-## 接下来
+## 持续扩展
 
 - 通过对话迭代已有游戏。
 - 自定义角色、背景和音效素材上传。
 - 更多游戏类型、模板与创作能力。
 
-## 可视化展示页
-
-打开[在线产品展示](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html)，查看产品流程、开发游戏展示和界面体验，并可在页面右上角切换中文或 English。
+<p align="center">
+  <strong>体验完整产品链路</strong><br /><br />
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html">打开在线产品展示</a>
+  &nbsp;·&nbsp;
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">观看试玩视频</a>
+</p>
 
 ## 许可证
 

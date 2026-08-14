@@ -4,7 +4,7 @@
   <a href="README.md">简体中文</a> · <strong>English</strong>
 </p>
 
-> Turn a browser game idea into a playable build with natural language.
+> Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
 
 <p align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">
@@ -13,43 +13,43 @@
 </p>
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch">View game showcases</a>
-  &nbsp;·&nbsp;
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">Open product showcase</a>
+  &nbsp;·&nbsp;
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en#watch">Watch game showcases</a>
 </p>
 
 ## What is GameForge?
 
-GameForge is an AI-assisted workspace for creating browser games. Creators describe a game idea, review an AI-generated plan, confirm the direction, generate the game, and play it directly in the browser. Generated games can also be managed, downloaded, or submitted for publishing from the game library.
+GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description, move through AI planning, human review, and game generation, then receive a browser game they can play immediately, manage as versions, download, or publish.
 
 ## Product flow
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph S1["01 · Creative input"]
-        A["Describe the game idea<br/>Gameplay · Characters · Rules"]
+        direction LR
+        A["Describe the game idea<br/>Gameplay · Characters · Rules"] --> B["Generate an AI plan<br/>Structure · Levels · Visuals"]
     end
 
     subgraph S2["02 · Plan and review"]
-        B["Generate an AI plan<br/>Gameplay · Levels · Visuals"]
-        C{"Review the plan"}
-        B --> C
-        C -.->|Keep refining| B
+        C{"Review the plan<br/>Approve or keep refining"}
     end
 
     subgraph S3["03 · Game generation"]
+        direction LR
         D["Generate a browser game<br/>Track progress in real time"]
         E["Save a runnable build<br/>Drafts · Version management"]
         D --> E
     end
 
     subgraph S4["04 · Play and deliver"]
-        F["Play in the browser<br/>Validate the gameplay directly"]
+        direction LR
+        F["Play in the browser<br/>Validate gameplay and controls"]
         G["Download HTML<br/>or submit for publishing"]
         F --> G
     end
 
-    A ==> B
+    B ==> C
     C ==>|Approved| D
     E ==> F
 
@@ -64,15 +64,6 @@ flowchart LR
     style S3 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
     style S4 fill:#fffdf5,stroke:#e6d28d,stroke-width:1px
 ```
-
-| Stage | Key action | Stage output |
-| --- | --- | --- |
-| Creative input | Describe the gameplay, characters, and rules in natural language in the Forge workspace. | A clear gameplay brief |
-| AI planning | Turn the creative direction into a game design that can be reviewed and confirmed. | A structured design plan |
-| Human review | Review the direction before generation and continue refining it when needed. | An approved generation plan |
-| Game generation | Turn the plan into a runnable browser game with live progress feedback. | A manageable game version |
-| Browser playtest | Open the game directly and validate the gameplay and controls. | Real playtest feedback |
-| Download or publish | Download a standalone HTML build or submit the game for publishing. | A deliverable game |
 
 ## Created game showcase
 
@@ -90,34 +81,31 @@ A colorful tower defense prototype. Place defensive towers, stop enemy waves, an
 
 ## Product interface
 
-| Home | Forge workspace | Browser playtest |
-| --- | --- | --- |
-| <img src="docs/showcase/assets/product-home.png" alt="GameForge home" width="100%" /> | <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge workspace" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge browser playtest" width="100%" /> |
-
-These interfaces show the creation entry point, the game design workspace, and the in-browser playtest experience.
+| Forge workspace | Browser playtest |
+| --- | --- |
+| <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge workspace" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge browser playtest" width="100%" /> |
+| Describe an idea, review the AI plan, and confirm the generation direction. | Open the generated result and validate the gameplay and controls directly. |
 
 ## Product capabilities
 
-- Describe game requirements in natural language and receive an AI-generated game plan.
-- Confirm the design direction before generation and stay in control of the creative process.
-- Generate browser-ready game versions with live progress feedback.
-- Manage drafts, versions, and public works in the game library.
-- Play in the browser, download standalone HTML builds, or submit games for publishing.
-- Discover, favorite, like, and share game creations.
+| Create and generate | Manage and deliver |
+| --- | --- |
+| **AI planning with human review**<br/>Turn natural-language requirements into a game plan that can be reviewed. | **Versions and game library**<br/>Manage drafts, previous versions, and public creations in one place. |
+| **Browser game generation**<br/>Generate a directly runnable game with live progress feedback. | **Play, download, and publish**<br/>Play in the browser, download standalone HTML, or submit for publishing. |
+| **End-to-end creation flow**<br/>Move continuously from an initial idea to a playable game result. | **Discovery and interaction**<br/>Discover, favorite, like, and share more game creations. |
 
-## Game showcase video
-
-Watch the complete game showcase on the [product showcase page](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html#watch).
-
-## What's next
+## Expanding next
 
 - Iterate on an existing game through conversation.
 - Upload custom character, background, and audio assets.
 - Add more game genres, templates, and creation capabilities.
 
-## Visual showcase
-
-Open the [online product showcase](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en) to explore the product flow, created games, and interface experience. Use the language switcher in the upper-right corner to change between English and Chinese.
+<p align="center">
+  <strong>Experience the complete product flow</strong><br /><br />
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en">Open the online product showcase</a>
+  &nbsp;·&nbsp;
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/docs/readme-redesign/docs/showcase/index.html?lang=en#watch">Watch the game showcase video</a>
+</p>
 
 ## License
 
