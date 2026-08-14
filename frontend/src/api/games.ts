@@ -1,5 +1,6 @@
-import { apiRequest, apiRequestFile, apiRequestList } from './client'
+import { apiRequest, apiRequestFile, apiRequestList, apiRequestText } from './client'
 import type {
+  ArtifactFile,
   CreateGameResponse,
   GameBatchDeleteResponse,
   GameDeleteResponse,
@@ -110,6 +111,31 @@ export const gamesApi = {
       token: accessToken,
       headers: { Accept: 'text/html' },
     })
+  },
+
+  /** 列出某版本产物下的全部文件（代码预览文件树，owner only）。 */
+  listVersionFiles(gameId: string, version: number, accessToken: string) {
+    return apiRequestList<ArtifactFile>(
+      `/games/${gameId}/versions/${version}/files`,
+      { token: accessToken },
+    )
+  },
+
+  /** 读取某版本产物下单个文件的源码文本（owner only）。
+
+   * path 按段 encodeURIComponent、保留斜杠，避免 `assets/js/app.js` 的 / 被编码成 %2F 导致路由失配。
+   */
+  fetchVersionFile(
+    gameId: string,
+    version: number,
+    path: string,
+    accessToken: string,
+  ) {
+    const encoded = path.split('/').map(encodeURIComponent).join('/')
+    return apiRequestText(
+      `/games/${gameId}/versions/${version}/files/${encoded}`,
+      { token: accessToken, headers: { Accept: 'text/plain' } },
+    )
   },
 
   getRun(runId: string, accessToken: string) {

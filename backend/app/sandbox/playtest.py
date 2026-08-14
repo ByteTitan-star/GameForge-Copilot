@@ -55,6 +55,40 @@ def _extract_scripts(html: str) -> list[str]:
     return re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.I | re.S)
 
 
+def _declares_engine(html: str) -> bool:
+    """HTML 是否引用了受控游戏引擎 CDN（Phaser/PixiJS）。
+
+    引擎产物的 <canvas> 由运行时注入到挂载点，源码里没有裸 <canvas>。静态模式不执行
+    JS，无法证明 canvas 已挂载，因此对声明了引擎的产物跳过 canvas 存在性检查——
+    这项交给运行时/Playwright/人工试玩，而非用「源码无 canvas」错判可玩性。
+    """
+    from app.forge.engine_router import SUPPORTED_ENGINES, recommended_cdn_url
+
+    engine_urls = {
+        url for eid in SUPPORTED_ENGINES if (url := recommended_cdn_url(eid))
+    }
+    return any(url in html for url in engine_urls)
+
+
+def _screen_target_errors(html: str, scripts: list[str]) -> list[str]:
+    """Detect the generated-game convention where state targets have no matching screen DOM."""
+    source = "\n".join(scripts)
+    if not re.search(r"screen-\$\{[^}]+\}", source):
+        return []
+
+    screen_ids = set(re.findall(r'id=["\']screen-([^"\']+)["\']', html, flags=re.I))
+    targets = set(
+        re.findall(r"\bsetScreen\(\s*[\"']([^\"']+)[\"']\s*\)", source)
+    )
+    missing = sorted(targets - screen_ids)
+    if not missing:
+        return []
+    return [
+        "状态切换目标缺少对应 DOM："
+        + ", ".join(f"setScreen('{state}') -> #screen-{state}" for state in missing)
+    ]
+
+
 def _static_playtest(html: str) -> PlaytestResult:
     """Fast checks without a browser: structure + basic script sanity."""
     errors: list[str] = []
@@ -67,10 +101,14 @@ def _static_playtest(html: str) -> PlaytestResult:
         errors.append(f"HTML 解析失败: {e}")
         return PlaytestResult(ok=False, errors=errors, console_logs=logs)
 
-    if not scanner.has_canvas and not scanner.has_interactive:
+    # 引擎产物 canvas 由运行时注入，静态模式无法验证其存在；对声明了引擎的产物
+    # 跳过 canvas 存在性检查，交给运行时/Playwright/人工。仍保留花括号/screen/白名单等检查。
+    missing_interactive = not scanner.has_canvas and not scanner.has_interactive
+    if missing_interactive and not _declares_engine(html):
         errors.append("缺少 canvas 或可交互元素（button/input/onclick）")
 
     scripts = _extract_scripts(html)
+    errors.extend(_screen_target_errors(html, scripts))
     for i, block in enumerate(scripts, start=1):
         src = block.strip()
         if not src:

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X } from 'lucide-react'
+import { Check, Inbox, X } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { formatApiError } from '@/api/error-message'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { AdminTable } from '@/components/admin/AdminTable'
 import { ConfirmModal } from '@/components/admin/ConfirmModal'
+import { EmptyState } from '@/components/admin/EmptyState'
 import { btnDanger, btnPrimary } from '@/components/admin/buttonStyles'
 import { useAdminToast } from '../adminToast'
 
@@ -37,7 +38,7 @@ export function QueueSection() {
       await qc.invalidateQueries({ queryKey: ['admin', 'publish-queue'] })
       onToast(t('adminApproveOk'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminApproveFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminApproveFail')), 'error'),
   })
 
   const rejectMu = useMutation({
@@ -49,7 +50,7 @@ export function QueueSection() {
       await qc.invalidateQueries({ queryKey: ['admin', 'publish-queue'] })
       onToast(t('adminRejectOk'))
     },
-    onError: (e) => onToast(formatApiError(e, t('adminRejectFail'))),
+    onError: (e) => onToast(formatApiError(e, t('adminRejectFail')), 'error'),
   })
 
   if (!token) return null
@@ -65,7 +66,7 @@ export function QueueSection() {
           t('adminColAction'),
         ]}
         loading={queue.isLoading}
-        empty={t('adminQueueEmpty')}
+        empty={<EmptyState icon={Inbox} title={t('adminQueueEmpty')} />}
         rows={pending.map((item) => (
           <tr key={item.publish_request_id} className="group border-t border-[var(--gf-border)]">
             <td className="px-4 py-3">{item.game_title}</td>

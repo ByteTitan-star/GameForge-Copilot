@@ -7,13 +7,68 @@
 from __future__ import annotations
 
 from app.core.cdn_policy import ALLOWED_CDN_HOSTS
+from app.forge.engine_router import (
+    DEFAULT_ENGINE,
+    SUPPORTED_ENGINES,
+    engine_methodology,
+    engine_routing_guide,
+    normalize_engine_id,
+    recommended_cdn_url,
+)
 from app.forge.skills import load_skill
 
 _CONV = load_skill("conventions.md")
 _PLAYTEST = load_skill("playtest.md")
 
+# 受控引擎枚举的中文展示，注入设计稿 schema，供策划阶段选择。
+_ENGINE_ENUM_TEXT = "、".join(sorted(SUPPORTED_ENGINES))
+
 # CDN 白名单中文展示：注入代码生成提示词，与 CSP / 试玩校验同源（单一改点）
 _CDN_ALLOWLIST = "、".join(sorted(ALLOWED_CDN_HOSTS))
+
+# 引擎 CDN 段：phaser3/pixijs 有钉死 URL；canvas 为空段。LLM 必须照搬，禁止改版本。
+def _engine_cdn_clause(engine_id: str) -> str:
+    url = recommended_cdn_url(engine_id)
+    if not url:
+        return ""
+    return (
+        "\n\n【本游戏引擎 CDN】\n"
+        f"必须使用以下精确 URL 通过 <script src> 引入引擎 UMD，不得更改版本号或路径，"
+        f"不得换用其他 CDN 或自行下载：\n{url}\n"
+        "引擎脚本加载失败时必须给出程序化回退，且不阻塞游戏启动。"
+    )
+
+
+# 通用硬约束骨架：与具体引擎无关。引擎专属方法论由 build_*_prompt 按需拼接。
+_CODE_COMMON = f"""
+你是一名资深 HTML5 游戏工程师。请根据已经由用户确认的设计稿，交付一个完整、
+可试玩、离线运行的小游戏，而不是静态展示页、机制片段或带占位符的 Demo。
+
+硬性约束：
+1. 只生成一个自包含的 index.html。游戏逻辑 JS 与 CSS 一律内联；仅允许通过
+   <script src> 引用白名单 CDN（{_CDN_ALLOWLIST}）上的游戏引擎 UMD 包（如 Phaser/PixiJS），
+   引擎 URL 以提示词中给出的为准，不得自行编造版本或换 CDN。
+2. 不得发起除引擎与字体 CDN 外的任何网络请求、不得动态 import、不得调用服务端接口
+   或引用本地额外文件。
+3. 只使用输入中明确提供的数据 URI 素材；未提供或加载失败的素材必须使用
+   Canvas/CSS 程序化图形作为可靠回退，不能阻止游戏开始。
+4. 必须实现设计稿中的主菜单、说明、游戏中、暂停、关卡过渡、失败、最终通关、
+   重新开始，以及清晰的 HUD 和即时反馈。
+5. 键盘和触控都必须可操作；按钮具备足够点击区域；页面缩放后核心游戏区域、
+   HUD 和关键按钮仍可见。
+6. 主循环遵循所选引擎的约定（原生 Canvas 用 requestAnimationFrame 并钳制异常大的
+   delta time；Phaser/PixiJS 用引擎自带 Ticker，不要叠加裸 RAF）；切换状态、
+   重开或重进关卡时必须正确重置计时器、输入、实体和临时效果。
+7. 不得留下 TODO、伪代码、未实现按钮、仅在注释中描述的功能或依赖刷新页面的重开。
+8. 不得通过删除关卡、敌人、碰撞、胜负或反馈等功能来规避实现难点。
+9. 正常游玩路径不得产生未捕获异常、无限循环或持续刷新的控制台错误。
+10. 状态机名称与 DOM 标识必须严格一致；例如 setScreen('playing') 动态查找
+    #screen-playing 时，HTML 中必须存在该元素。不得使用 #screen-game 等不同别名。
+
+实现优先级：先确保完整状态闭环和核心玩法正确，再完成关卡递进、反馈和视觉润色。
+输出前在内部逐项核对设计稿的 acceptance_criteria 和下方引擎方法论与试玩规范，
+但不要输出核对过程。
+""".strip()
 
 # 保留 title/gameplay/controls/levels 四个旧字段，避免现有前端展示和历史数据失效；
 # 更完整的设计信息放在新增字段中，由开发和 QA 阶段共同消费。
@@ -89,10 +144,16 @@ DESIGN_DOC_SCHEMA = r"""
     "effects": ["关键动画、粒子、镜头或声音反馈"]
   },
   "technical_constraints": [
-    "单个 index.html；除白名单 CDN 外离线运行、无其他网络请求",
+    "单个 index.html；除白名单 CDN（含所选引擎）外离线运行、无其他网络请求",
     "同时支持键盘和触控操作",
     "画面随视口自适应且核心玩法区域保持可见"
   ],
+  "engine": {
+    "id": "受控枚举之一：{_ENGINE_ENUM_TEXT}",
+    "rationale": "为什么选这个引擎（与玩法复杂度/物理碰撞/渲染需求的契合度）",
+    "version": "引擎精确版本号，须与代码生成的引擎 CDN URL 完全一致",
+    "library_notes": ["本引擎下需特别注意的工程约束，如加载回退、渲染模式、循环约定"]
+  },
   "acceptance_criteria": [
     {
       "id": "AC-01",
@@ -123,12 +184,19 @@ HTML5 游戏工程师实现的结构化设计稿。你的目标不是复述创�
    acceptance_criteria 必须具体到工程师无需再次猜测。
 7. 每一条验收标准都必须可观察、可复现，并覆盖启动、核心操作、关卡推进、
    胜负、重开、键盘、触控和控制台无致命错误。
+8. 根据《引擎选型指南》为游戏选择一个渲染引擎写入 engine.id（受控枚举：
+   {_ENGINE_ENUM_TEXT}），并在 engine.rationale 写清选择理由、在 engine.version
+   填写精确版本号。默认倾向 canvas；只有玩法明确需要碰撞/物理/多场景/精灵动画时
+   才上 phaser3，渲染是主要瓶颈且不需完整框架时才用 pixijs。一份游戏只选一个引擎。
 
 输出要求：
 - 只输出一个合法 JSON 对象，不输出 Markdown、代码围栏、说明或前后缀。
 - 严格使用下面的字段结构，不缺字段，不新增同义字段。
 - 所有数组即使只有一项也必须保持数组类型；所有 id 使用稳定的英文 snake_case。
 - 不允许出现“待定”“自行发挥”“等”“参考常规做法”这类无法实现或验收的表述。
+
+引擎选型指南：
+{engine_routing_guide()}
 
 设计稿 JSON 结构：
 {DESIGN_DOC_SCHEMA}
@@ -146,73 +214,91 @@ PLAN_REVISE_PROMPT = f"""
    index.html 可实现。
 4. 保留 title/gameplay/controls/levels 四个兼容字段，并保证它们与详细字段一致。
 5. 新增的非关键假设写入 overview.assumptions，不得把用户明确要求降级为假设。
+6. 重新审视 engine 选型：若修改意见未触及玩法复杂度，保持原 engine 不变；
+   若玩法性质发生根本变化（如从回合制改为实时物理），按《引擎选型指南》更新 engine
+   并填写新的 rationale 与 version。
 
 输出要求：只输出一个符合下列结构的合法 JSON 对象，不输出 Markdown、代码围栏、
 解释、差异列表或任何前后缀。
+
+引擎选型指南：
+{engine_routing_guide()}
 
 设计稿 JSON 结构：
 {DESIGN_DOC_SCHEMA}
 """.strip()
 
-CODE_PROMPT = f"""
-你是一名资深 HTML5 游戏工程师。请根据已经由用户确认的设计稿，交付一个完整、
-可试玩、离线运行的小游戏，而不是静态展示页、机制片段或带占位符的 Demo。
+def build_code_prompt(engine_id: str) -> str:
+    """按选定引擎拼装代码生成 system prompt：通用骨架 + 引擎方法论 + 钉死 CDN。
 
-硬性约束：
-1. 只生成一个自包含的 index.html；CSS 与 JavaScript 全部内联。
-2. 仅允许引用白名单内 CDN（{_CDN_ALLOWLIST}）渲染：three.js / tailwind / 字体等；
-   不得引用其他外部域名、不得发起其他网络请求、不得动态 import、不得调用服务端
-   接口或引用本地额外文件；CDN 必须提供加载失败时的程序化回退，不阻塞启动。
-3. 只使用输入中明确提供的数据 URI 素材；未提供或加载失败的素材必须使用
-   Canvas/CSS 程序化图形作为可靠回退，不能阻止游戏开始。
-4. 必须实现设计稿中的主菜单、说明、游戏中、暂停、关卡过渡、失败、最终通关、
-   重新开始，以及清晰的 HUD 和即时反馈。
-5. 键盘和触控都必须可操作；按钮具备足够点击区域；页面缩放后核心游戏区域、
-   HUD 和关键按钮仍可见。
-6. 游戏循环使用 requestAnimationFrame，并限制异常大的 delta time；切换状态、
-   重开或重进关卡时必须正确重置计时器、输入、实体和临时效果。
-7. 不得留下 TODO、伪代码、未实现按钮、仅在注释中描述的功能或依赖刷新页面的重开。
-8. 不得通过删除关卡、敌人、碰撞、胜负或反馈等功能来规避实现难点。
-9. 正常游玩路径不得产生未捕获异常、无限循环或持续刷新的控制台错误。
+    不同引擎的专属写法（Scene 结构 / Ticker / 裸 RAF）从独立方法论 md 注入，
+    避免把多种引擎细节挤进单个提示词。非法 engine_id 在 router 内回退 canvas。
+    """
+    methodology = engine_methodology(engine_id)
+    return "\n\n".join(
+        part
+        for part in (
+            _CODE_COMMON,
+            f"【所选引擎：{normalize_engine_id(engine_id)} 的实现方法论】\n{methodology}"
+            if methodology
+            else "",
+            _engine_cdn_clause(engine_id),
+            f"工程约定：\n{_CONV}" if _CONV else "",
+            f"自动试玩规范：\n{_PLAYTEST}" if _PLAYTEST else "",
+            (
+                "输出要求：只输出完整 HTML 源码，第一个非空字符必须属于 <!DOCTYPE html>，"
+                "最后必须以 </html> 结束；不要输出 Markdown 代码围栏、解释或文件名。"
+            ),
+        )
+        if part
+    )
 
-实现优先级：先确保完整状态闭环和核心玩法正确，再完成关卡递进、反馈和视觉润色。
-输出前在内部逐项核对设计稿的 acceptance_criteria 和下方试玩规范，但不要输出核对过程。
 
-工程约定：
-{_CONV}
+def build_repair_prompt(engine_id: str) -> str:
+    """修复工程师 prompt：在当前实现基础上修根因，保持原引擎选型不变。
 
-自动试玩规范：
-{_PLAYTEST}
+    与 build_code_prompt 共享通用骨架与引擎方法论，额外约束「不切换引擎」防回归。
+    """
+    methodology = engine_methodology(engine_id)
+    repair_specific = (
+        "修复规则：\n"
+        "1. 优先做范围清晰的根因修复，保留当前已经正常工作的玩法、视觉、关卡和交互。\n"
+        "2. 同时检查修复对菜单、暂停、关卡切换、失败、通关、重开、键盘和触控的回归影响。\n"
+        "3. 如果错误暴露出设计稿中的必需功能尚未实现，必须补齐该功能，而不是绕过检测。\n"
+        "4. 不得隐藏错误、吞掉所有异常、伪造通过结果，或删除碰撞、实体、关卡、胜负条件。\n"
+        "5. 当前 HTML 即使结构不佳，也必须输出一份语法完整、可独立运行的新 HTML；"
+        "不得只返回 diff、代码片段、说明或修复步骤。\n"
+        "6. 保持原 engine 选型不变，不得在修复中切换引擎或改用其他 CDN 版本。\n"
+        "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
+        "保留这些占位符；运行时会在构建前还原真实 data URI。"
+    )
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 HTML5 游戏故障修复工程师。输入会包含已确认设计稿、自动试玩错误、"
+                "QA 根因分析以及当前完整 HTML。请在当前实现基础上修复根因，并返回可直接替换的"
+                "完整 index.html。"
+            ),
+            repair_specific,
+            f"【所选引擎：{normalize_engine_id(engine_id)} 的实现方法论】\n{methodology}"
+            if methodology
+            else "",
+            _engine_cdn_clause(engine_id),
+            f"工程约定：\n{_CONV}" if _CONV else "",
+            f"自动试玩规范：\n{_PLAYTEST}" if _PLAYTEST else "",
+            (
+                "输出要求：只输出完整 HTML 源码，以 <!DOCTYPE html> 开始并以 </html> 结束，"
+                "不要输出 Markdown 代码围栏或任何解释。"
+            ),
+        )
+        if part
+    )
 
-输出要求：只输出完整 HTML 源码，第一个非空字符必须属于 <!DOCTYPE html>，
-最后必须以 </html> 结束；不要输出 Markdown 代码围栏、解释或文件名。
-""".strip()
 
-CODE_REPAIR_PROMPT = f"""
-你是一名资深 HTML5 游戏故障修复工程师。输入会包含已确认设计稿、自动试玩错误、
-QA 根因分析以及当前完整 HTML。请在当前实现基础上修复根因，并返回可直接替换的
-完整 index.html。
-
-修复规则：
-1. 优先做范围清晰的根因修复，保留当前已经正常工作的玩法、视觉、关卡和交互。
-2. 同时检查修复对菜单、暂停、关卡切换、失败、通关、重开、键盘和触控的回归影响。
-3. 如果错误暴露出设计稿中的必需功能尚未实现，必须补齐该功能，而不是绕过检测。
-4. 不得隐藏错误、吞掉所有异常、伪造通过结果，或删除碰撞、实体、关卡、胜负条件。
-5. 当前 HTML 即使结构不佳，也必须输出一份语法完整、可独立运行的新 HTML；
-   不得只返回 diff、代码片段、说明或修复步骤。
-6. 继续遵守单文件、仅白名单 CDN（{_CDN_ALLOWLIST}）、无其他网络请求和素材回退要求。
-7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样
-   保留这些占位符；运行时会在构建前还原真实 data URI。
-
-工程约定：
-{_CONV}
-
-自动试玩规范：
-{_PLAYTEST}
-
-输出要求：只输出完整 HTML 源码，以 <!DOCTYPE html> 开始并以 </html> 结束，
-不要输出 Markdown 代码围栏或任何解释。
-""".strip()
+# 向后兼容别名：默认 canvas 路线的完整提示词，供未传 engine_id 的旧调用与测试引用。
+CODE_PROMPT = build_code_prompt(DEFAULT_ENGINE)
+CODE_REPAIR_PROMPT = build_repair_prompt(DEFAULT_ENGINE)
 
 QA_PROMPT = f"""
 你是一名 HTML5 游戏 QA 负责人。自动试玩已经判定本次构建失败。请结合已确认设计稿、
@@ -253,4 +339,6 @@ __all__ = [
     "PLAN_PROMPT",
     "PLAN_REVISE_PROMPT",
     "QA_PROMPT",
+    "build_code_prompt",
+    "build_repair_prompt",
 ]

@@ -77,6 +77,42 @@ async def test_read_bytes_missing_returns_none() -> None:
     assert await store.read_bytes(gid, 1, "thumb.png") is None
 
 
+async def test_list_files_single_artifact() -> None:
+    """典型产物：index.html 单文件，列出后 path 为 posix 相对路径、含 size/mime。"""
+    gid = uuid.uuid4()
+    await store.write_artifact(gid, 1, {"index.html": _HTML})
+    metas = await store.list_files(gid, 1)
+    assert [m.path for m in metas] == ["index.html"]
+    assert metas[0].size == len(_HTML.encode())
+    assert metas[0].mime == "text/html"
+
+
+async def test_list_files_includes_bypass_and_nested() -> None:
+    """旁路产物 + 嵌套子目录都应被列出（为未来多文件产物留口）。"""
+    gid = uuid.uuid4()
+    await store.write_artifact(gid, 1, {"index.html": _HTML})
+    await store.write_bytes(gid, 1, "thumb.png", b"png-bytes")
+    await store.write_bytes(gid, 1, "assets/app.js", b"console.log(1)")
+    paths = [m.path for m in await store.list_files(gid, 1)]
+    assert set(paths) == {"index.html", "thumb.png", "assets/app.js"}
+
+
+async def test_list_files_missing_dir_returns_empty() -> None:
+    """版本未生成/已清理：目录不存在，返回 []（不抛错）。"""
+    gid = uuid.uuid4()
+    assert await store.list_files(gid, 999) == []
+
+
+async def test_list_files_excludes_outside_files() -> None:
+    """列目录仅返回 base 内的文件，相邻版本/游戏的产物不串进来。"""
+    gid = uuid.uuid4()
+    await store.write_artifact(gid, 1, {"index.html": _HTML})
+    # 另一个版本的产物
+    await store.write_artifact(gid, 2, {"index.html": _HTML})
+    paths_v1 = [m.path for m in await store.list_files(gid, 1)]
+    assert paths_v1 == ["index.html"]
+
+
 async def test_draft_owner_200(verified_client: httpx.AsyncClient) -> None:
     gid = await _make_game(verified_client)
     await _make_version(gid, 1)
@@ -141,6 +177,88 @@ async def test_download_missing_artifact_returns_404(verified_client: httpx.Asyn
     gid = await _make_game(verified_client)
     await _make_version(gid, 1, write_artifact=False)
     r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/download")
+    assert r.status_code == 404
+
+
+# ── 代码预览：文件树 + 单文件内容端点 ──────────────────────────────────────────
+
+
+async def test_list_files_endpoint_owner_200(verified_client: httpx.AsyncClient) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    await store.write_bytes(gid, 1, "thumb.png", b"png-bytes")
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/files")
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    paths = sorted(item["path"] for item in data)
+    assert paths == ["index.html", "thumb.png"]
+    html_item = next(i for i in data if i["path"] == "index.html")
+    assert html_item["mime"] == "text/html"
+    assert html_item["size"] == len(_HTML.encode())
+
+
+async def test_list_files_endpoint_non_owner_404(
+    verified_client: httpx.AsyncClient, auth_client: httpx.AsyncClient
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await auth_client.get(f"/api/v1/games/{gid}/versions/1/files")
+    assert r.status_code == 404
+
+
+async def test_list_files_endpoint_version_not_found(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    gid = await _make_game(verified_client)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/999/files")
+    assert r.status_code == 404
+
+
+async def test_list_files_endpoint_empty_artifact_returns_empty_list(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    """产物未落盘但有 version 行：返回 data: []，不是 404。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1, write_artifact=False)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/files")
+    assert r.status_code == 200, r.text
+    assert r.json()["data"] == []
+
+
+async def test_fetch_file_endpoint_owner_200(verified_client: httpx.AsyncClient) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/files/index.html")
+    assert r.status_code == 200, r.text
+    assert r.content == _HTML.encode()
+    assert r.headers["content-type"].startswith("text/plain")
+
+
+async def test_fetch_file_endpoint_non_owner_404(
+    verified_client: httpx.AsyncClient, auth_client: httpx.AsyncClient
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await auth_client.get(f"/api/v1/games/{gid}/versions/1/files/index.html")
+    assert r.status_code == 404
+
+
+async def test_fetch_file_endpoint_missing_file_404(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/files/nope.js")
+    assert r.status_code == 404
+
+
+async def test_fetch_file_endpoint_rejects_traversal(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    """路径穿越：read_bytes 的 _check_path 拦截 ../，端点返回 404 不泄漏。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    r = await verified_client.get(f"/api/v1/games/{gid}/versions/1/files/..%2Fescape.txt")
     assert r.status_code == 404
 
 

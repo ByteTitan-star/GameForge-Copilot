@@ -77,6 +77,11 @@ async def test_hitl_decision_is_persisted(
         {"phase": "plan_confirm", "design_doc": {"title": "地图"}},
         db_session,
     )
+    from app.models.generation_run import GenerationRun
+
+    generation_run = await db_session.get(GenerationRun, UUID(run_id))
+    assert generation_run is not None
+    generation_run.status = "paused"
     await db_session.commit()
 
     resolved = await verified_client.post(

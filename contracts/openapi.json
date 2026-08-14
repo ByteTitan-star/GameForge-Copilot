@@ -2214,6 +2214,152 @@
         }
       }
     },
+    "/api/v1/games/{game_id}/versions/{version}/files": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "List Version Files",
+        "description": "列出某版本产物下的全部文件（代码预览文件树，owner only）。\n\n空产物（版本未生成/已清理）返回 data: []，不当作 404。",
+        "operationId": "list_version_files_api_v1_games__game_id__versions__version__files_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ArtifactFileItem__"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/{game_id}/versions/{version}/files/{file_path}": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Fetch Version File",
+        "description": "读取某版本产物下单个文件的原始字节（代码预览内容，owner only）。\n\nfile_path 由 FastAPI :path 转换器吃下斜杠；read_bytes 已做防穿越校验。\n文件不存在/越界一律 GAME_NOT_FOUND，不泄漏存在性。",
+        "operationId": "fetch_version_file_api_v1_games__game_id__versions__version__files__file_path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "产物文件原始内容",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/games/{game_id}/versions/{version}/activate": {
       "post": {
         "tags": [
@@ -6072,6 +6218,22 @@
         ],
         "title": "ApiResponse[list[ActiveRunItem]]"
       },
+      "ApiResponse_list_ArtifactFileItem__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactFileItem"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ArtifactFileItem]]"
+      },
       "ApiResponse_list_ForgeMessageItem__": {
         "properties": {
           "data": {
@@ -6231,6 +6393,36 @@
           "data"
         ],
         "title": "ApiResponse[list[str]]"
+      },
+      "ArtifactFileItem": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "ArtifactFileItem",
+        "description": "产物单个文件的只读描述（代码预览用）。路径为相对产物根的 POSIX 路径。"
       },
       "AuditLogItem": {
         "properties": {

@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { ScrollText } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { AdminTable } from '@/components/admin/AdminTable'
+import { EmptyState } from '@/components/admin/EmptyState'
 
 export function AuditSection() {
   const t = useT()
@@ -20,7 +22,7 @@ export function AuditSection() {
       <AdminTable
         headers={[t('adminColTime'), t('adminColAction'), t('adminColTarget'), t('adminColActor')]}
         loading={logs.isLoading}
-        empty={t('adminAuditEmpty')}
+        empty={<EmptyState icon={ScrollText} title={t('adminAuditEmpty')} />}
         rows={(logs.data?.data ?? []).map((row) => (
           <tr key={row.id} className="border-t border-[var(--gf-border)]">
             <td className="gf-page-muted px-4 py-3 font-mono text-xs">

@@ -60,6 +60,96 @@ async def test_playtest_fails_unbalanced_braces() -> None:
 
 
 @pytest.mark.asyncio
+async def test_playtest_fails_when_screen_state_has_no_matching_dom() -> None:
+    html = """
+    <html><body>
+    <div id="screen-menu"><button>开始</button></div>
+    <div id="screen-game"></div>
+    <script>
+    function setScreen(next) {
+      document.getElementById(`screen-${next}`);
+    }
+    setScreen('playing');
+    </script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert not r.ok
+    assert any("#screen-playing" in e for e in r.errors)
+
+
+@pytest.mark.asyncio
+async def test_playtest_accepts_matching_screen_state_dom() -> None:
+    html = """
+    <html><body>
+    <div id="screen-menu"><button>开始</button></div>
+    <div id="screen-playing"></div>
+    <script>
+    function setScreen(next) {
+      document.getElementById(`screen-${next}`);
+    }
+    setScreen('playing');
+    </script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert r.ok, r.errors
+
+
+def test_cdn_whitelist_accepts_engine_scripts() -> None:
+    """Phaser/PixiJS 走 jsdelivr/unpkg CDN，已在白名单内，validate_refs 不得误杀。"""
+    from app.core.cdn_policy import extract_external_refs, validate_refs
+
+    html = (
+        '<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>'
+        '<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.0/dist/pixi.min.js"></script>'
+    )
+    ok, violations = validate_refs(extract_external_refs(html))
+    assert ok, violations
+
+
+@pytest.mark.asyncio
+async def test_playtest_passes_with_engine_cdn_and_canvas() -> None:
+    """含 Phaser CDN 脚本 + canvas 的产物应通过试玩（CDN 在白名单）。"""
+    html = """
+    <html><body>
+    <canvas id="game"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+    <script>document.addEventListener('keydown', function(e) {});</script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert r.ok, r.errors
+
+
+@pytest.mark.asyncio
+async def test_playtest_accepts_engine_mounted_canvas() -> None:
+    """引擎产物 canvas 由运行时注入挂载点，源码无裸 <canvas>；静态模式不得误判。
+
+    静态模式不执行 JS，无法验证引擎是否真的挂上了 canvas；此项交给运行时/Playwright/
+    人工，而非用「源码无 canvas」错判可玩性。
+    """
+    html = """
+    <html><body>
+    <div id="game"></div>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+    <script>document.addEventListener('keydown', function(e) {});</script>
+    </body></html>
+    """
+    r = await run_playtest(html)
+    assert r.ok, r.errors
+
+
+@pytest.mark.asyncio
+async def test_playtest_still_rejects_bare_page_without_engine() -> None:
+    """无 canvas 且无引擎声明的纯静态页仍应被拒（引擎兼容不得放宽通用保护）。"""
+    html = "<html><body><h1>no game</h1></body></html>"
+    r = await run_playtest(html)
+    assert not r.ok
+    assert any("canvas" in e or "交互" in e for e in r.errors)
+
+
+@pytest.mark.asyncio
 async def test_static_mode_never_returns_thumbnail(monkeypatch: pytest.MonkeyPatch) -> None:
     """默认无 PLAYTEST_USE_PLAYWRIGHT → 静态模式，want_thumb 也无法截图，thumbnail 恒 None。
 

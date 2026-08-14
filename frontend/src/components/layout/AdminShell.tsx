@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   BarChart3,
   Languages,
+  LayoutDashboard,
   ListChecks,
   Menu,
   Package,
   Palette,
   ScrollText,
   Settings,
-  Shield,
   TrendingUp,
   Users,
   X,
@@ -20,30 +20,35 @@ import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { useLocaleStore } from '@/stores/locale-store'
 import { ThemePanelModal } from '@/components/theme/ThemePanelModal'
+import { FlowerLogo } from '@/components/admin/FlowerLogo'
 import { UserMenu } from './UserMenu'
-import { AdminToastContext } from '@/pages/admin/adminToast'
+import { AdminToastContext, type ToastVariant } from '@/pages/admin/adminToast'
 
 type Section = {
   to: string
+  /** 是否为概览（精确匹配 /admin，不参与 startsWith） */
+  exact?: boolean
   label: string
   title: string
+  titleAccent?: string
   subtitle: string
   icon: LucideIcon
 }
 
 const sidebarLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'gf-interactive flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium',
-    isActive ? 'gf-nav-link-active' : 'gf-nav-link',
+    'gf-interactive flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+    isActive ? 'gf-admin-nav-active' : 'gf-admin-nav',
   )
 
 /**
- * 独立后台 shell：不套 AppShell。左侧固定侧边栏（品牌 + 7 个 section + 主题/语言/用户）
- * + 右侧主区（topbar 当前 section 标题 + Outlet）。
+ * 独立后台 shell（Convix 风）：不套 AppShell。左侧固定侧边栏（橙色 8 瓣花品牌 +
+ * Overview + 7 个 section + 主题/语言/用户）+ 右侧主区（浮动胶囊 topbar + Outlet）。
  *
- * token 驱动，跟随全局主题；外层 .gf-admin 标记类触发亮色 SaaS 质感层（index.css）。
- * 桌面端 sidebar 常驻（.gf-sidebar 已有基建）；移动端 <1024px 抽屉式（.gf-admin-sidebar
- * + is-open + overlay）。守卫（RequireAuth + RequireAdmin）在路由层包裹本 shell。
+ * admin 作用域（.gf-admin）强制橙色主题（index.css 的 !important token 覆盖），
+ * 与主站/forge/games 的用户自选主题解耦。桌面端 sidebar 常驻；移动端 <1024px 抽屉
+ * （.gf-admin-sidebar + is-open + overlay），抽屉打开时主内容区 inert 防止键盘焦点逃逸。
+ * 守卫（RequireAuth + RequireAdmin）在路由层包裹本 shell。
  * toast 由 AdminToastContext 下发，各 section 通过 useAdminToast() 推送反馈。
  */
 export function AdminShell() {
@@ -52,8 +57,13 @@ export function AdminShell() {
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
   const [themeOpen, setThemeOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // toast 推送：默认 info（role=status）。失败路径传 'error'（role=alert）让屏幕阅读器立即播报。
+  const pushToast = useCallback((message: string, variant: ToastVariant = 'info') => {
+    setToast({ message, variant })
+  }, [])
 
   // toast 自动消失（4s）
   useEffect(() => {
@@ -67,7 +77,18 @@ export function AdminShell() {
     setSidebarOpen(false)
   }, [location.pathname])
 
+  // 抽屉打开时锁背景滚动
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [sidebarOpen])
+
   const sections: Section[] = [
+    { to: '/admin', exact: true, label: t('adminTabOverview'), title: t('adminOverviewHeaderTitle'), subtitle: t('adminOverviewSubtitle'), icon: LayoutDashboard },
     { to: '/admin/queue', label: t('adminTabQueue'), title: t('adminQueueTitle'), subtitle: t('adminQueueSubtitle'), icon: ListChecks },
     { to: '/admin/published', label: t('adminTabPublished'), title: t('adminPublishedTitle'), subtitle: t('adminPublishedSubtitle'), icon: Package },
     { to: '/admin/users', label: t('adminTabUsers'), title: t('adminUsersTitle'), subtitle: t('adminUsersSubtitle'), icon: Users },
@@ -77,25 +98,26 @@ export function AdminShell() {
     { to: '/admin/settings', label: t('adminTabSettings'), title: t('adminSettingsTitle'), subtitle: t('adminSettingsSubtitle'), icon: Settings },
   ]
 
-  // 当前 section 标题（fallback 到管理后台总标题）
-  const current = sections.find((s) => location.pathname.startsWith(s.to))
+  // 当前 section 标题（Overview 精确匹配，其余 startsWith）
+  const current = sections.find((s) =>
+    s.exact ? location.pathname === s.to : location.pathname.startsWith(s.to) && s.to !== '/admin',
+  ) ?? sections[0]
 
   const sidebarBrand = (
     <Link
       to="/games"
       title={t('adminBackToApp')}
-      className="gf-interactive flex shrink-0 items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]"
+      className="gf-interactive flex shrink-0 items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-black/[0.03]"
     >
-      <span className="gf-logo-badge gf-interactive grid h-9 w-9 place-items-center rounded-xl text-sm font-black">
-        <Shield className="h-4 w-4" />
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-black/5">
+        <FlowerLogo className="h-6 w-6" />
       </span>
-      <span>
-        <span className="gf-page-body block text-sm font-semibold tracking-tight">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold tracking-tight text-[var(--gf-text)]">
           {t('adminShellTitle')}
         </span>
-        <span className="gf-page-muted flex items-center gap-1 text-[10px]">
-          <ArrowLeft className="h-2.5 w-2.5" />
-          {t('adminBackToApp')}
+        <span className="gf-admin-serif-italic block text-[13px] leading-tight text-[#ef4d23]">
+          {t('adminShellTagline')}
         </span>
       </span>
     </Link>
@@ -104,17 +126,22 @@ export function AdminShell() {
   const sidebarContent = (
     <>
       {sidebarBrand}
-      <nav className="mt-8 flex flex-1 flex-col gap-1">
+      <nav aria-label={t('admin')} className="mt-8 flex flex-1 flex-col gap-1">
         {sections.map((s) => (
-          <NavLink key={s.to} to={s.to} className={sidebarLinkClass}>
-            <s.icon className="h-4 w-4 shrink-0 opacity-80" />
+          <NavLink
+            key={s.to}
+            to={s.to}
+            end={s.exact}
+            className={sidebarLinkClass}
+          >
+            <s.icon className="h-4 w-4 shrink-0" />
             {s.label}
           </NavLink>
         ))}
       </nav>
-      <div className="gf-border-subtle mt-auto space-y-3 border-t pt-4">
+      <div className="mt-auto space-y-3 border-t border-[var(--gf-border)] pt-4">
         <div className="flex items-center justify-between px-1">
-          <span className="gf-page-muted text-[10px] font-medium tracking-wider uppercase">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
             {t('admin')}
           </span>
           <div className="flex items-center gap-1">
@@ -123,7 +150,7 @@ export function AdminShell() {
               title={t('themeTitle')}
               aria-label={t('themeTitle')}
               onClick={() => setThemeOpen(true)}
-              className="gf-interactive gf-text-accent grid h-9 w-9 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04]"
+              className="gf-interactive grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-[#ef4d23] transition hover:bg-black/[0.04]"
             >
               <Palette className="h-4 w-4" />
             </button>
@@ -132,7 +159,7 @@ export function AdminShell() {
               title={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
               aria-label={locale === 'zh' ? t('switchToEnglish') : t('switchToChinese')}
               onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}
-              className="gf-interactive gf-page-muted grid h-9 w-9 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04] hover:text-[var(--gf-text)]"
+              className="gf-interactive grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-neutral-500 transition hover:bg-black/[0.04] hover:text-[var(--gf-text)]"
             >
               <Languages className="h-4 w-4" />
             </button>
@@ -144,62 +171,87 @@ export function AdminShell() {
   )
 
   return (
-    <AdminToastContext.Provider value={setToast}>
-      <div className="gf-workshop gf-admin">
-        {/* 侧边栏：桌面常驻（.gf-sidebar fixed 基建）；移动端 <1024px 抽屉（CSS
-            .gf-admin-sidebar 默认 translateX(-100%)，is-open 滑入）。一个 aside，
-            通过 CSS 断点切换两种形态，避免重复渲染。 */}
-        {sidebarOpen ? (
-          <button
-            type="button"
-            aria-label={t('cancel')}
-            className="gf-admin-overlay lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        ) : null}
-        <aside
-          className={cn(
-            'gf-sidebar gf-admin-sidebar flex flex-col border-r px-3 py-4 backdrop-blur-xl',
-            sidebarOpen && 'is-open',
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            aria-label={t('cancel')}
-            className="gf-interactive gf-page-muted absolute right-2 top-2 grid h-8 w-8 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04] lg:hidden"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          {sidebarContent}
-        </aside>
-
-        <div className="gf-shell-main relative z-[1] flex flex-col">
-          <header className="gf-main-canvas sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-[var(--gf-border)] bg-white/80 px-4 py-3 backdrop-blur-xl md:px-8">
+    <AdminToastContext.Provider value={pushToast}>
+      <div className="gf-admin gf-admin-frame min-h-screen bg-[#ededed] p-3 sm:p-4">
+        {/* Convix 风大圆角容器：侧边栏 + 主区一起被圆角裁切 */}
+        <div className="relative flex h-[calc(100vh-24px)] w-full overflow-hidden rounded-2xl bg-[var(--gf-admin-bg-soft)] sm:h-[calc(100vh-32px)] sm:rounded-3xl">
+          {/* 移动端遮罩 + 主区 inert（抽屉打开时锁键盘焦点在抽屉内） */}
+          {sidebarOpen ? (
             <button
               type="button"
-              onClick={() => setSidebarOpen(true)}
-              aria-label={t('admin')}
-              className="gf-interactive gf-page-muted grid h-9 w-9 cursor-pointer place-items-center rounded-lg transition hover:bg-black/[0.04] hover:text-[var(--gf-text)] lg:hidden"
+              aria-label={t('adminCloseSidebar')}
+              className="gf-admin-overlay absolute inset-0 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          ) : null}
+          <aside
+            className={cn(
+              'gf-admin-sidebar relative z-50 flex w-64 shrink-0 flex-col bg-white px-3 py-4 shadow-sm',
+              sidebarOpen && 'is-open',
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              aria-label={t('adminCloseSidebar')}
+              className="gf-interactive absolute right-2 top-2 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-neutral-500 transition hover:bg-black/[0.04] lg:hidden"
             >
-              <Menu className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </button>
-            <div className="min-w-0">
-              <h2 className="gf-page-title leading-tight">{current?.title ?? t('adminShellTitle')}</h2>
-              {current ? <p className="gf-page-subtitle mt-0.5 hidden sm:block">{current.subtitle}</p> : null}
-            </div>
-          </header>
+            {sidebarContent}
+          </aside>
 
-          <main className="gf-main-canvas relative min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 md:px-8 md:py-8">
-              {toast ? (
-                <p role="status" className="gf-banner-info gf-toast-in mb-5 rounded-xl px-4 py-2.5 text-sm">
-                  {toast}
-                </p>
-              ) : null}
-              <Outlet />
-            </div>
-          </main>
+          <div
+            className="gf-shell-main relative z-[1] flex min-w-0 flex-1 flex-col"
+            // 抽屉打开时，主内容区 inert，键盘焦点锁在侧边栏抽屉内
+            inert={sidebarOpen ? true : undefined}
+          >
+            {/* 浮动胶囊 topbar：当前 section 标题（Inter 半粗 + Serif 斜体点睛）+ 返回主站 */}
+            <header className="flex items-center gap-3 border-b border-black/5 bg-white/80 px-4 py-3 backdrop-blur-xl md:px-8">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                aria-label={t('admin')}
+                className="gf-interactive grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-neutral-500 transition hover:bg-black/[0.04] hover:text-[var(--gf-text)] lg:hidden"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h2 className="flex items-center gap-2 truncate text-[15px] font-semibold leading-tight text-[var(--gf-text)]">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4d23]" />
+                  {current.title}
+                  {current.titleAccent ? (
+                    <span className="gf-admin-serif-italic text-[#ef4d23]">{current.titleAccent}</span>
+                  ) : null}
+                </h2>
+                {current ? <p className="mt-0.5 truncate text-xs text-neutral-500">{current.subtitle}</p> : null}
+              </div>
+              <Link
+                to="/games"
+                className="gf-interactive gf-admin-cta-btn hidden h-9 shrink-0 items-center gap-1.5 px-4 text-xs sm:inline-flex"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {t('adminBackToApp')}
+              </Link>
+            </header>
+
+            <main className="relative min-h-0 flex-1 overflow-y-auto bg-[#ededed]">
+              <div className="mx-auto w-full max-w-[1280px] px-4 py-6 md:px-8 md:py-8">
+                {toast ? (
+                  <p
+                    role={toast.variant === 'error' ? 'alert' : 'status'}
+                    className={cn(
+                      'gf-toast-in mb-5 rounded-xl px-4 py-2.5 text-sm',
+                      toast.variant === 'error' ? 'gf-banner-error' : 'gf-banner-info',
+                    )}
+                  >
+                    {toast.message}
+                  </p>
+                ) : null}
+                <Outlet />
+              </div>
+            </main>
+          </div>
         </div>
 
         <ThemePanelModal open={themeOpen} onClose={() => setThemeOpen(false)} />

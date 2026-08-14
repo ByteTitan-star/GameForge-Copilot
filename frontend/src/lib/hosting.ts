@@ -1,4 +1,6 @@
 import { env } from './env'
+import { authApi } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth-store'
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/$/, '')
@@ -39,18 +41,53 @@ export function wsRunUrl(runId: string, accessToken: string, after = 0): string 
 }
 
 /** 草稿托管需 Bearer；iframe 无法带头，改为 fetch → blob URL */
-export async function fetchDraftBlobUrl(
+export async function fetchDraftHtml(
   gameId: string,
   version: number | string,
   accessToken: string,
 ): Promise<string> {
   const url = draftArtifactUrl(gameId, version)
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'text/html' },
+  let token = accessToken
+  let res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'text/html' },
   })
+
+  // access token 只有短 TTL；草稿 iframe 通过 fetch 加载时也必须走同一套
+  // refresh 机制，否则页面打开超过 15 分钟后会稳定得到 401。最多刷新一次，
+  // 避免失效 refresh token 导致请求循环。
+  if (res.status === 401) {
+    const state = useAuthStore.getState()
+    if (state.access_token === accessToken && state.user && state.refresh_token) {
+      try {
+        const refreshed = await authApi.refresh(state.refresh_token)
+        state.setSession({
+          user: state.user,
+          access_token: refreshed.access_token,
+          refresh_token: refreshed.refresh_token,
+        })
+        token = refreshed.access_token
+        res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'text/html' },
+        })
+      } catch {
+        // 保留原始 401，交由上层显示可重试的加载错误。
+      }
+    }
+  }
   if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('登录状态已过期，请刷新页面后重试')
+    }
     throw new Error(`草稿加载失败 (${res.status})`)
   }
-  const html = await res.text()
+  return res.text()
+}
+
+export async function fetchDraftBlobUrl(
+  gameId: string,
+  version: number | string,
+  accessToken: string,
+): Promise<string> {
+  const html = await fetchDraftHtml(gameId, version, accessToken)
   return URL.createObjectURL(new Blob([html], { type: 'text/html' }))
 }

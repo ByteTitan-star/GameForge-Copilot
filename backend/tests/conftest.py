@@ -144,6 +144,12 @@ def _valid_design_doc_json() -> str:
                 "visual_style": "扁平像素风",
                 "color_palette": ["#111111", "#eeeeee"],
             },
+            "engine": {
+                "id": "canvas",
+                "rationale": "网格收集玩法实体少、无物理碰撞，原生 Canvas 足够且零依赖。",
+                "version": "",
+                "library_notes": ["用 requestAnimationFrame 并钳制 delta time"],
+            },
             "acceptance_criteria": [
                 {
                     "id": f"AC-{i:02d}",

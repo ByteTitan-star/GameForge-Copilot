@@ -7,16 +7,18 @@
  * - btnNeutral：中性操作（降权 / 启用 / 清除覆盖）
  * 统一 h-8 / rounded-lg / focus-visible ring，跨主题一致。
  *
- * btnDanger 行内默认弱化（opacity-60），父级 tr.group 悬停/聚焦时强化——降低视觉噪音，
- * 同时把破坏性操作退到「需要交互才显眼」的层级。配齐触屏：group-focus-within 兜底键盘/点击聚焦。
+ * btnDanger 只弱化背景透明度（文字 rose-700 全不透明保证对比度 ≥ 4.5:1），行 hover/focus-within
+ * 时背景加深到 /15。不再用整按钮 opacity-60（会连文字一起透明化导致不可读）。配齐触屏：
+ * group-focus-within 兜底键盘/点击聚焦。
  */
 const BASE =
   'gf-interactive inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg !px-3 !text-xs font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.4)]'
 
 export const btnPrimary = `gf-interactive gf-btn-primary ${BASE}`
 
-// 破坏性按钮：常驻但弱化，行 hover/focus-within 强化。tr 需挂 group 类。
-export const btnDanger = `${BASE} !bg-red-500/10 !text-rose-700 opacity-60 ring-1 ring-inset ring-red-500/20 transition-opacity duration-150 hover:!opacity-100 hover:!bg-red-500/15 group-hover:opacity-100 group-focus-within:opacity-100`
+// 破坏性按钮：常驻但弱化（仅背景），行 hover/focus-within 背景加深。tr 需挂 group 类。
+// 文字保持 rose-700 全不透明，满足正文对比度；不挂 opacity 到整按钮。
+export const btnDanger = `${BASE} !bg-red-500/10 !text-rose-700 ring-1 ring-inset ring-red-500/20 transition-colors duration-150 hover:!bg-red-500/20 group-hover:!bg-red-500/20 group-focus-within:!bg-red-500/20`
 
 /** 实心红：ConfirmModal 最终确认破坏性操作用（不走 BASE 的 ring，避免和红冲突） */
 export const btnDangerSolid =

@@ -18,6 +18,11 @@ type Props = {
   data: Point[]
   /** light = 浅色卡片（settings 用量看板）；dark = 深色面板（admin，默认） */
   tone?: 'light' | 'dark'
+  /** 显式指定主/辅色 hex，覆盖主题色。admin 作用域走橙色主题但 useThemeColors 读的是
+   * <html> inline style（读不到 .gf-admin !important 覆盖），故 admin 调用处直接传橙色 hex，
+   * 避免出现"卡片按钮橙、图表柱蓝/绿"的割裂。主站不传，继续走用户主题色。 */
+  primaryHex?: string
+  secondaryHex?: string
 }
 
 /** 中文标签必须显式字体，避免 canvas/svg 回退缺字（项目历史教训） */
@@ -45,11 +50,14 @@ const TOOLTIP_STYLE = {
   dark: { background: '#12151a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' },
 }
 
-export function UsageChart({ data, tone = 'dark' }: Props) {
+export function UsageChart({ data, tone = 'dark', primaryHex, secondaryHex }: Props) {
   const t = useT()
   const a = AXIS[tone]
-  // 用品牌色 hex 喂 recharts（input→primary、output→secondary），跟随用户主题
-  const { primary, secondary } = useThemeColors()
+  // 用品牌色 hex 喂 recharts（input→primary、output→secondary），跟随用户主题；
+  // primaryHex/secondaryHex 显式传入时覆盖（admin 橙色旁路）
+  const themeColors = useThemeColors()
+  const primary = primaryHex ?? themeColors.primary
+  const secondary = secondaryHex ?? themeColors.secondary
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">

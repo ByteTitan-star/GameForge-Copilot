@@ -29,11 +29,11 @@ import { gamesApi } from "@/api/games";
 import { meApi } from "@/api/me";
 import { RunPhase, RunStatus } from "@/api/enums";
 import { formatApiError } from "@/api/error-message";
+import { isApiError } from "@/api/errors";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { ChatPanel, type ChatMsg } from "@/components/forge/ChatPanel";
 import { ForgeAiStatusBar } from "@/components/forge/ForgeAiStatusBar";
 import { ForgeLogDock } from "@/components/forge/ForgeLogDock";
-import { ForgeQuickTemplates } from "@/components/forge/ForgeQuickTemplates";
 import { ForgeSplitLayout } from "@/components/forge/ForgeSplitLayout";
 import { HitlCard } from "@/components/forge/HitlCard";
 import { LlmConfigSelect } from "@/components/forge/LlmConfigSelect";
@@ -42,6 +42,7 @@ import { StagePipeline } from "@/components/forge/StagePipeline";
 import type { TimelineItem } from "@/components/forge/RunTimeline";
 import { TemplatePicker } from "@/components/forge/TemplatePicker";
 import { VersionTimeline } from "@/components/forge/VersionTimeline";
+import { CodePreview } from "@/components/forge/CodePreview";
 import { GamePlayer } from "@/components/game/GamePlayer";
 import { PublishNoteModal } from "@/components/games/PublishNoteModal";
 import { Button } from "@/components/ui/button";
@@ -122,7 +123,7 @@ export function ForgePage() {
   const [quotaHint, setQuotaHint] = useState<string | null>(null);
   const [llmConfigId, setLlmConfigId] = useState<string | null>(null);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
-  const [rightTab, setRightTab] = useState<"preview" | "versions" | "runs">(
+  const [rightTab, setRightTab] = useState<"preview" | "code" | "versions" | "runs">(
     "preview",
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
@@ -441,6 +442,7 @@ export function ForgePage() {
       setBusy,
       setRunStatus,
       setPreviewUrl,
+      setPreviewVersion,
       setSideTab,
       appendMessages: (msgs: ChatMsg[], kind?: "design" | "completed") => {
         if (
@@ -677,6 +679,19 @@ export function ForgePage() {
       // real：继续复用已连接的 WS，后端 resume 后推事件
     } catch (e) {
       setBusy(false);
+      if (isApiError(e) && e.status === 409) {
+        try {
+          const actual = await gamesApi.getRun(runId, token);
+          const ui = syncUiFromRun(actual, title);
+          setRunStatus(ui.runStatus);
+          setHitl(ui.hitl);
+          setPhase(ui.phase);
+          setBusy(ui.busy);
+          return;
+        } catch {
+          // 状态刷新失败时仍展示原始 resolve 错误。
+        }
+      }
       toast.error(formatApiError(e, t("generationFailed")));
     }
   }
@@ -1052,11 +1067,7 @@ export function ForgePage() {
                           }}
                         />
                       </div>
-                    ) : (
-                      <div className="rounded-xl border border-black/[0.06] bg-black/[0.018] p-3">
-                        <ForgeQuickTemplates onPick={setInput} />
-                      </div>
-                    )
+                    ) : null
                   ) : (
                     <p className="gf-banner-warn rounded-xl p-3 text-xs">
                       {t("trialForgeLocked")}
@@ -1100,7 +1111,12 @@ export function ForgePage() {
                     ...(gameId &&
                     detail.data &&
                     detail.data.current_version >= 1
-                      ? ([["versions", t("forgeTabVersions")]] as const)
+                      ? (
+                          [
+                            ["code", t("forgeTabCode")],
+                            ["versions", t("forgeTabVersions")],
+                          ] as const
+                        )
                       : []),
                     ...(gameId ? ([["runs", t("forgeTabRuns")]] as const) : []),
                   ] as const
@@ -1216,6 +1232,16 @@ export function ForgePage() {
                     </div>
                   </div>
                 )
+              ) : rightTab === "code" &&
+                gameId &&
+                detail.data &&
+                token &&
+                (previewVersion ?? detail.data.current_version) >= 1 ? (
+                <CodePreview
+                  gameId={gameId}
+                  version={previewVersion ?? detail.data.current_version}
+                  accessToken={token}
+                />
               ) : rightTab === "versions" && gameId && detail.data ? (
                 <VersionTimeline
                   gameId={gameId}

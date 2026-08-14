@@ -61,19 +61,46 @@ async def test_get_run_includes_hitl_wait_from_checkpoint(
     verified_client: httpx.AsyncClient,
     redis_client,
 ) -> None:
+    from app.core import db as db_module
+    from app.forge import state as ckpt
+    from app.models.generation_run import GenerationRun
+
+    rid = await _make_run(verified_client)
+    async with db_module.SessionLocal() as session:
+        run = await session.get(GenerationRun, rid)
+        assert run is not None
+        run.status = "paused"
+        await ckpt.save_state(
+            redis_client,
+            rid,
+            {
+                "phase": "plan_confirm",
+                "design_doc": {"title": "T", "gameplay": "g", "controls": "c", "levels": []},
+            },
+            session,
+        )
+        await session.commit()
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    assert r.status_code == 200, r.text
+    body = r.json()["data"]
+    assert body["hitl_wait"]["node"] == "plan_confirm"
+    assert body["hitl_wait"]["design_doc"]["title"] == "T"
+
+
+async def test_get_run_hides_stale_hitl_when_run_is_running(
+    verified_client: httpx.AsyncClient,
+    redis_client,
+) -> None:
     from app.forge import state as ckpt
 
     rid = await _make_run(verified_client)
     await ckpt.save_state(
         redis_client,
         rid,
-        {
-            "phase": "plan_confirm",
-            "design_doc": {"title": "T", "gameplay": "g", "controls": "c", "levels": []},
-        },
+        {"phase": "plan_confirm", "design_doc": {"title": "stale"}},
     )
-    r = await verified_client.get(f"/api/v1/runs/{rid}")
-    assert r.status_code == 200, r.text
-    body = r.json()["data"]
-    assert body["hitl_wait"]["node"] == "plan_confirm"
-    assert body["hitl_wait"]["design_doc"]["title"] == "T"
+    response = await verified_client.get(f"/api/v1/runs/{rid}")
+    body = response.json()["data"]
+    assert body["status"] == "running"
+    assert body["current_hitl"] is None
+    assert body["hitl_wait"] is None
