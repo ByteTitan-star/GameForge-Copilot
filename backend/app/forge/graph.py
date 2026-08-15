@@ -27,7 +27,13 @@ from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.assets.picker import asset_pick, format_assets_for_prompt
-from app.forge.build.integration import parse_llm_code_output, run_project_pipeline
+from app.forge.build.code_output import ParsedCodeOutput
+from app.forge.build.integration import (
+    format_project_repair_input,
+    parse_llm_code_output,
+    run_project_build_loop,
+    with_design_routing,
+)
 from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
 from app.forge.design_doc import (
     coerce_design_doc,
@@ -49,6 +55,7 @@ from app.forge.prompts import (
     QA_PROMPT,
     build_code_prompt,
     build_project_prompt,
+    build_project_repair_prompt,
     build_repair_prompt,
 )
 from app.forge.tracing import observe_phase, observe_run
@@ -109,6 +116,68 @@ async def _save_thumbnail(
             extra={"game_id": str(game.id), "version": version},
             exc_info=True,
         )
+
+
+async def _commit_project_build(
+    ctx: _Ctx,
+    *,
+    project_result: Any,
+    design_doc: dict[str, Any],
+    artifacts: list[Any],
+    art_direction: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Vite 多文件构建成功后落盘、发事件并返回 code_node 状态。"""
+    from app.games import services as game_services
+
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+        raise RunFinalized
+
+    ctx.game.current_version += 1
+    version = ctx.game.current_version
+    artifact = f"{ctx.game.id}/{version}/index.html"
+    await store.write_version_layers(
+        ctx.game.id,
+        version,
+        source=project_result.source,
+        build_snapshot=project_result.build_snapshot,
+        dist=project_result.dist,
+    )
+    ctx.s.add(
+        GameVersion(
+            game_id=ctx.game.id,
+            version=version,
+            artifact_path=artifact,
+            design_doc=design_doc,
+        )
+    )
+    await ctx.s.commit()
+    await game_services.prune_old_versions(ctx.s, ctx.game)
+    token = await preview_token_svc.mint_preview_token(
+        ctx.r,
+        game_id=ctx.game.id,
+        version=version,
+        owner_id=ctx.game.owner_id,
+    )
+    preview_url = preview_token_svc.preview_url_path(token, ctx.game.id, version)
+    await publish_event(
+        ctx.run.id,
+        WSEventType.BUILD_DONE,
+        {
+            "version": version,
+            "artifact_path": artifact,
+            "build": "vite",
+            "preview_url": preview_url,
+        },
+    )
+    return {
+        "design_doc": design_doc,
+        "artifacts": artifacts,
+        "art_direction": art_direction,
+        "code_ok": True,
+        "playtest_errors": [],
+        "qa_diagnosis": "",
+    }
 
 
 def normalize_html(raw: str) -> str:
@@ -782,6 +851,11 @@ def _build_graph(ctx: _Ctx) -> Any:
 
             await _set_phase(ctx, RunPhase.CODE)
             last_error = "; ".join(qa_errors)
+            design_routing = routing_from_design_doc(design_doc)
+            engine_id = design_doc["engine"]["id"]
+            use_vite = should_use_vite_pipeline(
+                design_routing, enabled=settings.build_pipeline_enabled
+            )
             for attempt in range(1, settings.code_max_retries + 1):
                 ctrl = await _check_ctrl(ctx, design_doc)
                 if ctrl != "ok":
@@ -811,16 +885,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                     user_msg = generation_user_msg
                     if last_error:
                         user_msg += f"\n\n【上次构建错误】\n{last_error}"
-                    design_routing = routing_from_design_doc(design_doc)
-                    if should_use_vite_pipeline(
-                        design_routing, settings.build_pipeline_enabled
-                    ):
+                    if use_vite:
                         system_prompt = build_project_prompt(
-                            design_doc["engine"]["id"],
+                            engine_id,
                             list(design_routing.dependencies),
                         )
                     else:
-                        system_prompt = build_code_prompt(design_doc["engine"]["id"])
+                        system_prompt = build_code_prompt(engine_id)
 
                 raw_output = await _streamed_llm_or_fallback(
                     ctx, system_prompt, user_msg, "code", emit_delta=False
@@ -828,71 +899,80 @@ def _build_graph(ctx: _Ctx) -> Any:
                 for token, data_uri in data_uris.items():
                     raw_output = raw_output.replace(token, data_uri)
 
-                if settings.build_pipeline_enabled:
-                    parsed = parse_llm_code_output(
-                        raw_output, engine_id=design_doc["engine"]["id"]
+                if use_vite and not previous_html:
+                    parsed = with_design_routing(
+                        parse_llm_code_output(raw_output, engine_id=engine_id),
+                        design_routing,
                     )
-                    project_result = await run_project_pipeline(parsed)
-                    if project_result is not None:
-                        if project_result.ok:
-                            from app.games import services as game_services
+                    if parsed.format == "project":
 
-                            await ctx.s.refresh(ctx.run)
-                            if (
-                                ctx.run.status != RunStatus.RUNNING.value
-                                or ctx.run.ended_at is not None
-                            ):
-                                raise RunFinalized
-
-                            ctx.game.current_version += 1
-                            version = ctx.game.current_version
-                            artifact = f"{ctx.game.id}/{version}/index.html"
-                            await store.write_version_layers(
-                                ctx.game.id,
-                                version,
-                                source=project_result.source,
-                                build_snapshot=project_result.build_snapshot,
-                                dist=project_result.dist,
+                        async def _repair_project(
+                            current: ParsedCodeOutput, build_error: str
+                        ) -> ParsedCodeOutput:
+                            repair_user = format_project_repair_input(
+                                base_user_msg, current, build_error
                             )
-                            ctx.s.add(
-                                GameVersion(
-                                    game_id=ctx.game.id,
-                                    version=version,
-                                    artifact_path=artifact,
-                                    design_doc=design_doc,
+                            repair_raw = await _streamed_llm_or_fallback(
+                                ctx,
+                                build_project_repair_prompt(
+                                    engine_id, list(design_routing.dependencies)
+                                ),
+                                repair_user,
+                                "code",
+                                emit_delta=False,
+                            )
+                            return with_design_routing(
+                                parse_llm_code_output(repair_raw, engine_id=engine_id),
+                                design_routing,
+                            )
+
+                        loop_result = await run_project_build_loop(
+                            parsed, repair_fn=_repair_project
+                        )
+                        if loop_result.ok and loop_result.pipeline_result:
+                            return await _commit_project_build(
+                                ctx,
+                                project_result=loop_result.pipeline_result,
+                                design_doc=design_doc,
+                                artifacts=artifacts,
+                                art_direction=art_direction,
+                            )
+                        if loop_result.fallback_required:
+                            fail_logs = ""
+                            if loop_result.pipeline_result:
+                                fail_logs = (
+                                    loop_result.pipeline_result.error
+                                    or loop_result.pipeline_result.logs
+                                    or ""
                                 )
-                            )
-                            await ctx.s.commit()
-                            await game_services.prune_old_versions(ctx.s, ctx.game)
-                            token = await preview_token_svc.mint_preview_token(
-                                ctx.r,
-                                game_id=ctx.game.id,
-                                version=version,
-                                owner_id=ctx.game.owner_id,
-                            )
-                            preview_url = preview_token_svc.preview_url_path(
-                                token, ctx.game.id, version
-                            )
                             await publish_event(
                                 ctx.run.id,
-                                WSEventType.BUILD_DONE,
+                                WSEventType.TOOL_CALL,
                                 {
-                                    "version": version,
-                                    "artifact_path": artifact,
-                                    "build": "vite",
-                                    "preview_url": preview_url,
+                                    "phase": "code",
+                                    "tool": "build_fallback",
+                                    "args": {
+                                        "attempt": loop_result.build_attempts,
+                                        "from": "vite",
+                                        "to": "single-html",
+                                    },
+                                    "status": "warn",
+                                    "summary": "Vite 构建失败，降级 single-html",
                                 },
                             )
-                            return {
-                                "design_doc": design_doc,
-                                "artifacts": artifacts,
-                                "art_direction": art_direction,
-                                "code_ok": True,
-                                "playtest_errors": [],
-                                "qa_diagnosis": "",
-                            }
-                        last_error = project_result.error or project_result.logs
-                        continue
+                            fallback_msg = (
+                                f"{base_user_msg}\n\n"
+                                f"【Vite 多文件构建 {loop_result.build_attempts} 次失败，"
+                                "请按设计稿重新交付 single-html 可运行版本】\n"
+                                f"{fail_logs or last_error}"
+                            )
+                            raw_output = await _streamed_llm_or_fallback(
+                                ctx,
+                                build_code_prompt(engine_id),
+                                fallback_msg,
+                                "code",
+                                emit_delta=False,
+                            )
 
                 html = normalize_html(raw_output)
                 result = await get_sandbox().execute(source={"index.html": html})
