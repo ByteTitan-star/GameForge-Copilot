@@ -36,6 +36,10 @@ const multiFiles: ArtifactFile[] = [
   { path: 'assets/style.css', size: 30, mime: 'text/css' },
 ]
 
+function asList<T>(data: T[]) {
+  return { data, total: data.length, page: 1, size: Math.max(data.length, 1) }
+}
+
 describe('buildFileTree', () => {
   it('单文件退化为单节点', () => {
     const tree = buildFileTree(singleFile)
@@ -65,7 +69,7 @@ describe('CodePreview', () => {
   })
 
   it('加载文件树并默认选中 index.html 展示内容', async () => {
-    listFiles.mockResolvedValue({ data: singleFile })
+    listFiles.mockResolvedValue(asList(singleFile))
     fetchFile.mockResolvedValue('<!doctype html><body>hi</body>')
 
     renderPreview()
@@ -79,7 +83,7 @@ describe('CodePreview', () => {
   })
 
   it('空产物显示空状态', async () => {
-    listFiles.mockResolvedValue({ data: [] })
+    listFiles.mockResolvedValue(asList([]))
 
     renderPreview()
 
@@ -101,7 +105,7 @@ describe('CodePreview', () => {
   })
 
   it('切换文件树节点重新拉取对应文件内容', async () => {
-    listFiles.mockResolvedValue({ data: multiFiles })
+    listFiles.mockResolvedValue(asList(multiFiles))
     fetchFile.mockResolvedValue('content')
 
     renderPreview()
@@ -117,7 +121,7 @@ describe('CodePreview', () => {
   })
 
   it('version 切换后重置选中文件', async () => {
-    listFiles.mockResolvedValue({ data: singleFile })
+    listFiles.mockResolvedValue(asList(singleFile))
     fetchFile.mockResolvedValue('x')
 
     const { rerender } = render(
