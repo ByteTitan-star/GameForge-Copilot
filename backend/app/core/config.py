@@ -101,6 +101,9 @@ class Settings(BaseSettings):
     llm_request_timeout: int = 300
     # 建连/写/连接池超时（秒）；服务端不可达时应快速失败而非长等
     llm_connect_timeout: int = 30
+    # 传输层有限重试：瞬时网络抖动 / 429 / 502-504；与业务自修复预算正交
+    llm_http_max_retries: int = 3
+    llm_http_retry_base_delay_s: float = 0.5
     # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
     llm_max_tokens: int = 8192
     # 默认「直连（绕过桌面/系统代理）」的国内 LLM host，逗号分隔。

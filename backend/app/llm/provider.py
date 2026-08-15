@@ -4,7 +4,9 @@ docs/05 §连通性测试：保存前发最小 completion，失败不让保存�
 complete() 返回 (content, usage)，usage 取响应真实字段，不估算（docs/05）。
 """
 
+import asyncio
 import logging
+import random
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -16,6 +18,9 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
 
 log = logging.getLogger(__name__)
+
+# 传输层可重试状态：限流与网关瞬时故障（与业务自修复预算正交）
+_RETRYABLE_HTTP_STATUS = frozenset({429, 502, 503, 504})
 
 _DEFAULT_API_BASE = {
     LLMProvider.ANTHROPIC: "https://api.anthropic.com/v1",
@@ -273,6 +278,39 @@ def _llm_timeout() -> httpx.Timeout:
     )
 
 
+def _retry_delay_s(attempt: int) -> float:
+    """指数退避 + 少量 jitter：attempt 从 0 起（第 1 次失败后的等待）。"""
+    base = settings.llm_http_retry_base_delay_s
+    return base * (2**attempt) + random.uniform(0, base)
+
+
+def _http_error_hint(url: str, status_code: int) -> str:
+    if status_code != 404:
+        return ""
+    return (
+        f"；请求 URL: {url}。"
+        "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
+        "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
+    )
+
+
+async def _sleep_before_retry(
+    *, attempt: int, model: str, reason: str
+) -> None:
+    delay = _retry_delay_s(attempt)
+    log.warning(
+        "llm http retry",
+        extra={
+            "stage": "http",
+            "model": model,
+            "attempt": attempt + 1,
+            "delay_s": round(delay, 3),
+            "reason": reason,
+        },
+    )
+    await asyncio.sleep(delay)
+
+
 async def complete(
     provider: LLMProvider,
     apikey: str,
@@ -283,7 +321,10 @@ async def complete(
     *,
     max_tokens: int | None = None,
 ) -> tuple[str, Usage]:
-    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。"""
+    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
+
+    传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
+    """
     if max_tokens is None:
         max_tokens = settings.llm_max_tokens
     headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
@@ -292,19 +333,46 @@ async def complete(
         provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=False
     )
     timeout = _llm_timeout()
+    max_retries = settings.llm_http_max_retries
     # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
     started = time.monotonic()
     log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
-    try:
-        async with _build_llm_client(url, timeout) as client:
-            resp = await client.post(url, headers=headers, json=body)
-    except httpx.HTTPError:
-        duration = round(time.monotonic() - started, 3)
-        log.exception(
-            "llm http failed",
-            extra={"stage": "http", "model": model, "duration": duration},
-        )
-        raise
+    last_http_error: httpx.HTTPError | None = None
+    resp: httpx.Response | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            async with _build_llm_client(url, timeout) as client:
+                resp = await client.post(url, headers=headers, json=body)
+        except httpx.HTTPError as exc:
+            last_http_error = exc
+            if attempt >= max_retries:
+                duration = round(time.monotonic() - started, 3)
+                log.exception(
+                    "llm http failed",
+                    extra={"stage": "http", "model": model, "duration": duration},
+                )
+                raise
+            await _sleep_before_retry(
+                attempt=attempt, model=model, reason=type(exc).__name__
+            )
+            continue
+
+        if (
+            resp.status_code in _RETRYABLE_HTTP_STATUS
+            and attempt < max_retries
+        ):
+            await _sleep_before_retry(
+                attempt=attempt,
+                model=model,
+                reason=f"HTTP {resp.status_code}",
+            )
+            continue
+        break
+
+    if resp is None:
+        assert last_http_error is not None
+        raise last_http_error
+
     duration = round(time.monotonic() - started, 3)
     log.info(
         "llm http response",
@@ -316,16 +384,10 @@ async def complete(
         },
     )
     if resp.status_code != 200:
-        hint = ""
-        if resp.status_code == 404:
-            hint = (
-                f"；请求 URL: {url}。"
-                "请确认 base_url 为 API 根（如 https://api.openai.com/v1），"
-                "勿含 /chat/completions；自定义代理请选 OpenAI 兼容或填写正确域名"
-            )
         raise AppError(
             ErrorCode.LLM_CONFIG_INVALID,
-            f"LLM 调用失败 HTTP {resp.status_code}: {resp.text[:120]}{hint}",
+            f"LLM 调用失败 HTTP {resp.status_code}: "
+            f"{resp.text[:120]}{_http_error_hint(url, resp.status_code)}",
         )
     data = resp.json()
     if _uses_anthropic_native_api(provider, base_url):
@@ -484,6 +546,7 @@ async def complete_stream(
     """流式补全：逐 token yield StreamChunk，末帧带 usage。
 
     与 complete() 共享请求体构造（_build_body），双协议 SSE 解析各自一套。
+    传输层仅在开流前对网络错误 / 429 / 502-504 重试；一旦开始 yield 不再重试，避免重复输出。
     httpx stream 在 generator 退出（含被 aclose/cancel）时自动 aclose 连接。
     """
     if max_tokens is None:
@@ -494,32 +557,53 @@ async def complete_stream(
         provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=True
     )
     timeout = _llm_timeout()
+    max_retries = settings.llm_http_max_retries
     started = time.monotonic()
     log.info("llm stream request", extra={"stage": "http", "model": model, "url": url})
-    try:
-        async with (
-            _build_llm_client(url, timeout) as client,
-            client.stream("POST", url, headers=headers, json=body) as resp,
-        ):
-            if resp.status_code != 200:
-                err = (await resp.aread()).decode("utf-8", "replace")[:200]
-                raise AppError(
-                    ErrorCode.LLM_CONFIG_INVALID,
-                    f"LLM 流式调用失败 HTTP {resp.status_code}: {err}",
+    started_yielding = False
+    for attempt in range(max_retries + 1):
+        try:
+            async with (
+                _build_llm_client(url, timeout) as client,
+                client.stream("POST", url, headers=headers, json=body) as resp,
+            ):
+                if (
+                    resp.status_code in _RETRYABLE_HTTP_STATUS
+                    and attempt < max_retries
+                    and not started_yielding
+                ):
+                    await resp.aread()
+                    await _sleep_before_retry(
+                        attempt=attempt,
+                        model=model,
+                        reason=f"HTTP {resp.status_code}",
+                    )
+                    continue
+                if resp.status_code != 200:
+                    err = (await resp.aread()).decode("utf-8", "replace")[:200]
+                    raise AppError(
+                        ErrorCode.LLM_CONFIG_INVALID,
+                        f"LLM 流式调用失败 HTTP {resp.status_code}: {err}",
+                    )
+                if _uses_anthropic_native_api(provider, base_url):
+                    parser = _parse_anthropic_stream(resp)
+                else:
+                    parser = _parse_openai_stream(resp)
+                started_yielding = True
+                async for chunk in parser:
+                    yield chunk
+                break
+        except httpx.HTTPError:
+            if started_yielding or attempt >= max_retries:
+                duration = round(time.monotonic() - started, 3)
+                log.exception(
+                    "llm stream failed",
+                    extra={"stage": "http", "model": model, "duration": duration},
                 )
-            if _uses_anthropic_native_api(provider, base_url):
-                parser = _parse_anthropic_stream(resp)
-            else:
-                parser = _parse_openai_stream(resp)
-            async for chunk in parser:
-                yield chunk
-    except httpx.HTTPError:
-        duration = round(time.monotonic() - started, 3)
-        log.exception(
-            "llm stream failed",
-            extra={"stage": "http", "model": model, "duration": duration},
-        )
-        raise
+                raise
+            await _sleep_before_retry(
+                attempt=attempt, model=model, reason="HTTPError"
+            )
     duration = round(time.monotonic() - started, 3)
     log.info(
         "llm stream response done",
