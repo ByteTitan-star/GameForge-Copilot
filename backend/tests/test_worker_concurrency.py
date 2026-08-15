@@ -1,9 +1,10 @@
 """并发消费：_run_one 的 ack/nack 生命周期（at-least-once）+ _consume 的 prefetch 并发。
 
 不连真实 RabbitMQ：用 fake message/channel 复刻 aio_pika 的 message.process() 语义
-（正常退出 ack，抛异常 nack(requeue) 并 re-raise）。重点锁住改造后的两条不变量：
-  1. ack 持有到任务结束 —— 失败必须 nack 重投，不能丢消息。
-  2. 每条消息独立 task —— 多条消息的 dispatch 能真正并发，慢 LLM 不阻塞后续消费。
+（正常退出 ack，抛异常 nack(requeue) 并 re-raise）。重点锁住改造后的不变量：
+  1. 成功 ack；失败显式 republish（带 x-retry-count）后仍 ack 原消息。
+  2. 超过 worker_max_redeliveries → DLQ，不再重投。
+  3. 每条消息独立 task —— 多条消息的 dispatch 能真正并发。
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import pytest
 from app.core import langfuse as lf
 from app.core.config import settings
 from app.messaging import worker as worker_mod
-from app.messaging.tasks import encode_task
+from app.messaging.tasks import HEADER_RETRY_COUNT, encode_task
 
 
 class _FakeProcess:
@@ -37,8 +38,9 @@ class _FakeProcess:
 
 
 class _FakeMessage:
-    def __init__(self, body: bytes) -> None:
+    def __init__(self, body: bytes, *, headers: dict | None = None) -> None:
         self.body = body
+        self.headers = headers
         self.acked = False
         self.nack_requeue: bool | None = None
 
@@ -116,18 +118,74 @@ async def test_run_one_acks_on_success(monkeypatch) -> None:
     assert seen == ["send_verification_email"]
 
 
-async def test_run_one_nacks_and_reraises_on_failure(monkeypatch) -> None:
-    """任务抛异常 → nack(requeue=True) 重投，且异常继续上抛（at-least-once）。"""
+async def test_run_one_republishes_on_failure(monkeypatch) -> None:
+    """任务抛异常且未超限 → 带递增 retry 重投，原消息 ack（at-least-once）。"""
     msg = _FakeMessage(_body())
+    republished: list[tuple[str, int]] = []
 
     async def _boom(task: str, payload: dict) -> None:  # noqa: ARG001
         raise RuntimeError("boom")
 
+    async def _republish(message, task: str, *, retry_count: int) -> None:  # noqa: ARG001
+        republished.append((task, retry_count))
+
     monkeypatch.setattr(worker_mod, "dispatch_task", _boom)
-    with pytest.raises(RuntimeError, match="boom"):
-        await worker_mod._run_one(msg)
-    assert msg.acked is False
-    assert msg.nack_requeue is True  # 重投
+    monkeypatch.setattr(worker_mod, "_republish_task", _republish)
+    await worker_mod._run_one(msg)
+    assert msg.acked is True
+    assert msg.nack_requeue is None
+    assert republished == [("send_verification_email", 1)]
+
+
+async def test_run_one_poison_goes_to_dlq(monkeypatch) -> None:
+    """重试耗尽 → 写入 DLQ，不再 republish。"""
+    msg = _FakeMessage(
+        _body(),
+        headers={HEADER_RETRY_COUNT: settings.worker_max_redeliveries},
+    )
+    dlq: list[tuple[str, int]] = []
+    republished: list[object] = []
+
+    async def _boom(task: str, payload: dict) -> None:  # noqa: ARG001
+        raise RuntimeError("poison")
+
+    async def _to_dlq(message, task: str, *, retry_count: int, error: str) -> None:  # noqa: ARG001
+        dlq.append((task, retry_count))
+
+    async def _republish(*args, **kwargs) -> None:  # noqa: ARG001
+        republished.append(1)
+
+    monkeypatch.setattr(worker_mod, "dispatch_task", _boom)
+    monkeypatch.setattr(worker_mod, "_publish_to_dlq", _to_dlq)
+    monkeypatch.setattr(worker_mod, "_republish_task", _republish)
+    await worker_mod._run_one(msg)
+    assert msg.acked is True
+    assert dlq == [("send_verification_email", settings.worker_max_redeliveries)]
+    assert republished == []
+
+
+async def test_run_one_lease_busy_republishes_without_increment(monkeypatch) -> None:
+    """TaskLeaseBusy → 不递增计数重投。"""
+    from app.forge.runner import TaskLeaseBusy
+
+    msg = _FakeMessage(_body(), headers={HEADER_RETRY_COUNT: 2})
+    republished: list[int] = []
+
+    async def _busy(task: str, payload: dict) -> None:  # noqa: ARG001
+        raise TaskLeaseBusy()
+
+    async def _republish(message, task: str, *, retry_count: int) -> None:  # noqa: ARG001
+        republished.append(retry_count)
+
+    async def _fast_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(worker_mod, "dispatch_task", _busy)
+    monkeypatch.setattr(worker_mod, "_republish_task", _republish)
+    monkeypatch.setattr(worker_mod.asyncio, "sleep", _fast_sleep)
+    await worker_mod._run_one(msg)
+    assert msg.acked is True
+    assert republished == [2]
 
 
 async def test_consume_sets_prefetch_and_dispatches_concurrently(monkeypatch) -> None:
