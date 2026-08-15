@@ -1,5 +1,7 @@
 """design_doc 结构化解析（Batch A · B-A4）与 v2 结构校验。"""
 
+import json
+
 from app.forge.design_doc import parse_design_doc, validate_design_doc
 
 
@@ -62,6 +64,33 @@ def test_coerce_engine_preserves_valid_choice() -> None:
     )
     assert doc["engine"]["id"] == "phaser3"
     assert doc["engine"]["version"] == "phaser@3.80.1"
+
+
+def test_coerce_build_routing_defaults() -> None:
+    doc = parse_design_doc('{"title":"T","gameplay":"G"}', "T")
+    assert doc["build_routing"]["build"] == "none"
+    assert doc["build_routing"]["renderer"] == "canvas"
+    assert doc["build_routing"]["ui"] == "none"
+
+
+def test_coerce_build_routing_from_plan() -> None:
+    raw = json.dumps(
+        {
+            "title": "T",
+            "gameplay": "G",
+            "controls": ["键盘"],
+            "levels": ["L1"],
+            "build_routing": {
+                "build": "vite",
+                "renderer": "phaser3",
+                "ui": "none",
+                "dependencies": ["matter-js"],
+            },
+        }
+    )
+    doc = parse_design_doc(raw, "T")
+    assert doc["build_routing"]["build"] == "vite"
+    assert doc["build_routing"]["dependencies"] == ["matter-js"]
 
 
 def test_validate_requires_engine_rationale() -> None:
