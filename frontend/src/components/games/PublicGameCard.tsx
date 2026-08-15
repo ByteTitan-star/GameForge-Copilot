@@ -143,12 +143,16 @@ export function PublicGameCard({
             )}
           >
             <span>{t('playCount').replace('{n}', String(game.play_count))}</span>
-            <span className={theme ? 'opacity-30' : 'text-white/30'} aria-hidden>
-              ·
-            </span>
-            <span title={new Date(game.published_at).toLocaleString()}>
-              {formatRelativeTime(game.published_at, locale)}
-            </span>
+            {game.published_at ? (
+              <>
+                <span className={theme ? 'opacity-30' : 'text-white/30'} aria-hidden>
+                  ·
+                </span>
+                <span title={new Date(game.published_at).toLocaleString()}>
+                  {formatRelativeTime(game.published_at, locale)}
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
 

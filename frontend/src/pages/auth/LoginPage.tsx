@@ -44,7 +44,7 @@ export function LoginPage() {
       const from = authState?.from
       navigate(from && from !== '/login' ? from : '/games', { replace: true })
     } catch (err) {
-      toast.error(formatApiError(err, t('errTrialFailed')))
+      toast.error(formatApiError(err, t('errTrialFailed'), t))
     } finally {
       setTrialLoading(false)
     }
@@ -66,7 +66,7 @@ export function LoginPage() {
       const from = authState?.from
       navigate(from && from !== '/login' ? from : '/games', { replace: true })
     } catch (err) {
-      toast.error(formatApiError(err, t('errLoginFailed')))
+      toast.error(formatApiError(err, t('errInvalidCredentials'), t))
     } finally {
       setLoading(false)
     }
