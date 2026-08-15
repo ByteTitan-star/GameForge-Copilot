@@ -52,13 +52,14 @@ from app.forge.prompts import (
     build_repair_prompt,
 )
 from app.forge.tracing import observe_phase, observe_run
-from app.hosting import store
+from app.hosting import preview_token as preview_token_svc
+from app.hosting import serve, store
 from app.llm import client as llm_client
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
 from app.sandbox import get_sandbox
-from app.sandbox.playtest import run_playtest
+from app.sandbox.playtest import run_playtest, run_playtest_dist
 
 PLAN_MAX_ATTEMPTS = 3
 
@@ -863,6 +864,15 @@ def _build_graph(ctx: _Ctx) -> Any:
                             )
                             await ctx.s.commit()
                             await game_services.prune_old_versions(ctx.s, ctx.game)
+                            token = await preview_token_svc.mint_preview_token(
+                                ctx.r,
+                                game_id=ctx.game.id,
+                                version=version,
+                                owner_id=ctx.game.owner_id,
+                            )
+                            preview_url = preview_token_svc.preview_url_path(
+                                token, ctx.game.id, version
+                            )
                             await publish_event(
                                 ctx.run.id,
                                 WSEventType.BUILD_DONE,
@@ -870,6 +880,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                                     "version": version,
                                     "artifact_path": artifact,
                                     "build": "vite",
+                                    "preview_url": preview_url,
                                 },
                             )
                             return {
@@ -978,10 +989,21 @@ def _build_graph(ctx: _Ctx) -> Any:
 
             html_path = store.index_path(ctx.game.id, ctx.game.current_version)
             html = ""
+            pt = None
             if html_path is None or not html_path.exists():
                 errors = ["产物 index.html 不存在，无法试玩"]
                 result_ok = False
                 console_logs: list[str] = []
+            elif serve.is_project_artifact(ctx.game.id, ctx.game.current_version):
+                artifact_dir = store.artifact_dir(ctx.game.id, ctx.game.current_version)
+                pt = await run_playtest_dist(
+                    artifact_dir, want_thumb=settings.thumbnail_enabled
+                )
+                result_ok = pt.ok
+                errors = pt.errors
+                console_logs = pt.console_logs
+                html_path = artifact_dir / "index.html"
+                html = _read_html(html_path) if html_path.is_file() else ""
             else:
                 html = _read_html(html_path)
                 pt = await run_playtest(html, want_thumb=settings.thumbnail_enabled)
@@ -1005,7 +1027,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             if result_ok:
                 # 自动试玩已给出确定性通过结果，无需再调用 LLM 做无效摘要。
                 # 通过分支顺带把截好的封面落盘（复用刚才浏览器会话截的图）。
-                if pt.thumbnail:
+                if pt and pt.thumbnail:
                     await _save_thumbnail(
                         ctx.s, ctx.game, ctx.game.current_version, pt.thumbnail
                     )
