@@ -135,6 +135,8 @@ class Settings(BaseSettings):
     audit_max_buffer_chars: int = 1500  # 审核滑窗上限：只取最近这么多字，避免越审越贵
     audit_request_timeout: int = 20  # 审核读超时（秒，短，避免拖垮打字机体验）
     audit_quick_filter: bool = True  # 正则前置快筛开关：命中即决，不调 LLM
+    # 快筛黑名单文件路径：空=内置 app/forge/blacklist.txt（docker 可挂载外部文件覆盖）
+    audit_blacklist_file: str = ""
 
     # 全局
     env: str = "development"
