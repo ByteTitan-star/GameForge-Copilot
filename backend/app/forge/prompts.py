@@ -425,6 +425,52 @@ def build_project_prompt(engine_id: str, extra_dependencies: list[str] | None = 
         if part
     )
 
+def build_project_repair_prompt(engine_id: str, extra_dependencies: list[str] | None = None) -> str:
+    """Vite 构建失败后的 Repair Agent prompt（§15-16：仅改 source / dependencies）。"""
+    from app.forge.build.catalog import DEPENDENCY_CATALOG
+
+    allowed = ", ".join(sorted(DEPENDENCY_CATALOG))
+    deps = extra_dependencies or []
+    methodology = engine_methodology(engine_id)
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 TypeScript 游戏故障修复工程师。构建 sandbox 已执行 "
+                "pnpm install --offline && vite build 并失败。请根据 stderr/日志修复业务源码，"
+                "使工程能离线构建通过。"
+            ),
+            (
+                "修复规则：\n"
+                "1. 只能修改 files 中的业务源码，或调整 dependencies 列表。\n"
+                "2. 不得输出 package.json、vite.config.ts、tsconfig.json、pnpm-lock.yaml——"
+                "这些由平台生成。\n"
+                "3. dependencies 只能从 catalog 选择，"
+                f"允许值：{allowed}；当前建议：{deps}。\n"
+                "4. 遇到 Cannot find module：改为 catalog 内包、删除错误 dependency、"
+                "修正 import，或改用已有依赖；不得请求 catalog 外任意 npm 包。\n"
+                "5. 保持 renderer/ui/build 选型不变，不得切换引擎或构建命令。\n"
+                "6. 修复须可验证：下次构建应能产出 dist/index.html。"
+            ),
+            f"【渲染引擎方法论：{normalize_engine_id(engine_id)}】\n{methodology}"
+            if methodology
+            else "",
+            (
+                "输出 JSON 结构（与 project 生成相同）：\n"
+                "{\n"
+                '  "format": "project",\n'
+                '  "build": "vite",\n'
+                f'  "renderer": "{normalize_engine_id(engine_id)}",\n'
+                '  "ui": "none",\n'
+                '  "dependencies": [],\n'
+                '  "files": { "src/main.ts": "..." }\n'
+                "}"
+            ),
+        )
+        if part
+    )
+
+
 QA_PROMPT = f"""
 你是一名 HTML5 游戏 QA 负责人。自动试玩已经判定本次构建失败。请结合已确认设计稿、
 错误列表和控制台日志进行根因分析，为修复工程师提供可执行且有优先级的诊断。
@@ -468,5 +514,7 @@ __all__ = [
     "ART_DETAIL_PROMPT",
     "QA_PROMPT",
     "build_code_prompt",
+    "build_project_prompt",
+    "build_project_repair_prompt",
     "build_repair_prompt",
 ]
