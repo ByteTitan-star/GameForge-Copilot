@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from sqlalchemy import select
+
 from app.core.config import settings
 from app.enums import RunPhase, RunStatus, WSEventType
 from app.forge.assets.picker import format_assets_for_prompt
@@ -18,7 +20,7 @@ from app.forge.build.integration import (
     with_design_routing,
 )
 from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
-from app.forge.code_candidate import next_candidate_version
+from app.forge.code_candidate import claim_candidate_version
 from app.forge.design_doc import coerce_design_doc, design_doc_to_text
 from app.forge.engine_router import engine_scaffold
 from app.forge.events import publish_event
@@ -273,6 +275,7 @@ async def execute_code_or_repair(
                         design_doc=design_doc,
                         artifacts=artifacts,
                         art_direction=art_direction,
+                        attempt=int(attempt),
                     )
                     return {
                         **committed,
@@ -361,17 +364,33 @@ async def execute_code_or_repair(
             ):
                 raise run_finalized_exc
 
-            version = await next_candidate_version(ctx.s, ctx.game)
+            version, _is_new = await claim_candidate_version(
+                ctx.r,
+                ctx.s,
+                ctx.game,
+                run_id=ctx.run.id,
+                attempt=int(attempt),
+            )
             artifact = f"{ctx.game.id}/{version}/index.html"
             await store.write_artifact(ctx.game.id, version, result.files)
-            ctx.s.add(
-                GameVersion(
-                    game_id=ctx.game.id,
-                    version=version,
-                    artifact_path=artifact,
-                    design_doc=design_doc,
+            existing_gv = await ctx.s.scalar(
+                select(GameVersion).where(
+                    GameVersion.game_id == ctx.game.id,
+                    GameVersion.version == version,
                 )
             )
+            if existing_gv is None:
+                ctx.s.add(
+                    GameVersion(
+                        game_id=ctx.game.id,
+                        version=version,
+                        artifact_path=artifact,
+                        design_doc=design_doc,
+                    )
+                )
+            else:
+                existing_gv.artifact_path = artifact
+                existing_gv.design_doc = design_doc
             await ctx.s.commit()
             await game_services.prune_old_versions(ctx.s, ctx.game)
             await publish_event(

@@ -27,7 +27,7 @@ from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.assets.picker import asset_pick
-from app.forge.code_candidate import next_candidate_version, promote_candidate
+from app.forge.code_candidate import claim_candidate_version, promote_candidate
 from app.forge.design_doc import (
     coerce_design_doc,
     design_doc_to_text,
@@ -125,6 +125,7 @@ async def _commit_project_build(
     design_doc: dict[str, Any],
     artifacts: list[Any],
     art_direction: dict[str, Any] | None,
+    attempt: int = 1,
 ) -> dict[str, Any]:
     """Vite 多文件构建成功后落盘为 candidate（不 promote current_version）。"""
     from app.games import services as game_services
@@ -133,7 +134,13 @@ async def _commit_project_build(
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
 
-    version = await next_candidate_version(ctx.s, ctx.game)
+    version, _is_new = await claim_candidate_version(
+        ctx.r,
+        ctx.s,
+        ctx.game,
+        run_id=ctx.run.id,
+        attempt=int(attempt),
+    )
     artifact = f"{ctx.game.id}/{version}/index.html"
     await store.write_version_layers(
         ctx.game.id,
@@ -142,14 +149,24 @@ async def _commit_project_build(
         build_snapshot=project_result.build_snapshot,
         dist=project_result.dist,
     )
-    ctx.s.add(
-        GameVersion(
-            game_id=ctx.game.id,
-            version=version,
-            artifact_path=artifact,
-            design_doc=design_doc,
+    existing_gv = await ctx.s.scalar(
+        select(GameVersion).where(
+            GameVersion.game_id == ctx.game.id,
+            GameVersion.version == version,
         )
     )
+    if existing_gv is None:
+        ctx.s.add(
+            GameVersion(
+                game_id=ctx.game.id,
+                version=version,
+                artifact_path=artifact,
+                design_doc=design_doc,
+            )
+        )
+    else:
+        existing_gv.artifact_path = artifact
+        existing_gv.design_doc = design_doc
     await ctx.s.commit()
     await game_services.prune_old_versions(ctx.s, ctx.game)
     token = await preview_token_svc.mint_preview_token(
