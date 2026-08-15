@@ -23,6 +23,7 @@ from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractQueue
 from app.core.config import settings
 from app.enums import WSEventType
 from app.messaging.tasks import (
+    TASK_DLQ,
     TASK_EXCHANGE,
     TASK_EXECUTE_RUN,
     TASK_QUEUE,
@@ -126,7 +127,9 @@ async def _task_channel() -> tuple[AbstractChannel, aio_pika.abc.AbstractExchang
         TASK_QUEUE,             # 队列名：gameforge.worker
         durable=True            # 持久化
     )
-    
+    # 死信队列：毒消息耗尽重试后由 worker 显式写入（不自动 DLX，便于带上失败原因 header）
+    await channel.declare_queue(TASK_DLQ, durable=True)
+
     # 6. 绑定队列到交换器：将 5 个路由键绑定到队列
     #    这样发送到 gameforge.tasks 交换器、routing_key 匹配的消息
     #    都会被路由到 gameforge.worker 队列

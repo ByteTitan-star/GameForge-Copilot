@@ -36,6 +36,10 @@ TASK_SCAN_SCHEDULES = "scan_schedules"         # 定时扫描到期游戏下架
 
 TASK_EXCHANGE = "gameforge.tasks"   # 任务交换器：生产者发送消息到这里
 TASK_QUEUE = "gameforge.worker"     # 任务队列：Worker 从此队列消费消息
+TASK_DLQ = "gameforge.worker.dlq"   # 死信队列：毒消息耗尽重试后落入此处
+
+# 消费侧重投计数（应用层 header；RabbitMQ 原生 requeue 不递增计数）
+HEADER_RETRY_COUNT = "x-retry-count"
 
 WS_EXCHANGE = "gameforge.ws"        # WebSocket 交换器：用于推送实时进度给前端
 

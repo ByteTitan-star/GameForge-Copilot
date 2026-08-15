@@ -14,7 +14,12 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.messaging.handlers import dispatch_task  # 任务分发器
 from app.messaging.rabbit import _task_channel, close_connection  # RabbitMQ 连接管理
-from app.messaging.tasks import TASK_QUEUE, decode_task  # 队列名称和消息解码
+from app.messaging.tasks import (  # 队列名称和消息解码
+    HEADER_RETRY_COUNT,
+    TASK_DLQ,
+    TASK_QUEUE,
+    decode_task,
+)
 
 log = logging.getLogger(__name__)
 
@@ -108,28 +113,123 @@ async def _outbox_loop() -> None:
         await asyncio.sleep(2)
 
 
+def _message_retry_count(message: AbstractIncomingMessage) -> int:
+    """读取应用层重投计数；非法/缺失按 0 处理。"""
+    headers = message.headers or {}
+    raw = headers.get(HEADER_RETRY_COUNT, 0)
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _merged_headers(
+    message: AbstractIncomingMessage, **extra: object
+) -> dict[str, object]:
+    headers = dict(message.headers or {})
+    headers.update(extra)
+    return headers
+
+
+async def _republish_task(
+    message: AbstractIncomingMessage, task: str, *, retry_count: int
+) -> None:
+    """带递增重试计数重新入队（ack 原消息后由调用方完成）。"""
+    import aio_pika
+    from aio_pika import Message
+
+    channel, exchange = await _task_channel()
+    try:
+        await exchange.publish(
+            Message(
+                body=message.body,
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                headers=_merged_headers(message, **{HEADER_RETRY_COUNT: retry_count}),
+            ),
+            routing_key=task,
+        )
+    finally:
+        await channel.close()
+
+
+async def _publish_to_dlq(
+    message: AbstractIncomingMessage, task: str, *, retry_count: int, error: str
+) -> None:
+    """毒消息写入死信队列，保留原 body 与失败元数据。"""
+    import aio_pika
+    from aio_pika import Message
+
+    channel, _exchange = await _task_channel()
+    try:
+        await channel.declare_queue(TASK_DLQ, durable=True)
+        await channel.default_exchange.publish(
+            Message(
+                body=message.body,
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                headers=_merged_headers(
+                    message,
+                    **{
+                        HEADER_RETRY_COUNT: retry_count,
+                        "x-death-task": task,
+                        "x-death-reason": error[:500],
+                    },
+                ),
+            ),
+            routing_key=TASK_DLQ,
+        )
+    finally:
+        await channel.close()
+
+
 async def _run_one(message: AbstractIncomingMessage) -> None:
     """处理单条消息。
 
-    ack 持有到任务结束：成功则 ack；抛异常则 nack(requeue=True) 重投，保证 at-least-once。
-    慢任务（如 LLM 生成）在独立 task 里跑，不阻塞消费循环（见 _consume 的 prefetch 并发）。
+    成功 → ack；TaskLeaseBusy → 短暂休眠后原计数重投；
+    其他失败 → 递增 x-retry-count 重投，超过 worker_max_redeliveries 写入 DLQ 后 ack，
+    避免毒消息无限占用 prefetch 槽位。
     """
-    async with message.process(requeue=True):
+    # requeue=False：由本函数显式 republish / DLQ，避免无计数的裸 nack 循环
+    async with message.process(requeue=False):
         task, payload = decode_task(message.body)
-        log.info("task=%s payload_keys=%s", task, list(payload.keys()))
+        retry = _message_retry_count(message)
+        log.info(
+            "task=%s payload_keys=%s retry=%s",
+            task,
+            list(payload.keys()),
+            retry,
+        )
         try:
             await dispatch_task(task, payload)
         except Exception as exc:
             from app.forge.runner import TaskLeaseBusy
 
             if isinstance(exc, TaskLeaseBusy):
-                # Avoid a tight nack/requeue loop while the current owner is alive.
+                # 租约冲突不算毒消息：不递增计数，短暂退避后原样重投
                 await asyncio.sleep(2)
-                log.info("task lease busy; requeue task=%s", task)
-                raise
-            # 失败重新抛出 → message.process 捕获后 nack(requeue=True) 重投
-            log.exception("task=%s failed", task)
-            raise
+                log.info("task lease busy; requeue task=%s retry=%s", task, retry)
+                await _republish_task(message, task, retry_count=retry)
+                return
+
+            max_retries = settings.worker_max_redeliveries
+            if retry >= max_retries:
+                log.exception(
+                    "task=%s poison → DLQ after %s retries",
+                    task,
+                    retry,
+                )
+                await _publish_to_dlq(
+                    message, task, retry_count=retry, error=str(exc)
+                )
+                return
+
+            next_retry = retry + 1
+            log.exception(
+                "task=%s failed; requeue retry=%s/%s",
+                task,
+                next_retry,
+                max_retries,
+            )
+            await _republish_task(message, task, retry_count=next_retry)
 
 
 async def _consume() -> None:
