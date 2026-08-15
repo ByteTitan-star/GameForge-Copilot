@@ -166,6 +166,12 @@ DESIGN_DOC_SCHEMA = r"""
     "version": "引擎精确版本号，须与代码生成的引擎 CDN URL 完全一致",
     "library_notes": ["本引擎下需特别注意的工程约束，如加载回退、渲染模式、循环约定"]
   },
+  "build_routing": {
+    "build": "none 或 vite；默认 none。phaser3/pixijs 且需 npm 依赖时用 vite",
+    "renderer": "与 engine.id 对齐：canvas/phaser3/pixijs",
+    "ui": "none 或 react；默认 none",
+    "dependencies": ["仅 catalog 允许的额外 npm 包名，如 matter-js、howler、gsap；无则 []"]
+  },
   "acceptance_criteria": [
     {
       "id": "AC-01",
@@ -208,6 +214,10 @@ HTML5 游戏工程师实现的结构化设计稿。你的目标不是复述创�
    {_ENGINE_ENUM_TEXT}），并在 engine.rationale 写清选择理由、在 engine.version
    填写精确版本号。默认倾向 canvas；只有玩法明确需要碰撞/物理/多场景/精灵动画时
    才上 phaser3，渲染是主要瓶颈且不需完整框架时才用 pixijs。一份游戏只选一个引擎。
+9. build_routing 决定代码交付形态：默认 build="none"（单 HTML，平台 sandbox 直跑）；
+   当 engine 为 phaser3/pixijs 且玩法需要 catalog 内 npm 依赖（如 matter-js 物理、
+   howler 音频、gsap 动画）时设 build="vite"，renderer 与 engine.id 一致，ui 默认 none。
+   dependencies 只能从 catalog 选额外包，不得自造包名；简单 canvas 游戏保持 build="none"。
 
 输出要求：
 - 只输出一个合法 JSON 对象，不输出 Markdown、代码围栏、说明或前后缀。
@@ -235,7 +245,9 @@ PLAN_REVISE_PROMPT = f"""
 4. 保留 title/gameplay/controls/levels 四个兼容字段，并保证它们与详细字段一致；
    其中 levels[i] 必须与 level_specs[i].name 逐字相等，acceptance_criteria 至少 8 条。
 5. 新增的非关键假设写入 overview.assumptions，不得把用户明确要求降级为假设。
-6. 重新审视 engine 选型：若修改意见未触及玩法复杂度，保持原 engine 不变；
+6. 若修改影响引擎或依赖（如新增物理/音频库），同步更新 build_routing：需要 catalog
+   npm 依赖时用 build="vite"，否则保持 build="none"。
+7. 重新审视 engine 选型：若修改意见未触及玩法复杂度，保持原 engine 不变；
    若玩法性质发生根本变化（如从回合制改为实时物理），按《引擎选型指南》更新 engine
    并填写新的 rationale 与 version。
 
@@ -377,6 +389,100 @@ def build_repair_prompt(engine_id: str) -> str:
 CODE_PROMPT = build_code_prompt(DEFAULT_ENGINE)
 CODE_REPAIR_PROMPT = build_repair_prompt(DEFAULT_ENGINE)
 
+
+def build_project_prompt(engine_id: str, extra_dependencies: list[str] | None = None) -> str:
+    """Vite 多文件工程输出契约（docs/build-pipeline §6.2）。"""
+    from app.forge.build.catalog import DEPENDENCY_CATALOG
+
+    allowed = ", ".join(sorted(DEPENDENCY_CATALOG))
+    deps = extra_dependencies or []
+    methodology = engine_methodology(engine_id)
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 TypeScript 游戏工程师。请根据已确认设计稿，交付一个可通过 Vite 构建的"
+                "多文件浏览器游戏工程（不是单 HTML）。"
+            ),
+            (
+                "硬性约束：\n"
+                "1. 只输出合法 JSON，不要 Markdown 围栏或解释。\n"
+                "2. 不得输出 package.json、pnpm-lock.yaml、vite.config.ts、tsconfig.json——"
+                "这些由平台生成。\n"
+                "3. dependencies 只能从平台 catalog 选择额外运行时依赖，"
+                f"允许值：{allowed}。\n"
+                f"4. 本次额外依赖建议：{deps}（可从中选取子集，不得添加 catalog 外包名）。\n"
+                "5. 业务源码放在 src/ 下，至少包含 src/main.ts。\n"
+                "6. 运行时 URL 必须用 import.meta.env.BASE_URL 拼接，禁止绝对路径 /api 等。\n"
+                "7. 若使用页面路由必须用 hash-based routing。"
+            ),
+            f"【渲染引擎方法论：{normalize_engine_id(engine_id)}】\n{methodology}"
+            if methodology
+            else "",
+            (
+                "输出 JSON 结构：\n"
+                "{\n"
+                '  "format": "project",\n'
+                '  "build": "vite",\n'
+                f'  "renderer": "{normalize_engine_id(engine_id)}",\n'
+                '  "ui": "none",\n'
+                '  "dependencies": [],\n'
+                '  "files": {\n'
+                '    "src/main.ts": "...",\n'
+                '    "src/style.css": "..."\n'
+                "  }\n"
+                "}"
+            ),
+        )
+        if part
+    )
+
+def build_project_repair_prompt(engine_id: str, extra_dependencies: list[str] | None = None) -> str:
+    """Vite 构建失败后的 Repair Agent prompt（§15-16：仅改 source / dependencies）。"""
+    from app.forge.build.catalog import DEPENDENCY_CATALOG
+
+    allowed = ", ".join(sorted(DEPENDENCY_CATALOG))
+    deps = extra_dependencies or []
+    methodology = engine_methodology(engine_id)
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 TypeScript 游戏故障修复工程师。构建 sandbox 已执行 "
+                "pnpm install --offline && vite build 并失败。请根据 stderr/日志修复业务源码，"
+                "使工程能离线构建通过。"
+            ),
+            (
+                "修复规则：\n"
+                "1. 只能修改 files 中的业务源码，或调整 dependencies 列表。\n"
+                "2. 不得输出 package.json、vite.config.ts、tsconfig.json、pnpm-lock.yaml——"
+                "这些由平台生成。\n"
+                "3. dependencies 只能从 catalog 选择，"
+                f"允许值：{allowed}；当前建议：{deps}。\n"
+                "4. 遇到 Cannot find module：改为 catalog 内包、删除错误 dependency、"
+                "修正 import，或改用已有依赖；不得请求 catalog 外任意 npm 包。\n"
+                "5. 保持 renderer/ui/build 选型不变，不得切换引擎或构建命令。\n"
+                "6. 修复须可验证：下次构建应能产出 dist/index.html。"
+            ),
+            f"【渲染引擎方法论：{normalize_engine_id(engine_id)}】\n{methodology}"
+            if methodology
+            else "",
+            (
+                "输出 JSON 结构（与 project 生成相同）：\n"
+                "{\n"
+                '  "format": "project",\n'
+                '  "build": "vite",\n'
+                f'  "renderer": "{normalize_engine_id(engine_id)}",\n'
+                '  "ui": "none",\n'
+                '  "dependencies": [],\n'
+                '  "files": { "src/main.ts": "..." }\n'
+                "}"
+            ),
+        )
+        if part
+    )
+
+
 QA_PROMPT = f"""
 你是一名 HTML5 游戏 QA 负责人。自动试玩已经判定本次构建失败。请结合已确认设计稿、
 错误列表和控制台日志进行根因分析，为修复工程师提供可执行且有优先级的诊断。
@@ -420,5 +526,7 @@ __all__ = [
     "ART_DETAIL_PROMPT",
     "QA_PROMPT",
     "build_code_prompt",
+    "build_project_prompt",
+    "build_project_repair_prompt",
     "build_repair_prompt",
 ]

@@ -1,5 +1,6 @@
 import { env } from './env'
 import { authApi } from '@/api/auth'
+import { gamesApi } from '@/api/games'
 import { useAuthStore } from '@/stores/auth-store'
 
 function joinUrl(base: string, path: string): string {
@@ -16,12 +17,37 @@ export function playArtifactUrl(slug: string): string {
   return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}${q}`)
 }
 
+export function templatePlayUrl(templateId: string): string {
+  const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
+  return joinUrl(
+    env.hostingBaseUrl,
+    `/play/template/${encodeURIComponent(templateId)}${q}`,
+  )
+}
+
 export function draftArtifactUrl(gameId: string, version: number | string): string {
   const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
   return joinUrl(
     env.hostingBaseUrl,
     `/draft/${encodeURIComponent(gameId)}/${encodeURIComponent(String(version))}${q}`,
   )
+}
+
+/** preview token 路径（Vite 多文件 dist），iframe 可直接加载无需 Bearer */
+export function isPreviewTokenUrl(src: string): boolean {
+  return /\/preview\//.test(src)
+}
+
+/** 向 API 申请短期 preview token，返回可 iframe 加载的完整 URL */
+export async function mintDraftPreviewUrl(
+  gameId: string,
+  version: number | string,
+  accessToken: string,
+): Promise<string> {
+  const ver = typeof version === 'number' ? version : Number.parseInt(String(version), 10)
+  const { preview_url } = await gamesApi.createPreviewToken(gameId, ver, accessToken)
+  const base = resolveHostingUrl(preview_url)
+  return ARTIFACT_VER ? `${base}${base.includes('?') ? '&' : '?'}v=${ARTIFACT_VER}` : base
 }
 
 /** 将 WS/API 返回的相对 preview_url 解析为可加载地址 */

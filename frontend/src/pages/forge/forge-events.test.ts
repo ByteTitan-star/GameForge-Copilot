@@ -29,7 +29,7 @@ function handlers() {
     runId: 'run-1',
     t: (key) => key,
   }
-  return { h, setHitl, setPhase, setBusy, setRunStatus, setPreviewVersion }
+  return { h, setHitl, setPhase, setBusy, setRunStatus, setPreviewVersion, setPreviewUrl: h.setPreviewUrl }
 }
 
 describe('forge websocket event state', () => {
@@ -53,6 +53,21 @@ describe('forge websocket event state', () => {
         : { code: 'RUN_FAILED', message: 'failed', fatal: true }
     handleForgeWsEvent(event(type, payload), h)
     expect(setHitl).toHaveBeenCalledWith(null)
+  })
+
+  it('build_done 解析 vite preview token 路径', () => {
+    const { h, setPreviewUrl } = handlers()
+    handleForgeWsEvent(
+      event(WSEventType.build_done, {
+        version: 3,
+        preview_url: '/preview/tok-abc/game-1/3/',
+        build: 'vite',
+      }),
+      h,
+    )
+    expect(setPreviewUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/preview\/tok-abc\/game-1\/3\//),
+    )
   })
 
   it('build_done 和 done 同步预览版本', () => {

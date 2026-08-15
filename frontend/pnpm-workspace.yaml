@@ -1,0 +1,4 @@
+# pnpm 11：构建脚本白名单（CI 与本地 install 均需）
+allowBuilds:
+  esbuild: true
+  msw: true

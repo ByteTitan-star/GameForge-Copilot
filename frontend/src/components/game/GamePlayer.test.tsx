@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GamePlayer } from './GamePlayer'
 
 describe('GamePlayer draft authentication', () => {
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
   })
 
@@ -40,5 +41,24 @@ describe('GamePlayer draft authentication', () => {
     fireEvent.load(screen.getByTitle('Game preview'))
     await waitFor(() => expect(screen.queryByText('加载中…')).not.toBeInTheDocument())
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('preview token URL 直接挂 iframe，不走 Bearer fetch', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <GamePlayer
+        src="http://127.0.0.1:8000/preview/tok/game-1/1/"
+        accessToken="token-1"
+        variant="stage"
+      />,
+    )
+    await waitFor(() =>
+      expect(screen.getByTitle('Game preview')).toHaveAttribute(
+        'src',
+        'http://127.0.0.1:8000/preview/tok/game-1/1/',
+      ),
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

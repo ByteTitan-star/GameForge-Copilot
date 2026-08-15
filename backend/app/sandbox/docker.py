@@ -15,9 +15,10 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 from app.core.config import settings
-from app.core.errors import AppError, ErrorCode
+from app.core.errors import AppError
 from app.core.metrics import SANDBOX_RUNS
 from app.sandbox.base import BuildResult
+from app.sandbox.collect import collect_artifact_files
 
 # 资源分级（docs/09）
 _TIERS: dict[str, dict] = {
@@ -34,7 +35,11 @@ class DockerSandbox:
         self.tier = tier or settings.sandbox_default_tier
 
     async def execute(
-        self, source: dict[str, str], build_cmd: Sequence[str] | None = None
+        self,
+        source: dict[str, str],
+        build_cmd: Sequence[str] | None = None,
+        *,
+        collect_root: str = ".",
     ) -> BuildResult:
         limits = _TIERS.get(self.tier, _TIERS["standard"])
         with tempfile.TemporaryDirectory() as ws:
@@ -45,7 +50,7 @@ class DockerSandbox:
                 # 显式 UTF-8：与 LocalSandbox 同源，避免 Windows 默认 GBK 把含中文 HTML 写坏。
                 p.write_text(content, encoding="utf-8")
             try:
-                result = await self._run_container(workspace, build_cmd, limits)
+                result = await self._run_container(workspace, build_cmd, limits, collect_root)
                 SANDBOX_RUNS.labels("docker", "ok" if result.ok else "fail").inc()
                 return result
             except DockerError as e:
@@ -60,6 +65,7 @@ class DockerSandbox:
         workspace: Path,
         build_cmd: Sequence[str] | None,
         limits: dict,
+        collect_root: str = ".",
     ) -> BuildResult:
         cmd = list(build_cmd) if build_cmd else ["sh", "-c", "test -f /workspace/index.html"]
         config = {
@@ -99,7 +105,10 @@ class DockerSandbox:
             code = (info.get("State") or {}).get("ExitCode", 1)
             if code != 0:
                 return BuildResult(ok=False, logs=log_text, error=f"构建退出码 {code}")
-            files = _collect(workspace)
+            try:
+                files = collect_artifact_files(workspace, collect_root=collect_root)
+            except AppError as e:
+                return BuildResult(ok=False, logs=log_text, error=e.message)
             if "index.html" not in files:
                 return BuildResult(ok=False, logs=log_text, error="产物缺少 index.html")
             return BuildResult(ok=True, files=files, logs=log_text or "build ok")
@@ -118,17 +127,3 @@ def _parse_mem(spec: str) -> int:
         return int(float(s[:-1]) * 1024**2)
     return int(s)
 
-
-def _collect(workspace: Path) -> dict[str, bytes]:
-    files: dict[str, bytes] = {}
-    total = 0
-    limit = settings.artifact_max_size_mb * 1024 * 1024
-    for p in workspace.rglob("*"):
-        if not p.is_file():
-            continue
-        data = p.read_bytes()
-        total += len(data)
-        if total > limit:
-            raise AppError(ErrorCode.QUOTA_EXCEEDED, "产物超出大小上限")
-        files[str(p.relative_to(workspace))] = data
-    return files

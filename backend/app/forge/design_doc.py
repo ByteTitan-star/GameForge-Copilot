@@ -10,6 +10,7 @@ import copy
 import json
 from typing import Any
 
+from app.forge.build.routing import coerce_build_routing, validate_routing
 from app.forge.engine_router import DEFAULT_ENGINE, SUPPORTED_ENGINES, normalize_engine_id
 
 SCHEMA_VERSION = "2.0"
@@ -94,6 +95,12 @@ def _empty_doc(title: str) -> dict[str, Any]:
             "rationale": "",
             "version": "",
             "library_notes": [],
+        },
+        "build_routing": {
+            "build": "none",
+            "renderer": DEFAULT_ENGINE,
+            "ui": "none",
+            "dependencies": [],
         },
         "acceptance_criteria": [],
     }
@@ -323,12 +330,16 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
     doc["acceptance_criteria"] = criteria
 
     engine = doc.get("engine") if isinstance(doc.get("engine"), dict) else {}
+    engine_id = normalize_engine_id(engine.get("id"))
     doc["engine"] = {
-        "id": normalize_engine_id(engine.get("id")),
+        "id": engine_id,
         "rationale": _text(engine.get("rationale")),
         "version": _text(engine.get("version")),
         "library_notes": _text_list(engine.get("library_notes")),
     }
+    raw_routing = doc.get("build_routing")
+    routing = coerce_build_routing(raw_routing, engine_id=engine_id)
+    doc["build_routing"] = routing.to_dict()
     return doc
 
 
@@ -423,6 +434,9 @@ def validate_design_doc(value: Any) -> list[str]:
     # canvas 无外部 CDN，不要求 version；phaser3/pixijs 必须钉死版本号防 CDN 404。
     if engine["id"] != DEFAULT_ENGINE and not engine["version"]:
         errors.append(f"engine.version 不能为空（{engine['id']} 需精确版本号）")
+
+    routing = coerce_build_routing(doc.get("build_routing"), engine_id=engine["id"])
+    errors.extend(validate_routing(routing))
 
     criteria = doc["acceptance_criteria"]
     if len(criteria) < 8:

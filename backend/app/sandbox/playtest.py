@@ -9,13 +9,21 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import socket
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from app.core.cdn_policy import extract_external_refs, validate_refs
+from app.core.cdn_policy import (
+    extract_external_refs,
+    scan_dist_external_refs,
+    validate_dist_self_contained,
+    validate_refs,
+)
 
 
 @dataclass
@@ -125,6 +133,61 @@ def _static_playtest(html: str) -> PlaytestResult:
     return PlaytestResult(ok=not errors, errors=errors, console_logs=logs)
 
 
+async def _playwright_playtest_url(base_url: str, want_thumb: bool = False) -> PlaytestResult:
+    from playwright.async_api import async_playwright
+
+    errors: list[str] = []
+    logs: list[str] = ["playtest: playwright dist mode"]
+    thumbnail: bytes | None = None
+    url = base_url if base_url.endswith("/") else f"{base_url}/"
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        def _on_page_error(exc: Exception) -> None:
+            errors.append(f"pageerror: {exc}")
+
+        page.on("pageerror", _on_page_error)
+
+        def _on_console(msg) -> None:
+            if msg.type in ("error", "warning"):
+                logs.append(f"console:{msg.type}:{msg.text}")
+
+        page.on("console", _on_console)
+        await page.goto(url, wait_until="networkidle", timeout=20_000)
+
+        has_canvas = await page.locator("canvas").count() > 0
+        has_root = await page.locator("#app, #game, [data-game-root]").count() > 0
+        has_interactive = (
+            await page.locator("button, input, select, textarea, [onclick]").count() > 0
+        )
+        if not has_canvas and not has_interactive and not has_root:
+            errors.append("缺少 canvas、游戏根节点或可交互元素")
+
+        try:
+            await page.keyboard.press("ArrowRight")
+            await page.keyboard.press("Space")
+            logs.append("playtest: keydown ArrowRight + Space ok")
+        except Exception as e:  # noqa: BLE001 input sim
+            errors.append(f"模拟按键失败: {e}")
+
+        if want_thumb and not errors:
+            try:
+                await page.set_viewport_size({"width": 1024, "height": 576})
+                await page.wait_for_timeout(500)
+                thumbnail = await page.screenshot(type="png", full_page=False)
+            except Exception as e:  # noqa: BLE001 playwright screenshot
+                logs.append(f"thumbnail: 截图失败，已降级无封面: {e}")
+                thumbnail = None
+
+        await browser.close()
+
+    return PlaytestResult(
+        ok=not errors, errors=errors, console_logs=logs, thumbnail=thumbnail
+    )
+
+
 async def _playwright_playtest(html_path: Path, want_thumb: bool = False) -> PlaytestResult:
     from playwright.async_api import async_playwright
 
@@ -177,6 +240,76 @@ async def _playwright_playtest(html_path: Path, want_thumb: bool = False) -> Pla
     return PlaytestResult(
         ok=not errors, errors=errors, console_logs=logs, thumbnail=thumbnail
     )
+
+
+def _static_playtest_dist(dist_dir: Path) -> PlaytestResult:
+    index = dist_dir / "index.html"
+    if not index.is_file():
+        return PlaytestResult(ok=False, errors=["dist/index.html 不存在"])
+    html = index.read_text(encoding="utf-8")
+    errors: list[str] = []
+    logs: list[str] = ["playtest: static dist mode"]
+    for match in re.finditer(r"""(?:src|href)\s*=\s*["']([^"']+)["']""", html, re.I):
+        ref = match.group(1).strip()
+        if ref.startswith(("http://", "https://", "data:", "blob:")):
+            continue
+        target = (dist_dir / ref.removeprefix("./")).resolve()
+        if not target.is_file():
+            errors.append(f"dist 资源缺失: {ref}")
+    result = _static_playtest(html)
+    result.console_logs = logs + result.console_logs
+    result.errors = errors + result.errors
+    result.ok = not result.errors
+    return result
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> PlaytestResult:
+    """对 dist/ 目录启动临时静态 HTTP Server 做试玩（§17 project/vite）。"""
+    refs = scan_dist_external_refs(dist_dir)
+    ok, violations = validate_dist_self_contained(refs)
+    if not ok:
+        return PlaytestResult(
+            ok=False,
+            errors=[f"dist 含外链（应自包含）：{v}" for v in violations],
+            console_logs=["playtest: dist external ref check failed"],
+        )
+
+    use_pw = os.environ.get("PLAYTEST_USE_PLAYWRIGHT", "").lower() in ("1", "true", "yes")
+    if use_pw:
+        try:
+            import playwright  # noqa: F401
+        except ImportError:
+            use_pw = False
+
+    if not use_pw:
+        return _static_playtest_dist(dist_dir)
+
+    port = _free_port()
+    handler = lambda *args, **kwargs: SimpleHTTPRequestHandler(  # noqa: E731
+        *args, directory=str(dist_dir.resolve()), **kwargs
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    base_url = f"http://127.0.0.1:{port}"
+
+    serve_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    serve_thread.start()
+    try:
+        return await _playwright_playtest_url(base_url, want_thumb=want_thumb)
+    except Exception as e:  # noqa: BLE001 playwright runtime
+        fallback = _static_playtest_dist(dist_dir)
+        fallback.errors.insert(0, f"Playwright dist 失败，已降级静态检测: {e}")
+        fallback.ok = False
+        return fallback
+    finally:
+        server.shutdown()
+        serve_thread.join(timeout=2)
+        server.server_close()
 
 
 async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:

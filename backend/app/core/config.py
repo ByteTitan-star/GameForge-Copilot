@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     sandbox_image: str = "gameforge/sandbox"
     sandbox_default_tier: str = "standard"
 
+    # 构建链（docs/build-pipeline.md P1+）
+    build_pipeline_enabled: bool = False
+    builder_backend: str = "docker"  # docker | local（local 需本机 pnpm，§24）
+    builder_image: str = "gameforge-builder:v1"
+    pnpm_store_path: str = ".pnpm-store"
+    npm_registry: str = "https://registry.npmmirror.com"
+    build_max_retries: int = 3
+    source_artifact_max_size_mb: int = 20
+    draft_url_ttl_s: int = 600
+    builder_timeout_s: int = 300
+
     # 限流与配额
     default_daily_token_limit: int = 500_000
     default_monthly_token_limit: int = 10_000_000

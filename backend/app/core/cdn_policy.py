@@ -15,6 +15,7 @@ url()、不处理 importmap（当前生成产物是单 HTML 内联结构）。
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 
 # 内置可信 CDN 白名单：主流公共库镜像 + 字体服务。新增域名在此一处维护，
@@ -63,6 +64,61 @@ def validate_refs(
     """
     violations = [url for url in refs if (urlparse(url).hostname or "") not in allowed]
     return (not violations, violations)
+
+
+# dist 产物内扫描 http(s) URL（§18：html/js/css 全量扫描）
+_DIST_URL_RE = re.compile(r"""https?://[^\s"'<>]+""", re.IGNORECASE)
+
+
+def extract_urls_from_text(text: str) -> list[str]:
+    """从 dist 文本产物提取 http(s) URL，保序去重。"""
+    refs: list[str] = []
+    seen: set[str] = set()
+    for match in _DIST_URL_RE.finditer(text or ""):
+        url = match.group(0).rstrip(".,;)")
+        if url not in seen:
+            seen.add(url)
+            refs.append(url)
+    return refs
+
+
+def scan_dist_external_refs(dist_dir: Path) -> list[str]:
+    """扫描 dist/ 下 html/js/css 中的外链 URL。"""
+    refs: list[str] = []
+    seen: set[str] = set()
+    if not dist_dir.is_dir():
+        return refs
+    for path in dist_dir.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".html", ".js", ".css"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        for url in extract_urls_from_text(text):
+            if url not in seen:
+                seen.add(url)
+                refs.append(url)
+    return refs
+
+
+def validate_dist_self_contained(refs: list[str]) -> tuple[bool, list[str]]:
+    """Vite dist 默认应自包含：任何 http(s) 外链均视为违规。"""
+    return (not refs, refs)
+
+
+def build_csp_project() -> str:
+    """多文件 Vite dist 的 CSP（§20）：仅 self，connect-src 默认 none。"""
+    return (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "font-src 'self' data:; "
+        "img-src 'self' data: blob:; "
+        "media-src 'self' blob:; "
+        "connect-src 'none'; "
+        "worker-src 'self' blob:"
+    )
 
 
 def build_csp(allowed: frozenset[str] = ALLOWED_CDN_HOSTS) -> str:

@@ -9,17 +9,20 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from app.core.config import settings
-from app.core.errors import AppError, ErrorCode
 from app.core.metrics import SANDBOX_RUNS
 from app.sandbox.base import BuildResult
+from app.sandbox.collect import collect_artifact_files
 
 _TIMEOUT_S = 60
 
 
 class LocalSandbox:
     async def execute(
-        self, source: dict[str, str], build_cmd: Sequence[str] | None = None
+        self,
+        source: dict[str, str],
+        build_cmd: Sequence[str] | None = None,
+        *,
+        collect_root: str = ".",
     ) -> BuildResult:
         with tempfile.TemporaryDirectory() as ws:
             workspace = Path(ws)
@@ -30,16 +33,21 @@ class LocalSandbox:
                 # 会让含中文的 HTML 以 GBK 落盘，后续 qa_node 的
                 # read_text(encoding="utf-8") 直接 UnicodeDecodeError。
                 p.write_text(content, encoding="utf-8")
+            logs = "source passthrough"
             if build_cmd is not None:
-                logs, error = await self._run_build(workspace, list(build_cmd))
+                run_logs, error = await self._run_build(workspace, list(build_cmd))
+                logs = run_logs
                 if error is not None:
                     SANDBOX_RUNS.labels("local", "fail").inc()
                     return BuildResult(ok=False, logs=logs, error=error)
-            files = self._collect(workspace)
+            try:
+                files = collect_artifact_files(workspace, collect_root=collect_root)
+            except Exception as e:  # noqa: BLE001
+                SANDBOX_RUNS.labels("local", "fail").inc()
+                return BuildResult(ok=False, logs=logs, error=str(e))
             if "index.html" not in files:
                 SANDBOX_RUNS.labels("local", "fail").inc()
-                return BuildResult(ok=False, logs="", error="产物缺少 index.html")
-            logs = "build ok" if build_cmd else "source passthrough"
+                return BuildResult(ok=False, logs=logs, error="产物缺少 index.html")
             SANDBOX_RUNS.labels("local", "ok").inc()
             return BuildResult(ok=True, files=files, logs=logs)
 
@@ -63,17 +71,3 @@ class LocalSandbox:
         if proc.returncode != 0:
             return logs, f"构建退出码 {proc.returncode}"
         return logs, None
-
-    def _collect(self, workspace: Path) -> dict[str, bytes]:
-        files: dict[str, bytes] = {}
-        total = 0
-        limit = settings.artifact_max_size_mb * 1024 * 1024
-        for p in workspace.rglob("*"):
-            if not p.is_file():
-                continue
-            data = p.read_bytes()
-            total += len(data)
-            if total > limit:
-                raise AppError(ErrorCode.QUOTA_EXCEEDED, "产物超出大小上限")
-            files[str(p.relative_to(workspace))] = data
-        return files

@@ -13,6 +13,25 @@ async def write_artifact(
     return await get_hosting_backend().write_artifact(game_id, version, files)
 
 
+async def write_version_layers(
+    game_id: uuid.UUID,
+    version: int,
+    *,
+    source: dict[str, bytes],
+    build_snapshot: dict[str, bytes],
+    dist: dict[str, bytes],
+) -> Path:
+    from app.hosting import local as local_store
+
+    return await local_store.write_version_layers(
+        game_id,
+        version,
+        source=source,
+        build_snapshot=build_snapshot,
+        dist=dist,
+    )
+
+
 def index_path(game_id: uuid.UUID, version: int) -> Path | None:
     return get_hosting_backend().index_path(game_id, version)
 

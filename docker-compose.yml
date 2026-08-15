@@ -57,11 +57,15 @@ services:
       MESSAGING_BACKEND: rabbitmq
       SANDBOX_BACKEND: docker
       SANDBOX_IMAGE: gameforge/sandbox:local
+      BUILDER_BACKEND: docker
+      BUILDER_IMAGE: gameforge-builder:v1
+      PNPM_STORE_PATH: /var/cache/gameforge/pnpm-store
       HOSTING_ROOT: /data/hosting
     ports:
       - "8000:8000"
     volumes:
       - hosting:/data/hosting
+      - pnpm_store:/var/cache/gameforge/pnpm-store
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:   # 依赖检查
       postgres:
@@ -90,9 +94,13 @@ services:
       MESSAGING_BACKEND: rabbitmq
       SANDBOX_BACKEND: docker
       SANDBOX_IMAGE: gameforge/sandbox:local
+      BUILDER_BACKEND: docker
+      BUILDER_IMAGE: gameforge-builder:v1
+      PNPM_STORE_PATH: /var/cache/gameforge/pnpm-store
       HOSTING_ROOT: /data/hosting
     volumes:
       - hosting:/data/hosting
+      - pnpm_store:/var/cache/gameforge/pnpm-store
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
@@ -109,7 +117,15 @@ services:
       dockerfile: Dockerfile.sandbox
     profiles: ["build-sandbox"]
 
+  builder:
+    image: gameforge-builder:v1
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.builder
+    profiles: ["build-sandbox"]
+
 volumes:
   pgdata:       # 数据库数据
   redisdata:    # 缓存数据
   hosting:      # 沙盒数据
+  pnpm_store:   # shared pnpm store（构建链 §9.1）

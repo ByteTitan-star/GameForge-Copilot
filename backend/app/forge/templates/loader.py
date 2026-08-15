@@ -18,24 +18,43 @@ def _load() -> list[dict[str, Any]]:
     return json.loads(_CATALOG.read_text(encoding="utf-8"))
 
 
-def list_templates(*, verified_only: bool = True) -> list[dict[str, Any]]:
+def list_templates(*, verified_only: bool = False) -> list[dict[str, Any]]:
+    """列出 catalog 模板。公开 API 默认返回全部；reference playtest 等仍可按 verified 过滤。"""
     rows = _load()
     if verified_only:
         rows = [r for r in rows if r.get("verified")]
     return rows
 
 
-def get_template(template_id: str) -> dict[str, Any]:
+def get_template(template_id: str, *, require_verified: bool = False) -> dict[str, Any]:
     for row in _load():
         if row["template_id"] == template_id:
-            if not row.get("verified"):
+            if require_verified and not row.get("verified"):
                 raise AppError(ErrorCode.VALIDATION_ERROR, f"模板未验证: {template_id}")
             return row
     raise AppError(ErrorCode.VALIDATION_ERROR, f"未知模板: {template_id}")
 
 
+def template_play_url(template_id: str) -> str | None:
+    """有 reference_artifact 时返回公开试玩路径，否则 None。"""
+    row = get_template(template_id)
+    if not row.get("reference_artifact"):
+        return None
+    return f"/play/template/{template_id}"
+
+
 def reference_artifact_path(template_id: str) -> Path:
-    tpl = get_template(template_id)
+    """已验证模板的 reference 产物路径（playtest 用）。"""
+    return _resolve_reference_path(template_id, require_verified=True)
+
+
+def public_reference_path(template_id: str) -> Path:
+    """公开试玩用 reference 产物路径（不要求 verified）。"""
+    return _resolve_reference_path(template_id, require_verified=False)
+
+
+def _resolve_reference_path(template_id: str, *, require_verified: bool) -> Path:
+    tpl = get_template(template_id, require_verified=require_verified)
     rel = tpl.get("reference_artifact")
     if not rel:
         raise AppError(ErrorCode.VALIDATION_ERROR, f"模板缺少 reference_artifact: {template_id}")

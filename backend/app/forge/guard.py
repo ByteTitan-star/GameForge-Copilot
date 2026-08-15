@@ -7,13 +7,15 @@
   LLM_DELTA、审核窗到期把窗口丢给后台 asyncio.Task（真零停顿，token 流不等审核）→ 命中
   发 ATTACKED 后 raise ContentAttacked，由 run_generation 既有 except 把 run 置 FAILED。
 
-审核模型不可用（超时/限流/key 错）→ 降级为仅快筛 + critical 告警（fail-soft，不阻断业务）。
+审核模型不可用（超时/限流/key 错）→ 强制走正则快筛（_QUICK_PATTERNS）降级。
+审核模型输出非 0/1 → 带软提示重试至多 3 次，仍失败则放行。
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import enum
 import logging
 import re
 import time
@@ -48,8 +50,16 @@ _AUDIT_SYSTEM = """你是内容安全审核员。判断给定文本是否含恶�
 - 违规：中国法律法规禁止的敏感内容
 正常游戏代码与策划输出 0。"""
 
+# 审核模型输出非 0/1 时追加到 user 消息的软提示（每次重试带上次输出片段）。
+_AUDIT_RETRY_HINT = (
+    "【重要】上次输出不符合要求。当前只需要输出单个字符 0 或 1，"
+    "不要输出任何其他内容（无 JSON、无解释、无标点）。"
+)
+_AUDIT_MAX_RETRIES = 3
 
-# 正则前置快筛：命中即决，不调 LLM。覆盖典型 prompt injection 与明显恶意代码。
+
+# 正则前置快筛（非独立黑名单文件，规则定义于此）：命中即决，不调 LLM。
+# 覆盖典型 prompt injection 与明显恶意代码；LLM 不可用时作为强制降级路径。
 _QUICK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(
@@ -106,9 +116,14 @@ class AuditResult:
     evidence: str = ""
 
 
-def quick_filter(text: str) -> AuditResult | None:
-    """正则前置快筛：命中返回 AuditResult(is_malicious=True)，未命中返回 None。"""
-    if not settings.audit_quick_filter or not text:
+def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
+    """正则前置快筛：命中返回 AuditResult(is_malicious=True)，未命中返回 None。
+
+    force=True 时忽略 audit_quick_filter 开关（审核 LLM 不可用时的强制降级路径）。
+    """
+    if not text:
+        return None
+    if not force and not settings.audit_quick_filter:
         return None
     for pattern, category in _QUICK_PATTERNS:
         m = pattern.search(text)
@@ -135,14 +150,19 @@ class AuditVerdict(BaseModel):
 def _parse_verdict(raw: str) -> bool | None:
     """解析审核模型的 0/1 输出。
 
-    返回 True=有害 / False=无害 / None=输出不合法（fail-soft 放行 + warning，
-    不因审核模型输出跑偏阻断业务）。
+    返回 True=有害 / False=无害 / None=输出不合法（由调用方决定是否重试）。
     """
     try:
         return AuditVerdict(verdict=raw.strip()).is_malicious
     except ValidationError:
-        log.warning("audit verdict invalid, allowing", extra={"raw_len": len(raw)})
         return None
+
+
+class _LlmAuditStatus(enum.Enum):
+    CLEAN = "clean"
+    MALICIOUS = "malicious"
+    CALL_FAILED = "call_failed"
+    INVALID_EXHAUSTED = "invalid_exhausted"
 
 
 class Guard:
@@ -161,47 +181,74 @@ class Guard:
         self._apikey = apikey
         self._base_url = base_url or None
 
-    async def _audit_with_llm(self, text: str) -> bool | None:
-        """调平台预设审核模型审一次（0/1 判定）。
+    async def _audit_with_llm(self, text: str) -> _LlmAuditStatus:
+        """调平台预设审核模型审一次（0/1 判定），输出异常时带软提示重试。
 
-        返回 True=有害 / False=无害 / None=审核失败（调用方降级）。trace 经
-        observe_generation 上报 langfuse（同构 client._invoke_llm）。
+        trace 经 observe_generation 上报 langfuse（同构 client._invoke_llm）。
         """
         from app.core.langfuse import observe_generation
 
-        text_preview = text[:500]
-        gen = None
-        try:
-            with observe_generation(
-                model=self._model,
-                provider=self._provider.value,
-                system=_AUDIT_SYSTEM,
-                user_msg=text_preview,
-                metadata={"kind": "guardrail"},
-            ) as gen:
-                content, usage = await llm_provider.complete(
-                    self._provider,
-                    self._apikey,
-                    self._model,
-                    _AUDIT_SYSTEM,
-                    f"【待审文本】\n{text}",
-                    base_url=self._base_url,
-                    max_tokens=2,
-                )
-                if gen is not None:
-                    gen.update(
-                        output=content.strip() or "(empty)",
-                        usage_details={
-                            "input": usage.input_tokens,
-                            "output": usage.output_tokens,
-                        },
+        user_msg = f"【待审文本】\n{text}"
+        last_raw = ""
+        for attempt in range(_AUDIT_MAX_RETRIES + 1):
+            text_preview = user_msg[:500]
+            gen = None
+            try:
+                with observe_generation(
+                    model=self._model,
+                    provider=self._provider.value,
+                    system=_AUDIT_SYSTEM,
+                    user_msg=text_preview,
+                    metadata={"kind": "guardrail", "attempt": attempt + 1},
+                ) as gen:
+                    content, usage = await llm_provider.complete(
+                        self._provider,
+                        self._apikey,
+                        self._model,
+                        _AUDIT_SYSTEM,
+                        user_msg,
+                        base_url=self._base_url,
+                        max_tokens=2,
                     )
-        except Exception:  # noqa: BLE001 审核不可用降级，不阻断业务
-            log.warning("audit llm call failed", exc_info=True)
-            if gen is not None:
-                gen.update(level="ERROR", status_message="audit call failed")
-            return None
-        return _parse_verdict(content)
+                    if gen is not None:
+                        gen.update(
+                            output=content.strip() or "(empty)",
+                            usage_details={
+                                "input": usage.input_tokens,
+                                "output": usage.output_tokens,
+                            },
+                        )
+            except Exception:  # noqa: BLE001 审核不可用 → 正则降级
+                log.warning("audit llm call failed", exc_info=True)
+                if gen is not None:
+                    gen.update(level="ERROR", status_message="audit call failed")
+                return _LlmAuditStatus.CALL_FAILED
+
+            parsed = _parse_verdict(content)
+            if parsed is not None:
+                return (
+                    _LlmAuditStatus.MALICIOUS
+                    if parsed
+                    else _LlmAuditStatus.CLEAN
+                )
+
+            last_raw = content.strip()
+            if attempt < _AUDIT_MAX_RETRIES:
+                log.warning(
+                    "audit verdict invalid, retrying",
+                    extra={"attempt": attempt + 1, "raw_preview": last_raw[:50]},
+                )
+                user_msg = (
+                    f"{user_msg}\n\n{_AUDIT_RETRY_HINT}\n"
+                    f"上次输出：{last_raw[:80] or '(empty)'}"
+                )
+                continue
+
+        log.warning(
+            "audit verdict invalid after retries, allowing",
+            extra={"raw_preview": last_raw[:50]},
+        )
+        return _LlmAuditStatus.INVALID_EXHAUSTED
 
     async def audit(self, text: str) -> AuditResult | None:
         """快筛 → 未命中跑 LLM 审核。返回 None=放行，AuditResult(is_malicious=True)=命中。
@@ -215,17 +262,18 @@ class Guard:
         # audit_model 为空时只能靠快筛
         if not self._model:
             return None
-        malicious = await self._audit_with_llm(text)
-        if malicious is None:
-            # 审核模型不可用 → 仅靠快筛 + critical 告警（fail-soft，不阻断业务）
+        outcome = await self._audit_with_llm(text)
+        if outcome is _LlmAuditStatus.CALL_FAILED:
+            # 审核 LLM 不可用 → 强制正则快筛降级（即使 audit_quick_filter 关闭）
             log.critical("audit llm unavailable, falling back to quick filter only")
-            return None
-        if malicious:
+            return quick_filter(text, force=True)
+        if outcome is _LlmAuditStatus.MALICIOUS:
             return AuditResult(
                 True,
                 category="llm_audit",
                 reason="审核模型判定有害",
             )
+        # CLEAN / INVALID_EXHAUSTED → 放行
         return None
 
 

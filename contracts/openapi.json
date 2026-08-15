@@ -477,6 +477,16 @@
               }
             }
           },
+          "403": {
+            "description": "试用账号只读",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2282,6 +2292,74 @@
         }
       }
     },
+    "/api/v1/games/{game_id}/versions/{version}/preview-token": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Create Preview Token",
+        "description": "签发 draft 多文件 preview token（owner only，§19.2）。",
+        "operationId": "create_preview_token_api_v1_games__game_id__versions__version__preview_token_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreviewTokenResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/games/{game_id}/versions/{version}/files/{file_path}": {
       "get": {
         "tags": [
@@ -2831,6 +2909,16 @@
               }
             }
           },
+          "403": {
+            "description": "试用账号只读",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2944,7 +3032,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedData_FavoriteGameItem_"
+                  "$ref": "#/components/schemas/PaginatedData_PublicGameMeta_"
                 }
               }
             }
@@ -5187,6 +5275,88 @@
         }
       }
     },
+    "/play/template/{template_id}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Template",
+        "description": "模板 reference 产物试玩（catalog.json reference_artifact），公开。",
+        "operationId": "play_template_play_template__template_id__get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/{slug}/thumb.png": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Thumb",
+        "description": "已发布游戏封面截图，公开。不触发 PV 统计。",
+        "operationId": "play_thumb_play__slug__thumb_png_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/play/{slug}": {
       "get": {
         "tags": [
@@ -5228,13 +5398,63 @@
         }
       }
     },
+    "/play/{slug}/{path}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Asset",
+        "description": "已发布游戏 dist 子资源（assets/* 等），公开。",
+        "operationId": "play_asset_play__slug___path__get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/draft/{game_id}/{version}": {
       "get": {
         "tags": [
           "hosting"
         ],
         "summary": "Draft",
-        "description": "草稿试玩，仅 owner。非 owner/不存在 → 404 不泄露。",
+        "description": "草稿试玩 index.html，仅 owner。非 owner/不存在 → 404 不泄露。",
         "operationId": "draft_draft__game_id___version__get",
         "security": [
           {
@@ -5284,22 +5504,235 @@
         }
       }
     },
-    "/play/{slug}/thumb.png": {
+    "/draft/{game_id}/{version}/{path}": {
       "get": {
         "tags": [
           "hosting"
         ],
-        "summary": "Play Thumb",
-        "description": "已发布游戏封面截图，公开。不触发 PV 统计。",
-        "operationId": "play_thumb_play__slug__thumb_png_get",
+        "summary": "Draft Asset",
+        "description": "草稿 dist 子资源，仅 owner。",
+        "operationId": "draft_asset_draft__game_id___version___path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "slug",
+            "name": "game_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Slug"
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}/": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Index",
+        "description": "Draft 多文件 preview 入口（短期 token，§19.2）。",
+        "operationId": "preview_index_preview__token___game_id___version___get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Index",
+        "description": "Draft 多文件 preview 入口（短期 token，§19.2）。",
+        "operationId": "preview_index_preview__token___game_id___version__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}/{path}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Asset",
+        "description": "Draft 多文件 preview 子资源（与 index 共享 token 授权）。",
+        "operationId": "preview_asset_preview__token___game_id___version___path__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
             }
           }
         ],
@@ -6134,6 +6567,18 @@
         ],
         "title": "ApiResponse[PasswordResetResp]"
       },
+      "ApiResponse_PreviewTokenResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreviewTokenResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreviewTokenResp]"
+      },
       "ApiResponse_PublicGameMeta_": {
         "properties": {
           "data": {
@@ -6934,45 +7379,6 @@
         ],
         "title": "ErrorResponse",
         "description": "统一错误响应：{\"error\": {code, message, detail}}"
-      },
-      "FavoriteGameItem": {
-        "properties": {
-          "game_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Game Id"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "status": {
-            "$ref": "#/components/schemas/GameStatus"
-          },
-          "play_count": {
-            "type": "integer",
-            "title": "Play Count"
-          },
-          "favorited_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Favorited At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "game_id",
-          "title",
-          "slug",
-          "status",
-          "play_count",
-          "favorited_at"
-        ],
-        "title": "FavoriteGameItem"
       },
       "FeedbackReq": {
         "properties": {
@@ -8122,37 +8528,6 @@
         ],
         "title": "PaginatedData[AuditLogItem]"
       },
-      "PaginatedData_FavoriteGameItem_": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/FavoriteGameItem"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "page": {
-            "type": "integer",
-            "title": "Page"
-          },
-          "size": {
-            "type": "integer",
-            "title": "Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data",
-          "total",
-          "page",
-          "size"
-        ],
-        "title": "PaginatedData[FavoriteGameItem]"
-      },
       "PaginatedData_GameListItem_": {
         "properties": {
           "data": {
@@ -8356,6 +8731,25 @@
         },
         "type": "object",
         "title": "PasswordResetResp"
+      },
+      "PreviewTokenResp": {
+        "properties": {
+          "preview_url": {
+            "type": "string",
+            "title": "Preview Url"
+          },
+          "expires_in_s": {
+            "type": "integer",
+            "title": "Expires In S",
+            "description": "token 有效期（秒）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preview_url",
+          "expires_in_s"
+        ],
+        "title": "PreviewTokenResp"
       },
       "ProfilePatch": {
         "properties": {
@@ -9275,6 +9669,27 @@
             },
             "type": "array",
             "title": "Tags"
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "default": "canvas"
+          },
+          "playable": {
+            "type": "boolean",
+            "title": "Playable",
+            "default": false
+          },
+          "play_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play Url"
           }
         },
         "type": "object",
