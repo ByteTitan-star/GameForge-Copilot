@@ -1,10 +1,11 @@
-"""词库加载与 AC 扫描：allow 掩码后扫 block，按目录 mtime 热加载。"""
+"""词库加载与 AC 扫描：allow 掩码后扫 block/suspect，按目录 mtime 热加载。"""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import ahocorasick
 
@@ -19,6 +20,9 @@ _BLOCK_CATEGORY_BY_FILE: dict[str, str] = {
     "porn.txt": "porn",
     "gambling_drugs.txt": "gambling_drugs",
 }
+_SUSPECT_CATEGORY_BY_FILE: dict[str, str] = {
+    "politics.txt": "politics",
+}
 
 _DEFAULT_LEXICON_DIR = Path(__file__).resolve().parent.parent / "lexicons"
 _MASK = "\0"
@@ -32,23 +36,26 @@ _cached_dir: str | None = None
 class LexiconHit:
     category: str
     word: str
+    level: Literal["block", "suspect"] = "block"
 
 
 class LexiconMatcher:
-    """已构建的 allow + block 自动机；scan 对原文做归一化后匹配。"""
+    """已构建的 allow + block/suspect 自动机；scan 对原文做归一化后匹配。"""
 
     def __init__(
         self,
         *,
         block: ahocorasick.Automaton | None,
+        suspect: ahocorasick.Automaton | None,
         allow_words: list[str],
     ) -> None:
         self._block = block
+        self._suspect = suspect
         self._allow_words = allow_words
 
     @classmethod
     def empty(cls) -> LexiconMatcher:
-        return cls(block=None, allow_words=[])
+        return cls(block=None, suspect=None, allow_words=[])
 
     @classmethod
     def load(cls) -> LexiconMatcher:
@@ -78,42 +85,31 @@ class LexiconMatcher:
             return cls.empty()
 
         allow_words = _read_words(root / "allow.txt")
-        block = ahocorasick.Automaton()
-        word_count = 0
-        block_dir = root / "block"
-        if block_dir.is_dir():
-            for path in sorted(block_dir.glob("*.txt")):
-                category = _BLOCK_CATEGORY_BY_FILE.get(path.name)
-                if category is None:
-                    log.warning("lexicon block file skipped (unknown category): %s", path.name)
-                    continue
-                for word in _read_words(path):
-                    block.add_word(word, (category, word))
-                    word_count += 1
-        if word_count == 0:
-            return cls(block=None, allow_words=allow_words)
-        block.make_automaton()
+        block, block_n = _build_automaton(root / "block", _BLOCK_CATEGORY_BY_FILE)
+        suspect, suspect_n = _build_automaton(root / "suspect", _SUSPECT_CATEGORY_BY_FILE)
         log.info(
-            "lexicon loaded: dir=%s block_words=%d allow_words=%d",
+            "lexicon loaded: dir=%s block_words=%d suspect_words=%d allow_words=%d",
             root,
-            word_count,
+            block_n,
+            suspect_n,
             len(allow_words),
         )
-        return cls(block=block, allow_words=allow_words)
+        return cls(block=block, suspect=suspect, allow_words=allow_words)
 
     def scan(self, text: str) -> LexiconHit | None:
-        """归一化 → 白名单掩码 → block 扫描；命中返回首个 LexiconHit。"""
-        if not settings.audit_lexicon_enabled or not text or self._block is None:
+        """归一化 → 白名单掩码 → block 优先，再 suspect。"""
+        if not settings.audit_lexicon_enabled or not text:
+            return None
+        if self._block is None and self._suspect is None:
             return None
         normalized = normalize(text)
         if not normalized:
             return None
         masked = _mask_allow(normalized, self._allow_words)
-        for _end, (category, word) in self._block.iter(masked):
-            if _MASK in masked[_end - len(word) + 1 : _end + 1]:
-                continue
-            return LexiconHit(category=category, word=word)
-        return None
+        block_hit = _first_hit(self._block, masked, "block")
+        if block_hit is not None:
+            return block_hit
+        return _first_hit(self._suspect, masked, "suspect")
 
 
 def reset_lexicon_cache() -> None:
@@ -142,6 +138,42 @@ def _dir_mtime(root: Path) -> float:
     return latest
 
 
+def _build_automaton(
+    directory: Path, category_by_file: dict[str, str]
+) -> tuple[ahocorasick.Automaton | None, int]:
+    if not directory.is_dir():
+        return None, 0
+    auto = ahocorasick.Automaton()
+    count = 0
+    for path in sorted(directory.glob("*.txt")):
+        category = category_by_file.get(path.name)
+        if category is None:
+            log.warning("lexicon file skipped (unknown category): %s", path.name)
+            continue
+        for word in _read_words(path):
+            auto.add_word(word, (category, word))
+            count += 1
+    if count == 0:
+        return None, 0
+    auto.make_automaton()
+    return auto, count
+
+
+def _first_hit(
+    auto: ahocorasick.Automaton | None,
+    masked: str,
+    level: Literal["block", "suspect"],
+) -> LexiconHit | None:
+    if auto is None:
+        return None
+    for end, (category, word) in auto.iter(masked):
+        start = end - len(word) + 1
+        if _MASK in masked[start : end + 1]:
+            continue
+        return LexiconHit(category=category, word=word, level=level)
+    return None
+
+
 def _read_words(path: Path) -> list[str]:
     if not path.is_file():
         return []
@@ -156,13 +188,16 @@ def _read_words(path: Path) -> list[str]:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        # 入库约定：过短词需人工确认；此处仍加载但 ≥2 才入自动机，单字直接跳过
         if len(line) < 2:
             continue
-        if line in seen:
+        # 与扫描侧同一套归一化，保证英文大小写/空格写法都能入库命中
+        word = normalize(line)
+        if len(word) < 2:
             continue
-        seen.add(line)
-        words.append(line)
+        if word in seen:
+            continue
+        seen.add(word)
+        words.append(word)
     return words
 
 

@@ -1,5 +1,6 @@
-﻿# block/porn — 高精裁剪，命中即决
-# 来源裁剪自 konsheng/Sensitive-lexicon（MIT）；不含单字/双字宽词与游戏易撞词
+# block/porn — 色情（高精裁剪，命中即决）
+# 来源：人工整理 + konsheng/Sensitive-lexicon（MIT）裁剪思路
+# 不含单字/双字宽词与「激情」「裸奔」等游戏易撞词
 
 色情网站
 成人影片
@@ -9,3 +10,30 @@
 约炮群
 艳照门
 儿童色情
+色情直播
+黄色网站
+淫秽小说
+成人色情片
+援交服务
+卖淫团伙
+招嫖信息
+色情交易
+淫秽光盘
+色情服务
+裸聊收费
+色情资源站
+成人色情网站
+色情聊天室
+
+# ---- English ----
+porn website
+pornography site
+child pornography
+child porn
+adult porn video
+sex trafficking
+prostitution service
+escort prostitution
+obscene video
+xxx porn site
+camgirl prostitution

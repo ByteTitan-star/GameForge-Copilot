@@ -1,11 +1,21 @@
 # block/gambling_drugs — 赌博/毒品（高精裁剪，命中即决）
-# 来源裁剪自 konsheng/Sensitive-lexicon（MIT）；已剔除过宽词与游戏玩法词
+# 来源：人工整理 + konsheng/Sensitive-lexicon（MIT）裁剪思路；已剔除过宽词与游戏玩法词
 
 网络赌博
 线上赌场
 赌博网站
 赌球网站
 私彩平台
+地下赌场
+赌资结算
+百家乐平台
+六合彩投注
+时时彩平台
+赌场筹码
+赌球公司
+博彩网站
+在线博彩
+赌场开户
 冰毒
 海洛因
 摇头丸
@@ -13,3 +23,29 @@ K粉
 大麻烟
 制毒原料
 贩毒团伙
+吸毒工具
+运毒通道
+贩毒网络
+可卡因粉末
+甲基苯丙胺
+麻黄碱制毒
+毒品交易
+毒贩窝点
+成瘾毒品
+
+# ---- English (high-precision; spaces OK, loaded via normalize) ----
+online gambling
+online casino
+betting website
+sports betting site
+illegal lottery
+casino account
+money laundering gambling
+methamphetamine
+heroin overdose
+cocaine trafficking
+drug trafficking
+fentanyl pills
+ecstasy tablets
+marijuana trafficking
+crystal meth

@@ -153,12 +153,14 @@ class AuditResult:
     category: str = "none"
     reason: str = ""
     evidence: str = ""
+    suspected: bool = False  # 灰名单命中：不即决，交 Guard.audit 强制 LLM
 
 
 def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
-    """快筛：原文跑 blacklist.txt，再（可选）归一化后跑 AC 词库；命中即决。
+    """快筛：原文 blacklist → AC block（即决）/ suspect（疑似，不即决）。
 
     force=True 时忽略 audit_quick_filter 开关（审核 LLM 不可用时的强制降级路径）。
+    返回值约定：is_malicious=True 即决拦截；suspected=True 仅提示升级 LLM。
     """
     if not text:
         return None
@@ -177,12 +179,20 @@ def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
     # 2) AC 敏感词词库（归一化 + 白名单掩码）；开关关闭则跳过
     if settings.audit_lexicon_enabled:
         hit = LexiconMatcher.load().scan(text)
-        if hit is not None:
+        if hit is not None and hit.level == "block":
             return AuditResult(
                 True,
                 category=hit.category,
                 reason="命中敏感词词库",
                 evidence=hit.word,
+            )
+        if hit is not None and hit.level == "suspect":
+            return AuditResult(
+                False,
+                category=hit.category,
+                reason="命中灰名单，待审核模型判定",
+                evidence=hit.word,
+                suspected=True,
             )
     return None
 
@@ -301,23 +311,34 @@ class Guard:
         return _LlmAuditStatus.INVALID_EXHAUSTED
 
     async def audit(self, text: str) -> AuditResult | None:
-        """快筛 → 未命中跑 LLM 审核。返回 None=放行，AuditResult(is_malicious=True)=命中。
+        """快筛 → 未即决再跑 LLM。对外只返回 None 或 is_malicious=True。
 
-        LLM 路径只产出 0/1（无 category/evidence），命中统一记 llm_audit；
-        quick_filter 命中仍带具体分类。
+        - block / blacklist 命中：即决返回
+        - suspect 灰名单：强制走 LLM；无模型 / LLM 挂掉 / 判 0 → 放行（fail-open）
+        - LLM 判 1：若来自灰名单则保留词库 category，否则 llm_audit
         """
         hit = quick_filter(text)
-        if hit is not None:
+        if hit is not None and hit.is_malicious:
             return hit
-        # audit_model 为空时只能靠快筛
+        # audit_model 为空：只能靠即决快筛；灰名单 fail-open
         if not self._model:
             return None
         outcome = await self._audit_with_llm(text)
         if outcome is _LlmAuditStatus.CALL_FAILED:
-            # 审核 LLM 不可用 → 强制正则快筛降级（即使 audit_quick_filter 关闭）
+            # 审核 LLM 不可用 → 仅对即决规则强制降级；灰名单仍放行
             log.critical("audit llm unavailable, falling back to quick filter only")
-            return quick_filter(text, force=True)
+            forced = quick_filter(text, force=True)
+            if forced is not None and forced.is_malicious:
+                return forced
+            return None
         if outcome is _LlmAuditStatus.MALICIOUS:
+            if hit is not None and hit.suspected:
+                return AuditResult(
+                    True,
+                    category=hit.category,
+                    reason="灰名单命中且审核模型判定有害",
+                    evidence=hit.evidence,
+                )
             return AuditResult(
                 True,
                 category="llm_audit",
@@ -420,7 +441,7 @@ async def run_streamed_llm(
 
     # 1) 输入侧审核
     in_res = await guard.audit(user_msg)
-    if in_res is not None:
+    if in_res is not None and in_res.is_malicious:
         await _emit_attacked(ctx, side="input", res=in_res, phase=phase)
         raise ContentAttacked(
             category=in_res.category,
@@ -440,7 +461,7 @@ async def run_streamed_llm(
 
     async def _raise_if_hit(res: AuditResult | None, side: str) -> None:
         """审核命中：发 ATTACKED + raise ContentAttacked（输入/输出共用）。"""
-        if res is not None:
+        if res is not None and res.is_malicious:
             await _emit_attacked(ctx, side=side, res=res, phase=phase)
             raise ContentAttacked(
                 category=res.category,

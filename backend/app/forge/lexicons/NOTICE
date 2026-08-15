@@ -1,8 +1,11 @@
 # 词库来源与许可（裁剪后入库，禁止运行时拉上游）
 #
-# 主来源：https://github.com/konsheng/Sensitive-lexicon （MIT）
+# 主来源思路：https://github.com/konsheng/Sensitive-lexicon （MIT）
 # 白名单思路参考：https://github.com/houbb/sensitive-word-data （Apache-2.0）
-# 入库原则：人工裁剪；游戏玩法词不进 block；长度≤2 未经确认不进；过宽词剔除。
-# 本目录为 P1 高精子集，非上游全量；同步上游须重新裁剪并更新本 NOTICE 日期。
+# 入库原则：人工裁剪；游戏玩法词不进 block；长度<=2 未经确认不进；过宽词剔除。
+# 本目录为高精子集，非上游全量；同步上游须重新裁剪并更新本 NOTICE 日期。
 #
 # 拉取/裁剪日期：2026-08-15
+# 扩裁记录：2026-08-15 扩 gambling_drugs / porn / terrorism / politics（人工高精，非全量照搬）
+# 扩裁记录：2026-08-15 增补英文高精词（赌毒/色情/暴恐/政治）；normalize 拉丁小写防大小写绕过
+

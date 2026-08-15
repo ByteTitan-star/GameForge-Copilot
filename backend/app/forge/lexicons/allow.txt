@@ -1,5 +1,5 @@
 # 白名单：最长匹配优先，掩码后跳过（游戏语境易误伤短语）
-# 来源：人工整理 + houbb sensitive_word_allow 思路；非上游全量照搬
+# 来源：人工整理 + houbb sensitive_word_allow 思路
 
 激情对战
 开黑上分
@@ -7,3 +7,14 @@
 塔防游戏
 击杀怪物
 收集金币
+射击训练
+爆炸特效
+炸弹道具
+枪战模式
+爆头奖励
+火力全开
+headshot bonus
+shooter mode
+bomb item
+explosion effect
+tower defense
