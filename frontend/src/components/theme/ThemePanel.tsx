@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { RotateCcw, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CustomColorField } from '@/components/theme/CustomColorField'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { WORKSHOP_DESIGN_PROMPTS } from '@/lib/theme/design-prompts'
@@ -97,28 +98,14 @@ export function ThemePanel({ className }: ThemePanelProps) {
 
         <div className="grid gap-3 sm:grid-cols-3">
           {colorFields.map(({ key, label, hint }) => (
-            <label key={key} className="space-y-1.5">
-              <span className="gf-page-muted block text-xs">{label}</span>
-              <div className="gf-border-subtle flex items-center gap-2 rounded-xl bg-black/[0.02] p-2 ring-1 ring-[var(--gf-border)]">
-                <input
-                  type="color"
-                  value={settings.colors[key]}
-                  onChange={(e) => setCustomColors({ [key]: e.target.value })}
-                  className="gf-color-swatch h-10 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0"
-                  aria-label={label}
-                />
-                <div className="min-w-0">
-                  <input
-                    type="text"
-                    value={settings.colors[key]}
-                    onChange={(e) => setCustomColors({ [key]: e.target.value })}
-                    className="gf-input w-full rounded-lg px-2 py-1.5 font-mono text-xs uppercase"
-                    spellCheck={false}
-                  />
-                  <span className="gf-page-muted mt-0.5 block text-[10px]">{hint}</span>
-                </div>
-              </div>
-            </label>
+            <CustomColorField
+              key={key}
+              colorKey={key}
+              label={label}
+              hint={hint}
+              value={settings.colors[key]}
+              onCommit={(colorKey, normalized) => setCustomColors({ [colorKey]: normalized })}
+            />
           ))}
         </div>
 

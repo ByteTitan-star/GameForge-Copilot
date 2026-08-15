@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { applyTheme } from '@/lib/theme/apply-theme'
+import { normalizeHex } from '@/lib/theme/color-utils'
 import { DEFAULT_THEME_SETTINGS, migrateThemeSettings, presetById, settingsFromPreset } from '@/lib/theme/presets'
 import { THEME_SCHEMA_VERSION } from '@/lib/theme/design-prompts'
 import type { ThemeColors, ThemeGlow, ThemeSettings } from '@/lib/theme/types'
@@ -38,10 +39,21 @@ export const useThemeStore = create<ThemeState>()(
 
       setCustomColors: (partial) => {
         const cur = get().settings
+        const nextColors = { ...cur.colors }
+        let changed = false
+        for (const [key, value] of Object.entries(partial) as [keyof ThemeColors, string][]) {
+          const normalized = normalizeHex(value)
+          if (!normalized) continue
+          if (nextColors[key] !== normalized) {
+            nextColors[key] = normalized
+            changed = true
+          }
+        }
+        if (!changed) return
         const next = commit({
           ...cur,
           presetId: 'custom',
-          colors: { ...cur.colors, ...partial },
+          colors: nextColors,
           schemaVersion: THEME_SCHEMA_VERSION,
         })
         set({ settings: next })

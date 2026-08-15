@@ -1,4 +1,5 @@
 import { THEME_SCHEMA_VERSION } from './design-prompts'
+import { sanitizeThemeColors } from './color-utils'
 import type { ThemePreset, ThemeSettings } from './types'
 
 export const DEFAULT_PRESET_ID = 'forma-glass'
@@ -83,5 +84,10 @@ export function migrateThemeSettings(raw: ThemeSettings | undefined): ThemeSetti
   if (!raw || (raw.schemaVersion ?? 1) < THEME_SCHEMA_VERSION) {
     return { ...DEFAULT_THEME_SETTINGS }
   }
-  return { ...DEFAULT_THEME_SETTINGS, ...raw, schemaVersion: THEME_SCHEMA_VERSION }
+  return {
+    ...DEFAULT_THEME_SETTINGS,
+    ...raw,
+    colors: sanitizeThemeColors(raw.colors, DEFAULT_THEME_SETTINGS.colors),
+    schemaVersion: THEME_SCHEMA_VERSION,
+  }
 }
