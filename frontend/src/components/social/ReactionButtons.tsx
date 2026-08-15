@@ -8,10 +8,11 @@ import { cn } from '@/lib/cn'
 type Props = {
   gameId: string
   accessToken?: string | null
+  readOnly?: boolean
   className?: string
 }
 
-export function ReactionButtons({ gameId, accessToken, className }: Props) {
+export function ReactionButtons({ gameId, accessToken, readOnly = false, className }: Props) {
   const t = useT()
   const qc = useQueryClient()
 
@@ -39,9 +40,10 @@ export function ReactionButtons({ gameId, accessToken, className }: Props) {
   const state = q.data
   const liked = state?.liked ?? false
   const favorited = state?.favorited ?? false
+  const canMutate = Boolean(accessToken) && !readOnly
 
   function onToggle(kind: 'like' | 'favorite') {
-    if (!accessToken) return
+    if (!canMutate) return
     toggleMu.mutate(kind)
   }
 
@@ -49,16 +51,16 @@ export function ReactionButtons({ gameId, accessToken, className }: Props) {
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
       <button
         type="button"
-        disabled={!accessToken || toggleMu.isPending}
+        disabled={!canMutate || toggleMu.isPending}
         onClick={() => onToggle('like')}
         className={cn(
           'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition',
           liked
             ? 'border-rose-400/40 bg-rose-400/15 text-rose-100'
             : 'border-white/15 bg-white/[0.04] text-white/80 hover:border-white/30',
-          !accessToken && 'opacity-50',
+          !canMutate && 'opacity-50',
         )}
-        title={!accessToken ? t('loginRequired') : undefined}
+        title={readOnly ? t('trialReactionsReadOnly') : !accessToken ? t('loginRequired') : undefined}
       >
         {toggleMu.isPending ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -70,15 +72,16 @@ export function ReactionButtons({ gameId, accessToken, className }: Props) {
       </button>
       <button
         type="button"
-        disabled={!accessToken || toggleMu.isPending}
+        disabled={!canMutate || toggleMu.isPending}
         onClick={() => onToggle('favorite')}
         className={cn(
           'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition',
           favorited
             ? 'border-amber-400/40 bg-amber-400/15 text-amber-100'
             : 'border-white/15 bg-white/[0.04] text-white/80 hover:border-white/30',
-          !accessToken && 'opacity-50',
+          !canMutate && 'opacity-50',
         )}
+        title={readOnly ? t('trialReactionsReadOnly') : undefined}
       >
         <Star className={cn('h-3.5 w-3.5', favorited && 'fill-current')} />
         {t('reactionFavorite')}
@@ -87,6 +90,8 @@ export function ReactionButtons({ gameId, accessToken, className }: Props) {
         <Link to="/login" className="text-[11px] text-white/45 hover:text-white/70">
           {t('login')}
         </Link>
+      ) : readOnly ? (
+        <span className="text-[11px] text-white/45">{t('trialReactionsReadOnly')}</span>
       ) : null}
     </div>
   )
