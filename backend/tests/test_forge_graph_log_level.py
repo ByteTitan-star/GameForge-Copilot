@@ -1,8 +1,7 @@
 """run_generation 异常日志分级：
 
-AppError（业务错，如 LLM 未配置/apikey 错）→ WARNING 且不带 traceback；
-其他异常（系统/瞬时错）→ ERROR 且带 traceback。
-两种情况都把 run 置 FAILED。验证 worker 进程不再因业务错刷一长串栈。
+AppError（业务错，如 LLM 未配置/apikey 错）→ WARNING 且不带 traceback，run FAILED；
+其他瞬时/系统异常（RuntimeError 等）→ ERROR 且带 traceback，run PAUSED + recoverable_error。
 """
 
 import logging
@@ -71,7 +70,7 @@ async def test_runtime_error_logged_as_exception_with_traceback(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """系统错（RuntimeError）→ error + traceback（保留诊断），run FAILED。"""
+    """系统错（RuntimeError）→ error + traceback；按 P0 进入可恢复暂停。"""
     rid = await _make_run(verified_client)
 
     async def _boom(*_a, **_k):
@@ -91,3 +90,10 @@ async def test_runtime_error_logged_as_exception_with_traceback(
     ]
     assert errs, "RuntimeError 应产生 error 日志"
     assert errs[0].exc_info is not None, "系统错日志应带 traceback"
+
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    data = r.json()["data"]
+    assert data["status"] == "paused"
+    assert data["pause_reason"] == "recoverable_error"
+    assert data["recovery"]["error_code"] == "worker_interrupted"
+    assert data["recovery"]["can_retry"] is True

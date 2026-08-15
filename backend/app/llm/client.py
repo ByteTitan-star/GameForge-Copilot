@@ -3,6 +3,7 @@
 明文 key 仅内存单次调用生命周期，不落日志（docs/05）。测试 monkeypatch call_llm。
 """
 
+import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from app.core.errors import AppError, ErrorCode
 from app.core.langfuse import observe_generation
 from app.core.metrics import LLM_CALLS, LLM_TOKENS
 from app.enums import LLMProvider, Role
+from app.forge.reliability.idempotency import side_effect_key
 from app.llm import circuit, crypto, provider
 from app.llm.provider import StreamChunk
 from app.models.llm_config import UserLLMConfig
@@ -25,6 +27,23 @@ from app.models.user import User
 from app.notify import services as notify_services
 from app.usage import quota as quota_mod
 from app.usage.store import get_system_usage, get_user_usage, record_usage
+
+
+def _usage_idem_key(
+    *,
+    user_id: uuid.UUID,
+    run_id: uuid.UUID | None,
+    system: str,
+    user_msg: str,
+    content: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> str:
+    digest = hashlib.sha256(
+        f"{system}\0{user_msg}\0{content}\0{input_tokens}\0{output_tokens}".encode()
+    ).hexdigest()[:24]
+    scope = run_id or user_id
+    return side_effect_key(scope, "llm", digest, "usage")
 
 
 async def _get_config(
@@ -176,6 +195,15 @@ async def call_llm(
         output_tokens=usage.output_tokens,
         game_id=game_id,
         run_id=run_id,
+        idempotency_key=_usage_idem_key(
+            user_id=user_id,
+            run_id=run_id,
+            system=system,
+            user_msg=user_msg,
+            content=content,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+        ),
     )
     await _maybe_quota_alert(db, r, user_id)
     await _maybe_system_alert(db, r)
@@ -249,6 +277,7 @@ async def call_llm_stream(
         LLM_CALLS.labels(prov.value, "ok").inc()
         LLM_TOKENS.labels(prov.value, "input").inc(usage_acc.input_tokens)
         LLM_TOKENS.labels(prov.value, "output").inc(usage_acc.output_tokens)
+        full_text = "".join(accumulated)
         await record_usage(
             r,
             user_id,
@@ -256,6 +285,15 @@ async def call_llm_stream(
             output_tokens=usage_acc.output_tokens,
             game_id=game_id,
             run_id=run_id,
+            idempotency_key=_usage_idem_key(
+                user_id=user_id,
+                run_id=run_id,
+                system=system,
+                user_msg=user_msg,
+                content=full_text,
+                input_tokens=usage_acc.input_tokens,
+                output_tokens=usage_acc.output_tokens,
+            ),
         )
         await _maybe_quota_alert(db, r, user_id)
         await _maybe_system_alert(db, r)

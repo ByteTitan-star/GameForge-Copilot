@@ -22,12 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.enums import RunPhase, RunStatus, WSEventType
+from app.enums import PauseReason, RunPhase, RunStatus, WSEventType
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.assets.picker import asset_pick
-from app.forge.code_candidate import next_candidate_version, promote_candidate
+from app.forge.code_candidate import claim_candidate_version, promote_candidate
 from app.forge.design_doc import (
     coerce_design_doc,
     design_doc_to_text,
@@ -45,6 +45,18 @@ from app.forge.prompts import (
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
 )
+from app.forge.reliability import (
+    FatalError,
+    RecoveryInfo,
+    apply_paused_metadata,
+    build_pause_checkpoint,
+    classify_exception,
+    is_fatal,
+    is_recoverable,
+)
+from app.forge.reliability.artifact_gate import derive_artifact_gate
+from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
+from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
@@ -114,6 +126,7 @@ async def _commit_project_build(
     design_doc: dict[str, Any],
     artifacts: list[Any],
     art_direction: dict[str, Any] | None,
+    attempt: int = 1,
 ) -> dict[str, Any]:
     """Vite 多文件构建成功后落盘为 candidate（不 promote current_version）。"""
     from app.games import services as game_services
@@ -122,7 +135,13 @@ async def _commit_project_build(
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
 
-    version = await next_candidate_version(ctx.s, ctx.game)
+    version, _is_new = await claim_candidate_version(
+        ctx.r,
+        ctx.s,
+        ctx.game,
+        run_id=ctx.run.id,
+        attempt=int(attempt),
+    )
     artifact = f"{ctx.game.id}/{version}/index.html"
     await store.write_version_layers(
         ctx.game.id,
@@ -131,14 +150,24 @@ async def _commit_project_build(
         build_snapshot=project_result.build_snapshot,
         dist=project_result.dist,
     )
-    ctx.s.add(
-        GameVersion(
-            game_id=ctx.game.id,
-            version=version,
-            artifact_path=artifact,
-            design_doc=design_doc,
+    existing_gv = await ctx.s.scalar(
+        select(GameVersion).where(
+            GameVersion.game_id == ctx.game.id,
+            GameVersion.version == version,
         )
     )
+    if existing_gv is None:
+        ctx.s.add(
+            GameVersion(
+                game_id=ctx.game.id,
+                version=version,
+                artifact_path=artifact,
+                design_doc=design_doc,
+            )
+        )
+    else:
+        existing_gv.artifact_path = artifact
+        existing_gv.design_doc = design_doc
     await ctx.s.commit()
     await game_services.prune_old_versions(ctx.s, ctx.game)
     token = await preview_token_svc.mint_preview_token(
@@ -156,6 +185,7 @@ async def _commit_project_build(
             "artifact_path": artifact,
             "build": "vite",
             "preview_url": preview_url,
+            **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
         },
     )
     return {
@@ -169,6 +199,7 @@ async def _commit_project_build(
         "failure_kind": None,
         "playtest_errors": [],
         "qa_diagnosis": "",
+        **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
     }
 
 
@@ -226,6 +257,10 @@ class ForgeState(TypedDict, total=False):
     artifacts: list[dict[str, str]]
     code_ok: bool
     qa_ok: bool
+    # ADR-01 产物门禁（与 qa_ok 分立；publishable 仅 qa_ok 时为真）
+    generation_success: bool
+    previewable: bool
+    publishable: bool
     attempt: int
     exhausted: bool
     candidate_version: int | None
@@ -373,7 +408,22 @@ async def _pause_hitl(
     await ctx.s.refresh(ctx.run)
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
-    ctx.run.status = RunStatus.PAUSED.value
+    apply_paused_metadata(ctx.run)
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    checkpoint = build_pause_checkpoint(
+        phase=str(existing.get("phase") or node),
+        pause_reason=PauseReason.WAITING_USER,
+        design_doc=design_doc,
+        extra={
+            **{k: v for k, v in existing.items() if k not in {"recovery", "pause_reason"}},
+            "phase": str(existing.get("phase") or node),
+            "design_doc": design_doc,
+            **(extra or {}),
+        },
+    )
+    # build_pause_checkpoint 已写入 pause_reason；去掉可能被 extra 带入的 recovery
+    checkpoint.pop("recovery", None)
+    await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
     await add_message(
         ctx.s,
         game_id=ctx.game.id,
@@ -389,11 +439,82 @@ async def _pause_hitl(
     payload = {
         "node": node,
         "design_doc": design_doc,
+        "pause_reason": PauseReason.WAITING_USER.value,
         "action_url": f"/api/v1/games/{ctx.game.id}/runs/{ctx.run.id}/hitl/resolve",
     }
     if extra:
         payload.update(extra)
     await publish_event(ctx.run.id, WSEventType.HITL_WAIT, payload)
+
+
+async def _pause_recoverable(
+    ctx: _Ctx,
+    *,
+    phase: str,
+    error_code: str,
+    message: str,
+    attempts: int = 1,
+) -> None:
+    """可恢复故障：status=paused + pause_reason=recoverable_error（ADR-05）。"""
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.ended_at is not None or ctx.run.status == RunStatus.FAILED.value:
+        raise RunFinalized
+    apply_paused_metadata(ctx.run)
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    recovery = RecoveryInfo(
+        node=phase,
+        error_code=error_code,
+        attempts=attempts,
+        can_retry=True,
+    )
+    checkpoint = build_pause_checkpoint(
+        phase=phase,
+        pause_reason=PauseReason.RECOVERABLE_ERROR,
+        design_doc=existing.get("design_doc"),
+        recovery=recovery,
+        extra={
+            k: v
+            for k, v in existing.items()
+            if k not in {"pause_reason", "recovery", "phase"}
+        },
+    )
+    await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="paused",
+        content=message,
+        metadata={
+            "pause_reason": PauseReason.RECOVERABLE_ERROR.value,
+            "recovery": {
+                "node": recovery.node,
+                "error_code": recovery.error_code,
+                "attempts": recovery.attempts,
+                "can_retry": recovery.can_retry,
+            },
+        },
+        dedupe_key=f"{ctx.run.id}:paused:{error_code}:{attempts}",
+    )
+    await ctx.s.commit()
+    await publish_event(
+        ctx.run.id,
+        WSEventType.ERROR,
+        {
+            "code": error_code,
+            "message": message,
+            "fatal": False,
+            "pause_reason": PauseReason.RECOVERABLE_ERROR.value,
+            "recovery": {
+                "node": recovery.node,
+                "error_code": recovery.error_code,
+                "attempts": recovery.attempts,
+                "can_retry": recovery.can_retry,
+            },
+        },
+    )
 
 
 async def _check_ctrl(
@@ -406,9 +527,16 @@ async def _check_ctrl(
     if flag == "pause":
         doc = coerce_design_doc(design_doc, ctx.game.title)
         await ckpt.save_state(
-            ctx.r, ctx.run.id, {"phase": "user_pause", "design_doc": doc}, ctx.s
+            ctx.r,
+            ctx.run.id,
+            build_pause_checkpoint(
+                phase="user_pause",
+                pause_reason=PauseReason.MANUAL_HOLD,
+                design_doc=doc,
+            ),
+            ctx.s,
         )
-        ctx.run.status = RunStatus.PAUSED.value
+        apply_paused_metadata(ctx.run)
         await ctx.s.commit()
         await run_ctrl.clear_control(ctx.r, ctx.run.id)
         return "pause"
@@ -476,6 +604,17 @@ def _build_graph(ctx: _Ctx) -> Any:
             return "art_detail"
         # qa_failed / sandbox_failed：HITL 恢复后重新进入 CodeQaLoop（attempt 重置）
         if st.get("phase") in ("sandbox_failed", "qa_failed"):
+            return "code_qa_loop"
+        if st.get("pause_reason") == PauseReason.RECOVERABLE_ERROR.value:
+            node = ""
+            recovery = st.get("recovery")
+            if isinstance(recovery, dict):
+                node = str(recovery.get("node") or "")
+            node = node or str(phase or "")
+            if node in {"plan", "revise_plan"}:
+                return "plan"
+            if node in {"art", "art_options", "art_detail", "revise_art_options"}:
+                return "art_options"
             return "code_qa_loop"
         if st.get("phase") == "user_pause":
             return "art_options"
@@ -859,8 +998,16 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "design_doc": design_doc,
                     "playtest_errors": ["qa_ok 但缺少 candidate_version"],
                 }
-            promote_candidate(ctx.game, int(version))
-            await ctx.s.commit()
+            key = side_effect_key(
+                ctx.run.id, "code_qa_loop", f"v{int(version)}", "promote"
+            )
+            if await try_begin_side_effect(ctx.r, key):
+                promote_candidate(ctx.game, int(version))
+                await ctx.s.commit()
+            else:
+                # 重放：已 promote 过则保持成功语义，避免重复抬版本
+                await ctx.s.refresh(ctx.game)
+            gate = derive_artifact_gate(build_ok=True, qa_ok=True)
             return {
                 **result,
                 "qa_ok": True,
@@ -868,10 +1015,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                 "code_ok": True,
                 "code_qa_reset": False,
                 "design_doc": design_doc,
+                **gate.as_dict(),
             }
 
         if result.get("exhausted"):
             errors = list(result.get("playtest_errors") or [])
+            has_candidate = bool(result.get("candidate_version"))
+            gate = derive_artifact_gate(build_ok=has_candidate, qa_ok=False)
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
@@ -886,6 +1036,8 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "artifacts": result.get("artifacts")
                     or state.get("artifacts")
                     or [],
+                    "candidate_version": result.get("candidate_version"),
+                    **gate.as_dict(),
                 },
                 ctx.s,
             )
@@ -897,6 +1049,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "issues": errors,
                     "attempt": result.get("attempt"),
                     "failure_kind": result.get("failure_kind"),
+                    **gate.as_dict(),
                 },
             )
             return {
@@ -941,6 +1094,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             await ckpt.clear_state(ctx.r, ctx.run.id, ctx.s)
             await run_ctrl.clear_control(ctx.r, ctx.run.id)
             await ctx.s.commit()
+            gate = derive_artifact_gate(build_ok=True, qa_ok=True)
             await publish_event(
                 ctx.run.id,
                 WSEventType.DONE,
@@ -949,6 +1103,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "game_id": str(ctx.game.id),
                     "version": ctx.game.current_version,
                     "preview_url": f"/draft/{ctx.game.id}/{ctx.game.current_version}",
+                    **gate.as_dict(),
                 },
             )
             return {}
@@ -968,13 +1123,21 @@ def _build_graph(ctx: _Ctx) -> Any:
             return "done"
         return END
 
+    def _node_kwargs(policy_key: str) -> dict[str, object]:
+        if not settings.reliability_node_timeout:
+            return {}
+        return {
+            "timeout": langgraph_timeout_policy(policy_key),
+            "retry_policy": langgraph_retry_policy(policy_key),
+        }
+
     g = StateGraph(ForgeState)
-    g.add_node("plan", plan_node)
-    g.add_node("revise_plan", revise_plan_node)
-    g.add_node("art_options", art_options_node)
-    g.add_node("revise_art_options", revise_art_options_node)
-    g.add_node("art_detail", art_detail_node)
-    g.add_node("code_qa_loop", code_qa_loop_node)
+    g.add_node("plan", plan_node, **_node_kwargs("plan"))
+    g.add_node("revise_plan", revise_plan_node, **_node_kwargs("plan"))
+    g.add_node("art_options", art_options_node, **_node_kwargs("art"))
+    g.add_node("revise_art_options", revise_art_options_node, **_node_kwargs("art"))
+    g.add_node("art_detail", art_detail_node, **_node_kwargs("art"))
+    g.add_node("code_qa_loop", code_qa_loop_node, **_node_kwargs("code_qa_loop"))
     g.add_node("done", done_node)
     g.add_conditional_edges(
         START,
@@ -1063,7 +1226,6 @@ async def run_generation(
             except Exception as e:
                 duration = round(time.monotonic() - started, 3)
                 if isinstance(e, AppError):
-                    # 业务错（LLM 未配置/apikey 错等）不打整条栈，仅一行 warning
                     log.warning(
                         "request failed (business)",
                         extra={
@@ -1077,7 +1239,15 @@ async def run_generation(
                         "request failed",
                         extra={"stage": stage, "duration": duration},
                     )
-                # 审核命中走 CONTENT_BLOCKED 友好分支；其余通用 RUN_FAILED。
+                await s.rollback()
+                run = await s.get(GenerationRun, run_id)
+                if run is None or run.ended_at is not None:
+                    return
+                game = await s.get(Game, run.game_id)
+                if game is None:
+                    return
+
+                # 审核命中 / 明确 Fatal → FAILED；可恢复错误 → paused+recoverable_error
                 if isinstance(e, ContentAttacked):
                     fail_code = "CONTENT_BLOCKED"
                     fail_msg = (
@@ -1085,12 +1255,6 @@ async def run_generation(
                         if e.side == "output"
                         else f"输入未通过安全审核（{e.category}），已中断。"
                     )
-                else:
-                    fail_code = "RUN_FAILED"
-                    fail_msg = f"本轮生成失败：{e}"
-                await s.rollback()
-                await s.refresh(run)
-                if run.ended_at is None:
                     run.status = RunStatus.FAILED.value
                     run.ended_at = datetime.now(UTC)
                     await add_message(
@@ -1110,6 +1274,70 @@ async def run_generation(
                         WSEventType.ERROR,
                         {"code": fail_code, "message": fail_msg, "fatal": True},
                     )
+                    return
+
+                classified = (
+                    e
+                    if isinstance(e, FatalError) or is_recoverable(e)
+                    else classify_exception(e)
+                )
+                if is_fatal(classified) or isinstance(e, AppError):
+                    fail_code = (
+                        e.code.value if isinstance(e, AppError) else classified.error_code
+                    )
+                    fail_msg = f"本轮生成失败：{e}"
+                    run.status = RunStatus.FAILED.value
+                    run.ended_at = datetime.now(UTC)
+                    await add_message(
+                        s,
+                        game_id=run.game_id,
+                        run_id=run.id,
+                        user_id=run.user_id,
+                        role="assistant",
+                        kind="failed",
+                        content=fail_msg,
+                        metadata={"code": fail_code, "phase": run.phase},
+                        dedupe_key=f"{run.id}:failed:{fail_code}",
+                    )
+                    await s.commit()
+                    await publish_event(
+                        run_id,
+                        WSEventType.ERROR,
+                        {"code": fail_code, "message": fail_msg, "fatal": True},
+                    )
+                    return
+
+                if is_recoverable(classified):
+                    forge_ctx = _Ctx(s, r, run, game)
+                    await _pause_recoverable(
+                        forge_ctx,
+                        phase=run.phase or "code",
+                        error_code=classified.error_code,
+                        message=f"可恢复故障，已暂停：{classified}",
+                        attempts=1,
+                    )
+                    return
+
+                # 兜底：未知但仍非 fatal 的路径不应静默
+                run.status = RunStatus.FAILED.value
+                run.ended_at = datetime.now(UTC)
+                await add_message(
+                    s,
+                    game_id=run.game_id,
+                    run_id=run.id,
+                    user_id=run.user_id,
+                    role="assistant",
+                    kind="failed",
+                    content=f"本轮生成失败：{e}",
+                    metadata={"code": "RUN_FAILED", "phase": run.phase},
+                    dedupe_key=f"{run.id}:failed:RUN_FAILED",
+                )
+                await s.commit()
+                await publish_event(
+                    run_id,
+                    WSEventType.ERROR,
+                    {"code": "RUN_FAILED", "message": str(e), "fatal": True},
+                )
     finally:
         clear_log_context()
 
