@@ -1,0 +1,50 @@
+# Build Pipeline E2E（docs/build-pipeline.md §26）
+# 需 Docker：构建 gameforge-builder:v1 并跑固定 demo prepare → offline build → dist
+name: Build Pipeline E2E
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/forge/build/**"
+      - "backend/app/sandbox/builder.py"
+      - "backend/app/sandbox/collect.py"
+      - "backend/scripts/verify_build_pipeline.py"
+      - "docker/Dockerfile.builder"
+      - "docker/templates/**"
+      - ".github/workflows/build-pipeline-e2e.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: build-pipeline-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build builder image
+        run: docker build -f docker/Dockerfile.builder -t gameforge-builder:v1 .
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Verify script (§26.4–7)
+        working-directory: backend
+        env:
+          RUN_BUILD_PIPELINE: "1"
+          BUILDER_BACKEND: docker
+          VERIFY_BUILD_DEMOS: all
+        run: uv sync --group dev && uv run python -m scripts.verify_build_pipeline
+
+      - name: Docker integration tests
+        working-directory: backend
+        env:
+          RUN_BUILD_PIPELINE: "1"
+          BUILDER_BACKEND: docker
+        run: |
+          uv run pytest tests/test_build_pipeline_docker.py -q --tb=short
