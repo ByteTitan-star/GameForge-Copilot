@@ -8,7 +8,9 @@ from pathlib import Path
 
 from app.forge.build.constants import BUILD_SNAPSHOT_FILES
 from app.forge.build.dependency_preparer import DependencyPreparer, PrepareResult
+from app.forge.build.manifest import merge_workspace
 from app.forge.build.profile import BuildProfile, default_build_profile
+from app.forge.build.routing import BuildRouting
 from app.forge.build.template import load_vite_ts_template_files
 from app.sandbox.builder import (
     BuilderRunResult,
@@ -27,6 +29,7 @@ class BuildPipelineResult:
     ok: bool
     dist: dict[str, bytes] = field(default_factory=dict)
     build_snapshot: dict[str, bytes] = field(default_factory=dict)
+    source: dict[str, bytes] = field(default_factory=dict)
     prepare: PrepareResult | None = None
     logs: str = ""
     error: str | None = None
@@ -64,41 +67,66 @@ class BuildPipeline:
         with tempfile.TemporaryDirectory() as ws:
             workspace = Path(ws)
             _write_workspace(workspace, load_vite_ts_template_files())
-            prep = await self._preparer.prepare(workspace, prof)
-            if not prep.ok:
-                return BuildPipelineResult(ok=False, prepare=prep, logs=prep.logs, error=prep.error)
+            return await self._run_workspace(workspace, prof)
 
-            build = await self._offline_build(workspace)
-            if not build.ok:
-                return BuildPipelineResult(
-                    ok=False,
-                    prepare=prep,
-                    logs=prep.logs + "\n" + build.logs,
-                    error=build.error,
-                )
-            try:
-                dist = collect_artifact_files(workspace, collect_root="dist")
-            except Exception as e:  # noqa: BLE001
-                return BuildPipelineResult(
-                    ok=False,
-                    prepare=prep,
-                    logs=build.logs,
-                    error=str(e),
-                )
-            if "index.html" not in dist:
-                return BuildPipelineResult(
-                    ok=False,
-                    prepare=prep,
-                    logs=build.logs,
-                    error="dist 缺少 index.html",
-                )
+    async def run_project(
+        self,
+        source_files: dict[str, str],
+        routing: BuildRouting,
+        profile: BuildProfile | None = None,
+    ) -> BuildPipelineResult:
+        """P2：LLM 多文件工程 → prepare → offline build → dist/。"""
+        prof = profile or default_build_profile()
+        with tempfile.TemporaryDirectory() as ws:
+            workspace = Path(ws)
+            workspace_files = merge_workspace(routing, source_files, prof)
+            _write_workspace(workspace, workspace_files)
+            source_bytes = {
+                rel: content.encode("utf-8") for rel, content in source_files.items()
+            }
+            result = await self._run_workspace(workspace, prof)
+            if result.ok:
+                result.source = source_bytes
+            return result
+
+    async def _run_workspace(
+        self, workspace: Path, profile: BuildProfile
+    ) -> BuildPipelineResult:
+        prep = await self._preparer.prepare(workspace, profile)
+        if not prep.ok:
+            return BuildPipelineResult(ok=False, prepare=prep, logs=prep.logs, error=prep.error)
+
+        build = await self._offline_build(workspace)
+        if not build.ok:
             return BuildPipelineResult(
-                ok=True,
-                dist=dist,
-                build_snapshot=_collect_build_snapshot(workspace),
+                ok=False,
                 prepare=prep,
                 logs=prep.logs + "\n" + build.logs,
+                error=build.error,
             )
+        try:
+            dist = collect_artifact_files(workspace, collect_root="dist")
+        except Exception as e:  # noqa: BLE001
+            return BuildPipelineResult(
+                ok=False,
+                prepare=prep,
+                logs=build.logs,
+                error=str(e),
+            )
+        if "index.html" not in dist:
+            return BuildPipelineResult(
+                ok=False,
+                prepare=prep,
+                logs=build.logs,
+                error="dist 缺少 index.html",
+            )
+        return BuildPipelineResult(
+            ok=True,
+            dist=dist,
+            build_snapshot=_collect_build_snapshot(workspace),
+            prepare=prep,
+            logs=prep.logs + "\n" + build.logs,
+        )
 
     async def _offline_build(self, workspace: Path) -> BuilderRunResult:
         store = "/pnpm/store"
