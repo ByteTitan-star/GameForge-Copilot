@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from app.core import langfuse as lf
 from app.core.config import settings
 from app.messaging import worker as worker_mod
