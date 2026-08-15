@@ -19,6 +19,11 @@ from app.forge.reliability.errors import (
     is_fatal,
     is_recoverable,
 )
+from app.forge.reliability.idempotency import (
+    already_applied,
+    side_effect_key,
+    try_begin_side_effect,
+)
 from app.forge.reliability.pause import (
     RecoveryInfo,
     apply_paused_metadata,
@@ -50,6 +55,7 @@ __all__ = [
     "SecurityViolation",
     "UserActionRequired",
     "WorkerInterrupted",
+    "already_applied",
     "apply_paused_metadata",
     "build_pause_checkpoint",
     "classify_exception",
@@ -60,4 +66,6 @@ __all__ = [
     "pause_reason_from_state",
     "recovery_from_state",
     "resolve_node_run_timeout",
+    "side_effect_key",
+    "try_begin_side_effect",
 ]

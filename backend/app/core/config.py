@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     code_qa_max_attempts: int = 3
     # P0 可靠性：为 LangGraph 节点挂 TimeoutPolicy/RetryPolicy；关则保持旧行为便于回滚
     reliability_node_timeout: bool = True
+    # P0 可靠性：副作用幂等（promote / usage 等）；关则跳过 Redis NX 门闩
+    reliability_idempotent_side_effects: bool = True
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True

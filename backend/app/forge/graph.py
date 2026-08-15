@@ -54,6 +54,7 @@ from app.forge.reliability import (
     is_fatal,
     is_recoverable,
 )
+from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
 from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
@@ -973,8 +974,15 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "design_doc": design_doc,
                     "playtest_errors": ["qa_ok 但缺少 candidate_version"],
                 }
-            promote_candidate(ctx.game, int(version))
-            await ctx.s.commit()
+            key = side_effect_key(
+                ctx.run.id, "code_qa_loop", f"v{int(version)}", "promote"
+            )
+            if await try_begin_side_effect(ctx.r, key):
+                promote_candidate(ctx.game, int(version))
+                await ctx.s.commit()
+            else:
+                # 重放：已 promote 过则保持成功语义，避免重复抬版本
+                await ctx.s.refresh(ctx.game)
             return {
                 **result,
                 "qa_ok": True,
