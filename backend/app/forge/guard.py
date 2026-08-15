@@ -20,6 +20,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -58,33 +59,70 @@ _AUDIT_RETRY_HINT = (
 _AUDIT_MAX_RETRIES = 3
 
 
-# 正则前置快筛（非独立黑名单文件，规则定义于此）：命中即决，不调 LLM。
-# 覆盖典型 prompt injection 与明显恶意代码；LLM 不可用时作为强制降级路径。
-_QUICK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (
-        re.compile(
-            r"ignore\s+(?:all\s+)?(?:previous|prior|above|system|developer|earlier)\s+"
-            r"(?:instructions?|prompts?|rules?)",
-            re.IGNORECASE,
-        ),
-        "jailbreak",
-    ),
-    (re.compile(r"disregard\s+(?:all\s+)?(?:previous|prior|above)", re.IGNORECASE), "jailbreak"),
-    (
-        re.compile(
-            r"\bDAN\b|\bjailbreak\b|\b越狱\b|\b绕过(?:限制|审核|安全|护栏)\b",
-            re.IGNORECASE,
-        ),
-        "jailbreak",
-    ),
-    (re.compile(r"<script[^>]*>\s*eval\s*\(", re.IGNORECASE), "harmful_code"),
-    (re.compile(r"javascript:[^;\s]", re.IGNORECASE), "harmful_code"),
-    (re.compile(r"onerror\s*=\s*[\"']", re.IGNORECASE), "harmful_code"),
-    (
-        re.compile(r"new\s+WebSocket\s*\(|navigator\.sendBeacon\s*\(", re.IGNORECASE),
-        "harmful_code",
-    ),
-]
+# 正则前置快筛黑名单：外部文件维护（backend/app/forge/blacklist.txt，可用
+# AUDIT_BLACKLIST_FILE 指向自定义路径），按 mtime 热加载，命中即决不调 LLM。
+# 行格式：`敏感词`（字面子串）/ `re:正则` / `分类|规则`；详见文件头注释。
+_BLACKLIST_FILE = Path(__file__).with_name("blacklist.txt")
+_DEFAULT_CATEGORY = "sensitive_word"
+
+_blacklist_mtime: float | None = None
+_blacklist_patterns: list[tuple[re.Pattern[str], str]] = []
+
+
+def _compile_blacklist_line(line: str) -> tuple[re.Pattern[str], str] | None:
+    """把一行黑名单编译成 (pattern, category)；格式非法/正则错误返回 None 并告警。
+
+    `re:` 行整体按正则处理（其中的 | 是正则或运算符，不作分类分隔）；
+    其余行仅当前缀是纯小写标识符（如 `jailbreak|`）时视为分类前缀，否则整行字面匹配。
+    """
+    if line.startswith("re:"):
+        try:
+            return re.compile(line[3:].strip(), re.IGNORECASE), _DEFAULT_CATEGORY
+        except re.error:
+            log.warning("blacklist line skipped, invalid regex: %s", line)
+            return None
+    category, sep, rule = line.partition("|")
+    if sep and re.fullmatch(r"[a-z_]+", category.strip()):
+        category, rule = category.strip(), rule.strip()
+    else:
+        category, rule = _DEFAULT_CATEGORY, line
+    if not rule:
+        return None
+    return re.compile(re.escape(rule), re.IGNORECASE), category
+
+
+def _load_blacklist() -> list[tuple[re.Pattern[str], str]]:
+    """读黑名单文件并编译。文件缺失/读失败 → 空列表（快筛不拦，LLM 审核仍兜底）。"""
+    path = Path(settings.audit_blacklist_file) if settings.audit_blacklist_file else _BLACKLIST_FILE
+    try:
+        patterns = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            compiled = _compile_blacklist_line(line)
+            if compiled is not None:
+                patterns.append(compiled)
+        return patterns
+    except OSError:
+        log.warning("blacklist file unreadable: %s", path, exc_info=True)
+        return []
+
+
+def _quick_patterns() -> list[tuple[re.Pattern[str], str]]:
+    """取当前生效的黑名单规则；mtime 变化时重载（改文件即生效，无需重启）。"""
+    global _blacklist_mtime, _blacklist_patterns
+    path = Path(settings.audit_blacklist_file) if settings.audit_blacklist_file else _BLACKLIST_FILE
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        _blacklist_mtime, _blacklist_patterns = None, []
+        return _blacklist_patterns
+    if mtime != _blacklist_mtime:
+        _blacklist_mtime = mtime
+        _blacklist_patterns = _load_blacklist()
+        log.info("blacklist loaded: %d rules from %s", len(_blacklist_patterns), path)
+    return _blacklist_patterns
 
 
 class ContentAttacked(Exception):
@@ -125,7 +163,7 @@ def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
         return None
     if not force and not settings.audit_quick_filter:
         return None
-    for pattern, category in _QUICK_PATTERNS:
+    for pattern, category in _quick_patterns():
         m = pattern.search(text)
         if m:
             return AuditResult(

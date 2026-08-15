@@ -1,0 +1,21 @@
+# 审核正则快筛黑名单：每行一条规则，命中即决（不调审核 LLM）。
+#
+# 行格式（# 开头为注释，空行忽略）：
+#   敏感词                  → 字面子串匹配（自动转义，写普通词即可）
+#   re:正则                 → 正则匹配（大小写不敏感；正则里的 | 是或运算，不识别分类）
+#   分类|敏感词             → 指定命中分类，分类须为纯小写字母/下划线
+#                            （默认 sensitive_word；可用 jailbreak/harmful_code 等自定义值）
+#
+# 文件按 mtime 热加载：改完保存即生效，无需重启服务。
+# 注意：普通词是子串匹配，加过短的词（如"杀"）会大量误伤正常游戏文本。
+
+# ---- 越狱/提示注入 ----
+re:ignore\s+(?:all\s+)?(?:previous|prior|above|system|developer|earlier)\s+(?:instructions?|prompts?|rules?)
+re:disregard\s+(?:all\s+)?(?:previous|prior|above)
+re:\bDAN\b|\bjailbreak\b|\b越狱\b|\b绕过(?:限制|审核|安全|护栏)\b
+
+# ---- 恶意代码 ----
+re:<script[^>]*>\s*eval\s*\(
+re:javascript:[^;\s]
+re:onerror\s*=\s*["']
+re:new\s+WebSocket\s*\(|navigator\.sendBeacon\s*\(
