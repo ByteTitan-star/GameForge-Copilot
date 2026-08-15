@@ -93,7 +93,8 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
     store = store_dir
     cache_cfg = ""
     if workspace is not None:
-        cache_path = workspace / ".pnpm-cache"
+        # 目录名勿含 "pnpm" 子串，否则 pin_docker_pnpm 会误替换路径
+        cache_path = workspace / ".build-cache"
         if os.name == "nt":
             cache_cfg = f'{pnpm} config set cache-dir "{cache_path}" && '
         else:

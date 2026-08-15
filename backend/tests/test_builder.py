@@ -29,12 +29,13 @@ def test_shell_cmd_wraps_script() -> None:
 
 def test_pin_docker_pnpm_replaces_cli_tokens() -> None:
     shell = (
-        "pnpm config set store-dir '/pnpm/store' && "
+        "pnpm config set cache-dir '/workspace/.build-cache' && "
         "pnpm install --offline && pnpm build"
     )
     pinned = pin_docker_pnpm(shell)
     assert pinned.count("/usr/local/bin/pnpm") == 3
-    assert "/pnpm/store" in pinned
+    assert "/workspace/.build-cache" in pinned
+    assert ".usr/local/bin/pnpm" not in pinned
     assert " pnpm " not in pinned
 
 
@@ -64,7 +65,7 @@ def test_pnpm_setup_shell_unix_style(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     shell = pnpm_setup_shell(store_dir="/pnpm/store", workspace=tmp_path)
     assert "pnpm config set registry" in shell
     assert "store-dir '/pnpm/store'" in shell
-    assert f"cache-dir '{tmp_path / '.pnpm-cache'}'" in shell
+    assert f"cache-dir '{tmp_path / '.build-cache'}'" in shell
     assert "corepack" not in shell
 
 
