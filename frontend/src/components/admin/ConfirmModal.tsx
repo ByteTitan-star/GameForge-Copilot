@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useId, useRef } from 'react'
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useId, useRef } from 'react'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 import { btnDangerSolid } from './buttonStyles'
@@ -53,7 +53,7 @@ export function ConfirmModal({
 
   // Escape 关闭
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
@@ -64,7 +64,7 @@ export function ConfirmModal({
   }, [onClose])
 
   // Tab 焦点陷阱：在面板内首末可聚焦元素间循环
-  const handleTab = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+  const handleTab = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Tab') return
     const panel = panelRef.current
     if (!panel) return
