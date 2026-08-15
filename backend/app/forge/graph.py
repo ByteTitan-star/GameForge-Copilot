@@ -1224,8 +1224,11 @@ async def run_generation(
                         extra={"stage": stage, "duration": duration},
                     )
                 await s.rollback()
-                await s.refresh(run)
-                if run.ended_at is not None:
+                run = await s.get(GenerationRun, run_id)
+                if run is None or run.ended_at is not None:
+                    return
+                game = await s.get(Game, run.game_id)
+                if game is None:
                     return
 
                 # 审核命中 / 明确 Fatal → FAILED；可恢复错误 → paused+recoverable_error
@@ -1258,7 +1261,9 @@ async def run_generation(
                     return
 
                 classified = (
-                    e if isinstance(e, FatalError) or is_recoverable(e) else classify_exception(e)
+                    e
+                    if isinstance(e, FatalError) or is_recoverable(e)
+                    else classify_exception(e)
                 )
                 if is_fatal(classified) or isinstance(e, AppError):
                     fail_code = (

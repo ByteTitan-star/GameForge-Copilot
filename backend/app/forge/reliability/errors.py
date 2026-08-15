@@ -5,6 +5,8 @@ RecoverableError 不得直接把 Run 打成 FAILED；仅 FatalError（及明确�
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 
@@ -101,7 +103,7 @@ def classify_exception(exc: BaseException) -> ForgeRuntimeError:
         return WorkerInterrupted(str(exc) or f"http {status}", cause=exc)
 
     msg = str(exc).lower()
-    if "out of memory" in msg or "oom" in msg:
+    if "out of memory" in msg or re.search(r"\boom\b", msg):
         return SandboxOOM(str(exc) or "sandbox oom", cause=exc)
     if "构建超时" in str(exc) or "sandbox timeout" in msg:
         return SandboxTimeout(str(exc) or "sandbox timeout", cause=exc)

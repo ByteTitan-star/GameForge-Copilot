@@ -9295,6 +9295,34 @@
         ],
         "title": "Ready"
       },
+      "RecoveryDetail": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node"
+          },
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "node",
+          "error_code",
+          "attempts"
+        ],
+        "title": "RecoveryDetail"
+      },
       "RedisFlushReq": {
         "properties": {
           "scopes": {
@@ -9646,6 +9674,27 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/HitlWaitDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pause Reason"
+          },
+          "recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecoveryDetail"
               },
               {
                 "type": "null"
