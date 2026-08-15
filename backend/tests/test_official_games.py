@@ -9,11 +9,6 @@ import pytest
 from app.games.official import OFFICIAL_CATALOG, seed_official_games
 
 
-@pytest.fixture
-async def official_seeded(db_session) -> None:
-    await seed_official_games(db_session)
-
-
 async def test_list_official_games(client: httpx.AsyncClient, official_seeded) -> None:
     r = await client.get("/api/v1/official-games")
     assert r.status_code == 200
@@ -22,6 +17,22 @@ async def test_list_official_games(client: httpx.AsyncClient, official_seeded) -
     slugs = {item["slug"] for item in data}
     assert "official-neon-snake" in slugs
     assert all(item["play_url"].startswith("/play/") for item in data)
+
+
+async def test_list_official_games_en_locale(
+    client: httpx.AsyncClient, official_seeded
+) -> None:
+    r = await client.get("/api/v1/official-games?locale=en")
+    assert r.status_code == 200
+    titles = {item["title"] for item in r.json()["data"]}
+    assert "Neon Snake" in titles
+    assert "塔防雏形" not in titles
+
+
+async def test_play_official_en_locale(client: httpx.AsyncClient, official_seeded) -> None:
+    r = await client.get("/play/official-neon-snake?lang=en")
+    assert r.status_code == 200
+    assert "Start game" in r.text
 
 
 async def test_play_official_slug(client: httpx.AsyncClient, official_seeded) -> None:

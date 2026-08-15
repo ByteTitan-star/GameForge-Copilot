@@ -100,12 +100,13 @@ def _download_headers(title: str, version: int) -> dict[str, str]:
     }
 
 
-async def _public_item(db: DbSession, game: Game) -> PublicGameMeta:
+async def _public_item(db: DbSession, game: Game, locale: str | None = None) -> PublicGameMeta:
     handle, display_name = await profile_services.get_owner_brief(db, game.owner_id)
     like_count, favorite_count = await reaction_services.reaction_counts(db, game.id)
+    title = official_svc.localized_game_title(game, locale)
     return PublicGameMeta(
         game_id=game.id,
-        title=game.title,
+        title=title,
         slug=game.slug or "",
         cover_url=(f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None),
         published_at=game.published_at,
@@ -128,10 +129,11 @@ async def list_public_games(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     sort: str = Query("updated_at", pattern="^(updated_at|play_count)$"),
+    locale: str | None = Query(None, description="zh | en，官方样例标题随 locale 切换"),
 ) -> PaginatedData[PublicGameMeta]:
     """公开已发布游戏发现页（无需登录，无 owner PII）。"""
     rows, total = await services.list_public_games(db, page, size, sort)
-    data = [await _public_item(db, g) for g in rows]
+    data = [await _public_item(db, g, locale) for g in rows]
     return PaginatedData(data=data, total=total, page=page, size=size)
 
 
@@ -140,17 +142,22 @@ async def list_featured_games(
     db: DbSession,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    locale: str | None = Query(None, description="zh | en，官方样例标题随 locale 切换"),
 ) -> PaginatedData[PublicGameMeta]:
     """本周精选（Batch C · R7）。"""
     rows, total = await services.list_featured_games(db, page, size)
-    data = [await _public_item(db, g) for g in rows]
+    data = [await _public_item(db, g, locale) for g in rows]
     return PaginatedData(data=data, total=total, page=page, size=size)
 
 
 @router.get("/public/{slug}", response_model=ApiResponse[PublicGameMeta], responses=ERR_404)
-async def get_public_game_meta(slug: str, db: DbSession) -> ApiResponse[PublicGameMeta]:
+async def get_public_game_meta(
+    slug: str,
+    db: DbSession,
+    locale: str | None = Query(None, description="zh | en，官方样例标题随 locale 切换"),
+) -> ApiResponse[PublicGameMeta]:
     game = await services.get_public_game_by_slug(db, slug)
-    return ApiResponse(data=await _public_item(db, game))
+    return ApiResponse(data=await _public_item(db, game, locale))
 
 
 @router.post(

@@ -5,6 +5,7 @@ import { ExternalLink, GitFork, Loader2, Sparkles } from 'lucide-react'
 import { officialApi } from '@/api/official'
 import { formatApiError } from '@/api/error-message'
 import { useT } from '@/i18n/use-t'
+import { useLocaleStore } from '@/stores/locale-store'
 import { cn } from '@/lib/cn'
 import { CreatorLink } from '@/components/creator/CreatorLink'
 
@@ -24,12 +25,13 @@ export function OfficialGameCards({
   compact = false,
 }: Props) {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const navigate = useNavigate()
   const [forking, setForking] = useState<string | null>(null)
 
   const q = useQuery({
-    queryKey: ['official-games'],
-    queryFn: () => officialApi.list(),
+    queryKey: ['official-games', locale],
+    queryFn: () => officialApi.list(locale),
   })
 
   async function fork(slug: string) {

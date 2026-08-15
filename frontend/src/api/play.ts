@@ -22,8 +22,8 @@ function toPlayMeta(game: PublicGame): PlayMeta {
 
 export const playApi = {
   /** Resolve play page metadata via GET /games/public/{slug}. */
-  async getMeta(slug: string): Promise<PlayMeta> {
-    const game = await publicGamesApi.getBySlug(slug)
+  async getMeta(slug: string, locale?: string): Promise<PlayMeta> {
+    const game = await publicGamesApi.getBySlug(slug, locale)
     return toPlayMeta(game)
   },
 }

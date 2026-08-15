@@ -488,3 +488,10 @@ async def admin_client() -> AsyncIterator[httpx.AsyncClient]:
         assert resp.status_code == 200, resp.text
         client.headers["Authorization"] = f"Bearer {resp.json()['data']['access_token']}"
         yield client
+
+
+@pytest_asyncio.fixture
+async def official_seeded(db_session: AsyncSession) -> None:
+    from app.games.official import seed_official_games
+
+    await seed_official_games(db_session)

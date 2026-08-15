@@ -20,11 +20,13 @@ export type PublicGame = {
 }
 
 export const publicGamesApi = {
-  async list(): Promise<PublicGame[]> {
-    return apiRequest<PublicGame[]>('/games/public')
+  async list(locale?: string): Promise<PublicGame[]> {
+    const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+    return apiRequest<PublicGame[]>(`/games/public${q}`)
   },
 
-  async getBySlug(slug: string): Promise<PublicGame> {
-    return apiRequest<PublicGame>(`/games/public/${encodeURIComponent(slug)}`)
+  async getBySlug(slug: string, locale?: string): Promise<PublicGame> {
+    const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+    return apiRequest<PublicGame>(`/games/public/${encodeURIComponent(slug)}${q}`)
   },
 }

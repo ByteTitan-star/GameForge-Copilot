@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2, Sparkles } from 'lucide-react'
 import { featuredApi } from '@/api/featured'
 import { PublicGameCard } from '@/components/games/PublicGameCard'
+import { useLocaleStore } from '@/stores/locale-store'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 
@@ -12,9 +13,10 @@ type Props = {
 
 export function FeaturedGamesStrip({ className, variant = 'dark' }: Props) {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const q = useQuery({
-    queryKey: ['featured-games'],
-    queryFn: () => featuredApi.list(),
+    queryKey: ['featured-games', locale],
+    queryFn: () => featuredApi.list(locale),
   })
 
   const games = q.data ?? []

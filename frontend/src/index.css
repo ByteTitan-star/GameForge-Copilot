@@ -1273,6 +1273,24 @@ body.gf-forge-dock-resizing * {
 
 /* mobile sidebar 抽屉：<1024px 隐藏，is-open 滑入。不动全局 .gf-sidebar */
 @media (max-width: 1023px) {
+  .gf-workshop {
+    --gf-sidebar-w: 0px;
+  }
+
+  .gf-workshop .gf-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    width: min(280px, 86vw);
+  }
+
+  .gf-workshop .gf-sidebar.is-open {
+    transform: none;
+  }
+
+  .gf-shell-main {
+    margin-left: 0;
+  }
+
   /* 抽屉：绝对定位浮在主内容上，默认 translateX 隐藏，is-open 滑入 */
   .gf-admin-sidebar {
     position: absolute;

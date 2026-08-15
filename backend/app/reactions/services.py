@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus, ReactionType
+from app.games import official as official_svc
 from app.models.game import Game
 from app.models.game_reaction import GameReaction
 from app.models.user import User
@@ -131,9 +132,10 @@ async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
     """收藏列表与公开广场共用同一公开元数据形状（无 owner PII）。"""
     handle, display_name = await profile_services.get_owner_brief(db, game.owner_id)
     like_count, favorite_count = await reaction_counts(db, game.id)
+    title = official_svc.localized_game_title(game)
     return PublicGameMeta(
         game_id=game.id,
-        title=game.title,
+        title=title,
         slug=game.slug or "",
         cover_url=(
             f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None

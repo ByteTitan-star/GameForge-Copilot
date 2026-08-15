@@ -11,8 +11,9 @@ export type OfficialGame = {
 
 export const officialApi = {
   /** GET /official-games */
-  async list(): Promise<OfficialGame[]> {
-    return apiRequest<OfficialGame[]>('/official-games')
+  async list(locale?: string): Promise<OfficialGame[]> {
+    const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+    return apiRequest<OfficialGame[]>(`/official-games${q}`)
   },
 
   /** POST /games/fork/{slug} — 404 时抛错由 UI toast */
