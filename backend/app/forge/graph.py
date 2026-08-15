@@ -1025,6 +1025,25 @@ def _build_graph(ctx: _Ctx) -> Any:
                                 "code",
                                 emit_delta=False,
                             )
+                    elif not previous_html and not stored_project:
+                        await publish_event(
+                            ctx.run.id,
+                            WSEventType.TOOL_CALL,
+                            {
+                                "phase": "code",
+                                "tool": "build_format_mismatch",
+                                "args": {
+                                    "expected": "project",
+                                    "got": parsed.format,
+                                    "errors": list(parsed.errors),
+                                },
+                                "status": "warn",
+                                "summary": (
+                                    "build=vite 但 LLM 未返回 project JSON，"
+                                    "降级 single-html"
+                                ),
+                            },
+                        )
 
                 html = normalize_html(raw_output)
                 result = await get_sandbox().execute(source={"index.html": html})
