@@ -12,7 +12,13 @@ from app.enums import GameStatus, ReactionType
 from app.models.game import Game
 from app.models.game_reaction import GameReaction
 from app.models.user import User
-from app.schemas.reactions import FavoriteGameItem, ReactionStateResp, ReactionToggleResp
+from app.profile import services as profile_services
+from app.schemas.reactions import (
+    CreatorBrief,
+    PublicGameMeta,
+    ReactionStateResp,
+    ReactionToggleResp,
+)
 
 
 async def _get_published_game(db: AsyncSession, game_id: UUID) -> Game:
@@ -121,9 +127,28 @@ async def remove_reaction(
     )
 
 
+async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
+    """收藏列表与公开广场共用同一公开元数据形状（无 owner PII）。"""
+    handle, display_name = await profile_services.get_owner_brief(db, game.owner_id)
+    like_count, favorite_count = await reaction_counts(db, game.id)
+    return PublicGameMeta(
+        game_id=game.id,
+        title=game.title,
+        slug=game.slug or "",
+        cover_url=(
+            f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None
+        ),
+        published_at=game.published_at,
+        play_count=game.play_count,
+        like_count=like_count,
+        favorite_count=favorite_count,
+        creator=CreatorBrief(handle=handle, display_name=display_name),
+    )
+
+
 async def list_favorites(
     db: AsyncSession, user: User, page: int, size: int
-) -> tuple[list[FavoriteGameItem], int]:
+) -> tuple[list[PublicGameMeta], int]:
     base = (
         select(GameReaction, Game)
         .join(Game, Game.id == GameReaction.game_id)
@@ -140,15 +165,5 @@ async def list_favorites(
             .offset((page - 1) * size)
         )
     ).all()
-    items = [
-        FavoriteGameItem(
-            game_id=game.id,
-            title=game.title,
-            slug=game.slug or "",
-            status=GameStatus(game.status),
-            play_count=game.play_count,
-            favorited_at=reaction.created_at,
-        )
-        for reaction, game in rows
-    ]
+    items = [await _public_game_meta(db, game) for _reaction, game in rows]
     return items, int(total or 0)
