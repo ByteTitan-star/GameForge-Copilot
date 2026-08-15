@@ -43,7 +43,7 @@ def _docker_user_spec() -> str:
 
 
 def _ensure_bind_mount_permissions(path: Path) -> None:
-    """Docker builder 以 node(1000) 运行，bind mount 需对容器用户可读写（CI 临时目录常为 root）。"""
+    """Docker builder 以宿主 uid 运行；bind mount 需可读写（CI 临时目录权限不一致）。"""
     if os.name == "nt" or not path.exists():
         return
     import stat
@@ -121,6 +121,14 @@ def shell_cmd(script: str) -> list[str]:
     return ["sh", "-c", script]
 
 
+def pin_docker_pnpm(script: str) -> str:
+    """Docker 构建使用 /usr/local/bin/pnpm，避免 corepack 在 NetworkMode=none 时联网。"""
+    import re
+
+    # 勿替换路径片段（如 /pnpm/store）
+    return re.sub(r"(?<![/\w-])pnpm\b", "/usr/local/bin/pnpm", script)
+
+
 def _shell_script(cmd: Sequence[str]) -> str | None:
     parts = list(cmd)
     if len(parts) >= 3 and parts[0] == "sh" and parts[1] == "-c":
@@ -152,14 +160,18 @@ class DockerBuilder:
             f"{workspace.resolve()}:/workspace:rw",
             f"{self.store_path.resolve()}:/pnpm/store:{store_mode}",
         ]
+        cmd_list = list(cmd)
+        script = _shell_script(cmd_list)
+        if script is not None:
+            cmd_list = shell_cmd(pin_docker_pnpm(script))
         config = {
             "Image": self.image,
-            "Cmd": list(cmd),
+            "Cmd": cmd_list,
             "WorkingDir": "/workspace",
             "User": _docker_user_spec(),
             "Env": [
                 "HOME=/tmp",
-                "COREPACK_HOME=/tmp/corepack",
+                "PATH=/usr/local/bin:/pnpm:/usr/bin:/bin",
                 f"npm_config_registry={settings.npm_registry}",
             ],
             "HostConfig": {

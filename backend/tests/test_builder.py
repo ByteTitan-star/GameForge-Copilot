@@ -12,6 +12,7 @@ from app.sandbox.builder import (
     corepack_activate_shell,
     get_builder,
     offline_install_shell,
+    pin_docker_pnpm,
     pnpm_cli,
     pnpm_setup_shell,
     prepare_cache_key,
@@ -24,6 +25,17 @@ from app.sandbox.builder import (
 
 def test_shell_cmd_wraps_script() -> None:
     assert shell_cmd("echo hi") == ["sh", "-c", "echo hi"]
+
+
+def test_pin_docker_pnpm_replaces_cli_tokens() -> None:
+    shell = (
+        "pnpm config set store-dir '/pnpm/store' && "
+        "pnpm install --offline && pnpm build"
+    )
+    pinned = pin_docker_pnpm(shell)
+    assert pinned.count("/usr/local/bin/pnpm") == 3
+    assert "/pnpm/store" in pinned
+    assert " pnpm " not in pinned
 
 
 def test_pnpm_cli_platform_specific() -> None:
