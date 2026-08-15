@@ -118,7 +118,10 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
         )
     reg = registry.replace("'", "")
     st = store.replace("'", "")
-    return f"{prefix}{cache_cfg}pnpm config set registry '{reg}' && pnpm config set store-dir '{st}'"
+    return (
+        f"{prefix}{cache_cfg}pnpm config set registry '{reg}' "
+        f"&& pnpm config set store-dir '{st}'"
+    )
 
 
 def offline_install_shell(setup: str) -> str:
