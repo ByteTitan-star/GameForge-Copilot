@@ -91,3 +91,9 @@ def test_build_csp_has_no_wildcard_https() -> None:
     # 收敛后不应再出现宽松的 https: 通配（旧策略的风险点）
     csp = build_csp()
     assert "https:" not in csp
+
+
+def test_build_csp_allows_blob_workers() -> None:
+    """Tone.js 等音频库会在 sandbox iframe 内创建 blob: worker。"""
+    csp = build_csp()
+    assert "worker-src 'self' blob:" in csp

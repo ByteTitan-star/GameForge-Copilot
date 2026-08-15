@@ -69,6 +69,7 @@ def build_csp(allowed: frozenset[str] = ALLOWED_CDN_HOSTS) -> str:
     """按白名单生成产物 iframe 的 Content-Security-Policy 头。
 
     相比放行整个 https:，仅允许 'self' + 白名单域名，收紧脚本/样式/字体/连接来源。
+    worker-src 允许 blob: 以支持 Tone.js 等库在 sandbox iframe 内创建 Web Worker。
     """
     hosts = " ".join(sorted(allowed))
     return (
@@ -77,5 +78,6 @@ def build_csp(allowed: frozenset[str] = ALLOWED_CDN_HOSTS) -> str:
         f"style-src 'self' 'unsafe-inline' {hosts}; "
         f"font-src 'self' data: {hosts}; "
         "img-src 'self' data:; "
-        f"connect-src 'self' {hosts}"
+        f"connect-src 'self' {hosts}; "
+        "worker-src 'self' blob:"
     )
