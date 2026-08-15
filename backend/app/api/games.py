@@ -7,12 +7,14 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
-from app.auth.deps import CurrentUser, DbSession
+from app.auth.deps import CurrentUser, DbSession, RedisClient
+from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
 from app.enums import GameStatus, PublishStatus, ReactionType
 from app.games import official as official_svc
 from app.games import services
+from app.hosting import preview_token as preview_token_svc
 from app.hosting import store as hosting_store
 from app.hosting.backend import ArtifactFileMeta
 from app.models.game import Game
@@ -30,6 +32,7 @@ from app.schemas.game import (
     GameListItem,
     GamePatch,
     GameResp,
+    PreviewTokenResp,
     VersionItem,
 )
 from app.schemas.publish import PublishSubmitResp
@@ -330,6 +333,34 @@ async def list_version_files(
     await services.get_owned_version(db, user, game_id, version)
     metas = await hosting_store.list_files(game_id, version)
     return ApiResponse(data=_artifact_file_items(metas))
+
+
+@router.post(
+    "/{game_id}/versions/{version}/preview-token",
+    response_model=ApiResponse[PreviewTokenResp],
+    responses=ERR_404,
+)
+async def create_preview_token(
+    game_id: UUID,
+    version: int,
+    user: CurrentUser,
+    db: DbSession,
+    r: RedisClient,
+) -> ApiResponse[PreviewTokenResp]:
+    """签发 draft 多文件 preview token（owner only，§19.2）。"""
+    game, _ = await services.get_owned_version(db, user, game_id, version)
+    token = await preview_token_svc.mint_preview_token(
+        r,
+        game_id=game_id,
+        version=version,
+        owner_id=game.owner_id,
+    )
+    return ApiResponse(
+        data=PreviewTokenResp(
+            preview_url=preview_token_svc.preview_url_path(token, game_id, version),
+            expires_in_s=settings.draft_url_ttl_s,
+        )
+    )
 
 
 @router.get(

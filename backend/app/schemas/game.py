@@ -52,6 +52,11 @@ class ArtifactFileItem(BaseModel):
     mime: str | None = None
 
 
+class PreviewTokenResp(BaseModel):
+    preview_url: str
+    expires_in_s: int = Field(description="token 有效期（秒）")
+
+
 class GameDetailResp(BaseModel):
     game_id: uuid.UUID
     owner_id: uuid.UUID
