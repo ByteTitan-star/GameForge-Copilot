@@ -64,8 +64,13 @@ def _playtest_ok(monkeypatch: pytest.MonkeyPatch) -> None:
             motion_signal="raf",
         )
 
-    monkeypatch.setattr("app.forge.graph.run_playtest", _ok)
-    monkeypatch.setattr("app.forge.graph.run_playtest_dist", _ok)
+    for target in (
+        "app.forge.graph.run_playtest",
+        "app.forge.graph.run_playtest_dist",
+        "app.forge.code_qa_exec.run_playtest",
+        "app.forge.code_qa_exec.run_playtest_dist",
+    ):
+        monkeypatch.setattr(target, _ok)
 
 
 def _valid_design_doc_json() -> str:

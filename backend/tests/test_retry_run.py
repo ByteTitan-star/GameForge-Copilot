@@ -45,12 +45,14 @@ async def test_retry_run_from_qa_failed(
     from app.sandbox.playtest import PlaytestResult
 
     async def _fail(_html: str, **_kwargs: object) -> PlaytestResult:
-        return PlaytestResult(ok=False, errors=["mock"], console_logs=[])
+        return PlaytestResult(
+            ok=False, errors=["mock"], console_logs=[], failure_kind="product"
+        )
 
-    monkeypatch.setattr("app.forge.graph.run_playtest", _fail)
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail)
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "qa_max_retries", 0)
+    monkeypatch.setattr(settings, "code_qa_max_attempts", 1)
 
     gid = await _make_game(verified_client)
     rid = uuid.UUID(
@@ -71,10 +73,17 @@ async def test_retry_run_from_qa_failed(
     assert st is not None
     assert st.get("phase") == "qa_failed"
 
+    r = await verified_client.get(f"/api/v1/runs/{rid}")
+    assert r.json()["data"]["status"] == "paused"
+
     r = await verified_client.post(f"/api/v1/runs/{rid}/retry")
     assert r.status_code == 200, r.text
     assert r.json()["data"]["status"] == "running"
     assert r.json()["data"]["phase"] == "code"
+
+    st2 = await ckpt.load_state(redis_client, rid)
+    assert st2 is not None
+    assert st2.get("code_qa_reset") is True
 
 
 async def test_retry_run_invalid_state(

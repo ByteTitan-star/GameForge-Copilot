@@ -41,17 +41,18 @@ export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayl
       art_options: hw.art_options,
     }
   }
-  // current_hitl 兜底仅对仍可交互的 paused 态生效。新版流程下
-  // qa_failed/sandbox_failed 是 FAILED 终态（checkpoint 仍写、get_run 仍返回
-  // current_hitl，但 resolve 会 409），failed run 不能再浮出 HITL 卡，否则会显示
-  // 一张点批准必 409 的死卡，掩盖本应出现的失败恢复条。
+  // current_hitl 兜底仅对仍可交互的 paused 态生效。
+  // qa_failed 现为 PAUSED HITL（可 hitl/resolve 重试修复）；failed 终态不浮卡。
   if (run.status !== 'paused') return null
   if (!run.current_hitl) return null
   return {
     node: run.current_hitl.node,
     design_doc: {
       title: `${gameTitle} · 待确认策划`,
-      gameplay: '（重连恢复）请确认或修改策划后继续生成。',
+      gameplay:
+        run.current_hitl.node === 'qa_failed'
+          ? '（重连恢复）自动试玩未通过，可批准重试修复或修改后继续。'
+          : '（重连恢复）请确认或修改策划后继续生成。',
       controls: '',
       levels: [],
     },
