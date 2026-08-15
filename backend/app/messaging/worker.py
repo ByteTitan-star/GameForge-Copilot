@@ -69,16 +69,15 @@ def _worker_loop_exception_handler(
 async def _scheduler_loop() -> None:
     """
     定时任务调度循环（后台协程）。
-    
+
     功能：每分钟执行一次定时扫描
     用途：
         - 检查并处理到期的游戏下架任务（B8 功能）
-        - 类似 cron 的定时任务
-    
-    注意：这是一个独立的协程，和消息消费并行运行
+        - 回收超时仍 PAUSED 的 HIL/暂停 run，释放并发额度
     """
     from app.core import db as dbmod
-    from app.scheduler.services import scan_scheduled
+    from app.messaging.handlers import _worker_redis
+    from app.scheduler.services import expire_stale_paused_runs, scan_scheduled
 
     while True:
         await asyncio.sleep(60)  # 每分钟执行一次
@@ -89,6 +88,13 @@ async def _scheduler_loop() -> None:
                     log.info("scheduled take_down count=%s", n)
         except Exception:
             log.exception("scheduler scan failed")  # 出错时记录日志，不影响主循环
+        try:
+            async with dbmod.SessionLocal() as s:
+                n = await expire_stale_paused_runs(s, _worker_redis())
+                if n:
+                    log.info("hil wait timeout expired count=%s", n)
+        except Exception:
+            log.exception("hil wait timeout scan failed")
 
 
 async def _outbox_loop() -> None:
