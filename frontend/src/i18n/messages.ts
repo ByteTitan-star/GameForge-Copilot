@@ -210,8 +210,6 @@ export const messages = {
     trialForgeLocked: '试用账号不能发起生成。你可以浏览预置样例，或注册后开始做游戏。',
     trialGamesHint: '试用预览：可查看预置样例，不能新建、删除或提交发布。',
     trialAccountReadOnly: '试用预览账号为只读，不能修改密码或公开资料。注册正式账号后可自由设置。',
-    openMenu: '打开导航菜单',
-    closeMenu: '关闭导航菜单',
     themeTitle: '外观主题',
     collapseSidebar: '收起侧边栏',
     expandSidebar: '展开侧边栏',

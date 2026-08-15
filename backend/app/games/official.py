@@ -36,9 +36,12 @@ class OfficialGameSpec:
     game_id: uuid.UUID
     slug: str
     title: str
+    title_en: str
     description: str
+    description_en: str
     requirement: str
     html_filename: str
+    html_filename_en: str
 
 
 OFFICIAL_CATALOG: tuple[OfficialGameSpec, ...] = (
@@ -46,37 +49,75 @@ OFFICIAL_CATALOG: tuple[OfficialGameSpec, ...] = (
         game_id=OFFICIAL_NEON_SNAKE_ID,
         slug="official-neon-snake",
         title="霓虹贪吃蛇",
+        title_en="Neon Snake",
         description="方向键控制霓虹小蛇，吃豆得分，撞墙结束。",
+        description_en="Steer a neon snake with arrow keys, eat orbs to score, and avoid walls.",
         requirement="霓虹风格贪吃蛇：方向键控制，吃食物变长，计分，撞墙 game over。",
         html_filename="neon_snake.html",
+        html_filename_en="neon_snake_en.html",
     ),
     OfficialGameSpec(
         game_id=OFFICIAL_PIXEL_RUNNER_ID,
         slug="official-pixel-runner",
         title="像素跑酷",
+        title_en="Pixel Runner",
         description="空格跳跃躲避障碍，像素风侧 scroll 跑酷。",
+        description_en="Space to jump and dodge obstacles in a pixel side-scroller.",
         requirement="像素风横版跑酷：空格跳跃，躲避障碍，距离计分。",
         html_filename="pixel_runner.html",
+        html_filename_en="pixel_runner_en.html",
     ),
     OfficialGameSpec(
         game_id=OFFICIAL_TOWER_STUB_ID,
         slug="official-tower-stub",
         title="塔防雏形",
+        title_en="Tower Defense Stub",
         description="点击放置防御塔，拦截沿路径前进的小怪。",
+        description_en="Place towers on the map to stop enemies marching along the path.",
         requirement="极简塔防：固定路径，点击放塔，拦截敌人波次。",
         html_filename="tower_stub.html",
+        html_filename_en="tower_stub_en.html",
     ),
 )
 
 OFFICIAL_SLUGS = frozenset(s.slug for s in OFFICIAL_CATALOG)
+_CATALOG_BY_SLUG = {s.slug: s for s in OFFICIAL_CATALOG}
+
+
+def normalize_locale(locale: str | None) -> str:
+    raw = (locale or "zh").strip().lower()
+    return "en" if raw.startswith("en") else "zh"
+
+
+def catalog_for_slug(slug: str | None) -> OfficialGameSpec | None:
+    if not slug:
+        return None
+    return _CATALOG_BY_SLUG.get(slug)
+
+
+def localized_game_title(game: Game, locale: str | None = None) -> str:
+    spec = catalog_for_slug(game.slug)
+    if spec is None:
+        return game.title
+    loc = normalize_locale(locale)
+    return spec.title_en if loc == "en" else spec.title
+
+
+def localized_description(spec: OfficialGameSpec, locale: str | None = None) -> str:
+    loc = normalize_locale(locale)
+    return spec.description_en if loc == "en" else spec.description
 
 
 def assets_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "scripts" / "official_assets"
 
 
-def load_html(spec: OfficialGameSpec) -> str:
-    path = assets_dir() / spec.html_filename
+def load_html(spec: OfficialGameSpec, locale: str | None = None) -> str:
+    loc = normalize_locale(locale)
+    filename = spec.html_filename_en if loc == "en" else spec.html_filename
+    path = assets_dir() / filename
+    if not path.exists():
+        path = assets_dir() / spec.html_filename
     if not path.exists():
         raise FileNotFoundError(f"official asset missing: {path}")
     return path.read_text(encoding="utf-8")
@@ -171,13 +212,23 @@ async def seed_official_games(db: AsyncSession) -> SeedResult:
         else:
             version.design_doc = design_doc
         # 始终从源重写产物：编辑 scripts/official_assets 后重跑 seed 即更新线上试玩。
-        await write_artifact(spec.game_id, 1, {"index.html": load_html(spec)})
+        await write_artifact(
+            spec.game_id,
+            1,
+            {
+                "index.html": load_html(spec, "zh"),
+                "index.en.html": load_html(spec, "en"),
+            },
+        )
     await db.commit()
     return SeedResult(created=created, refreshed=refreshed)
 
 
-async def list_official_games(db: AsyncSession) -> list[dict[str, str | None]]:
+async def list_official_games(
+    db: AsyncSession, locale: str | None = None,
+) -> list[dict[str, str | None]]:
     """GET /official-games 数据。"""
+    loc = normalize_locale(locale)
     rows = (
         await db.scalars(
             select(Game)
@@ -188,12 +239,13 @@ async def list_official_games(db: AsyncSession) -> list[dict[str, str | None]]:
             .order_by(Game.slug)
         )
     ).all()
-    desc_by_slug = {s.slug: s.description for s in OFFICIAL_CATALOG}
     return [
         {
             "slug": g.slug or "",
-            "title": g.title,
-            "description": desc_by_slug.get(g.slug or "", g.requirement[:120]),
+            "title": localized_game_title(g, loc),
+            "description": localized_description(
+                _CATALOG_BY_SLUG[g.slug or ""], loc
+            ) if g.slug in _CATALOG_BY_SLUG else (g.requirement[:120]),
             "play_url": f"/play/{g.slug}",
             "thumbnail_url": None,
         }

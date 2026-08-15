@@ -28,8 +28,8 @@ export function LandingPage() {
   const ctaTo = token ? '/forge' : '/register'
 
   const publicQuery = useQuery({
-    queryKey: ['public-games', 'landing'],
-    queryFn: () => publicGamesApi.list(),
+    queryKey: ['public-games', 'landing', locale],
+    queryFn: () => publicGamesApi.list(locale),
   })
 
   const services = useMemo(

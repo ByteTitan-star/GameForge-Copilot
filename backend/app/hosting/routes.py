@@ -118,6 +118,7 @@ async def play(
     background: BackgroundTasks,
     db: DbSession,
     r: RedisClient,
+    lang: str | None = None,
 ) -> Response:
     """已发布游戏入口，公开。非 published 一律 404。"""
     game = await _published_game(db, slug)
@@ -127,10 +128,15 @@ async def play(
     background.add_task(
         analytics_store.record_play, r, db, slug=slug, game_id=game.id, visitor_id=visitor
     )
+    rel: str | None = None
+    if (lang or "").strip().lower().startswith("en"):
+        en_file = store.artifact_dir(game.id, game.current_version) / "index.en.html"
+        if en_file.is_file():
+            rel = "index.en.html"
     return await _serve_artifact(
         game.id,
         game.current_version,
-        None,
+        rel,
         cache="public, max-age=31536000, immutable",
     )
 

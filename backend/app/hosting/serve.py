@@ -65,7 +65,7 @@ async def artifact_file_response(
     if base not in target.parents and target != base:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
     if target.is_file():
-        if rel == "index.html":
+        if rel in ("index.html", "index.en.html"):
             return FileResponse(target, media_type=_media_type(rel), headers=headers)
         return FileResponse(target, headers=headers)
     data = await store.read_bytes(game_id, version, rel)

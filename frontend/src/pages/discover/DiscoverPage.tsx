@@ -7,6 +7,7 @@ import { FeaturedGamesStrip } from '@/components/discover/FeaturedGamesStrip'
 import { PublicGameCard } from '@/components/games/PublicGameCard'
 import { useT } from '@/i18n/use-t'
 import { useAuthStore } from '@/stores/auth-store'
+import { useLocaleStore } from '@/stores/locale-store'
 import { cn } from '@/lib/cn'
 
 type SortKey = 'latest' | 'popular'
@@ -65,10 +66,11 @@ function SkeletonCard() {
 
 export function DiscoverPage() {
   const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const token = useAuthStore((s) => s.access_token)
   const query = useQuery({
-    queryKey: ['public-games'],
-    queryFn: () => publicGamesApi.list(),
+    queryKey: ['public-games', locale],
+    queryFn: () => publicGamesApi.list(locale),
   })
 
   const games = query.data ?? []
@@ -79,7 +81,7 @@ export function DiscoverPage() {
   const stats = useMemo(() => {
     const total = games.reduce((s, g) => s + g.play_count, 0)
     const weekAgo = Date.now() - 7 * 86_400_000
-    const fresh = games.filter((g) => Date.parse(g.published_at) > weekAgo).length
+    const fresh = games.filter((g) => Date.parse(g.published_at ?? '') > weekAgo).length
     return { count: games.length, total, fresh }
   }, [games])
 
@@ -93,7 +95,7 @@ export function DiscoverPage() {
     list.sort((a, b) =>
       sort === 'popular'
         ? b.play_count - a.play_count
-        : Date.parse(b.published_at) - Date.parse(a.published_at),
+        : Date.parse(b.published_at ?? '') - Date.parse(a.published_at ?? ''),
     )
     return list
   }, [games, q, featuredOnly, sort])

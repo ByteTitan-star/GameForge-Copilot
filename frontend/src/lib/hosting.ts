@@ -12,9 +12,13 @@ function joinUrl(base: string, path: string): string {
 // dev 给 artifact URL 加版本戳破浏览器强缓存（改产物/CSP 后刷新即生效）；生产留空走后端 ETag
 const ARTIFACT_VER = import.meta.env.DEV ? `${Date.now()}` : ''
 
-export function playArtifactUrl(slug: string): string {
-  const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
-  return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}${q}`)
+export function playArtifactUrl(slug: string, locale?: string): string {
+  const params = new URLSearchParams()
+  if (ARTIFACT_VER) params.set('v', ARTIFACT_VER)
+  if (locale === 'en') params.set('lang', 'en')
+  const q = params.toString()
+  const suffix = q ? `?${q}` : ''
+  return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}${suffix}`)
 }
 
 export function templatePlayUrl(templateId: string): string {

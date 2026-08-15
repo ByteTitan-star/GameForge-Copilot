@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Neon Gravity Runner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Tone.js 用于程序化生成实时电子音乐和音效 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+    
+    body { 
+      margin: 0; 
+      background-color: #0a0a1a; 
+      color: #fff; 
+      font-family: 'Orbitron', sans-serif; 
+      overflow: hidden; 
+      touch-action: none; 
+    }
+    
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, #1a1a3a 0%, #050510 100%);
+    }
+
+    canvas { 
+      display: block; 
+      box-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
+      border-top: 2px solid #0ff;
+      border-bottom: 2px solid #f0f;
+      background-color: rgba(0, 0, 0, 0.6);
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    .ui-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2rem;
+    }
+
+    .glass-panel {
+      background: rgba(10, 10, 26, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(0, 255, 255, 0.3);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+      pointer-events: auto;
+    }
+
+    .neon-text-cyan { text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; color: #e0ffff; }
+    .neon-text-magenta { text-shadow: 0 0 10px #f0f, 0 0 20px #f0f; color: #ffe0ff; }
+    .neon-text-gold { text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700; color: #fffacd; }
+    
+    button { transition: all 0.2s ease; }
+    button:hover { transform: scale(1.05); box-shadow: 0 0 25px currentColor; }
+    button:active { transform: scale(0.95); }
+
+    /* 护盾状态UI指示器 */
+    #shield-ui {
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #shield-ui.active {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="c" width="800" height="400"></canvas>
+    
+    <div class="ui-layer">
+      <!-- 顶部信息栏 -->
+      <div class="flex justify-between items-start">
+        <div>
+          <h1 class="text-2xl md:text-4xl font-black neon-text-cyan tracking-wider">NEON GRAVITY</h1>
+          <p class="text-sm md:text-base text-gray-400 mt-1">Space / tap to flip gravity</p>
+          <!-- 护盾指示器 -->
+          <div id="shield-ui" class="mt-2 flex items-center text-[#0f0]">
+            <span class="mr-2">🛡️</span> SHIELD ACTIVE
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-xl md:text-3xl font-bold neon-text-magenta">SCORE: <span id="dist">0</span></div>
+          <div class="text-sm md:text-base text-gray-400">HI: <span id="high-score">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 游戏主菜单/死亡面板 -->
+    <div id="menu-panel" class="glass-panel absolute rounded-2xl p-8 flex flex-col items-center z-10">
+      <h2 id="menu-title" class="text-4xl font-black mb-6 neon-text-cyan">Ready</h2>
+      <button id="play-btn" class="px-8 py-3 rounded-full border-2 border-[#0ff] text-[#0ff] font-bold text-xl neon-text-cyan bg-transparent cursor-pointer pointer-events-auto">
+        START SYSTEM
+      </button>
+      <p class="mt-4 text-xs text-gray-500 text-center">Tap to start the engine and enable audio</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const distEl = document.getElementById('dist');
+    const highScoreEl = document.getElementById('high-score');
+    const menuPanel = document.getElementById('menu-panel');
+    const menuTitle = document.getElementById('menu-title');
+    const playBtn = document.getElementById('play-btn');
+    const shieldUi = document.getElementById('shield-ui');
+
+    function resizeCanvas() {
+      const container = document.getElementById('game-container');
+      const aspect = 800 / 400;
+      let w = container.clientWidth - 40;
+      let h = w / aspect;
+      if (h > container.clientHeight - 40) {
+        h = container.clientHeight - 40;
+        w = h * aspect;
+      }
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let gameState = 'START'; 
+    let score = 0;
+    let highScore;
+    try { highScore = localStorage.getItem('neonGravityHighScore') || 0; } catch { highScore = 0; }
+    highScoreEl.textContent = highScore;
+    let baseSpeed = 6;
+    let speedMultiplier = 1;
+    let animationId;
+    let frames = 0;
+    let screenShake = 0; // 屏幕震动变量
+
+    const audioSys = {
+      isReady: false,
+      init: async function() {
+        if(this.isReady) return;
+        await Tone.start();
+        
+        // 1. 赛博朋克风的背景低音合成器 (Bass Synth)
+        this.bassSynth = new Tone.Synth({
+          oscillator: { type: "sawtooth" },
+          envelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 0.5 }
+        }).toDestination();
+        this.bassSynth.volume.value = -15; // 调低音量防止炸麦
+
+        // 编写一段 8-beat 的 Bassline 序列
+        const bassNotes = ["C2", "C2", "G1", "A1", "C2", "D2", "E2", "C2"];
+        let step = 0;
+        this.bgmLoop = new Tone.Loop((time) => {
+          let note = bassNotes[step % bassNotes.length];
+          this.bassSynth.triggerAttackRelease(note, "8n", time);
+          step++;
+        }, "8n");
+
+        Tone.Transport.bpm.value = 140; // 动感节奏
+        
+        // 2. 音效合成器 (SFX)
+        this.sfxFm = new Tone.FMSynth().toDestination();
+        this.sfxFm.volume.value = -10;
+        
+        this.sfxMembrane = new Tone.MembraneSynth().toDestination(); // 用于爆炸声
+        
+        this.isReady = true;
+      },
+      playBGM: function() {
+        if(this.isReady) { Tone.Transport.start(); this.bgmLoop.start(0); }
+      },
+      stopBGM: function() {
+        if(this.isReady) { this.bgmLoop.stop(); Tone.Transport.stop(); }
+      },
+      playFlip: function() { // 翻转音效
+        if(!this.isReady) return;
+        this.sfxFm.triggerAttackRelease("C5", "32n");
+      },
+      playPowerup: function() { // 吃到护盾音效
+        if(!this.isReady) return;
+        this.sfxFm.triggerAttackRelease("G5", "8n");
+      },
+      playScore: function() { // 吃到能量球音效
+        if(!this.isReady) return;
+        this.sfxFm.triggerAttackRelease("E5", "16n");
+      },
+      playCrash: function() { // 撞击音效
+        if(!this.isReady) return;
+        this.sfxMembrane.triggerAttackRelease("C1", "8n");
+      }
+    };
+
+    class Player {
+      constructor() {
+        this.size = 24;
+        this.x = 80;
+        this.y = canvas.height - this.size - 10;
+        this.vy = 0;
+        this.gravity = 0.8; 
+        this.isFlipped = false; 
+        this.color = '#0ff'; 
+        this.trail = []; 
+        this.hasShield = false; // 新增护盾状态
+      }
+
+      flip() {
+        this.isFlipped = !this.isFlipped;
+        this.gravity = this.isFlipped ? -0.8 : 0.8;
+        this.vy = 0; 
+        this.color = this.isFlipped ? '#f0f' : '#0ff'; 
+        createParticles(this.x + this.size/2, this.y + this.size/2, this.color, 5);
+        audioSys.playFlip(); // 播放音效
+      }
+
+      update() {
+        this.vy += this.gravity;
+        this.y += this.vy;
+
+        if (this.y > canvas.height - this.size - 10) { this.y = canvas.height - this.size - 10; this.vy = 0; }
+        if (this.y < 10) { this.y = 10; this.vy = 0; }
+
+        this.trail.push({x: this.x, y: this.y});
+        if (this.trail.length > 10) this.trail.shift();
+      }
+
+      draw(ctx) {
+        // 尾迹
+        ctx.fillStyle = this.color;
+        for (let i = 0; i < this.trail.length; i++) {
+          let alpha = i / this.trail.length;
+          ctx.globalAlpha = alpha * 0.5;
+          let s = this.size * (0.5 + 0.5 * alpha);
+          ctx.fillRect(this.trail[i].x + (this.size-s)/2, this.trail[i].y + (this.size-s)/2, s, s);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // 本体
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+        
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(this.x + 6, this.y + 6, this.size - 12, this.size - 12);
+
+        // 护盾特效：外围旋转光环
+        if (this.hasShield) {
+          ctx.strokeStyle = '#0f0';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size, frames * 0.1, frames * 0.1 + Math.PI);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size, frames * 0.1 + Math.PI + 0.5, frames * 0.1 + Math.PI * 2 - 0.5);
+          ctx.stroke();
+        }
+      }
+    }
+
+    class Particle {
+      constructor(x, y, color, speedMulti = 1) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 10 * speedMulti;
+        this.vy = (Math.random() - 0.5) * 10 * speedMulti;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.03;
+        this.color = color;
+        this.size = Math.random() * 4 + 2;
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy; this.life -= this.decay;
+      }
+      draw(ctx) {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    class Obstacle {
+      constructor() {
+        this.w = 30;
+        this.h = 40 + Math.random() * 100;
+        this.x = canvas.width;
+        this.isTop = Math.random() > 0.5;
+        this.y = this.isTop ? 10 : canvas.height - this.h - 10;
+        this.color = this.isTop ? '#f0f' : '#0ff';
+        this.passed = false;
+        this.destroyed = false; // 用于被护盾撞碎的状态
+      }
+      update(speed) { this.x -= speed; }
+      draw(ctx) {
+        if(this.destroyed) return;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = this.color;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 0;
+        ctx.strokeRect(this.x, this.y, this.w, this.h);
+      }
+    }
+
+    // 新增：游戏内道具（能量球和护盾）
+    class Item {
+      constructor(type) {
+        this.type = type; // 'orb' 或 'shield'
+        this.size = type === 'shield' ? 20 : 15;
+        this.x = canvas.width;
+        this.y = 40 + Math.random() * (canvas.height - 80); // 随机高度，避开边界
+        this.color = type === 'shield' ? '#0f0' : '#ffd700'; // 绿护盾，金能量
+        this.active = true;
+        this.offsetY = Math.random() * Math.PI; // 用于上下浮动动画
+      }
+      update(speed) {
+        this.x -= speed;
+      }
+      draw(ctx) {
+        if(!this.active) return;
+        let floatY = this.y + Math.sin(frames * 0.1 + this.offsetY) * 10;
+        
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = this.color;
+
+        if (this.type === 'shield') {
+          // 护盾画成菱形
+          ctx.beginPath();
+          ctx.moveTo(this.x, floatY - this.size);
+          ctx.lineTo(this.x + this.size, floatY);
+          ctx.lineTo(this.x, floatY + this.size);
+          ctx.lineTo(this.x - this.size, floatY);
+          ctx.fill();
+        } else {
+          // 能量球画成圆形
+          ctx.beginPath();
+          ctx.arc(this.x, floatY, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    let player, obstacles, items, particles, stars;
+
+    function initStars() {
+      stars = [];
+      for(let i=0; i<50; i++) {
+        stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, speed: Math.random() * 2 + 1, size: Math.random() * 2 });
+      }
+    }
+
+    function createParticles(x, y, color, count = 20, speedMulti = 1) {
+      for(let i=0; i<count; i++) particles.push(new Particle(x, y, color, speedMulti));
+    }
+
+    function resetGame() {
+      player = new Player();
+      obstacles = [];
+      items = [];
+      particles = [];
+      score = 0;
+      frames = 0;
+      screenShake = 0;
+      speedMultiplier = 1;
+      distEl.textContent = '0';
+      shieldUi.className = 'mt-2 flex items-center text-[#0f0] opacity-0 transition-opacity';
+      
+      gameState = 'PLAYING';
+      menuPanel.style.display = 'none';
+      initStars();
+      
+      audioSys.playBGM();
+
+      if(animationId) cancelAnimationFrame(animationId);
+      gameLoop();
+    }
+
+    function triggerGameOver() {
+      gameState = 'GAMEOVER';
+      audioSys.stopBGM();
+      audioSys.playCrash();
+      createParticles(player.x + player.size/2, player.y + player.size/2, '#fff', 50, 2);
+      
+      if (score > highScore) {
+        highScore = score;
+        try { localStorage.setItem('neonGravityHighScore', highScore); } catch {}
+        highScoreEl.textContent = highScore;
+      }
+
+      setTimeout(() => {
+        menuTitle.textContent = 'SYSTEM FAILURE';
+        menuTitle.className = 'text-4xl font-black mb-6 neon-text-magenta text-red-500';
+        playBtn.textContent = 'REBOOT';
+        menuPanel.style.display = 'flex';
+      }, 800);
+    }
+
+    function gameLoop() {
+      if (gameState !== 'PLAYING') return;
+
+      // 1. 屏幕震动逻辑 (Screen Shake)
+      ctx.save();
+      if (screenShake > 0) {
+        let dx = (Math.random() - 0.5) * screenShake;
+        let dy = (Math.random() - 0.5) * screenShake;
+        ctx.translate(dx, dy);
+        screenShake *= 0.9; // 衰减
+        if (screenShake < 0.5) screenShake = 0;
+      }
+
+      // 清屏
+      ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 上下边界线
+      ctx.fillStyle = '#0ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+      ctx.fillRect(0, 8, canvas.width, 2);
+      ctx.fillStyle = '#f0f'; ctx.shadowColor = '#f0f';
+      ctx.fillRect(0, canvas.height - 10, canvas.width, 2);
+      ctx.shadowBlur = 0;
+
+      // 绘制星星背景
+      ctx.fillStyle = '#fff';
+      stars.forEach(star => {
+        star.x -= star.speed * speedMultiplier;
+        if(star.x < 0) { star.x = canvas.width; star.y = Math.random() * canvas.height; }
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(star.x, star.y, star.speed * 5, star.size);
+      });
+      ctx.globalAlpha = 1.0;
+
+      let currentSpeed = baseSpeed * speedMultiplier;
+      speedMultiplier += 0.0005; // 随时间缓慢加速
+      Tone.Transport.bpm.value = 140 + (speedMultiplier - 1) * 50; // 音乐随着速度加快！
+      
+      // 障碍物生成
+      if (frames % Math.floor(90 / speedMultiplier) === 0) {
+        obstacles.push(new Obstacle());
+        if(Math.random() < 0.25 && score > 300) {
+           let obs2 = new Obstacle();
+           obs2.isTop = !obstacles[obstacles.length-1].isTop;
+           obs2.y = obs2.isTop ? 10 : canvas.height - obs2.h - 10;
+           obs2.color = obs2.isTop ? '#f0f' : '#0ff';
+           obstacles.push(obs2);
+        }
+      }
+
+      // 道具生成 (较小概率)
+      if (frames % 120 === 0 && Math.random() < 0.4) {
+        // 10% 概率生成护盾，90% 概率生成能量球
+        let type = Math.random() < 0.1 ? 'shield' : 'orb';
+        items.push(new Item(type));
+      }
+
+      // 更新和检测道具
+      for (let i = items.length - 1; i >= 0; i--) {
+        let item = items[i];
+        item.update(currentSpeed);
+        item.draw(ctx);
+        
+        let floatY = item.y + Math.sin(frames * 0.1 + item.offsetY) * 10;
+        
+        // 简单的圆/矩形碰撞检测
+        if (item.active && 
+            player.x < item.x + item.size && player.x + player.size > item.x - item.size &&
+            player.y < floatY + item.size && player.y + player.size > floatY - item.size) {
+            
+            item.active = false; // 吃掉
+            
+            if (item.type === 'orb') {
+               score += 50; // 大幅加分
+               audioSys.playScore();
+               createParticles(item.x, floatY, item.color, 15);
+            } else if (item.type === 'shield') {
+               player.hasShield = true;
+               audioSys.playPowerup();
+               shieldUi.classList.add('active'); // 显示UI护盾提示
+               createParticles(item.x, floatY, item.color, 30);
+            }
+        }
+        if (item.x < -50 || !item.active) items.splice(i, 1);
+      }
+
+      // 更新和检测障碍物
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        let obs = obstacles[i];
+        obs.update(currentSpeed);
+        obs.draw(ctx);
+
+        if (!obs.destroyed &&
+          player.x < obs.x + obs.w && player.x + player.size > obs.x &&
+          player.y < obs.y + obs.h && player.y + player.size > obs.y
+        ) {
+          if (player.hasShield) {
+            // 撞碎障碍物
+            obs.destroyed = true;
+            player.hasShield = false;
+            shieldUi.classList.remove('active');
+            screenShake = 20; // 强烈的震屏反馈
+            audioSys.playCrash(); // 使用爆炸音效
+            createParticles(obs.x + obs.w/2, obs.y + obs.h/2, obs.color, 40, 2);
+          } else {
+            triggerGameOver();
+          }
+        }
+
+        if (!obs.destroyed && !obs.passed && player.x > obs.x + obs.w) {
+          obs.passed = true;
+          score += 10;
+        }
+        if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+      }
+
+      distEl.textContent = score;
+
+      // 粒子更新
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; p.update(); p.draw(ctx);
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      // 距离自然得分
+      if (frames % 10 === 0) score += 1;
+
+      player.update();
+      player.draw(ctx);
+
+      ctx.restore(); // 恢复震动前的画布状态
+
+      frames++;
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function triggerAction(e) {
+      if(e.type === 'keydown' && e.code !== 'Space') return;
+      if(e.type === 'keydown') e.preventDefault(); 
+      if (gameState === 'PLAYING') player.flip();
+    }
+
+    window.addEventListener('keydown', triggerAction);
+    window.addEventListener('touchstart', (e) => {
+      if(e.target.id === 'play-btn') return;
+      e.preventDefault(); triggerAction(e);
+    }, {passive: false});
+    window.addEventListener('mousedown', (e) => {
+       if(e.target.id === 'play-btn') return;
+       triggerAction(e);
+    });
+
+    playBtn.addEventListener('click', async () => {
+      // 必须在用户交互时初始化音频，这是浏览器的安全策略
+      await audioSys.init();
+      resetGame();
+    });
+    playBtn.addEventListener('touchstart', async (e) => {
+      e.preventDefault(); 
+      await audioSys.init();
+      resetGame();
+    });
+
+  </script>
+</body>
+</html>
