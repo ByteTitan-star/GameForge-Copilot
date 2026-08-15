@@ -46,6 +46,21 @@ async def _html_response(
     return Response(content=data, media_type="text/html; charset=utf-8", headers=headers)
 
 
+@router.get("/play/template/{template_id}")
+async def play_template(template_id: str) -> Response:
+    """模板 reference 产物试玩（catalog.json reference_artifact），公开。"""
+    from app.forge.templates.loader import public_reference_path
+
+    path = public_reference_path(template_id)
+    return FileResponse(
+        path,
+        headers={
+            "Content-Security-Policy": _CSP,
+            "Cache-Control": _cache_control("public, max-age=3600"),
+        },
+    )
+
+
 @router.get("/play/{slug}")
 async def play(
     slug: str,
