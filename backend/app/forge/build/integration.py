@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -14,6 +15,25 @@ from app.forge.build.routing import BuildRouting
 
 def parse_llm_code_output(raw: str, *, engine_id: str) -> ParsedCodeOutput:
     return parse_code_output(raw, default_engine=engine_id)
+
+
+async def load_stored_project_source(
+    game_id: uuid.UUID, version: int
+) -> dict[str, str]:
+    """从已落盘的 source/ 层加载工程源码（QA 重试 vite 修复基线）。"""
+    from app.hosting import store
+
+    files: dict[str, str] = {}
+    for meta in await store.list_files(game_id, version):
+        if not meta.path.startswith("source/"):
+            continue
+        rel = meta.path.removeprefix("source/")
+        if not rel:
+            continue
+        data = await store.read_bytes(game_id, version, meta.path)
+        if data is not None:
+            files[rel] = data.decode("utf-8", errors="replace")
+    return files
 
 
 async def run_project_pipeline(

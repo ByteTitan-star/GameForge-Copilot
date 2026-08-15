@@ -30,6 +30,7 @@ from app.forge.assets.picker import asset_pick, format_assets_for_prompt
 from app.forge.build.code_output import ParsedCodeOutput
 from app.forge.build.integration import (
     format_project_repair_input,
+    load_stored_project_source,
     parse_llm_code_output,
     run_project_build_loop,
     with_design_routing,
@@ -868,7 +869,56 @@ def _build_graph(ctx: _Ctx) -> Any:
                         "code_ok": False,
                     }
 
-                if previous_html:
+                stored_project: dict[str, str] | None = None
+                if use_vite and previous_html and ctx.game.current_version > 0:
+                    loaded = await load_stored_project_source(
+                        ctx.game.id, ctx.game.current_version
+                    )
+                    if loaded:
+                        stored_project = loaded
+
+                raw_output = ""
+                data_uris: dict[str, str] = {}
+
+                if use_vite and stored_project:
+                    parsed_retry = ParsedCodeOutput(
+                        format="project",
+                        files=stored_project,
+                        routing=design_routing,
+                    )
+                    if last_error or qa_diagnosis:
+                        repair_parts = [base_user_msg]
+                        if last_error:
+                            repair_parts.append(f"【自动试玩/构建错误】\n{last_error}")
+                        if qa_diagnosis:
+                            repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
+                        repair_user = format_project_repair_input(
+                            "\n\n".join(repair_parts),
+                            parsed_retry,
+                            last_error or qa_diagnosis,
+                        )
+                        repair_raw = await _streamed_llm_or_fallback(
+                            ctx,
+                            build_project_repair_prompt(
+                                engine_id, list(design_routing.dependencies)
+                            ),
+                            repair_user,
+                            "code",
+                            emit_delta=False,
+                        )
+                        parsed_retry = with_design_routing(
+                            parse_llm_code_output(repair_raw, engine_id=engine_id),
+                            design_routing,
+                        )
+                    raw_output = json.dumps(
+                        {
+                            "format": "project",
+                            **design_routing.to_dict(),
+                            "files": parsed_retry.files,
+                        },
+                        ensure_ascii=False,
+                    )
+                elif previous_html:
                     masked_html, data_uris = mask_data_uris(previous_html)
                     repair_parts = [base_user_msg]
                     if last_error:
@@ -880,8 +930,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     )
                     user_msg = "\n\n".join(repair_parts)
                     system_prompt = build_repair_prompt(design_doc["engine"]["id"])
+                    raw_output = await _streamed_llm_or_fallback(
+                        ctx, system_prompt, user_msg, "code", emit_delta=False
+                    )
                 else:
-                    data_uris = {}
                     user_msg = generation_user_msg
                     if last_error:
                         user_msg += f"\n\n【上次构建错误】\n{last_error}"
@@ -892,14 +944,14 @@ def _build_graph(ctx: _Ctx) -> Any:
                         )
                     else:
                         system_prompt = build_code_prompt(engine_id)
+                    raw_output = await _streamed_llm_or_fallback(
+                        ctx, system_prompt, user_msg, "code", emit_delta=False
+                    )
 
-                raw_output = await _streamed_llm_or_fallback(
-                    ctx, system_prompt, user_msg, "code", emit_delta=False
-                )
                 for token, data_uri in data_uris.items():
                     raw_output = raw_output.replace(token, data_uri)
 
-                if use_vite and not previous_html:
+                if use_vite and (stored_project or not previous_html):
                     parsed = with_design_routing(
                         parse_llm_code_output(raw_output, engine_id=engine_id),
                         design_routing,
