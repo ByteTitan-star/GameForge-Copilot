@@ -54,6 +54,7 @@ from app.forge.reliability import (
     is_fatal,
     is_recoverable,
 )
+from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
@@ -1081,13 +1082,21 @@ def _build_graph(ctx: _Ctx) -> Any:
             return "done"
         return END
 
+    def _node_kwargs(policy_key: str) -> dict[str, object]:
+        if not settings.reliability_node_timeout:
+            return {}
+        return {
+            "timeout": langgraph_timeout_policy(policy_key),
+            "retry_policy": langgraph_retry_policy(policy_key),
+        }
+
     g = StateGraph(ForgeState)
-    g.add_node("plan", plan_node)
-    g.add_node("revise_plan", revise_plan_node)
-    g.add_node("art_options", art_options_node)
-    g.add_node("revise_art_options", revise_art_options_node)
-    g.add_node("art_detail", art_detail_node)
-    g.add_node("code_qa_loop", code_qa_loop_node)
+    g.add_node("plan", plan_node, **_node_kwargs("plan"))
+    g.add_node("revise_plan", revise_plan_node, **_node_kwargs("plan"))
+    g.add_node("art_options", art_options_node, **_node_kwargs("art"))
+    g.add_node("revise_art_options", revise_art_options_node, **_node_kwargs("art"))
+    g.add_node("art_detail", art_detail_node, **_node_kwargs("art"))
+    g.add_node("code_qa_loop", code_qa_loop_node, **_node_kwargs("code_qa_loop"))
     g.add_node("done", done_node)
     g.add_conditional_edges(
         START,
