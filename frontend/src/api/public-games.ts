@@ -1,6 +1,5 @@
 import { apiRequest } from './client'
 
-/** 公开广场条目（契约 B2） */
 export type CreatorRef = {
   handle: string
   display_name?: string | null
@@ -23,5 +22,9 @@ export type PublicGame = {
 export const publicGamesApi = {
   async list(): Promise<PublicGame[]> {
     return apiRequest<PublicGame[]>('/games/public')
+  },
+
+  async getBySlug(slug: string): Promise<PublicGame> {
+    return apiRequest<PublicGame>(`/games/public/${encodeURIComponent(slug)}`)
   },
 }

@@ -1,5 +1,4 @@
-import { env } from '@/lib/env'
-import { publicGamesApi } from './public-games'
+import { publicGamesApi, type PublicGame } from './public-games'
 
 export type PlayMeta = {
   game_id?: string
@@ -10,46 +9,30 @@ export type PlayMeta = {
   play_count: number
 }
 
-async function tryFetchMeta(slug: string): Promise<PlayMeta | null> {
-  const res = await fetch(`${env.apiBaseUrl}/play/${encodeURIComponent(slug)}/meta`, {
-    headers: { Accept: 'application/json' },
-  })
-  if (!res.ok) return null
-  const json = (await res.json()) as { data?: PlayMeta }
-  if (!json.data?.title) return null
-  return json.data
+function toPlayMeta(game: PublicGame): PlayMeta {
+  return {
+    game_id: game.game_id,
+    title: game.title,
+    author_display: game.creator?.display_name ?? game.author_display ?? 'GameForge',
+    author_handle: game.creator?.handle ?? game.author_handle ?? null,
+    published_at: game.published_at ?? null,
+    play_count: game.play_count,
+  }
 }
 
 export const playApi = {
-  /** meta 端点未就绪时从公开列表或 slug 回退 */
+  /** 通过契约端点 GET /games/public/{slug} 解析试玩页元数据（不再请求未实现的 /play/{slug}/meta）。 */
   async getMeta(slug: string): Promise<PlayMeta> {
     try {
-      const live = await tryFetchMeta(slug)
-      if (live) return live
+      const game = await publicGamesApi.getBySlug(slug)
+      return toPlayMeta(game)
     } catch {
-      /* fallback */
-    }
-    try {
-      const pub = await publicGamesApi.list()
-      const match = pub.find((g) => g.slug === slug)
-      if (match) {
-        return {
-          game_id: match.game_id,
-          title: match.title,
-          author_display: match.author_display ?? 'GameForge',
-          author_handle: match.author_handle ?? match.creator?.handle ?? null,
-          published_at: match.published_at,
-          play_count: match.play_count,
-        }
+      return {
+        title: slug,
+        author_display: '',
+        published_at: null,
+        play_count: 0,
       }
-    } catch {
-      /* fallback */
-    }
-    return {
-      title: slug,
-      author_display: '',
-      published_at: null,
-      play_count: 0,
     }
   },
 }
