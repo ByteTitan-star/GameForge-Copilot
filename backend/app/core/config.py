@@ -97,12 +97,8 @@ class Settings(BaseSettings):
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     # CodeQaLoop 总 attempt（含首次 generate）；infra/product/build 共用此预算。
     code_qa_max_attempts: int = 3
-    # 已弃用：外层双预算由 code_qa_max_attempts 取代；保留字段避免旧 .env 炸导入。
-    code_max_retries: int = 3
-    qa_max_retries: int = 2
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
-    # 封面截图开关：QA 通过后用 Playwright 截当前 candidate 画面当封面。
-    # 需 worker 已安装 Chromium；Playwright 不可用时 playtest 记 infra 失败，无封面。
+    # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
     models_cache_ttl_s: int = 600  # /models 短期缓存（docs/05）
 

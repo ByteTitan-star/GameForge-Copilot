@@ -34,7 +34,8 @@ cp frontend/.env.example frontend/.env
 | `backend/.env` | `RABBITMQ_URL` | `amqp://gameforge:gameforge@localhost:5672/` | Worker 队列和实时事件 |
 | `backend/.env` | `CORS_ORIGINS` | `http://127.0.0.1:5173,...` | API 允许的浏览器来源 |
 | `backend/.env` | `SANDBOX_BACKEND` | `local` | 本地开发使用的构建后端；仅在构建 Sandbox Image 后使用 `docker` |
-| `backend/.env` | `THUMBNAIL_ENABLED` | `true` | 允许在浏览器试玩成功后，可选地截取游戏卡片封面 |
+| `backend/.env` | `THUMBNAIL_ENABLED` | `true` | Playwright QA 通过后可选截取游戏卡片封面 |
+| `backend/.env` | `CODE_QA_MAX_ATTEMPTS` | `3` | CodeQaLoop 总 attempt（含首次 generate） |
 | `frontend/.env` | `VITE_API_BASE_URL` | `http://127.0.0.1:8000/api/v1` | REST API 基础地址 |
 | `frontend/.env` | `VITE_HOSTING_BASE_URL` | 可选 | `/play` 和 `/draft` 页的托管根地址 |
 | `frontend/.env` | `VITE_WS_BASE_URL` | 可选 | WebSocket 根地址；留空时自动推导 |
@@ -143,32 +144,28 @@ docker compose exec backend uv run python -m scripts.seed_official_games
 
 开发期间前端通常仍在本地通过 `pnpm run dev` 运行。
 
-## 可选浏览器试玩与生成封面
+## 必需的浏览器试玩（CodeQaLoop）
 
-默认 Worker 会对生成的 HTML 做静态检查。Worker 还可以启动真实的 Chromium 浏览器试玩，并把首屏截图保存为游戏卡片封面。这是可选增强：没有 Chromium 或任一开关关闭时，游戏仍会正常生成，卡片会使用渐变回退样式。
+执行生成任务的 Worker **必须**具备 Playwright + Chromium。静态 DOM 检查仅作诊断，不得作为 QA 通过依据。缺少浏览器时 CodeQaLoop 记 `failure_kind=infra`，无法进入 `done`。
 
-要生成封面，以下两个控制项必须同时启用：
-
-- `backend/.env` 中的 `THUMBNAIL_ENABLED=true`（运行时开关，默认值为 `true`）。
-- Worker 进程环境中的 `PLAYTEST_USE_PLAYWRIGHT=1`。
-
-在运行 Worker 的机器上安装可选依赖与 Chromium：
+在 Worker 机器上安装：
 
 ```bash
 cd backend
 uv sync --extra playwright
 uv run playwright install chromium
-export PLAYTEST_USE_PLAYWRIGHT=1
 ```
 
-Windows PowerShell 中，请在启动 Worker 前为当前终端设置环境变量：
+Windows PowerShell：
 
 ```powershell
-$env:PLAYTEST_USE_PLAYWRIGHT = "1"
+cd backend
+uv sync --extra playwright
+uv run playwright install chromium
 uv run python -m app.messaging.worker
 ```
 
-Linux 容器中，应将浏览器依赖安装进 Worker 镜像；在支持的环境可使用 `uv run playwright install chromium --with-deps`。浏览器或截图失败会自动降级，不会阻断游戏生成。
+Linux 容器应将浏览器依赖写入 Worker 镜像（见 `docker/Dockerfile.worker` 的 `playwright install --with-deps`）。截图失败只影响封面（`THUMBNAIL_ENABLED`）；缺少 Chromium 会阻断 QA 通过。
 
 ## Windows 排错
 
@@ -180,7 +177,7 @@ Linux 容器中，应将浏览器依赖安装进 Worker 镜像；在支持的环
 | `/ready` 报依赖不可用 | 打开 Docker Desktop，运行 `docker compose ps`，确认 PostgreSQL、Redis 和 RabbitMQ 均为 healthy。 |
 | 没有验证码或 Forge 一直排队 | 确认 Worker 终端正在运行并且已连接 RabbitMQ。 |
 | Forge 尚未开始就失败 | 检查邮箱是否完成验证，并在设置页保存和测试可用的 LLM Provider 配置。 |
-| 游戏卡片没有截图封面 | 只有 Worker 安装 Playwright 与 Chromium、设置 `PLAYTEST_USE_PLAYWRIGHT=1` 且启用 `THUMBNAIL_ENABLED` 时才会截取封面。不会影响游戏生成。 |
+| 游戏卡片没有截图封面 | 需 Worker 已装 Playwright + Chromium 且 `THUMBNAIL_ENABLED=true`。缺少 Chromium 同时会阻断 CodeQaLoop 通过。 |
 | 本地数据库结构过旧 | 在 `backend/` 中运行 `uv run alembic upgrade head`。 |
 
 ## 端口

@@ -34,7 +34,7 @@
 * 提示词输出契约：`prompts.py:326`「只输出完整 HTML 源码，首字符必须是 `<!DOCTYPE html>`，以 `</html>` 结束」；`_CODE_COMMON`（`prompts.py:55`）「只生成一个自包含 index.html，JS/CSS 一律内联」。
 * 代码节点：`graph.py:794` `execute(source={"index.html": html})`，source 只有一个 key。
 * 沙箱：`docker.py:64` 无 `build_cmd` 时仅 `test -f /workspace/index.html`；`graph.py:794` 调用根本没传 `build_cmd`。**当前 HTML 不在沙箱里构建/执行，沙箱只做写盘 + 文件存在性检查。**
-* 试玩：`playtest.py` 默认走 `_static_playtest`（`playtest.py:203`），纯 Python 正则扫描，不执行 JS；仅 `PLAYTEST_USE_PLAYWRIGHT=1` 时用真浏览器。
+* 试玩：`playtest.py` 对产物做 Playwright 可交互冒烟（CodeQaLoop 硬门禁）；静态 DOM 检查仅作诊断，不得冒充 QA 通过。
 * 托管：`hosting/local.py:59`、`hosting/routes.py:43` 固定读写单个 `index.html`。
 
 已支持三个 CDN-UMD 引擎 `canvas` / `phaser3` / `pixijs`（`engine_router.py:19`）。**框架层面已具备中等能力，真正瓶颈不是渲染框架，而是：游戏必须压成单 HTML，且没有 npm / TypeScript / Vite 标准前端构建链。** 这限制了 LLM 使用 npm 生态（物理/动画/声音/3D 库）、代码模块化、TypeScript、代码分包，以及 React 等 UI 框架。
