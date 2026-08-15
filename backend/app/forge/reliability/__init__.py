@@ -21,6 +21,7 @@ from app.forge.reliability.errors import (
 )
 from app.forge.reliability.idempotency import (
     already_applied,
+    get_side_effect_value,
     side_effect_key,
     try_begin_side_effect,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "apply_paused_metadata",
     "build_pause_checkpoint",
     "classify_exception",
+    "get_side_effect_value",
     "is_fatal",
     "is_recoverable",
     "langgraph_retry_policy",
