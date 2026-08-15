@@ -59,11 +59,12 @@ def test_prepare_install_shell_has_lockfile_only_and_fetch() -> None:
     assert "fetch" in shell
 
 
-def test_pnpm_setup_shell_unix_style(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pnpm_setup_shell_unix_style(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(os, "name", "posix")
-    shell = pnpm_setup_shell(store_dir="/pnpm/store")
+    shell = pnpm_setup_shell(store_dir="/pnpm/store", workspace=tmp_path)
     assert "pnpm config set registry" in shell
     assert "store-dir '/pnpm/store'" in shell
+    assert f"cache-dir '{tmp_path / '.pnpm-cache'}'" in shell
     assert "corepack" not in shell
 
 

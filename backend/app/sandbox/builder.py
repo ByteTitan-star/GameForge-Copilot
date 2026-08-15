@@ -91,15 +91,24 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
     pnpm = pnpm_cli()
     registry = settings.npm_registry
     store = store_dir
+    cache_cfg = ""
+    if workspace is not None:
+        cache_path = workspace / ".pnpm-cache"
+        if os.name == "nt":
+            cache_cfg = f'{pnpm} config set cache-dir "{cache_path}" && '
+        else:
+            cp = str(cache_path).replace("'", "")
+            cache_cfg = f"pnpm config set cache-dir '{cp}' && "
     if os.name == "nt":
         return (
             f"{prefix}"
+            f"{cache_cfg}"
             f'{pnpm} config set registry "{registry}" && '
             f'{pnpm} config set store-dir "{store}"'
         )
     reg = registry.replace("'", "")
     st = store.replace("'", "")
-    return f"{prefix}pnpm config set registry '{reg}' && pnpm config set store-dir '{st}'"
+    return f"{prefix}{cache_cfg}pnpm config set registry '{reg}' && pnpm config set store-dir '{st}'"
 
 
 def offline_install_shell(setup: str) -> str:
