@@ -648,6 +648,10 @@ export const messages = {
     auditLlmTestOk: '审核 LLM 连通性测试通过',
     auditLlmTestFail: '审核 LLM 连通性测试失败',
     auditLlmTestFailed: '审核 LLM 测试请求失败',
+    auditLlmDisableTitle: '确认关闭内容审核？',
+    auditLlmDisableWarning:
+      '关闭后 Forge 生成流程将不再进行输入/输出安全审核，越狱提示、恶意代码与违规内容可能直接进入生成链路。此操作会显著降低平台安全性，仅建议在紧急排障时临时关闭，并尽快恢复。',
+    auditLlmDisableConfirm: '仍要关闭',
     adminTabOverview: '概览',
     adminShellTagline: 'Forge Console',
     adminCloseSidebar: '关闭侧边栏',
@@ -1332,6 +1336,10 @@ export const messages = {
     auditLlmTestOk: 'Audit LLM connectivity test passed',
     auditLlmTestFail: 'Audit LLM connectivity test failed',
     auditLlmTestFailed: 'Audit LLM test request failed',
+    auditLlmDisableTitle: 'Disable content audit?',
+    auditLlmDisableWarning:
+      'Forge will stop input/output safety checks. Jailbreak prompts, malicious code, and policy violations may flow into generation. This significantly weakens platform safety—only disable temporarily for emergency troubleshooting, then re-enable as soon as possible.',
+    auditLlmDisableConfirm: 'Disable anyway',
     adminTabOverview: 'Overview',
     adminShellTagline: 'Forge Console',
     adminCloseSidebar: 'Close sidebar',

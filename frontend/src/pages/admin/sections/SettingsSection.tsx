@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import { formatApiError } from '@/api/error-message'
 import { LLMProvider } from '@/api/enums'
+import { ConfirmModal } from '@/components/admin/ConfirmModal'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 import { useAdminToast } from '../adminToast'
@@ -27,6 +28,7 @@ export function SettingsSection() {
   const [auditModel, setAuditModel] = useState('')
   const [auditApikey, setAuditApikey] = useState('')
   const [auditBaseUrl, setAuditBaseUrl] = useState('')
+  const [disableAuditConfirmOpen, setDisableAuditConfirmOpen] = useState(false)
 
   const loaded = settings.data
   const dailyVal = daily === '' ? (loaded?.default_daily_token_limit ?? '') : daily
@@ -39,6 +41,14 @@ export function SettingsSection() {
   const auditModelVal = auditModel || auditLoaded?.model || ''
   const auditApikeyVal = auditApikey || auditLoaded?.apikey || ''
   const auditBaseUrlVal = auditBaseUrl || auditLoaded?.base_url || ''
+
+  const handleAuditEnabledChange = (checked: boolean) => {
+    if (!checked && auditEnabledVal) {
+      setDisableAuditConfirmOpen(true)
+      return
+    }
+    setAuditEnabled(checked)
+  }
 
   const saveMu = useMutation({
     mutationFn: () =>
@@ -166,7 +176,7 @@ export function SettingsSection() {
           <input
             type="checkbox"
             checked={auditEnabledVal}
-            onChange={(e) => setAuditEnabled(e.target.checked)}
+            onChange={(e) => handleAuditEnabledChange(e.target.checked)}
             className="h-4 w-4"
           />
           {t('auditLlmEnabled')}
@@ -242,6 +252,23 @@ export function SettingsSection() {
           </button>
         </div>
       </section>
+
+      {disableAuditConfirmOpen ? (
+        <ConfirmModal
+          title={t('auditLlmDisableTitle')}
+          danger
+          confirmLabel={t('auditLlmDisableConfirm')}
+          onClose={() => setDisableAuditConfirmOpen(false)}
+          onConfirm={() => {
+            setAuditEnabled(false)
+            setDisableAuditConfirmOpen(false)
+          }}
+        >
+          <p className="text-sm leading-relaxed text-[var(--gf-text-muted)]">
+            {t('auditLlmDisableWarning')}
+          </p>
+        </ConfirmModal>
+      ) : null}
     </div>
   )
 }
