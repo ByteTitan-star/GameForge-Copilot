@@ -21,18 +21,9 @@ function toPlayMeta(game: PublicGame): PlayMeta {
 }
 
 export const playApi = {
-  /** 通过契约端点 GET /games/public/{slug} 解析试玩页元数据（不再请求未实现的 /play/{slug}/meta）。 */
+  /** Resolve play page metadata via GET /games/public/{slug}. */
   async getMeta(slug: string): Promise<PlayMeta> {
-    try {
-      const game = await publicGamesApi.getBySlug(slug)
-      return toPlayMeta(game)
-    } catch {
-      return {
-        title: slug,
-        author_display: '',
-        published_at: null,
-        play_count: 0,
-      }
-    }
+    const game = await publicGamesApi.getBySlug(slug)
+    return toPlayMeta(game)
   },
 }

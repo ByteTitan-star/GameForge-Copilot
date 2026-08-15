@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Copy, Check, Image, Maximize2, Smartphone } from 'lucide-react'
+import { isApiError } from '@/api/errors'
 import { playApi } from '@/api/play'
 import { CreatorLink } from '@/components/creator/CreatorLink'
 import { GamePlayer } from '@/components/game/GamePlayer'
@@ -29,17 +30,25 @@ export function PlayPage() {
     queryKey: ['play-meta', safeSlug],
     enabled: Boolean(safeSlug),
     queryFn: () => playApi.getMeta(safeSlug),
+    retry: false,
   })
+
+  const notFound =
+    metaQ.isError &&
+    isApiError(metaQ.error) &&
+    (metaQ.error.status === 404 || metaQ.error.code === 'GAME_NOT_FOUND')
 
   const meta = metaQ.data
   const title = meta?.title ?? safeSlug
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
 
   useDocumentMeta({
-    title: `${title} · GameForge`,
-    description: meta?.author_display
-      ? `${title} — ${meta.author_display} · ${t('playCount').replace('{n}', String(meta?.play_count ?? 0))}`
-      : title,
+    title: notFound ? t('playNotFoundTitle') : `${title} · GameForge`,
+    description: notFound
+      ? t('playNotFoundBody')
+      : meta?.author_display
+        ? `${title} — ${meta.author_display} · ${t('playCount').replace('{n}', String(meta?.play_count ?? 0))}`
+        : title,
     url: shareUrl,
   })
 
@@ -58,7 +67,6 @@ export function PlayPage() {
     }
   }
 
-  // 进入全屏后短暂提示「ESC 退出全屏试玩」
   useEffect(() => {
     function onFsChange() {
       if (document.fullscreenElement) {
@@ -71,6 +79,42 @@ export function PlayPage() {
     document.addEventListener('fullscreenchange', onFsChange)
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
+
+  if (!safeSlug) {
+    return null
+  }
+
+  if (metaQ.isLoading) {
+    return (
+      <div className="grid h-[100svh] place-items-center bg-[#0a0a0a] text-white/60">
+        {t('loading')}
+      </div>
+    )
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex h-[100svh] flex-col items-center justify-center bg-[#0a0a0a] px-6 text-center text-white">
+        <p className="text-2xl font-semibold tracking-tight">{t('playNotFoundTitle')}</p>
+        <p className="mt-3 max-w-md text-sm text-white/55">{t('playNotFoundBody')}</p>
+        <Link
+          to="/discover"
+          className="mt-6 inline-flex items-center gap-1.5 rounded-lg bg-white/90 px-4 py-2 text-sm font-medium text-black transition hover:bg-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t('playNotFoundCta')}
+        </Link>
+      </div>
+    )
+  }
+
+  if (!meta) {
+    return (
+      <div className="grid h-[100svh] place-items-center bg-[#0a0a0a] text-white/60">
+        {t('loadFailed')}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[100svh] flex-col bg-[#0a0a0a] text-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
