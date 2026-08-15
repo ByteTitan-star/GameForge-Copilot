@@ -2922,6 +2922,11 @@ export interface components {
             /** Play Count */
             play_count: number;
             /**
+             * Featured
+             * @default false
+             */
+            featured: boolean;
+            /**
              * Like Count
              * @default 0
              */
@@ -4527,6 +4532,8 @@ export interface operations {
                 page?: number;
                 size?: number;
                 sort?: string;
+                /** @description zh | en，官方样例标题随 locale 切换 */
+                locale?: string | null;
             };
             header?: never;
             path?: never;
@@ -4559,6 +4566,8 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
+                /** @description zh | en，官方样例标题随 locale 切换 */
+                locale?: string | null;
             };
             header?: never;
             path?: never;
@@ -4588,7 +4597,10 @@ export interface operations {
     };
     get_public_game_meta_api_v1_games_public__slug__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description zh | en，官方样例标题随 locale 切换 */
+                locale?: string | null;
+            };
             header?: never;
             path: {
                 slug: string;
@@ -5434,7 +5446,10 @@ export interface operations {
     };
     list_official_games_api_v1_official_games_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description zh | en */
+                locale?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5448,6 +5463,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_list_OfficialGameItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7148,7 +7172,9 @@ export interface operations {
     };
     play_play__slug__get: {
         parameters: {
-            query?: never;
+            query?: {
+                lang?: string | null;
+            };
             header?: never;
             path: {
                 slug: string;
