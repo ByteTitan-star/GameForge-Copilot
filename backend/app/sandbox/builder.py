@@ -42,28 +42,37 @@ def _docker_user_spec() -> str:
     return f"{os.getuid()}:{os.getgid()}"
 
 
-def _ensure_bind_mount_permissions(path: Path) -> None:
+def _ensure_bind_mount_permissions(path: Path, *, recursive: bool = True) -> None:
     """Docker builder 以宿主 uid 运行；bind mount 需可读写（CI 临时目录权限不一致）。"""
     if os.name == "nt" or not path.exists():
         return
     import stat
 
     def _chmod(target: Path) -> None:
-        mode = (
-            stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO
-            if target.is_dir()
-            else stat.S_IRUSR
-            | stat.S_IWUSR
-            | stat.S_IRGRP
-            | stat.S_IWGRP
-            | stat.S_IROTH
-            | stat.S_IWOTH
-        )
+        try:
+            current = target.stat().st_mode
+        except OSError:
+            return
+        if target.is_dir():
+            desired = current | stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO
+        else:
+            # 保留可执行位（esbuild 等原生二进制依赖 +x）
+            desired = (
+                current
+                | stat.S_IRUSR
+                | stat.S_IWUSR
+                | stat.S_IRGRP
+                | stat.S_IWGRP
+                | stat.S_IROTH
+                | stat.S_IWOTH
+            )
+            if current & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+                desired |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         with contextlib.suppress(OSError):
-            os.chmod(target, mode)
+            os.chmod(target, desired)
 
     _chmod(path)
-    if path.is_dir():
+    if recursive and path.is_dir():
         for child in path.rglob("*"):
             _chmod(child)
 
@@ -165,7 +174,8 @@ class DockerBuilder:
     ) -> BuilderRunResult:
         timeout = timeout_s or settings.builder_timeout_s
         _ensure_bind_mount_permissions(workspace.resolve())
-        _ensure_bind_mount_permissions(self.store_path.resolve())
+        # 勿递归 chmod store 内包文件，否则会剥掉 esbuild 等二进制的 +x
+        _ensure_bind_mount_permissions(self.store_path.resolve(), recursive=False)
         store_mode = "ro" if store_readonly else "rw"
         binds = [
             f"{workspace.resolve()}:/workspace:rw",
