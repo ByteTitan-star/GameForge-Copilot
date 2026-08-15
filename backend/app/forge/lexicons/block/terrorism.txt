@@ -1,0 +1,9 @@
+﻿# block/terrorism — 暴恐（高精裁剪，命中即决）
+# 来源裁剪自 konsheng/Sensitive-lexicon（MIT）
+
+恐怖袭击
+自制炸弹
+人肉炸弹
+暴力恐怖
+爆炸装置
+暗杀行动

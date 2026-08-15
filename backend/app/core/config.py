@@ -137,6 +137,9 @@ class Settings(BaseSettings):
     audit_quick_filter: bool = True  # 正则前置快筛开关：命中即决，不调 LLM
     # 快筛黑名单文件路径：空=内置 app/forge/blacklist.txt（docker 可挂载外部文件覆盖）
     audit_blacklist_file: str = ""
+    # AC 敏感词词库：关则只跑 blacklist.txt；目录空=内置 app/forge/lexicons/
+    audit_lexicon_enabled: bool = True
+    audit_lexicon_dir: str = ""
 
     # 全局
     env: str = "development"
