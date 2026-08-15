@@ -48,7 +48,10 @@ class QaReportPayload(BaseModel):
     issues: list[str]
     log_excerpt: str
     console_logs: list[str] = []
-    playtest_mode: str = "sandbox"
+    playtest_mode: str = "playwright"
+    attempt: int = 1
+    failure_kind: str | None = None
+    motion_signal: str | None = None
 
 
 class DesignDoc(BaseModel):
