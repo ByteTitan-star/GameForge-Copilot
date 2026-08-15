@@ -7183,6 +7183,33 @@
         "title": "ArtifactFileItem",
         "description": "产物单个文件的只读描述（代码预览用）。路径为相对产物根的 POSIX 路径。"
       },
+      "ArtifactGateDetail": {
+        "properties": {
+          "generation_success": {
+            "type": "boolean",
+            "title": "Generation Success",
+            "default": false
+          },
+          "previewable": {
+            "type": "boolean",
+            "title": "Previewable",
+            "default": false
+          },
+          "publishable": {
+            "type": "boolean",
+            "title": "Publishable",
+            "default": false
+          },
+          "qa_ok": {
+            "type": "boolean",
+            "title": "Qa Ok",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ArtifactGateDetail",
+        "description": "ADR-01：previewable ≠ publishable，build_ok ≠ qa_ok。"
+      },
       "AuditLogItem": {
         "properties": {
           "id": {
@@ -9695,6 +9722,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RecoveryDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artifact_gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactGateDetail"
               },
               {
                 "type": "null"

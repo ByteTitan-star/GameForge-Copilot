@@ -1,5 +1,6 @@
 """Forge 可靠性子系统（P0）：错误分类、暂停原因、节点策略、幂等。"""
 
+from app.forge.reliability.artifact_gate import ArtifactGate, derive_artifact_gate
 from app.forge.reliability.errors import (
     DataCorruption,
     FatalError,
@@ -40,6 +41,7 @@ from app.forge.reliability.policy import (
 )
 
 __all__ = [
+    "ArtifactGate",
     "DataCorruption",
     "FatalError",
     "ForgeRuntimeError",
@@ -60,6 +62,7 @@ __all__ = [
     "apply_paused_metadata",
     "build_pause_checkpoint",
     "classify_exception",
+    "derive_artifact_gate",
     "get_side_effect_value",
     "is_fatal",
     "is_recoverable",

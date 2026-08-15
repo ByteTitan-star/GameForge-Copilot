@@ -22,6 +22,7 @@ from app.models.generation_run import GenerationRun
 from app.schemas.active_run import ActiveRunItem
 from app.schemas.forge_message import ForgeMessageItem
 from app.schemas.run import (
+    ArtifactGateDetail,
     HitlResolveReq,
     HitlResolveResp,
     HitlState,
@@ -195,6 +196,17 @@ async def get_run(
     current_hitl, hitl_wait = _hitl_from_state(run, state)
     pause_reason = None
     recovery = None
+    artifact_gate = None
+    if state and any(
+        k in state
+        for k in ("previewable", "publishable", "qa_ok", "generation_success")
+    ):
+        artifact_gate = ArtifactGateDetail(
+            generation_success=bool(state.get("generation_success", False)),
+            previewable=bool(state.get("previewable", False)),
+            publishable=bool(state.get("publishable", False)),
+            qa_ok=bool(state.get("qa_ok", False)),
+        )
     if run.status == RunStatus.PAUSED.value:
         try:
             reason = pause_reason_from_state(state)
@@ -221,6 +233,7 @@ async def get_run(
             hitl_wait=hitl_wait,
             pause_reason=pause_reason,
             recovery=recovery,
+            artifact_gate=artifact_gate,
         )
     )
 

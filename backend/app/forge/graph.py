@@ -54,6 +54,7 @@ from app.forge.reliability import (
     is_fatal,
     is_recoverable,
 )
+from app.forge.reliability.artifact_gate import derive_artifact_gate
 from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
 from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
@@ -184,6 +185,7 @@ async def _commit_project_build(
             "artifact_path": artifact,
             "build": "vite",
             "preview_url": preview_url,
+            **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
         },
     )
     return {
@@ -197,6 +199,7 @@ async def _commit_project_build(
         "failure_kind": None,
         "playtest_errors": [],
         "qa_diagnosis": "",
+        **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
     }
 
 
@@ -254,6 +257,10 @@ class ForgeState(TypedDict, total=False):
     artifacts: list[dict[str, str]]
     code_ok: bool
     qa_ok: bool
+    # ADR-01 产物门禁（与 qa_ok 分立；publishable 仅 qa_ok 时为真）
+    generation_success: bool
+    previewable: bool
+    publishable: bool
     attempt: int
     exhausted: bool
     candidate_version: int | None
@@ -1000,6 +1007,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             else:
                 # 重放：已 promote 过则保持成功语义，避免重复抬版本
                 await ctx.s.refresh(ctx.game)
+            gate = derive_artifact_gate(build_ok=True, qa_ok=True)
             return {
                 **result,
                 "qa_ok": True,
@@ -1007,10 +1015,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                 "code_ok": True,
                 "code_qa_reset": False,
                 "design_doc": design_doc,
+                **gate.as_dict(),
             }
 
         if result.get("exhausted"):
             errors = list(result.get("playtest_errors") or [])
+            has_candidate = bool(result.get("candidate_version"))
+            gate = derive_artifact_gate(build_ok=has_candidate, qa_ok=False)
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
@@ -1025,6 +1036,8 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "artifacts": result.get("artifacts")
                     or state.get("artifacts")
                     or [],
+                    "candidate_version": result.get("candidate_version"),
+                    **gate.as_dict(),
                 },
                 ctx.s,
             )
@@ -1036,6 +1049,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "issues": errors,
                     "attempt": result.get("attempt"),
                     "failure_kind": result.get("failure_kind"),
+                    **gate.as_dict(),
                 },
             )
             return {
@@ -1080,6 +1094,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             await ckpt.clear_state(ctx.r, ctx.run.id, ctx.s)
             await run_ctrl.clear_control(ctx.r, ctx.run.id)
             await ctx.s.commit()
+            gate = derive_artifact_gate(build_ok=True, qa_ok=True)
             await publish_event(
                 ctx.run.id,
                 WSEventType.DONE,
@@ -1088,6 +1103,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "game_id": str(ctx.game.id),
                     "version": ctx.game.current_version,
                     "preview_url": f"/draft/{ctx.game.id}/{ctx.game.current_version}",
+                    **gate.as_dict(),
                 },
             )
             return {}

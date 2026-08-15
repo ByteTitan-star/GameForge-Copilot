@@ -31,6 +31,7 @@ from app.forge.prompts import (
     build_repair_prompt,
 )
 from app.forge.qa.diagnose import diagnose_playtest_failure
+from app.forge.reliability.artifact_gate import derive_artifact_gate
 from app.hosting import serve, store
 from app.models.game_version import GameVersion
 from app.sandbox import get_sandbox
@@ -400,6 +401,7 @@ async def execute_code_or_repair(
                     "version": version,
                     "artifact_path": artifact,
                     "preview_url": f"/draft/{ctx.game.id}/{version}",
+                    **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
                 },
             )
             return {
@@ -417,6 +419,7 @@ async def execute_code_or_repair(
                 "design_doc": design_doc,
                 "artifacts": artifacts,
                 "art_direction": art_direction,
+                **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
             }
 
         last_error = result.error or "构建失败"
