@@ -77,7 +77,8 @@ def test_classify_httpx_429() -> None:
 def test_classify_httpx_502() -> None:
     req = httpx.Request("POST", "https://example.com")
     resp = httpx.Response(502, request=req)
-    classified = classify_exception(httpx.HTTPStatusError("bad gateway", request=req, response=resp))
+    err = httpx.HTTPStatusError("bad gateway", request=req, response=resp)
+    classified = classify_exception(err)
     assert isinstance(classified, Provider5xx)
 
 
