@@ -10,6 +10,18 @@ export function normalizeHex(input: string): string | null {
   return null
 }
 
+export function sanitizeThemeColors<T extends { primary: string; secondary: string; background: string }>(
+  colors: T,
+  fallback: T,
+): T {
+  return {
+    ...colors,
+    primary: normalizeHex(colors.primary) ?? fallback.primary,
+    secondary: normalizeHex(colors.secondary) ?? fallback.secondary,
+    background: normalizeHex(colors.background) ?? fallback.background,
+  }
+}
+
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const n = normalizeHex(hex)
   if (!n) return null
