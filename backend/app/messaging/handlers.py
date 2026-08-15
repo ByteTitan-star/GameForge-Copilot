@@ -109,11 +109,12 @@ async def dispatch_task(task: str, payload: dict) -> None:
         # 扫描定时任务（如游戏定时下架）
         case _ if task == TASK_SCAN_SCHEDULES:
             from app.core import db as dbmod
-            from app.scheduler.services import scan_scheduled
+            from app.scheduler.services import expire_stale_paused_runs, scan_scheduled
 
             # 创建数据库会话，执行定时扫描
             async with dbmod.SessionLocal() as s:
                 await scan_scheduled(s)
+                await expire_stale_paused_runs(s, _worker_redis())
         
         # 未知任务类型：抛出异常（Worker 会 nack 并重新入队）
         case _:
