@@ -26,16 +26,7 @@ from app.enums import RunPhase, RunStatus, WSEventType
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
-from app.forge.assets.picker import asset_pick, format_assets_for_prompt
-from app.forge.build.code_output import ParsedCodeOutput
-from app.forge.build.integration import (
-    format_project_repair_input,
-    load_stored_project_source,
-    parse_llm_code_output,
-    run_project_build_loop,
-    with_design_routing,
-)
-from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
+from app.forge.assets.picker import asset_pick
 from app.forge.code_candidate import next_candidate_version, promote_candidate
 from app.forge.design_doc import (
     coerce_design_doc,
@@ -43,7 +34,6 @@ from app.forge.design_doc import (
     parse_design_doc,
     validate_design_doc,
 )
-from app.forge.engine_router import engine_scaffold
 from app.forge.events import publish_event
 from app.forge.guard import ContentAttacked, run_streamed_llm
 from app.forge.messages import add_message, design_message_content, stable_design_key
@@ -54,21 +44,16 @@ from app.forge.prompts import (
     ART_OPTIONS_REVISE_PROMPT,
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
-    build_code_prompt,
-    build_project_prompt,
-    build_project_repair_prompt,
-    build_repair_prompt,
 )
-from app.forge.qa.diagnose import diagnose_playtest_failure
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
-from app.hosting import serve, store
+from app.hosting import store
 from app.llm import client as llm_client
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
-from app.sandbox import get_sandbox
+
 # run_playtest 由 code_qa_exec 调用；此处保留 re-export 供旧 monkeypatch 路径兼容
 from app.sandbox.playtest import run_playtest, run_playtest_dist  # noqa: F401
 

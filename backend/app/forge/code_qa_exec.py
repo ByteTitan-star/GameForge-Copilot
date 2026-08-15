@@ -79,9 +79,9 @@ async def execute_code_or_repair(
     run_finalized_exc: type[BaseException],
 ) -> dict[str, Any]:
     """单次 CodeQa attempt：generate 或 repair，成功则写入 candidate（不 promote）。"""
-    from app.games import services as game_services
     from app.forge.assets.picker import PickedAsset
     from app.forge.tracing import observe_phase
+    from app.games import services as game_services
 
     with observe_phase("code"):
         design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)

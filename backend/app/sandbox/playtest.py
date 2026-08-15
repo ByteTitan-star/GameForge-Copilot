@@ -291,7 +291,9 @@ async def _session_playtest(
     )
 
 
-async def _with_browser(url: str, want_thumb: bool, mode_label: str, timeout: int) -> PlaytestResult:
+async def _with_browser(
+    url: str, want_thumb: bool, mode_label: str, timeout: int
+) -> PlaytestResult:
     from playwright.async_api import async_playwright
 
     try:

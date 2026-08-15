@@ -6,7 +6,6 @@ import pytest
 
 from app.sandbox.playtest import make_playtest_result, run_playtest_dist
 
-
 _CANVAS_HTML = """<!doctype html><html><body>
 <canvas id="game"></canvas>
 <script src="./assets/app.js"></script>
