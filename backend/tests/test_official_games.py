@@ -4,7 +4,6 @@ import shutil
 import uuid
 
 import httpx
-import pytest
 
 from app.games.official import OFFICIAL_CATALOG, seed_official_games
 
