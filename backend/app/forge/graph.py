@@ -1,7 +1,7 @@
-"""生成主图：plan→确认→美术方向→确认→详细美术稿→code↔qa→done。
+"""生成主图：plan→确认→美术方向→确认→详细美术稿→CodeQaLoop→done。
 
 支持：策划修订与美术方向重做、节点间 pause/cancel、美术失败素材兜底、
-code/qa 自动诊断重试，以及 skills 约定注入。
+CodeQaLoop 有界 code/playtest/diagnose，以及 skills 约定注入。
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from app.forge.build.integration import (
     with_design_routing,
 )
 from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
+from app.forge.code_candidate import next_candidate_version, promote_candidate
 from app.forge.design_doc import (
     coerce_design_doc,
     design_doc_to_text,
@@ -53,12 +54,13 @@ from app.forge.prompts import (
     ART_OPTIONS_REVISE_PROMPT,
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
-    QA_PROMPT,
     build_code_prompt,
     build_project_prompt,
     build_project_repair_prompt,
     build_repair_prompt,
 )
+from app.forge.qa.diagnose import diagnose_playtest_failure
+from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
 from app.hosting import serve, store
@@ -67,7 +69,8 @@ from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
 from app.sandbox import get_sandbox
-from app.sandbox.playtest import run_playtest, run_playtest_dist
+# run_playtest 由 code_qa_exec 调用；此处保留 re-export 供旧 monkeypatch 路径兼容
+from app.sandbox.playtest import run_playtest, run_playtest_dist  # noqa: F401
 
 PLAN_MAX_ATTEMPTS = 3
 
@@ -127,15 +130,14 @@ async def _commit_project_build(
     artifacts: list[Any],
     art_direction: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Vite 多文件构建成功后落盘、发事件并返回 code_node 状态。"""
+    """Vite 多文件构建成功后落盘为 candidate（不 promote current_version）。"""
     from app.games import services as game_services
 
     await ctx.s.refresh(ctx.run)
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
 
-    ctx.game.current_version += 1
-    version = ctx.game.current_version
+    version = await next_candidate_version(ctx.s, ctx.game)
     artifact = f"{ctx.game.id}/{version}/index.html"
     await store.write_version_layers(
         ctx.game.id,
@@ -176,6 +178,10 @@ async def _commit_project_build(
         "artifacts": artifacts,
         "art_direction": art_direction,
         "code_ok": True,
+        "candidate_ready": True,
+        "candidate_version": version,
+        "candidate_kind": "project",
+        "failure_kind": None,
         "playtest_errors": [],
         "qa_diagnosis": "",
     }
@@ -235,10 +241,17 @@ class ForgeState(TypedDict, total=False):
     artifacts: list[dict[str, str]]
     code_ok: bool
     qa_ok: bool
-    qa_attempt: int
-    qa_retry: bool
+    attempt: int
+    exhausted: bool
+    candidate_version: int | None
+    candidate_ready: bool
+    candidate_kind: str | None
     playtest_errors: list[str]
+    console_logs: list[str]
+    failure_kind: str | None
+    motion_signal: str | None
     qa_diagnosis: str
+    code_qa_reset: bool
     failed: bool
     error: str
     hitl_stop: bool
@@ -454,11 +467,16 @@ def _build_graph(ctx: _Ctx) -> Any:
     async def route_start(
         state: ForgeState,
     ) -> Literal[
-        "plan", "revise_plan", "art_options", "revise_art_options", "art_detail", "code"
+        "plan",
+        "revise_plan",
+        "art_options",
+        "revise_art_options",
+        "art_detail",
+        "code_qa_loop",
     ]:
         if not state.get("resume"):
             if state.get("entry_phase") == "code":
-                return "code"
+                return "code_qa_loop"
             return "plan"
 
         st = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
@@ -471,10 +489,11 @@ def _build_graph(ctx: _Ctx) -> Any:
             if state.get("decision") == "modify" and state.get("modify_text"):
                 return "revise_art_options"
             return "art_detail"
-        # 兼容升级前已经停在 sandbox/qa HITL 的历史任务；新任务在策划确认后
-        # 不再请求人工介入，而是在预算内自动修复，耗尽后直接报告失败。
-        if st.get("phase") in ("sandbox_failed", "qa_failed", "user_pause"):
-            return "code" if st.get("phase") != "user_pause" else "art_options"
+        # qa_failed / sandbox_failed：HITL 恢复后重新进入 CodeQaLoop（attempt 重置）
+        if st.get("phase") in ("sandbox_failed", "qa_failed"):
+            return "code_qa_loop"
+        if st.get("phase") == "user_pause":
+            return "art_options"
         return "art_options"
 
     async def plan_node(state: ForgeState) -> dict:
@@ -777,472 +796,97 @@ def _build_graph(ctx: _Ctx) -> Any:
                     )
             return await fallback_art(design_doc, last_error)
 
-    async def code_node(state: ForgeState) -> dict:
-        with observe_phase("code"):
-            design_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
-            design_text = design_doc_to_text(design_doc)
-            entry_req = state.get("entry_requirement")
-            assets_block = ""
-            artifacts = state.get("artifacts") or []
-            art_direction = state.get("art_direction") or {}
-            if artifacts:
-                from app.forge.assets.picker import PickedAsset
+    async def code_or_repair_node(state: ForgeState) -> dict:
+        from app.forge import code_qa_exec as cqe
 
-                picked = [
-                    PickedAsset(
-                        asset_id=a["asset_id"],
-                        filename=a["filename"],
-                        kind=a["kind"],
-                        description=a.get("description", a["filename"]),
-                        data_uri=a["data_uri"],
-                    )
-                    for a in artifacts
-                ]
-                assets_block = "\n\n" + format_assets_for_prompt(picked)
+        return await cqe.execute_code_or_repair(
+            ctx,
+            dict(state),
+            streamed_llm=_streamed_llm_or_fallback,
+            set_phase=_set_phase,
+            check_ctrl=_check_ctrl,
+            normalize_html=normalize_html,
+            commit_project_build=_commit_project_build,
+            run_finalized_exc=RunFinalized,
+        )
 
-            qa_errors = state.get("playtest_errors") or []
-            qa_diagnosis = state.get("qa_diagnosis") or ""
-            base_user_msg = f"【已确认设计稿 JSON】\n{design_text}"
-            if art_direction:
-                base_user_msg += (
-                    "\n\n【已确认美术实现设计稿 JSON】\n"
-                    + json.dumps(art_direction, ensure_ascii=False, indent=2)
-                )
-            if entry_req:
-                base_user_msg += f"\n\n【本次实现变更要求】\n{entry_req}"
-            generation_user_msg = base_user_msg
-            if assets_block:
-                generation_user_msg += f"\n\n【可用内置素材】{assets_block}"
-            # 引擎最小骨架作为参考起点（仅首次生成；修复分支走 previous_html 基线）。
-            # canvas 无骨架；phaser3/pixijs 注入以降低 Scene/Application 结构出错率。
-            scaffold = engine_scaffold(design_doc["engine"]["id"])
-            if scaffold:
-                generation_user_msg += (
-                    "\n\n【所选引擎最小可运行骨架（参考起点，在此基础上实现设计稿，"
-                    "不要照搬玩法，须替换为设计稿的实体/关卡/规则）】\n"
-                    f"{scaffold}"
-                )
+    async def playtest_node(state: ForgeState) -> dict:
+        from app.forge import code_qa_exec as cqe
 
-            # QA 失败或对已有版本做修改时，以当前可运行版本为修复基线，避免每次
-            # 都从零生成造成已通过功能回归。首次构建则仍走完整生成提示词。
-            previous_html = ""
-            if (qa_errors or entry_req) and ctx.game.current_version > 0:
-                current_path = store.index_path(
-                    ctx.game.id, ctx.game.current_version
-                )
-                if current_path is not None and current_path.exists():
-                    previous_html = _read_html(current_path)
+        return await cqe.execute_playtest(
+            ctx,
+            dict(state),
+            set_phase=_set_phase,
+            save_thumbnail=_save_thumbnail,
+        )
 
-            def mask_data_uris(source: str) -> tuple[str, dict[str, str]]:
-                replacements: dict[str, str] = {}
+    async def diagnose_node(state: ForgeState) -> dict:
+        from app.forge import code_qa_exec as cqe
 
-                def replace(match: re.Match[str]) -> str:
-                    token = f"__FORGE_DATA_URI_{len(replacements):04d}__"
-                    replacements[token] = match.group(0)
-                    return token
+        return await cqe.execute_diagnose(ctx, dict(state), llm=_llm)
 
-                masked = re.sub(
-                    r"data:[^;\"'\s]+;base64,[A-Za-z0-9+/=]+",
-                    replace,
-                    source,
-                )
-                return masked, replacements
+    async def code_qa_loop_node(state: ForgeState) -> dict:
+        """主图包装：调用子图；ok 则 promote，exhausted 则 PAUSED HITL。"""
+        design_doc = coerce_design_doc(
+            state.get("design_doc") or {}, ctx.game.title
+        )
+        loop_in: dict[str, Any] = {
+            "design_doc": design_doc,
+            "artifacts": state.get("artifacts") or [],
+            "art_direction": state.get("art_direction") or {},
+            "entry_requirement": state.get("entry_requirement"),
+            "candidate_version": state.get("candidate_version"),
+            "qa_diagnosis": state.get("qa_diagnosis") or "",
+            "playtest_errors": state.get("playtest_errors") or [],
+        }
+        if state.get("code_qa_reset"):
+            loop_in["attempt"] = 0
+            loop_in["qa_diagnosis"] = ""
+            loop_in["playtest_errors"] = []
+            loop_in["candidate_ready"] = False
+            loop_in["failure_kind"] = None
+            loop_in["code_qa_reset"] = False
+        else:
+            loop_in["attempt"] = int(state.get("attempt") or 0)
 
-            await _set_phase(ctx, RunPhase.CODE)
-            last_error = "; ".join(qa_errors)
-            design_routing = routing_from_design_doc(design_doc)
-            engine_id = design_doc["engine"]["id"]
-            use_vite = should_use_vite_pipeline(
-                design_routing, enabled=settings.build_pipeline_enabled
-            )
-            for attempt in range(1, settings.code_max_retries + 1):
-                ctrl = await _check_ctrl(ctx, design_doc)
-                if ctrl != "ok":
-                    return {
-                        "design_doc": design_doc,
-                        "artifacts": artifacts,
-                        "art_direction": art_direction,
-                        "paused": ctrl == "pause",
-                        "failed": ctrl == "cancel",
-                        "code_ok": False,
-                    }
+        subgraph = build_code_qa_loop(
+            code_or_repair=code_or_repair_node,
+            playtest=playtest_node,
+            diagnose=diagnose_node,
+        )
+        result = await subgraph.ainvoke(loop_in)
 
-                stored_project: dict[str, str] | None = None
-                if use_vite and previous_html and ctx.game.current_version > 0:
-                    loaded = await load_stored_project_source(
-                        ctx.game.id, ctx.game.current_version
-                    )
-                    if loaded:
-                        stored_project = loaded
-
-                raw_output = ""
-                data_uris: dict[str, str] = {}
-
-                if use_vite and stored_project:
-                    parsed_retry = ParsedCodeOutput(
-                        format="project",
-                        files=stored_project,
-                        routing=design_routing,
-                    )
-                    if last_error or qa_diagnosis:
-                        repair_parts = [base_user_msg]
-                        if last_error:
-                            repair_parts.append(f"【自动试玩/构建错误】\n{last_error}")
-                        if qa_diagnosis:
-                            repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
-                        repair_user = format_project_repair_input(
-                            "\n\n".join(repair_parts),
-                            parsed_retry,
-                            last_error or qa_diagnosis,
-                        )
-                        repair_raw = await _streamed_llm_or_fallback(
-                            ctx,
-                            build_project_repair_prompt(
-                                engine_id, list(design_routing.dependencies)
-                            ),
-                            repair_user,
-                            "code",
-                            emit_delta=False,
-                        )
-                        parsed_retry = with_design_routing(
-                            parse_llm_code_output(repair_raw, engine_id=engine_id),
-                            design_routing,
-                        )
-                    raw_output = json.dumps(
-                        {
-                            "format": "project",
-                            **design_routing.to_dict(),
-                            "files": parsed_retry.files,
-                        },
-                        ensure_ascii=False,
-                    )
-                elif previous_html:
-                    masked_html, data_uris = mask_data_uris(previous_html)
-                    repair_parts = [base_user_msg]
-                    if last_error:
-                        repair_parts.append(f"【自动试玩/构建错误】\n{last_error}")
-                    if qa_diagnosis:
-                        repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
-                    repair_parts.append(
-                        f"【当前完整 index.html】\n{masked_html}"
-                    )
-                    user_msg = "\n\n".join(repair_parts)
-                    system_prompt = build_repair_prompt(design_doc["engine"]["id"])
-                    raw_output = await _streamed_llm_or_fallback(
-                        ctx, system_prompt, user_msg, "code", emit_delta=False
-                    )
-                else:
-                    user_msg = generation_user_msg
-                    if last_error:
-                        user_msg += f"\n\n【上次构建错误】\n{last_error}"
-                    if use_vite:
-                        system_prompt = build_project_prompt(
-                            engine_id,
-                            list(design_routing.dependencies),
-                        )
-                    else:
-                        system_prompt = build_code_prompt(engine_id)
-                    raw_output = await _streamed_llm_or_fallback(
-                        ctx, system_prompt, user_msg, "code", emit_delta=False
-                    )
-
-                for token, data_uri in data_uris.items():
-                    raw_output = raw_output.replace(token, data_uri)
-
-                if use_vite and (stored_project or not previous_html):
-                    parsed = with_design_routing(
-                        parse_llm_code_output(raw_output, engine_id=engine_id),
-                        design_routing,
-                    )
-                    if parsed.format == "project":
-
-                        async def _repair_project(
-                            current: ParsedCodeOutput, build_error: str
-                        ) -> ParsedCodeOutput:
-                            repair_user = format_project_repair_input(
-                                base_user_msg, current, build_error
-                            )
-                            repair_raw = await _streamed_llm_or_fallback(
-                                ctx,
-                                build_project_repair_prompt(
-                                    engine_id, list(design_routing.dependencies)
-                                ),
-                                repair_user,
-                                "code",
-                                emit_delta=False,
-                            )
-                            return with_design_routing(
-                                parse_llm_code_output(repair_raw, engine_id=engine_id),
-                                design_routing,
-                            )
-
-                        loop_result = await run_project_build_loop(
-                            parsed, repair_fn=_repair_project
-                        )
-                        if loop_result.ok and loop_result.pipeline_result:
-                            return await _commit_project_build(
-                                ctx,
-                                project_result=loop_result.pipeline_result,
-                                design_doc=design_doc,
-                                artifacts=artifacts,
-                                art_direction=art_direction,
-                            )
-                        if loop_result.fallback_required:
-                            fail_logs = ""
-                            if loop_result.pipeline_result:
-                                fail_logs = (
-                                    loop_result.pipeline_result.error
-                                    or loop_result.pipeline_result.logs
-                                    or ""
-                                )
-                            await publish_event(
-                                ctx.run.id,
-                                WSEventType.TOOL_CALL,
-                                {
-                                    "phase": "code",
-                                    "tool": "build_fallback",
-                                    "args": {
-                                        "attempt": loop_result.build_attempts,
-                                        "from": "vite",
-                                        "to": "single-html",
-                                    },
-                                    "status": "warn",
-                                    "summary": "Vite 构建失败，降级 single-html",
-                                },
-                            )
-                            fallback_msg = (
-                                f"{base_user_msg}\n\n"
-                                f"【Vite 多文件构建 {loop_result.build_attempts} 次失败，"
-                                "请按设计稿重新交付 single-html 可运行版本】\n"
-                                f"{fail_logs or last_error}"
-                            )
-                            raw_output = await _streamed_llm_or_fallback(
-                                ctx,
-                                build_code_prompt(engine_id),
-                                fallback_msg,
-                                "code",
-                                emit_delta=False,
-                            )
-                    elif not previous_html and not stored_project:
-                        await publish_event(
-                            ctx.run.id,
-                            WSEventType.TOOL_CALL,
-                            {
-                                "phase": "code",
-                                "tool": "build_format_mismatch",
-                                "args": {
-                                    "expected": "project",
-                                    "got": parsed.format,
-                                    "errors": list(parsed.errors),
-                                },
-                                "status": "warn",
-                                "summary": (
-                                    "build=vite 但 LLM 未返回 project JSON，"
-                                    "降级 single-html"
-                                ),
-                            },
-                        )
-
-                html = normalize_html(raw_output)
-                result = await get_sandbox().execute(source={"index.html": html})
-                if result.ok:
-                    from app.games import services as game_services
-
-                    await ctx.s.refresh(ctx.run)
-                    if (
-                        ctx.run.status != RunStatus.RUNNING.value
-                        or ctx.run.ended_at is not None
-                    ):
-                        raise RunFinalized
-
-                    ctx.game.current_version += 1
-                    version = ctx.game.current_version
-                    artifact = f"{ctx.game.id}/{version}/index.html"
-                    await store.write_artifact(ctx.game.id, version, result.files)
-                    ctx.s.add(
-                        GameVersion(
-                            game_id=ctx.game.id,
-                            version=version,
-                            artifact_path=artifact,
-                            design_doc=design_doc,
-                        )
-                    )
-                    await ctx.s.commit()
-                    await game_services.prune_old_versions(ctx.s, ctx.game)
-                    await publish_event(
-                        ctx.run.id,
-                        WSEventType.BUILD_DONE,
-                        {
-                            "version": version,
-                            "artifact_path": artifact,
-                            "preview_url": f"/draft/{ctx.game.id}/{version}",
-                        },
-                    )
-                    return {
-                        "code_ok": True,
-                        "qa_ok": False,
-                        "qa_retry": False,
-                        "playtest_errors": [],
-                        "qa_diagnosis": "",
-                        "failed": False,
-                        "design_doc": design_doc,
-                        "artifacts": artifacts,
-                        "art_direction": art_direction,
-                    }
-
-                last_error = result.error or "构建失败"
-                previous_html = html
-                await publish_event(
-                    ctx.run.id,
-                    WSEventType.TOOL_CALL,
-                    {
-                        "phase": "code",
-                        "tool": "execute_code",
-                        "args": {"attempt": attempt},
-                        "status": "error",
-                        "summary": last_error,
-                    },
-                )
-
-            # 策划确认后不再增加人工确认点；自动修复预算耗尽即明确结束任务。
-            await ckpt.save_state(
-                ctx.r,
-                ctx.run.id,
-                {
-                    "phase": "sandbox_failed",
-                    "design_doc": design_doc,
-                    "error": last_error,
-                },
-                ctx.s,
-            )
-            await _fail(
-                ctx,
-                f"代码构建自动修复 {settings.code_max_retries} 次后仍失败：{last_error}",
-                code="CODE_RETRY_EXHAUSTED",
-            )
+        if result.get("paused") or result.get("failed") or result.get("hitl_stop"):
             return {
-                "code_ok": False,
-                "failed": True,
-                "design_doc": design_doc,
-                "error": last_error,
-                "artifacts": artifacts,
+                **result,
+                "design_doc": result.get("design_doc") or design_doc,
+                "code_qa_reset": False,
             }
 
-    async def qa_node(state: ForgeState) -> dict:
-        with observe_phase("qa"):
-            design_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
-            qa_attempt = state.get("qa_attempt", 0) + 1
-            await _set_phase(ctx, RunPhase.QA)
-
-            html_path = store.index_path(ctx.game.id, ctx.game.current_version)
-            html = ""
-            pt = None
-            if html_path is None or not html_path.exists():
-                errors = ["产物 index.html 不存在，无法试玩"]
-                result_ok = False
-                console_logs: list[str] = []
-            elif serve.is_project_artifact(ctx.game.id, ctx.game.current_version):
-                artifact_dir = store.artifact_dir(ctx.game.id, ctx.game.current_version)
-                pt = await run_playtest_dist(
-                    artifact_dir, want_thumb=settings.thumbnail_enabled
-                )
-                result_ok = pt.ok
-                errors = pt.errors
-                console_logs = pt.console_logs
-                html_path = artifact_dir / "index.html"
-                html = _read_html(html_path) if html_path.is_file() else ""
-            else:
-                html = _read_html(html_path)
-                pt = await run_playtest(html, want_thumb=settings.thumbnail_enabled)
-                result_ok = pt.ok
-                errors = pt.errors
-                console_logs = pt.console_logs
-
-            log_excerpt = "\n".join(console_logs[:5]) if console_logs else ""
-            await publish_event(
-                ctx.run.id,
-                WSEventType.QA_REPORT,
-                {
-                    "passed": result_ok,
-                    "issues": [] if result_ok else errors,
-                    "log_excerpt": log_excerpt,
-                    "console_logs": console_logs,
-                    "playtest_mode": "sandbox",
-                },
-            )
-
-            if result_ok:
-                # 自动试玩已给出确定性通过结果，无需再调用 LLM 做无效摘要。
-                # 通过分支顺带把截好的封面落盘（复用刚才浏览器会话截的图）。
-                if pt and pt.thumbnail:
-                    await _save_thumbnail(
-                        ctx.s, ctx.game, ctx.game.current_version, pt.thumbnail
-                    )
-                return {
-                    "qa_ok": True,
-                    "qa_retry": False,
-                    "playtest_errors": [],
-                    "qa_diagnosis": "",
-                    "failed": False,
-                    "design_doc": design_doc,
-                    "qa_attempt": qa_attempt,
-                }
-
-            if qa_attempt < settings.qa_max_retries:
-                qa_source = re.sub(
-                    r"data:[^;\"'\s]+;base64,[A-Za-z0-9+/=]+",
-                    "__DATA_URI_OMITTED_FOR_QA__",
-                    html,
-                )[:60000]
-                diagnosis_input = (
-                    "【已确认设计稿 JSON】\n"
-                    f"{design_doc_to_text(design_doc)}\n\n"
-                    "【自动试玩错误】\n"
-                    f"{json.dumps(errors, ensure_ascii=False, indent=2)}\n\n"
-                    "【控制台日志】\n"
-                    f"{chr(10).join(console_logs[:20])[:6000] or '无控制台日志'}\n\n"
-                    "【当前 HTML 源码（data URI 已省略）】\n"
-                    f"{qa_source or '源码不可用'}"
-                )
-                try:
-                    diagnosis = await _llm(ctx, QA_PROMPT, diagnosis_input)
-                except Exception:
-                    # QA 诊断是修复增强项，不应因诊断模型偶发失败而阻断确定性的
-                    # 自动重试。降级为包含原始证据的结构化诊断继续修复。
-                    diagnosis = json.dumps(
-                        {
-                            "summary": "QA 诊断调用失败，依据自动试玩原始错误继续修复",
-                            "root_causes": errors,
-                            "required_fixes": [
-                                {
-                                    "priority": "P0",
-                                    "location": "根据自动试玩错误定位",
-                                    "change": "逐项修复错误并保持完整游戏状态闭环",
-                                    "expected_result": "自动试玩不再出现上述错误",
-                                }
-                            ],
-                            "regression_checks": [
-                                "重新验证菜单、核心操作、关卡推进、胜负与重开"
-                            ],
-                        },
-                        ensure_ascii=False,
-                    )
+        if result.get("qa_ok"):
+            version = result.get("candidate_version")
+            if not version:
                 return {
                     "qa_ok": False,
-                    "qa_attempt": qa_attempt,
-                    "qa_retry": True,
-                    "playtest_errors": errors,
-                    "qa_diagnosis": diagnosis,
-                    "failed": False,
+                    "exhausted": True,
+                    "paused": True,
+                    "hitl_stop": True,
                     "design_doc": design_doc,
-                    "artifacts": state.get("artifacts") or [],
-                    "art_direction": state.get("art_direction") or {},
+                    "playtest_errors": ["qa_ok 但缺少 candidate_version"],
                 }
+            promote_candidate(ctx.game, int(version))
+            await ctx.s.commit()
+            return {
+                **result,
+                "qa_ok": True,
+                "exhausted": False,
+                "code_ok": True,
+                "code_qa_reset": False,
+                "design_doc": design_doc,
+            }
 
+        if result.get("exhausted"):
+            errors = list(result.get("playtest_errors") or [])
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
@@ -1250,23 +894,41 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "phase": "qa_failed",
                     "design_doc": design_doc,
                     "qa": "; ".join(errors),
+                    "code_qa_reset": True,
+                    "art_direction": result.get("art_direction")
+                    or state.get("art_direction")
+                    or {},
+                    "artifacts": result.get("artifacts")
+                    or state.get("artifacts")
+                    or [],
                 },
                 ctx.s,
             )
-            await _fail(
+            await _pause_hitl(
                 ctx,
-                f"自动试玩修复 {settings.qa_max_retries} 轮后仍未通过：{'; '.join(errors)}",
-                code="QA_RETRY_EXHAUSTED",
+                "qa_failed",
+                design_doc,
+                extra={
+                    "issues": errors,
+                    "attempt": result.get("attempt"),
+                    "failure_kind": result.get("failure_kind"),
+                },
             )
             return {
+                **result,
                 "qa_ok": False,
-                "qa_retry": False,
-                "failed": True,
+                "exhausted": True,
+                "paused": True,
+                "hitl_stop": True,
                 "design_doc": design_doc,
-                "qa_attempt": qa_attempt,
-                "playtest_errors": errors,
-                "qa_diagnosis": state.get("qa_diagnosis") or "",
+                "code_qa_reset": False,
             }
+
+        return {
+            **result,
+            "design_doc": result.get("design_doc") or design_doc,
+            "code_qa_reset": False,
+        }
 
     async def done_node(state: ForgeState) -> dict:
         with observe_phase("done"):
@@ -1309,21 +971,16 @@ def _build_graph(ctx: _Ctx) -> Any:
     def after_plan(state: ForgeState) -> Literal["__end__"]:
         return END
 
-    def after_art(state: ForgeState) -> Literal["code", "__end__"]:
+    def after_art(state: ForgeState) -> Literal["code_qa_loop", "__end__"]:
         if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
             return END
-        return "code"
+        return "code_qa_loop"
 
-    def after_code(state: ForgeState) -> Literal["qa", "__end__"]:
-        if state.get("code_ok"):
-            return "qa"
-        return END
-
-    def after_qa(state: ForgeState) -> Literal["done", "code", "__end__"]:
+    def after_code_qa(
+        state: ForgeState,
+    ) -> Literal["done", "__end__"]:
         if state.get("qa_ok"):
             return "done"
-        if state.get("qa_retry"):
-            return "code"
         return END
 
     g = StateGraph(ForgeState)
@@ -1332,8 +989,7 @@ def _build_graph(ctx: _Ctx) -> Any:
     g.add_node("art_options", art_options_node)
     g.add_node("revise_art_options", revise_art_options_node)
     g.add_node("art_detail", art_detail_node)
-    g.add_node("code", code_node)
-    g.add_node("qa", qa_node)
+    g.add_node("code_qa_loop", code_qa_loop_node)
     g.add_node("done", done_node)
     g.add_conditional_edges(
         START,
@@ -1344,18 +1000,23 @@ def _build_graph(ctx: _Ctx) -> Any:
             "art_options": "art_options",
             "revise_art_options": "revise_art_options",
             "art_detail": "art_detail",
-            "code": "code",
+            "code_qa_loop": "code_qa_loop",
         },
     )
     g.add_conditional_edges("plan", after_plan, {END: END})
     g.add_conditional_edges("revise_plan", after_plan, {END: END})
-    g.add_conditional_edges("art_options", after_art, {"code": "code", END: END})
     g.add_conditional_edges(
-        "revise_art_options", after_art, {"code": "code", END: END}
+        "art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END}
     )
-    g.add_conditional_edges("art_detail", after_art, {"code": "code", END: END})
-    g.add_conditional_edges("code", after_code, {"qa": "qa", END: END})
-    g.add_conditional_edges("qa", after_qa, {"done": "done", "code": "code", END: END})
+    g.add_conditional_edges(
+        "revise_art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END}
+    )
+    g.add_conditional_edges(
+        "art_detail", after_art, {"code_qa_loop": "code_qa_loop", END: END}
+    )
+    g.add_conditional_edges(
+        "code_qa_loop", after_code_qa, {"done": "done", END: END}
+    )
     g.add_edge("done", END)
     return g.compile()
 
@@ -1482,6 +1143,7 @@ async def _run_body(
     art_options: dict[str, Any] = {}
     entry_phase = getattr(run, "entry_phase", "plan") or "plan"
     entry_requirement: str | None = None
+    code_qa_reset = False
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
         # 一次性推进凭据：只有 resolve_hitl / resume_run_control / retry_run /
@@ -1499,6 +1161,11 @@ async def _run_body(
         if grant:
             decision = grant.get("decision") or decision
             modify_text = grant.get("modify_text")
+        # qa_failed / sandbox_failed 恢复：下一轮 CodeQaLoop 从 attempt==1 开始
+        code_qa_reset = bool(st.pop("code_qa_reset", False)) or phase in (
+            "qa_failed",
+            "sandbox_failed",
+        )
         await ckpt.save_state(r, run_id, st, s)
         design_doc = st.get("design_doc") or run.requirement
         art_options = st.get("art_options") or {}
@@ -1526,5 +1193,7 @@ async def _run_body(
         "art_options": art_options,
         "entry_phase": entry_phase,
         "entry_requirement": entry_requirement,
+        "code_qa_reset": code_qa_reset,
+        "attempt": 0 if code_qa_reset else 0,
     }
     await graph.ainvoke(initial)
