@@ -64,6 +64,27 @@ async def write_artifact(
     return base / "index.html"
 
 
+def _prefix_files(prefix: str, files: dict[str, str | bytes]) -> dict[str, str | bytes]:
+    return {f"{prefix}/{rel}": content for rel, content in files.items()}
+
+
+async def write_version_layers(
+    game_id: uuid.UUID,
+    version: int,
+    *,
+    source: dict[str, bytes],
+    build_snapshot: dict[str, bytes],
+    dist: dict[str, bytes],
+) -> Path:
+    """三层产物：dist 在版本根（兼容试玩路由），source/build 在子目录（§12）。"""
+    if "index.html" not in dist:
+        raise AppError(ErrorCode.SANDBOX_FAILED, "dist 缺少 index.html")
+    combined: dict[str, bytes] = dict(dist)
+    combined.update(_prefix_files("source", source))
+    combined.update(_prefix_files("build", build_snapshot))
+    return await write_artifact(game_id, version, combined)
+
+
 def index_path(game_id: uuid.UUID, version: int) -> Path | None:
     p = artifact_dir(game_id, version) / "index.html"
     return p if p.exists() else None
