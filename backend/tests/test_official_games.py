@@ -30,6 +30,16 @@ async def test_play_official_slug(client: httpx.AsyncClient, official_seeded) ->
     assert "canvas" in r.text
 
 
+async def test_public_game_meta_by_slug(client: httpx.AsyncClient, official_seeded) -> None:
+    """Play shell resolves metadata via GET /games/public/{slug} (no /play/{slug}/meta 404)."""
+    r = await client.get("/api/v1/games/public/official-neon-snake")
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["slug"] == "official-neon-snake"
+    assert data["title"]
+    assert "play_count" in data
+
+
 async def test_fork_official_game(
     verified_client: httpx.AsyncClient, official_seeded
 ) -> None:
