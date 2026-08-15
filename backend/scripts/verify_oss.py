@@ -84,7 +84,10 @@ async def main() -> int:
 
     # endpoint 含 -internal 且本机不在阿里云内网时给个提示（不阻断，让真实错误说话）
     if "internal" in settings.s3_endpoint:
-        print("        ⚠️  endpoint 含 -internal：本机/非阿里云内网环境连不上，建议改公网 endpoint。")
+        print(
+            "        ⚠️  endpoint 含 -internal："
+            "本机/非阿里云内网环境连不上，建议改公网 endpoint。"
+        )
 
     # 构造后端（走项目真实代码；构造失败通常是 addressing_style / 凭证问题）
     try:
@@ -116,13 +119,19 @@ async def main() -> int:
         await backend.write_bytes(_TEST_GAME_ID, _TEST_VERSION, _MARKER_REL, marker)
     except AppError as e:
         print(f"[FAIL] 上传失败: {e.message}")
-        print("       常见原因：AK 缺 PutObject 权限 / addressing_style 应为 virtual / endpoint 用了 -internal")
+        print(
+            "       常见原因：AK 缺 PutObject 权限 / "
+            "addressing_style 应为 virtual / endpoint 用了 -internal"
+        )
         return 1
 
     print("[3/6] read_bytes: 回读 README.md 并比对内容 ...")
     got = await backend.read_bytes(_TEST_GAME_ID, _TEST_VERSION, _README_REL)
     if got != readme_bytes:
-        print(f"[FAIL] 回读内容与原文不一致（len 期望 {len(readme_bytes)}，实际 {len(got or b'')}）")
+        print(
+            f"[FAIL] 回读内容与原文不一致"
+            f"（len 期望 {len(readme_bytes)}，实际 {len(got or b'')}）"
+        )
         await _delete_test_objects(backend, _TEST_GAME_ID, _TEST_VERSION)
         return 1
 

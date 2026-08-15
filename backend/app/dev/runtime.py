@@ -15,9 +15,9 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
+from app.forge.queue import enqueue_resume
 from app.messaging.factory import use_memory
 from app.messaging.memory import MemoryTaskPublisher
-from app.forge.queue import enqueue_resume
 from app.messaging.outbox import add_task
 from app.messaging.rabbit import purge_task_queue, task_queue_stats
 from app.messaging.tasks import (

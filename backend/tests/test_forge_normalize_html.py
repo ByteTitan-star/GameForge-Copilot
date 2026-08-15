@@ -17,7 +17,10 @@ def test_injects_charset_when_missing() -> None:
 
 
 def test_preserves_existing_charset() -> None:
-    raw = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>x</title></head><body></body></html>'
+    raw = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        "<title>x</title></head><body></body></html>"
+    )
     out = normalize_html(raw)
     # 已有 charset 不重复注入
     assert out.count("charset") == 1
