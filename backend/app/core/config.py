@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     create_run_idempotency_ttl: int = 86_400
     max_concurrent_runs: int = 3  # 每用户同时进行中的 run 上限（docs/05）
     max_concurrent_tasks: int = 3  # worker 进程内同时处理的任务数（RabbitMQ prefetch_count）
+    # HIL / 用户暂停等待超时：PAUSED 超过此时长自动 FAILED，释放并发额度
+    hil_wait_timeout_s: int = 172_800  # 默认 48h
     # LLM 熔断（按 user+provider）：连续失败达阈值后短时拒绝，避免雪崩打坏 key/配额
     llm_circuit_enabled: bool = True
     llm_circuit_failure_threshold: int = 5
@@ -105,6 +107,9 @@ class Settings(BaseSettings):
     llm_request_timeout: int = 300
     # 建连/写/连接池超时（秒）；服务端不可达时应快速失败而非长等
     llm_connect_timeout: int = 30
+    # 传输层有限重试：瞬时网络抖动 / 429 / 502-504；与业务自修复预算正交
+    llm_http_max_retries: int = 3
+    llm_http_retry_base_delay_s: float = 0.5
     # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
     llm_max_tokens: int = 8192
     # 默认「直连（绕过桌面/系统代理）」的国内 LLM host，逗号分隔。

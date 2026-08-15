@@ -1,14 +1,21 @@
-"""定时上下架扫描（B8）。"""
+"""定时上下架扫描（B8）+ HIL/暂停等待超时回收。"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+import redis.asyncio as redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.enums import GameStatus, Role
+from app.core.config import settings
+from app.enums import GameStatus, Role, RunStatus, WSEventType
+from app.forge import state as ckpt
+from app.forge.events import publish_event
+from app.forge.messages import add_message
+from app.messaging.outbox import cancel_run_tasks
 from app.models.game import Game
+from app.models.generation_run import GenerationRun
 from app.models.user import User
 from app.publish import services as publish_services
 
@@ -28,6 +35,62 @@ async def scan_scheduled(db: AsyncSession) -> int:
     if count:
         await db.commit()
     return count
+
+
+async def expire_stale_paused_runs(
+    db: AsyncSession, r: redis.Redis | None = None
+) -> int:
+    """将超过 hil_wait_timeout_s 仍处于 PAUSED 的 run 置为 FAILED，释放并发额度。
+
+    判定依据：status=paused 且 updated_at 早于 cutoff（暂停写入时会刷新 updated_at）。
+    """
+    cutoff = datetime.now(UTC) - timedelta(seconds=settings.hil_wait_timeout_s)
+    rows = (
+        await db.scalars(
+            select(GenerationRun).where(
+                GenerationRun.status == RunStatus.PAUSED.value,
+                GenerationRun.ended_at.is_(None),
+                GenerationRun.updated_at <= cutoff,
+            )
+        )
+    ).all()
+    if not rows:
+        return 0
+
+    now = datetime.now(UTC)
+    if (
+        settings.hil_wait_timeout_s >= 3600
+        and settings.hil_wait_timeout_s % 3600 == 0
+    ):
+        wait_label = f"{settings.hil_wait_timeout_s // 3600} 小时"
+    else:
+        wait_label = f"{settings.hil_wait_timeout_s} 秒"
+    msg = f"等待确认已超过 {wait_label}，本轮生成已自动结束以释放并发额度。"
+    for run in rows:
+        run.status = RunStatus.FAILED.value
+        run.ended_at = now
+        await add_message(
+            db,
+            game_id=run.game_id,
+            run_id=run.id,
+            user_id=run.user_id,
+            role="system",
+            kind="failed",
+            content=msg,
+            metadata={"code": "HIL_TIMEOUT"},
+            dedupe_key=f"{run.id}:failed:HIL_TIMEOUT",
+        )
+        await cancel_run_tasks(db, run.id)
+        if r is not None:
+            await ckpt.clear_state(r, run.id, db)
+            await r.delete(f"run:hitl:{run.id}")
+        await publish_event(
+            run.id,
+            WSEventType.ERROR,
+            {"code": "HIL_TIMEOUT", "message": msg, "fatal": True},
+        )
+    await db.commit()
+    return len(rows)
 
 
 async def _run_take_downs(db: AsyncSession, admin: User, now: datetime) -> int:
