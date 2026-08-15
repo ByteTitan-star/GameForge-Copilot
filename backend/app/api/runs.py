@@ -11,11 +11,12 @@ from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
-from app.enums import EntryPhase, RunPhase, RunStatus
+from app.enums import EntryPhase, PauseReason, RunPhase, RunStatus
 from app.forge import state as ckpt
 from app.forge.event_log import list_events
 from app.forge.messages import add_message, list_messages, stable_payload_key
 from app.forge.queue import enqueue_resume
+from app.forge.reliability.pause import pause_reason_from_state, recovery_from_state
 from app.games import services
 from app.models.generation_run import GenerationRun
 from app.schemas.active_run import ActiveRunItem
@@ -25,6 +26,7 @@ from app.schemas.run import (
     HitlResolveResp,
     HitlState,
     HitlWaitDetail,
+    RecoveryDetail,
     RunControlResp,
     RunCreate,
     RunListItem,
@@ -191,6 +193,22 @@ async def get_run(
     run = await services.get_run(db, user, run_id)
     state = await ckpt.load_state(r, run_id, db)
     current_hitl, hitl_wait = _hitl_from_state(run, state)
+    pause_reason = None
+    recovery = None
+    if run.status == RunStatus.PAUSED.value:
+        try:
+            reason = pause_reason_from_state(state)
+            pause_reason = reason.value if reason else None
+        except ValueError:
+            pause_reason = None
+        raw_recovery = recovery_from_state(state)
+        if raw_recovery:
+            recovery = RecoveryDetail(
+                node=str(raw_recovery.get("node") or ""),
+                error_code=str(raw_recovery.get("error_code") or ""),
+                attempts=int(raw_recovery.get("attempts") or 0),
+                can_retry=bool(raw_recovery.get("can_retry", True)),
+            )
     return ApiResponse(
         data=RunStatusResp(
             run_id=run.id,
@@ -201,6 +219,8 @@ async def get_run(
             ws_url=_WS.format(run_id=run.id),
             current_hitl=current_hitl,
             hitl_wait=hitl_wait,
+            pause_reason=pause_reason,
+            recovery=recovery,
         )
     )
 
@@ -310,6 +330,12 @@ async def resolve_hitl(
     ):
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 不在 HITL 等待态")
+    if state.get("pause_reason") == PauseReason.RECOVERABLE_ERROR.value:
+        await r.delete(f"run:hitl:{run_id}")
+        raise AppError(
+            ErrorCode.INVALID_STATE,
+            "可恢复故障请使用 /retry，而非 HITL resolve",
+        )
     if run.status != RunStatus.PAUSED.value:
         await r.delete(f"run:hitl:{run_id}")
         raise AppError(ErrorCode.INVALID_STATE, "run 已结束")

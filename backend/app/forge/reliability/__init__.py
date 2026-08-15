@@ -19,6 +19,13 @@ from app.forge.reliability.errors import (
     is_fatal,
     is_recoverable,
 )
+from app.forge.reliability.pause import (
+    RecoveryInfo,
+    apply_paused_metadata,
+    build_pause_checkpoint,
+    pause_reason_from_state,
+    recovery_from_state,
+)
 
 __all__ = [
     "DataCorruption",
@@ -30,12 +37,17 @@ __all__ = [
     "ProviderRateLimit",
     "ProviderTimeout",
     "RecoverableError",
+    "RecoveryInfo",
     "SandboxOOM",
     "SandboxTimeout",
     "SecurityViolation",
     "UserActionRequired",
     "WorkerInterrupted",
+    "apply_paused_metadata",
+    "build_pause_checkpoint",
     "classify_exception",
     "is_fatal",
     "is_recoverable",
+    "pause_reason_from_state",
+    "recovery_from_state",
 ]

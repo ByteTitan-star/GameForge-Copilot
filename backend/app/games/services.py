@@ -14,12 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import services as admin_services
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
-from app.enums import EntryPhase, GameStatus, RunPhase, RunStatus
+from app.enums import EntryPhase, GameStatus, PauseReason, RunPhase, RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.entry_router import classify_entry_phase
 from app.forge.messages import add_message
 from app.forge.queue import enqueue_resume
+from app.forge.reliability.pause import build_pause_checkpoint
 from app.hosting import store as hosting_store
 from app.messaging.outbox import add_task, cancel_run_tasks
 from app.messaging.tasks import (
@@ -453,6 +454,18 @@ async def pause_run(
         raise AppError(ErrorCode.INVALID_STATE, "仅 running 可暂停")
     await run_ctrl.request_pause(r, run_id)
     run.status = RunStatus.PAUSED.value
+    existing = await ckpt.load_state(r, run_id, db) or {}
+    await ckpt.save_state(
+        r,
+        run_id,
+        build_pause_checkpoint(
+            phase=str(existing.get("phase") or run.phase or "plan"),
+            pause_reason=PauseReason.MANUAL_HOLD,
+            design_doc=existing.get("design_doc"),
+            extra={k: v for k, v in existing.items() if k not in {"pause_reason", "recovery"}},
+        ),
+        db,
+    )
     await db.commit()
     await db.refresh(run)
     return run
@@ -552,21 +565,35 @@ async def activate_version(
 async def retry_run(
     db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
 ) -> GenerationRun:
-    """从失败检查点重试（Batch A · B-A5）。"""
+    """从失败检查点或可恢复暂停重试（Batch A · B-A5 / P0 ADR-05）。"""
     run = await get_run(db, user, run_id)
     st = await ckpt.load_state(r, run_id, db) or {}
     phase = st.get("phase")
-    if phase not in _RETRY_PHASES:
+    pause_reason = st.get("pause_reason")
+    recovery = st.get("recovery") if isinstance(st.get("recovery"), dict) else {}
+    recoverable = (
+        pause_reason == PauseReason.RECOVERABLE_ERROR.value
+        and bool(recovery.get("can_retry", True))
+    )
+    if phase not in _RETRY_PHASES and not recoverable:
         raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")
     if run.status not in (RunStatus.FAILED.value, RunStatus.PAUSED.value):
         raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")
     await run_ctrl.clear_control(r, run_id)
     await r.delete(f"run:hitl:{run_id}")
     run.status = RunStatus.RUNNING.value
-    run.phase = RunPhase.CODE.value
+    if phase in _RETRY_PHASES:
+        run.phase = RunPhase.CODE.value
+    else:
+        run.phase = run.phase or RunPhase.CODE.value
     run.ended_at = None
-    # 下一轮 CodeQaLoop 从 attempt==1 开始
-    st = {**st, "code_qa_reset": True}
+    # 下一轮 CodeQaLoop 从 attempt==1 开始；清掉 recoverable 元数据避免陈旧 UI
+    st = {
+        **st,
+        "code_qa_reset": True,
+    }
+    st.pop("pause_reason", None)
+    st.pop("recovery", None)
     await ckpt.save_state(r, run_id, st, db)
     await add_message(
         db,
@@ -576,7 +603,7 @@ async def retry_run(
         role="system",
         kind="retry",
         content="正在从失败阶段重试本轮生成。",
-        dedupe_key=f"{run.id}:retry:{phase}",
+        dedupe_key=f"{run.id}:retry:{phase or 'recoverable'}",
     )
     await enqueue_resume(db, r, run_id, "approve", None)
     await db.commit()

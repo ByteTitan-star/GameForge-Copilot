@@ -41,6 +41,13 @@ class HitlWaitDetail(BaseModel):
     art_options: dict | None = None
 
 
+class RecoveryDetail(BaseModel):
+    node: str
+    error_code: str
+    attempts: int
+    can_retry: bool = True
+
+
 class RunStatusResp(BaseModel):
     run_id: uuid.UUID
     game_id: uuid.UUID
@@ -50,6 +57,8 @@ class RunStatusResp(BaseModel):
     ws_url: str
     current_hitl: HitlState | None = None
     hitl_wait: HitlWaitDetail | None = None
+    pause_reason: str | None = None
+    recovery: RecoveryDetail | None = None
 
 
 class HitlResolveReq(BaseModel):
