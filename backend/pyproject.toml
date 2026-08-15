@@ -26,6 +26,7 @@ dependencies = [
     "boto3>=1.35",
     # zoneinfo 在 Windows 上无系统时区库，需 tzdata 提供 IANA 时区（如 Asia/Shanghai）
     "tzdata>=2024.1",
+    "pyahocorasick>=2.1",
 ]
 
 [dependency-groups]

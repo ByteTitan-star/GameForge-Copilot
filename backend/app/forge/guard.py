@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.config import settings
 from app.enums import LLMProvider, WSEventType
 from app.forge.events import publish_event
+from app.forge.lexicon import LexiconMatcher
 from app.llm import client as llm_client
 from app.llm import provider as llm_provider
 from app.llm.provider import StreamChunk
@@ -155,7 +156,7 @@ class AuditResult:
 
 
 def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
-    """正则前置快筛：命中返回 AuditResult(is_malicious=True)，未命中返回 None。
+    """快筛：原文跑 blacklist.txt，再（可选）归一化后跑 AC 词库；命中即决。
 
     force=True 时忽略 audit_quick_filter 开关（审核 LLM 不可用时的强制降级路径）。
     """
@@ -163,6 +164,7 @@ def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
         return None
     if not force and not settings.audit_quick_filter:
         return None
+    # 1) 运营自定义规则对【原文】匹配，保证越狱正则词界/空格语义不变
     for pattern, category in _quick_patterns():
         m = pattern.search(text)
         if m:
@@ -171,6 +173,16 @@ def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
                 category=category,
                 reason="命中安全规则快筛",
                 evidence=m.group(0),
+            )
+    # 2) AC 敏感词词库（归一化 + 白名单掩码）；开关关闭则跳过
+    if settings.audit_lexicon_enabled:
+        hit = LexiconMatcher.load().scan(text)
+        if hit is not None:
+            return AuditResult(
+                True,
+                category=hit.category,
+                reason="命中敏感词词库",
+                evidence=hit.word,
             )
     return None
 
