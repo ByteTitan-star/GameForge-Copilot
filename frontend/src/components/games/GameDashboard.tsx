@@ -14,6 +14,8 @@ import { cn } from '@/lib/cn'
 import { isTrialUser } from '@/lib/trial'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { GameCard } from './GameCard'
+import { PublicGameCard } from './PublicGameCard'
+import type { PublicGame } from '@/api/public-games'
 import { GameDetailDrawer } from './GameDetailDrawer'
 
 import type { MessageKey } from '@/i18n/messages'
@@ -75,23 +77,12 @@ export function GameDashboard() {
     return { all: rows.length, draft, published, pipeline, favorites: favoritesQ.data?.length ?? 0 }
   }, [rows, favoritesQ.data?.length])
 
-  const list = useMemo(() => {
-    if (filter === 'favorites') {
-      const favRows = favoritesQ.data ?? []
-      return favRows
-        .filter((g) => !q || g.title.toLowerCase().includes(q.toLowerCase()))
-        .map(
-          (g) =>
-            ({
-              game_id: g.game_id,
-              title: g.title,
-              status: 'published',
-              current_version: 1,
-              slug: g.slug,
-              updated_at: g.published_at,
-            }) as GameSummary,
-        )
-    }
+  const favoriteList = useMemo(() => {
+    const favRows = favoritesQ.data ?? []
+    return favRows.filter((g) => !q || g.title.toLowerCase().includes(q.toLowerCase()))
+  }, [favoritesQ.data, q])
+
+  const ownedList = useMemo(() => {
     return rows.filter((g) => {
       if (q && !g.title.toLowerCase().includes(q.toLowerCase())) return false
       if (filter === 'draft') return g.status === GameStatus.draft || g.status === GameStatus.rejected
@@ -100,10 +91,13 @@ export function GameDashboard() {
         return g.status === GameStatus.submitted || g.status === GameStatus.reviewing
       return true
     })
-  }, [filter, q, rows, favoritesQ.data])
+  }, [filter, q, rows])
+
+  const showingFavorites = filter === 'favorites'
+  const list = showingFavorites ? [] : ownedList
 
   // favorites 视图为他人已发布游戏的只读集合；不参与多选/删除
-  const selectable = !trial && filter !== 'favorites'
+  const selectable = !trial && !showingFavorites
   const listIds = useMemo(() => list.map((g) => g.game_id), [list])
   const allSelected = selectable && listIds.length > 0 && listIds.every((id) => selectedIds.has(id))
 
@@ -359,7 +353,7 @@ export function GameDashboard() {
         </div>
       ) : null}
 
-      {query.isLoading || (filter === 'favorites' && favoritesQ.isLoading) ? (
+      {query.isLoading || (showingFavorites && favoritesQ.isLoading) ? (
         <p className="gf-page-muted text-sm">{t('loading')}</p>
       ) : null}
       {query.isError ? (
@@ -368,7 +362,9 @@ export function GameDashboard() {
         </p>
       ) : null}
 
-      {!query.isLoading && !(filter === 'favorites' && favoritesQ.isLoading) && list.length === 0 ? (
+      {!query.isLoading &&
+      !(showingFavorites && favoritesQ.isLoading) &&
+      (showingFavorites ? favoriteList.length === 0 : list.length === 0) ? (
         <div className="gf-glass flex flex-col items-center rounded-2xl px-6 py-20 text-center">
           <div className="relative">
             <div className="gf-empty-glow absolute inset-0 scale-150 rounded-full blur-3xl" aria-hidden />
@@ -389,6 +385,16 @@ export function GameDashboard() {
             </>
           )}
         </div>
+      ) : showingFavorites ? (
+        <motion.div
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          {favoriteList.map((g: PublicGame) => (
+            <PublicGameCard key={g.game_id} game={g} variant="theme" showFeaturedBadge={false} />
+          ))}
+        </motion.div>
       ) : (
         <motion.div
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
@@ -408,7 +414,7 @@ export function GameDashboard() {
                 >
                   <GameCard
                     game={g}
-                    readOnly={trial || filter === 'favorites'}
+                    readOnly={trial}
                     selectable={selectable}
                     selected={selectedIds.has(g.game_id)}
                     onToggleSelect={toggleSelect}
@@ -416,7 +422,7 @@ export function GameDashboard() {
                     onRequestDelete={setConfirmStateDeleteSingle}
                     onRequestUnpublish={trial ? undefined : setConfirmStateUnpublish}
                     onRequestWithdraw={trial ? undefined : setConfirmStateWithdraw}
-                    onRename={trial || filter === 'favorites' ? undefined : renameGame}
+                    onRename={trial ? undefined : renameGame}
                     onOpenDetail={g.current_version > 0 ? setDetailGame : undefined}
                   />
                 </motion.div>
