@@ -16,6 +16,14 @@ export function playArtifactUrl(slug: string): string {
   return joinUrl(env.hostingBaseUrl, `/play/${encodeURIComponent(slug)}${q}`)
 }
 
+export function templatePlayUrl(templateId: string): string {
+  const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
+  return joinUrl(
+    env.hostingBaseUrl,
+    `/play/template/${encodeURIComponent(templateId)}${q}`,
+  )
+}
+
 export function draftArtifactUrl(gameId: string, version: number | string): string {
   const q = ARTIFACT_VER ? `?v=${ARTIFACT_VER}` : ''
   return joinUrl(
