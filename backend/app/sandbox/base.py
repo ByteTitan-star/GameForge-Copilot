@@ -17,5 +17,9 @@ class Sandbox(Protocol):
     """把源码（+可选构建命令）在受限环境跑出静态产物。"""
 
     async def execute(
-        self, source: dict[str, str], build_cmd: Sequence[str] | None = None
+        self,
+        source: dict[str, str],
+        build_cmd: Sequence[str] | None = None,
+        *,
+        collect_root: str = ".",
     ) -> BuildResult: ...
