@@ -18,7 +18,7 @@ from app.core.errors import AppError, ErrorCode
 from app.core.langfuse import observe_generation
 from app.core.metrics import LLM_CALLS, LLM_TOKENS
 from app.enums import LLMProvider, Role
-from app.llm import crypto, provider
+from app.llm import circuit, crypto, provider
 from app.llm.provider import StreamChunk
 from app.models.llm_config import UserLLMConfig
 from app.models.user import User
@@ -150,6 +150,8 @@ async def call_llm(
     cfg = await _get_config(db, user_id, config_id)
     apikey = crypto.decrypt_apikey(cfg.apikey_enc)
     prov = LLMProvider(cfg.provider)
+    cb_key = circuit.circuit_key(user_id, prov, cfg.base_url)
+    await circuit.assert_circuit_closed(r, cb_key)
     trace_meta: dict[str, str] = {"user_id": str(user_id)}
     if game_id is not None:
         trace_meta["game_id"] = str(game_id)
@@ -161,7 +163,9 @@ async def call_llm(
         )
     except Exception:
         LLM_CALLS.labels(prov.value, "error").inc()
+        await circuit.record_failure(r, cb_key)
         raise
+    await circuit.record_success(r, cb_key)
     LLM_CALLS.labels(prov.value, "ok").inc()
     LLM_TOKENS.labels(prov.value, "input").inc(usage.input_tokens)
     LLM_TOKENS.labels(prov.value, "output").inc(usage.output_tokens)
@@ -205,6 +209,8 @@ async def call_llm_stream(
     cfg = await _get_config(db, user_id, config_id)
     apikey = crypto.decrypt_apikey(cfg.apikey_enc)
     prov = LLMProvider(cfg.provider)
+    cb_key = circuit.circuit_key(user_id, prov, cfg.base_url)
+    await circuit.assert_circuit_closed(r, cb_key)
     trace_meta: dict[str, str] = {"user_id": str(user_id)}
     if game_id is not None:
         trace_meta["game_id"] = str(game_id)
@@ -239,6 +245,7 @@ async def call_llm_stream(
                     },
                 )
         # 流正常结束才记账（usage 此刻才确定）
+        await circuit.record_success(r, cb_key)
         LLM_CALLS.labels(prov.value, "ok").inc()
         LLM_TOKENS.labels(prov.value, "input").inc(usage_acc.input_tokens)
         LLM_TOKENS.labels(prov.value, "output").inc(usage_acc.output_tokens)
@@ -252,9 +259,12 @@ async def call_llm_stream(
         )
         await _maybe_quota_alert(db, r, user_id)
         await _maybe_system_alert(db, r)
-    except BaseException:
+    except BaseException as exc:
         # CancelledError（审核中断）与 httpx 异常都走这里；不记账，标 trace 失败。
         LLM_CALLS.labels(prov.value, "error").inc()
+        # 熔断只统计真实故障；取消/中断不计入，避免误开熔断
+        if isinstance(exc, Exception):
+            await circuit.record_failure(r, cb_key)
         if gen is not None:
             gen.update(level="ERROR", status_message="llm stream aborted")
         raise

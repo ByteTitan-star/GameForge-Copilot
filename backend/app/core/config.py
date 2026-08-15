@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     # HIL / 用户暂停等待超时：PAUSED 超过此时长自动 FAILED，释放并发额度
     hil_wait_timeout_s: int = 172_800  # 默认 48h
 
+    # LLM 熔断（按 user+provider）：连续失败达阈值后短时拒绝，避免雪崩打坏 key/配额
+    llm_circuit_enabled: bool = True
+    llm_circuit_failure_threshold: int = 5
+    llm_circuit_open_s: int = 60
+
     max_versions_per_game: int = 20  # 版本保留上限（docs/04），超出删最旧
     max_drafts_per_user: int = 20  # 每用户草稿游戏数上限
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
