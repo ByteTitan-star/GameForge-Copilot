@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.errors import AppError
 from app.hosting import local as local_store
 
 
@@ -25,3 +26,20 @@ async def test_write_version_layers_layout(tmp_path: Path, monkeypatch: pytest.M
     assert (base / "assets" / "app.js").is_file()
     assert (base / "source" / "src" / "main.ts").is_file()
     assert (base / "build" / "package.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_write_version_layers_rejects_oversized_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.core.config.settings.hosting_root", str(tmp_path))
+    monkeypatch.setattr("app.core.config.settings.source_artifact_max_size_mb", 0)
+    gid = uuid.uuid4()
+    with pytest.raises(AppError, match="source"):
+        await local_store.write_version_layers(
+            gid,
+            1,
+            source={"src/main.ts": b"x"},
+            build_snapshot={"package.json": b"{}"},
+            dist={"index.html": b"<html></html>"},
+        )

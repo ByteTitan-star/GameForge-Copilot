@@ -68,6 +68,10 @@ def _prefix_files(prefix: str, files: dict[str, str | bytes]) -> dict[str, str |
     return {f"{prefix}/{rel}": content for rel, content in files.items()}
 
 
+def _layer_bytes(files: dict[str, bytes]) -> int:
+    return sum(len(v) for v in files.values())
+
+
 async def write_version_layers(
     game_id: uuid.UUID,
     version: int,
@@ -79,6 +83,13 @@ async def write_version_layers(
     """三层产物：dist 在版本根（兼容试玩路由），source/build 在子目录（§12）。"""
     if "index.html" not in dist:
         raise AppError(ErrorCode.SANDBOX_FAILED, "dist 缺少 index.html")
+    source_limit = settings.source_artifact_max_size_mb * 1024 * 1024
+    source_bytes = _layer_bytes(source)
+    if source_bytes > source_limit:
+        raise AppError(
+            ErrorCode.QUOTA_EXCEEDED,
+            f"source 产物超出大小上限（{source_bytes} > {source_limit}）",
+        )
     combined: dict[str, bytes] = dict(dist)
     combined.update(_prefix_files("source", source))
     combined.update(_prefix_files("build", build_snapshot))
