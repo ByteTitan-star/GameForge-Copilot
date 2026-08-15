@@ -166,6 +166,12 @@ DESIGN_DOC_SCHEMA = r"""
     "version": "引擎精确版本号，须与代码生成的引擎 CDN URL 完全一致",
     "library_notes": ["本引擎下需特别注意的工程约束，如加载回退、渲染模式、循环约定"]
   },
+  "build_routing": {
+    "build": "none 或 vite；默认 none。phaser3/pixijs 且需 npm 依赖时用 vite",
+    "renderer": "与 engine.id 对齐：canvas/phaser3/pixijs",
+    "ui": "none 或 react；默认 none",
+    "dependencies": ["仅 catalog 允许的额外 npm 包名，如 matter-js、howler、gsap；无则 []"]
+  },
   "acceptance_criteria": [
     {
       "id": "AC-01",
@@ -208,6 +214,10 @@ HTML5 游戏工程师实现的结构化设计稿。你的目标不是复述创�
    {_ENGINE_ENUM_TEXT}），并在 engine.rationale 写清选择理由、在 engine.version
    填写精确版本号。默认倾向 canvas；只有玩法明确需要碰撞/物理/多场景/精灵动画时
    才上 phaser3，渲染是主要瓶颈且不需完整框架时才用 pixijs。一份游戏只选一个引擎。
+9. build_routing 决定代码交付形态：默认 build="none"（单 HTML，平台 sandbox 直跑）；
+   当 engine 为 phaser3/pixijs 且玩法需要 catalog 内 npm 依赖（如 matter-js 物理、
+   howler 音频、gsap 动画）时设 build="vite"，renderer 与 engine.id 一致，ui 默认 none。
+   dependencies 只能从 catalog 选额外包，不得自造包名；简单 canvas 游戏保持 build="none"。
 
 输出要求：
 - 只输出一个合法 JSON 对象，不输出 Markdown、代码围栏、说明或前后缀。
@@ -235,7 +245,9 @@ PLAN_REVISE_PROMPT = f"""
 4. 保留 title/gameplay/controls/levels 四个兼容字段，并保证它们与详细字段一致；
    其中 levels[i] 必须与 level_specs[i].name 逐字相等，acceptance_criteria 至少 8 条。
 5. 新增的非关键假设写入 overview.assumptions，不得把用户明确要求降级为假设。
-6. 重新审视 engine 选型：若修改意见未触及玩法复杂度，保持原 engine 不变；
+6. 若修改影响引擎或依赖（如新增物理/音频库），同步更新 build_routing：需要 catalog
+   npm 依赖时用 build="vite"，否则保持 build="none"。
+7. 重新审视 engine 选型：若修改意见未触及玩法复杂度，保持原 engine 不变；
    若玩法性质发生根本变化（如从回合制改为实时物理），按《引擎选型指南》更新 engine
    并填写新的 rationale 与 version。
 
