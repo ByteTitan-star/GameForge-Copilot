@@ -27,6 +27,8 @@ from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.assets.picker import asset_pick, format_assets_for_prompt
+from app.forge.build.integration import parse_llm_code_output, run_project_pipeline
+from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
 from app.forge.design_doc import (
     coerce_design_doc,
     design_doc_to_text,
@@ -46,6 +48,7 @@ from app.forge.prompts import (
     PLAN_REVISE_PROMPT,
     QA_PROMPT,
     build_code_prompt,
+    build_project_prompt,
     build_repair_prompt,
 )
 from app.forge.tracing import observe_phase, observe_run
@@ -807,15 +810,80 @@ def _build_graph(ctx: _Ctx) -> Any:
                     user_msg = generation_user_msg
                     if last_error:
                         user_msg += f"\n\n【上次构建错误】\n{last_error}"
-                    system_prompt = build_code_prompt(design_doc["engine"]["id"])
+                    design_routing = routing_from_design_doc(design_doc)
+                    if should_use_vite_pipeline(
+                        design_routing, settings.build_pipeline_enabled
+                    ):
+                        system_prompt = build_project_prompt(
+                            design_doc["engine"]["id"],
+                            list(design_routing.dependencies),
+                        )
+                    else:
+                        system_prompt = build_code_prompt(design_doc["engine"]["id"])
 
-                html = normalize_html(
-                    await _streamed_llm_or_fallback(
-                        ctx, system_prompt, user_msg, "code", emit_delta=False
-                    )
+                raw_output = await _streamed_llm_or_fallback(
+                    ctx, system_prompt, user_msg, "code", emit_delta=False
                 )
                 for token, data_uri in data_uris.items():
-                    html = html.replace(token, data_uri)
+                    raw_output = raw_output.replace(token, data_uri)
+
+                if settings.build_pipeline_enabled:
+                    parsed = parse_llm_code_output(
+                        raw_output, engine_id=design_doc["engine"]["id"]
+                    )
+                    project_result = await run_project_pipeline(parsed)
+                    if project_result is not None:
+                        if project_result.ok:
+                            from app.games import services as game_services
+
+                            await ctx.s.refresh(ctx.run)
+                            if (
+                                ctx.run.status != RunStatus.RUNNING.value
+                                or ctx.run.ended_at is not None
+                            ):
+                                raise RunFinalized
+
+                            ctx.game.current_version += 1
+                            version = ctx.game.current_version
+                            artifact = f"{ctx.game.id}/{version}/index.html"
+                            await store.write_version_layers(
+                                ctx.game.id,
+                                version,
+                                source=project_result.source,
+                                build_snapshot=project_result.build_snapshot,
+                                dist=project_result.dist,
+                            )
+                            ctx.s.add(
+                                GameVersion(
+                                    game_id=ctx.game.id,
+                                    version=version,
+                                    artifact_path=artifact,
+                                    design_doc=design_doc,
+                                )
+                            )
+                            await ctx.s.commit()
+                            await game_services.prune_old_versions(ctx.s, ctx.game)
+                            await publish_event(
+                                ctx.run.id,
+                                WSEventType.BUILD_DONE,
+                                {
+                                    "version": version,
+                                    "artifact_path": artifact,
+                                    "build": "vite",
+                                },
+                            )
+                            return {
+                                "design_doc": design_doc,
+                                "artifacts": artifacts,
+                                "art_direction": art_direction,
+                                "code_ok": True,
+                                "playtest_errors": [],
+                                "qa_diagnosis": "",
+                            }
+                        last_error = project_result.error or project_result.logs
+                        continue
+
+                html = normalize_html(raw_output)
                 result = await get_sandbox().execute(source={"index.html": html})
                 if result.ok:
                     from app.games import services as game_services

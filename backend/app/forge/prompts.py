@@ -377,6 +377,54 @@ def build_repair_prompt(engine_id: str) -> str:
 CODE_PROMPT = build_code_prompt(DEFAULT_ENGINE)
 CODE_REPAIR_PROMPT = build_repair_prompt(DEFAULT_ENGINE)
 
+
+def build_project_prompt(engine_id: str, extra_dependencies: list[str] | None = None) -> str:
+    """Vite 多文件工程输出契约（docs/build-pipeline §6.2）。"""
+    from app.forge.build.catalog import DEPENDENCY_CATALOG
+
+    allowed = ", ".join(sorted(DEPENDENCY_CATALOG))
+    deps = extra_dependencies or []
+    methodology = engine_methodology(engine_id)
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 TypeScript 游戏工程师。请根据已确认设计稿，交付一个可通过 Vite 构建的"
+                "多文件浏览器游戏工程（不是单 HTML）。"
+            ),
+            (
+                "硬性约束：\n"
+                "1. 只输出合法 JSON，不要 Markdown 围栏或解释。\n"
+                "2. 不得输出 package.json、pnpm-lock.yaml、vite.config.ts、tsconfig.json——"
+                "这些由平台生成。\n"
+                "3. dependencies 只能从平台 catalog 选择额外运行时依赖，"
+                f"允许值：{allowed}。\n"
+                f"4. 本次额外依赖建议：{deps}（可从中选取子集，不得添加 catalog 外包名）。\n"
+                "5. 业务源码放在 src/ 下，至少包含 src/main.ts。\n"
+                "6. 运行时 URL 必须用 import.meta.env.BASE_URL 拼接，禁止绝对路径 /api 等。\n"
+                "7. 若使用页面路由必须用 hash-based routing。"
+            ),
+            f"【渲染引擎方法论：{normalize_engine_id(engine_id)}】\n{methodology}"
+            if methodology
+            else "",
+            (
+                "输出 JSON 结构：\n"
+                "{\n"
+                '  "format": "project",\n'
+                '  "build": "vite",\n'
+                f'  "renderer": "{normalize_engine_id(engine_id)}",\n'
+                '  "ui": "none",\n'
+                '  "dependencies": [],\n'
+                '  "files": {\n'
+                '    "src/main.ts": "...",\n'
+                '    "src/style.css": "..."\n'
+                "  }\n"
+                "}"
+            ),
+        )
+        if part
+    )
+
 QA_PROMPT = f"""
 你是一名 HTML5 游戏 QA 负责人。自动试玩已经判定本次构建失败。请结合已确认设计稿、
 错误列表和控制台日志进行根因分析，为修复工程师提供可执行且有优先级的诊断。
