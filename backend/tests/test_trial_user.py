@@ -6,6 +6,12 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.trial import TRIAL_EMAIL, TRIAL_PASSWORD, ensure_trial_user
+from app.games.official import seed_official_games
+
+
+@pytest_asyncio.fixture
+async def official_seeded(db_session: AsyncSession) -> None:
+    await seed_official_games(db_session)
 
 
 @pytest_asyncio.fixture
@@ -62,6 +68,29 @@ async def test_trial_user_can_read_profile(trial_client: httpx.AsyncClient) -> N
     resp = await trial_client.get("/api/v1/me/profile")
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["email"] == TRIAL_EMAIL
+
+
+@pytest.mark.asyncio
+async def test_trial_user_cannot_favorite(
+    trial_client: httpx.AsyncClient, official_seeded
+) -> None:
+    meta = await trial_client.get("/api/v1/games/public/official-neon-snake")
+    assert meta.status_code == 200, meta.text
+    game_id = meta.json()["data"]["game_id"]
+    resp = await trial_client.post(f"/api/v1/games/{game_id}/favorite")
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_trial_user_cannot_like(
+    trial_client: httpx.AsyncClient, official_seeded
+) -> None:
+    meta = await trial_client.get("/api/v1/games/public/official-neon-snake")
+    game_id = meta.json()["data"]["game_id"]
+    resp = await trial_client.post(f"/api/v1/games/{game_id}/like")
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error"]["code"] == "FORBIDDEN"
 
 
 @pytest.mark.asyncio

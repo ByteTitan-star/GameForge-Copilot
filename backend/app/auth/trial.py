@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import hash_password
 from app.core.errors import AppError, ErrorCode
 from app.enums import Role
+from app.models.game_reaction import GameReaction
 from app.models.user import User
 
 TRIAL_USER_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
@@ -28,13 +29,25 @@ def reject_trial_mutation(user: User) -> None:
         raise AppError(ErrorCode.FORBIDDEN, "试用预览账号为只读，不能修改账号信息")
 
 
+async def purge_trial_reactions(db: AsyncSession) -> int:
+    """清理共享试用账号的持久化点赞/收藏，避免多人试用互相污染。"""
+    user = await db.get(User, TRIAL_USER_ID)
+    if user is None:
+        return 0
+    result = await db.execute(delete(GameReaction).where(GameReaction.user_id == user.id))
+    await db.commit()
+    return int(result.rowcount or 0)
+
+
 async def ensure_trial_user(db: AsyncSession) -> User:
     """幂等创建试用账号：已验证邮箱、可多人各自登录（独立 refresh token）。"""
     user = await db.get(User, TRIAL_USER_ID)
     if user is not None:
+        await purge_trial_reactions(db)
         return user
     by_email = await db.scalar(select(User).where(User.email == TRIAL_EMAIL))
     if by_email is not None:
+        await purge_trial_reactions(db)
         return by_email
     user = User(
         id=TRIAL_USER_ID,

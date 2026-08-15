@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.trial import reject_trial_mutation
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus, ReactionType
 from app.models.game import Game
@@ -53,6 +54,7 @@ async def reaction_counts(db: AsyncSession, game_id: UUID) -> tuple[int, int]:
 async def toggle_reaction(
     db: AsyncSession, user: User, game_id: UUID, reaction_type: ReactionType
 ) -> ReactionToggleResp:
+    reject_trial_mutation(user)
     await _get_published_game(db, game_id)
     row = await db.scalar(
         select(GameReaction).where(
@@ -107,6 +109,7 @@ async def remove_reaction(
     db: AsyncSession, user: User, game_id: UUID, reaction_type: ReactionType
 ) -> ReactionToggleResp:
     """幂等删除当前用户的指定 reaction（不存在则 noop），返回最新计数。"""
+    reject_trial_mutation(user)
     await _get_published_game(db, game_id)
     row = await db.scalar(
         select(GameReaction).where(
