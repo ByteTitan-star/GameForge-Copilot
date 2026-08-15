@@ -5,7 +5,7 @@
 #   app/forge/lexicons/      → 赌毒/色情/暴恐等中文内容词（block 即决）与政治灰名单
 #
 # 不要把大批量中文敏感词写进本文件：字面子串无归一化/白名单，短词极易误伤游戏文本；
-# 内容词请改 lexicons/block|suspect/*.txt（见 docs/敏感词词库检测方案.md）。
+# 内容词请改 lexicons/block|suspect/*.txt（见 docs/sensitive-lexicon-detection.md）。
 #
 # 行格式（# 开头为注释，空行忽略）：
 #   敏感词                  → 字面子串匹配（自动转义，写普通词即可）
