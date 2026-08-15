@@ -65,7 +65,7 @@ import {
   previewFromGameDetail,
   syncUiFromRun,
 } from "./resume";
-import { draftArtifactUrl } from "@/lib/hosting";
+import { mintDraftPreviewUrl } from "@/lib/hosting";
 import {
   clearActiveRun,
   readActiveRun,
@@ -303,8 +303,8 @@ export function ForgePage() {
         const game = detail.data ?? (await gamesApi.get(gameId!, token!));
         if (cancelled) return;
         const preview = previewFromGameDetail(game);
-        if (preview && !previewUrl) {
-          setPreviewUrl(preview);
+        if (preview && !previewUrl && token) {
+          setPreviewUrl(await mintDraftPreviewUrl(game.game_id, game.current_version, token));
           setPreviewVersion(game.current_version);
           setSideTab("play");
         }
@@ -326,10 +326,16 @@ export function ForgePage() {
               clearActiveRun(saved.runId);
               if (savedRun.status === "done") {
                 await detail.refetch();
-                const refreshed = previewFromGameDetail(
-                  (await gamesApi.get(gameId!, token!)) as typeof game,
-                );
-                if (refreshed) setPreviewUrl(refreshed);
+                const refreshedGame = await gamesApi.get(gameId!, token!);
+                const refreshed = previewFromGameDetail(refreshedGame);
+                if (refreshed)
+                  setPreviewUrl(
+                    await mintDraftPreviewUrl(
+                      refreshedGame.game_id,
+                      refreshedGame.current_version,
+                      token!,
+                    ),
+                  );
               }
             } else {
               active = {
@@ -397,8 +403,14 @@ export function ForgePage() {
             const refreshed = await detail.refetch();
             if (refreshed.data) {
               const preview = previewFromGameDetail(refreshed.data);
-              if (preview) {
-                setPreviewUrl(preview);
+              if (preview && token) {
+                setPreviewUrl(
+                  await mintDraftPreviewUrl(
+                    refreshed.data.game_id,
+                    refreshed.data.current_version,
+                    token,
+                  ),
+                );
                 setPreviewVersion(refreshed.data.current_version);
               }
             }
@@ -855,10 +867,15 @@ export function ForgePage() {
     }
   }
 
-  function onPreviewVersion(version: number) {
-    if (!gameId) return;
+  async function onPreviewVersion(version: number) {
+    if (!gameId || !token) return;
     setPreviewVersion(version);
-    setPreviewUrl(draftArtifactUrl(gameId, version));
+    try {
+      setPreviewUrl(await mintDraftPreviewUrl(gameId, version, token));
+    } catch (e) {
+      toast.error(formatApiError(e, t("loadFailed")));
+      return;
+    }
     setSideTab("play");
     setRightTab("preview");
     setStageOpen(true);

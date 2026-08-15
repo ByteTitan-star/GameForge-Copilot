@@ -8,7 +8,7 @@ import type { GameSummary } from '@/api/types'
 import { GamePlayer } from '@/components/game/GamePlayer'
 import { VersionHistoryPanel } from '@/components/games/VersionHistoryPanel'
 import { StatusBadge } from '@/components/games/StatusBadge'
-import { draftArtifactUrl } from '@/lib/hosting'
+import { mintDraftPreviewUrl } from '@/lib/hosting'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
 
@@ -38,24 +38,29 @@ export function GameDetailDrawer({
   })
 
   useEffect(() => {
-    if (!game) {
+    if (!game || game.current_version < 1) {
       setPreviewVersion(null)
       setPreviewUrl(null)
       return
     }
-    if (game.current_version > 0) {
-      setPreviewVersion(game.current_version)
-      setPreviewUrl(draftArtifactUrl(game.game_id, game.current_version))
-    } else {
-      setPreviewVersion(null)
-      setPreviewUrl(null)
+    let cancelled = false
+    setPreviewVersion(game.current_version)
+    void mintDraftPreviewUrl(game.game_id, game.current_version, accessToken)
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewUrl(null)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [game?.game_id, game?.current_version])
+  }, [game?.game_id, game?.current_version, accessToken])
 
   function onPreview(version: number) {
     if (!game) return
     setPreviewVersion(version)
-    setPreviewUrl(draftArtifactUrl(game.game_id, version))
+    void mintDraftPreviewUrl(game.game_id, version, accessToken).then(setPreviewUrl)
   }
 
   return (

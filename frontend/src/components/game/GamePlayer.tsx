@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { fetchDraftHtml } from "@/lib/hosting";
+import { fetchDraftHtml, isPreviewTokenUrl } from "@/lib/hosting";
 import { useT } from "@/i18n/use-t";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ type Props = {
 };
 
 function isDraftUrl(src: string): boolean {
-  return /\/draft\//.test(src);
+  return /\/draft\//.test(src) && !isPreviewTokenUrl(src);
 }
 
 /** 试玩容器：sandbox 不含 allow-same-origin（对齐 docs/08） */

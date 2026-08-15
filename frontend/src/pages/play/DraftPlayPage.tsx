@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { GamePlayer } from '@/components/game/GamePlayer'
-import { draftArtifactUrl } from '@/lib/hosting'
+import { mintDraftPreviewUrl } from '@/lib/hosting'
 import { useAuthStore } from '@/stores/auth-store'
 import { useT } from '@/i18n/use-t'
 
@@ -11,9 +12,27 @@ export function DraftPlayPage() {
   const { gameId, version } = useParams()
   const token = useAuthStore((s) => s.access_token)
   const t = useT()
-  if (!token) return <Navigate to="/login" replace />
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const src = draftArtifactUrl(gameId ?? '', version ?? '0')
+  useEffect(() => {
+    if (!token || !gameId || !version) return
+    let cancelled = false
+    void mintDraftPreviewUrl(gameId, version, token)
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : t('loadFailed'))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [gameId, version, token, t])
+
+  if (!token) return <Navigate to="/login" replace />
 
   return (
     <div className="flex h-[100dvh] flex-col bg-[#0B0F17]">
@@ -32,12 +51,21 @@ export function DraftPlayPage() {
         </h1>
       </header>
       <main className="min-h-0 flex-1 px-3 pb-3">
-        <GamePlayer
-          src={src}
-          title={`draft/${gameId}/${version}`}
-          variant="stage"
-          accessToken={token}
-        />
+        {error ? (
+          <p className="grid h-full place-items-center text-sm text-rose-300">{error}</p>
+        ) : previewUrl ? (
+          <GamePlayer
+            src={previewUrl}
+            title={`draft/${gameId}/${version}`}
+            variant="stage"
+            accessToken={token}
+          />
+        ) : (
+          <p className="grid h-full place-items-center text-sm text-white/50">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            {t('loading')}
+          </p>
+        )}
       </main>
     </div>
   )
