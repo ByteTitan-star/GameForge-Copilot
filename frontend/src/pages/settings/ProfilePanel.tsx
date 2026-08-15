@@ -9,9 +9,10 @@ import { useT } from '@/i18n/use-t'
 
 type Props = {
   accessToken: string
+  readOnly?: boolean
 }
 
-export function ProfilePanel({ accessToken }: Props) {
+export function ProfilePanel({ accessToken, readOnly = false }: Props) {
   const t = useT()
   const qc = useQueryClient()
   const q = useQuery({
@@ -74,7 +75,9 @@ export function ProfilePanel({ accessToken }: Props) {
   return (
     <section className="gf-glass rounded-2xl p-5">
       <h2 className="gf-page-body text-lg">{t('profileTitle')}</h2>
-      <p className="gf-page-muted mt-1 text-xs">{t('profileSubtitle')}</p>
+      <p className="gf-page-muted mt-1 text-xs">
+        {readOnly ? t('trialAccountReadOnly') : t('profileSubtitle')}
+      </p>
 
       <form className="mt-4 max-w-md space-y-3" onSubmit={onSubmit}>
         <Input
@@ -83,12 +86,14 @@ export function ProfilePanel({ accessToken }: Props) {
           onChange={(e) => setHandle(e.target.value.toLowerCase())}
           placeholder="my_handle"
           autoComplete="off"
+          disabled={readOnly}
         />
         <Input
           label={t('profileDisplayName')}
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder={t('profileDisplayName')}
+          disabled={readOnly}
         />
         <label className="flex cursor-pointer items-center gap-2 text-sm gf-page-body">
           <input
@@ -96,6 +101,7 @@ export function ProfilePanel({ accessToken }: Props) {
             checked={profilePublic}
             onChange={(e) => setProfilePublic(e.target.checked)}
             className="h-4 w-4 rounded border gf-border-subtle"
+            disabled={readOnly}
           />
           {t('profilePublic')}
         </label>
@@ -114,7 +120,11 @@ export function ProfilePanel({ accessToken }: Props) {
             {t('profilePublicUrl')}: /u/{handle.trim()}
           </p>
         ) : null}
-        <Button type="submit" className="gf-btn-primary !rounded-xl !border-0" disabled={saveMu.isPending}>
+        <Button
+          type="submit"
+          className="gf-btn-primary !rounded-xl !border-0"
+          disabled={readOnly || saveMu.isPending}
+        >
           {saveMu.isPending ? t('loading') : t('save')}
         </Button>
       </form>

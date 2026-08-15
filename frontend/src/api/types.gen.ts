@@ -1400,6 +1400,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/audit-llm/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Audit Llm
+         * @description 审核模型连通测试（表单当前值 dry-test，不落库）。
+         *
+         *     apikey 为空/masked 时回退 DB 已存密钥（只改 model 不重填 key 也能测）。
+         *     纯付费 LLM 调用，按 admin 限流防成本放大（同用户 LLM 配置探测限流）。
+         */
+        post: operations["test_audit_llm_api_v1_admin_settings_audit_llm_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit-logs": {
         parameters: {
             query?: never;
@@ -1567,6 +1590,44 @@ export interface components {
             /** Trend */
             trend: components["schemas"]["AnalyticsTrendPoint"][];
         };
+        /**
+         * AdminAuditLlmSettings
+         * @description 平台预设审核模型（护栏）配置。GET 回 masked apikey；PUT 收明文（空/masked=保留旧值）。
+         */
+        AdminAuditLlmSettings: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Provider
+             * @default openai_compat
+             */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Apikey
+             * @default
+             */
+            apikey: string;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+        };
+        /** AdminAuditLlmTestResp */
+        AdminAuditLlmTestResp: {
+            /** Tested Ok */
+            tested_ok: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /** AdminGameFeaturedPatch */
         AdminGameFeaturedPatch: {
             /** Featured Rank */
@@ -1625,6 +1686,7 @@ export interface components {
              * @default
              */
             admin_contact_email: string;
+            audit_llm?: components["schemas"]["AdminAuditLlmSettings"] | null;
         };
         /** AdminUsageResp */
         AdminUsageResp: {
@@ -1704,6 +1766,10 @@ export interface components {
         /** ApiResponse[AdminAnalyticsResp] */
         ApiResponse_AdminAnalyticsResp_: {
             data: components["schemas"]["AdminAnalyticsResp"];
+        };
+        /** ApiResponse[AdminAuditLlmTestResp] */
+        ApiResponse_AdminAuditLlmTestResp_: {
+            data: components["schemas"]["AdminAuditLlmTestResp"];
         };
         /** ApiResponse[AdminGameItem] */
         ApiResponse_AdminGameItem_: {
@@ -3244,7 +3310,7 @@ export interface components {
          * WSEventType
          * @enum {string}
          */
-        WSEventType: "phase_start" | "llm_call" | "tool_call" | "build_done" | "qa_report" | "hitl_wait" | "usage" | "done" | "error";
+        WSEventType: "phase_start" | "llm_call" | "llm_delta" | "tool_call" | "build_done" | "qa_report" | "hitl_wait" | "usage" | "done" | "attacked" | "error";
     };
     responses: never;
     parameters: never;
@@ -6625,6 +6691,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_audit_llm_api_v1_admin_settings_audit_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAuditLlmSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AdminAuditLlmTestResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 探测限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

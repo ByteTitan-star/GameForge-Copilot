@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.trial import reject_trial_mutation
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus
 from app.models.game import Game
@@ -29,6 +30,7 @@ async def get_profile(db: AsyncSession, user: User) -> UserProfile:
 
 
 async def patch_profile(db: AsyncSession, user: User, req: ProfilePatch) -> UserProfile:
+    reject_trial_mutation(user)
     if req.handle is not None:
         existing = await db.scalar(
             select(User).where(User.handle == req.handle, User.id != user.id)

@@ -111,11 +111,11 @@ async def test_openai_stream_drops_reasoning_content(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_openai_stream_estimates_usage_when_missing(monkeypatch) -> None:
-    """compat provider 不返回 usage 帧时，按 chunk 计数粗估 output（兜底）。"""
+    """compat provider 不返回 usage 帧时，按字符数估算 output（~4 chars/token）。"""
     no_usage_sse = (
         'data: {"choices":[{"delta":{"content":"a"},"finish_reason":null}]}\n\n'
         'data: {"choices":[{"delta":{"content":"b"},"finish_reason":null}]}\n\n'
-        'data: {"choices":[{"delta":{"content":"c"},"finish_reason":"stop"}]}\n\n'
+        'data: {"choices":[{"delta":{"content":"cdefghij"},"finish_reason":"stop"}]}\n\n'
         "data: [DONE]\n\n"
     )
     monkeypatch.setattr(
@@ -129,5 +129,5 @@ async def test_openai_stream_estimates_usage_when_missing(monkeypatch) -> None:
     ):
         chunks.append(chunk)
     text, usage = _collect(chunks)
-    assert text == "abc"
-    assert usage is not None and usage.output_tokens == 3  # 3 个 chunk 粗估
+    assert text == "abcdefghij"  # 10 字符
+    assert usage is not None and usage.output_tokens == 2  # max(1, 10//4) = 2

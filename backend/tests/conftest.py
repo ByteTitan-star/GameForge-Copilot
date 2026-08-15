@@ -22,6 +22,7 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.email import queue as email_queue
 from app.forge import queue as forge_queue
+from app.hosting.factory import reset_hosting_for_tests
 from app.main import app
 from app.messaging.factory import reset_messaging
 from app.models import Base
@@ -298,6 +299,7 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     global _fake
     _fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     _orig_hosting = settings.hosting_root
+    _orig_hosting_backend = settings.hosting_backend
     _orig_messaging = settings.messaging_backend
     _orig_admin_contact = settings.admin_contact_email
     _orig_log_dir = settings.log_dir
@@ -305,6 +307,8 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     _orig_langfuse_pub = settings.langfuse_public_key
     _orig_langfuse_sec = settings.langfuse_secret_key
     settings.hosting_root = str(tmp_path)
+    # hosting 强制 local：.env 切到 s3 时测试产物（含 60MB 配额用例）会泄进真实 OSS
+    settings.hosting_backend = "local"
     settings.messaging_backend = "memory"
     settings.admin_contact_email = ""
     settings.log_dir = "-"
@@ -333,6 +337,8 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     forge_queue.enqueue_run = _real_enqueue  # type: ignore[assignment]
     forge_queue.enqueue_resume = _real_enqueue_resume  # type: ignore[assignment]
     settings.hosting_root = _orig_hosting
+    settings.hosting_backend = _orig_hosting_backend
+    reset_hosting_for_tests()
     settings.messaging_backend = _orig_messaging
     settings.admin_contact_email = _orig_admin_contact
     settings.log_dir = _orig_log_dir

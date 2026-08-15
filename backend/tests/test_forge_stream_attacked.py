@@ -45,7 +45,11 @@ async def test_normal_run_emits_llm_delta_then_call(
     """正常路径：plan 阶段发若干 LLM_DELTA（打字机）+ LLM_CALL + HITL_WAIT（plan_confirm）。"""
     # 审核关闭，确保不误触（quick_filter 对正常设计稿 JSON 不命中，但显式 noop 更稳）
     orig = guard.build_guard
-    guard.build_guard = lambda ctx=None: guard.NoopGuard()
+
+    async def _noop_guard(ctx=None):
+        return guard.NoopGuard()
+
+    guard.build_guard = _noop_guard
     try:
         gid, rid = await _make_plan_run(verified_client)
         await execute_run({"redis": redis_client}, rid)
@@ -83,7 +87,10 @@ async def test_output_audit_hit_emits_attacked_and_fails_run(
                 True, category="harmful_code", reason="test", evidence="x"
             )
 
-    monkeypatch.setattr(guard, "build_guard", lambda ctx=None: _HitGuard())
+    async def _hit_guard(ctx=None):
+        return _HitGuard()
+
+    monkeypatch.setattr(guard, "build_guard", _hit_guard)
     gid, rid = await _make_plan_run(verified_client)
     await execute_run({"redis": redis_client}, rid)
 
@@ -120,7 +127,10 @@ async def test_input_audit_hit_emits_attacked(
                 True, category="jailbreak", reason="test input", evidence="x"
             )
 
-    monkeypatch.setattr(guard, "build_guard", lambda ctx=None: _InputHitGuard())
+    async def _input_hit_guard(ctx=None):
+        return _InputHitGuard()
+
+    monkeypatch.setattr(guard, "build_guard", _input_hit_guard)
     gid, rid = await _make_plan_run(verified_client)
     await execute_run({"redis": redis_client}, rid)
 

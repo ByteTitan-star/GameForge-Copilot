@@ -4855,6 +4855,63 @@
         ]
       }
     },
+    "/api/v1/admin/settings/audit-llm/test": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Test Audit Llm",
+        "description": "审核模型连通测试（表单当前值 dry-test，不落库）。\n\napikey 为空/masked 时回退 DB 已存密钥（只改 model 不重填 key 也能测）。\n纯付费 LLM 调用，按 admin 限流防成本放大（同用户 LLM 配置探测限流）。",
+        "operationId": "test_audit_llm_api_v1_admin_settings_audit_llm_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAuditLlmSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AdminAuditLlmTestResp_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "探测限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/audit-logs": {
       "get": {
         "tags": [
@@ -5343,6 +5400,62 @@
         ],
         "title": "AdminAnalyticsResp"
       },
+      "AdminAuditLlmSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "openai_compat"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": ""
+          },
+          "apikey": {
+            "type": "string",
+            "title": "Apikey",
+            "default": ""
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "AdminAuditLlmSettings",
+        "description": "平台预设审核模型（护栏）配置。GET 回 masked apikey；PUT 收明文（空/masked=保留旧值）。"
+      },
+      "AdminAuditLlmTestResp": {
+        "properties": {
+          "tested_ok": {
+            "type": "boolean",
+            "title": "Tested Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tested_ok"
+        ],
+        "title": "AdminAuditLlmTestResp"
+      },
       "AdminGameFeaturedPatch": {
         "properties": {
           "featured_rank": {
@@ -5466,6 +5579,16 @@
             "type": "string",
             "title": "Admin Contact Email",
             "default": ""
+          },
+          "audit_llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdminAuditLlmSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -5686,6 +5809,18 @@
           "data"
         ],
         "title": "ApiResponse[AdminAnalyticsResp]"
+      },
+      "ApiResponse_AdminAuditLlmTestResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminAuditLlmTestResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[AdminAuditLlmTestResp]"
       },
       "ApiResponse_AdminGameItem_": {
         "properties": {

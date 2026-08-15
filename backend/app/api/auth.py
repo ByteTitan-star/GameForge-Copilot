@@ -160,7 +160,7 @@ async def password_reset_confirm(
 @router.post(
     "/password/change",
     response_model=ApiResponse[PasswordChangeResp],
-    responses={**ERR_401, **ERR_400},
+    responses={**ERR_401, **ERR_400, 403: {"model": ErrorResponse, "description": "试用账号只读"}},
 )
 async def password_change(
     req: PasswordChangeReq, user: CurrentUser, db: DbSession

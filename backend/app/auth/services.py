@@ -17,6 +17,7 @@ from app.auth.security import (
     verify_password,
 )
 from app.auth.tokens import issue_refresh, revoke_refresh, rotate_refresh
+from app.auth.trial import is_trial_user, reject_trial_mutation
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import Role
@@ -171,7 +172,7 @@ async def request_password_reset(
 ) -> tuple[str, str] | None:
     """防枚举：用户不存在时返回 None，调用方仍恒返回 sent=true。"""
     user = await db.scalar(select(User).where(User.email == email))
-    if user is None:
+    if user is None or is_trial_user(user):
         return None
     token = _gen_token()
     db.add(
@@ -192,6 +193,7 @@ async def confirm_password_reset(
     user = await db.get(User, row.user_id)
     if user is None:
         raise AppError(ErrorCode.VALIDATION_ERROR, "token 无效")
+    reject_trial_mutation(user)
     user.password_hash = hash_password(new_password)
     await db.commit()
     return user
@@ -201,6 +203,7 @@ async def change_password(
     user: User, db: AsyncSession, old_password: str, new_password: str
 ) -> User:
     """登录态改密：旧密码错误 → 401；成功写新 hash。"""
+    reject_trial_mutation(user)
     if not verify_password(old_password, user.password_hash):
         raise AppError(ErrorCode.UNAUTHORIZED, "旧密码不正确")
     if old_password == new_password:

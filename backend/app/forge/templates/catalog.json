@@ -1,32 +1,312 @@
 [
   {
-    "template_id": "arcade-snake",
-    "title": "经典贪吃蛇",
-    "description": "方向键控制蛇吃食物、变长、撞墙结束",
-    "requirement_seed": "做一个经典贪吃蛇：方向键移动，吃食物变长，撞墙或自身失败，显示分数。",
-    "tags": ["arcade", "snake", "keyboard"],
+    "template_id": "survival-dodge",
+    "title": "极限生存躲避",
+    "description": "在不断增加的危险物中尽可能存活",
+    "requirement_seed": "制作一个生存躲避小游戏。玩家用方向键或 WASD 控制角色移动，场地持续生成不同速度、大小和轨迹的危险物，碰撞后游戏结束。存活越久难度越高。显示存活时间、最高纪录和当前难度，加入碰撞闪烁、粒子反馈、暂停及重新开始功能。",
+    "tags": ["arcade", "survival", "keyboard"],
     "engine": "canvas",
-    "verified": true,
-    "reference_artifact": "references/arcade-snake.html"
+    "verified": false,
+    "reference_artifact": null
   },
   {
-    "template_id": "puzzle-2048",
-    "title": "2048 合成",
-    "description": "四方向滑动合并相同数字方块",
-    "requirement_seed": "2048 风格：4x4 网格，方向键滑动合并相同数字，无法移动时游戏结束，显示最高分。",
-    "tags": ["puzzle", "2048", "keyboard"],
+    "template_id": "precision-platform",
+    "title": "精准跳跃挑战",
+    "description": "控制角色连续跳过不断变化的平台",
+    "requirement_seed": "制作一个横版精准跳跃游戏。方向键控制移动，空格跳跃，角色受到重力影响。设计移动平台、易碎平台和危险区域，到达终点过关，掉出地图或碰到危险物失败。至少包含 3 个逐渐变难的关卡，并显示关卡、死亡次数和计时。",
+    "tags": ["platformer", "physics", "keyboard"],
     "engine": "canvas",
-    "verified": true,
-    "reference_artifact": "references/puzzle-2048.html"
+    "verified": false,
+    "reference_artifact": null
   },
   {
-    "template_id": "clicker-idle",
-    "title": "点击放置",
-    "description": "点击得分、升级自动产出",
-    "requirement_seed": "点击放置小游戏：点击主按钮得分，用分数购买升级提高自动得分速度，UI 简洁。",
-    "tags": ["clicker", "idle", "casual"],
+    "template_id": "lane-racer",
+    "title": "极速变道",
+    "description": "高速公路中闪避车辆并追求距离纪录",
+    "requirement_seed": "制作一个俯视角高速变道游戏。玩家使用左右方向键切换车道，车辆持续向前行驶，道路上随机出现不同速度的车辆和障碍。随着距离增加整体速度逐渐提升。发生碰撞后结束，显示距离、速度、最高纪录，并加入加速感、道路滚动和碰撞反馈。",
+    "tags": ["racing", "arcade", "keyboard"],
     "engine": "canvas",
-    "verified": true,
-    "reference_artifact": "references/clicker-idle.html"
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "rhythm-beat",
+    "title": "节奏击打",
+    "description": "根据节拍准确点击落下的音符",
+    "requirement_seed": "制作一个节奏点击游戏。音符按照固定节奏从屏幕上方落向判定线，玩家使用 D/F/J/K 四个按键击打对应轨道。根据时间误差判定 Perfect、Good、Miss，并计算连击和总分。随着进度提高节奏密度，结束后展示准确率、最高连击和评级。",
+    "tags": ["rhythm", "music", "keyboard"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "tower-stack",
+    "title": "高塔堆叠",
+    "description": "把移动方块精准叠放成越来越高的塔",
+    "requirement_seed": "制作一个单键堆塔游戏。方块在屏幕上方水平往返移动，点击或空格键让方块落下，与上一层重叠的区域保留，超出的部分切除。重叠区域会越来越小，完全没有重叠时结束。显示塔层数和最高纪录，并加入落下动画、切割效果和轻微屏幕震动。",
+    "tags": ["casual", "precision", "one-button"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "orbit-escape",
+    "title": "轨道逃逸",
+    "description": "在旋转轨道之间寻找时机跳跃",
+    "requirement_seed": "制作一个轨道跳跃游戏。角色自动围绕圆形星球旋转，点击或空格键让角色沿当前方向飞出，并尝试进入另一个星球的引力范围。成功进入轨道获得分数，飞出屏幕或碰到危险物失败。逐渐加入不同半径、旋转速度和移动星球。",
+    "tags": ["arcade", "timing", "physics"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "arena-survival",
+    "title": "竞技场生存",
+    "description": "在小型竞技场击败不断出现的敌人",
+    "requirement_seed": "制作一个俯视角竞技场生存游戏。WASD 移动，鼠标控制方向并点击攻击。敌人从场地边缘不断出现并追踪玩家，不同敌人具有不同生命值和移动速度。击败敌人获得分数，每隔一段时间提升难度。显示生命、得分、波次，并支持重新开始。",
+    "tags": ["action", "shooter", "survival"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "asteroid-miner",
+    "title": "小行星矿工",
+    "description": "驾驶飞船寻找并开采太空资源",
+    "requirement_seed": "制作一个太空采矿小游戏。玩家用 WASD 控制飞船推进和转向，在地图中寻找随机生成的小行星，靠近后持续按键进行采矿。不同矿石价值不同，飞船拥有有限货仓和燃料。玩家需要返回基地出售资源并补充燃料，显示金币、燃料和货仓容量。",
+    "tags": ["space", "exploration", "resource"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "stealth-escape",
+    "title": "潜行逃脱",
+    "description": "避开守卫视野偷偷抵达出口",
+    "requirement_seed": "制作一个俯视角潜行小游戏。玩家用方向键移动，需要避开巡逻守卫的扇形视野。守卫按照路线移动，发现玩家后进入警戒并追赶。地图包含墙壁、可躲藏区域和出口。到达出口胜利，被抓住失败。明确绘制视野范围、警戒状态和关卡计时。",
+    "tags": ["stealth", "puzzle", "keyboard"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "micro-tower-defense",
+    "title": "迷你塔防",
+    "description": "布置防御塔阻止敌人到达终点",
+    "requirement_seed": "制作一个迷你塔防游戏。敌人沿固定路线分波前进，玩家点击空地建造防御塔。至少包含快速塔、高伤害塔和减速塔三种类型，可花费金币升级。击败敌人获得金币，敌人到达终点扣除生命。显示波次、生命、金币和下一波按钮。",
+    "tags": ["strategy", "tower-defense", "mouse"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "match-chain",
+    "title": "连线消除",
+    "description": "连接相同元素形成长链并消除",
+    "requirement_seed": "制作一个连线消除游戏。在网格中生成多种颜色的元素，玩家按住鼠标拖动，可连接上下左右或斜向相邻且颜色相同的元素。连接至少 3 个后释放即可消除并获得分数，新元素自动补充。长链获得额外倍率，限定时间内争取最高分。",
+    "tags": ["puzzle", "match", "mouse"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "pipe-network",
+    "title": "管道连通",
+    "description": "旋转管道让能源从起点流向所有终点",
+    "requirement_seed": "制作一个管道连接解谜游戏。网格中包含直线、转角、三通等管道模块，点击模块可旋转 90 度。玩家需要让起点能源连通所有目标节点。实时高亮已经连通的管道，全部连通即过关。提供多个随机或预设关卡，并统计步数和最佳纪录。",
+    "tags": ["puzzle", "logic", "mouse"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "laser-mirror",
+    "title": "激光镜面",
+    "description": "调整镜子方向让激光命中所有目标",
+    "requirement_seed": "制作一个激光反射解谜游戏。激光从固定发射器射出，遇到镜面会按照角度反射。玩家点击镜子改变方向，需要让光束依次命中地图中的所有目标。墙壁会阻挡激光，并加入分光器等特殊组件。实时绘制激光路径，完成后显示使用步数。",
+    "tags": ["puzzle", "laser", "logic"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "box-pusher",
+    "title": "仓库推箱",
+    "description": "规划路线把所有货箱推到目标区域",
+    "requirement_seed": "制作一个网格推箱解谜游戏。方向键控制角色移动，只能推动箱子而不能拉动。玩家需要把全部箱子移动到对应目标位置。设计至少 5 个逐渐增加难度的小关卡，支持撤销上一步和重新开始，并显示当前步数、推动次数和最佳纪录。",
+    "tags": ["puzzle", "grid", "keyboard"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "maze-run",
+    "title": "随机迷宫挑战",
+    "description": "每局生成不同迷宫寻找最快出口",
+    "requirement_seed": "制作一个随机迷宫游戏。每次开始自动生成一个可通行的迷宫，玩家使用方向键移动，从入口寻找出口。加入计时、移动步数和最佳纪录，并支持不同迷宫尺寸。可选加入有限视野模式，只显示玩家附近区域，提高探索难度。",
+    "tags": ["maze", "procedural", "puzzle"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "memory-flip",
+    "title": "记忆翻牌",
+    "description": "依靠记忆找出全部相同图案",
+    "requirement_seed": "制作一个记忆翻牌小游戏。牌面朝下排列成网格，点击可翻开，每次最多展示两张。图案相同则保持打开，否则短暂显示后自动翻回。找到全部配对后结束。提供不同网格难度，显示用时、翻牌次数、连续配对次数和最佳纪录。",
+    "tags": ["memory", "casual", "mouse"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "number-target",
+    "title": "数字目标",
+    "description": "组合有限数字得到指定目标值",
+    "requirement_seed": "制作一个数字运算解谜游戏。每局随机提供若干数字和一个目标值，玩家点击数字并选择加减乘除，将数字组合计算，每个数字最多使用一次。成功得到目标值即可过关。加入连续关卡、计时、提示和跳过功能，并根据使用步骤多少计算评分。",
+    "tags": ["math", "puzzle", "logic"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "circuit-builder",
+    "title": "逻辑电路",
+    "description": "连接开关和逻辑元件点亮目标设备",
+    "requirement_seed": "制作一个逻辑电路解谜游戏。玩家通过点击或拖线连接输入开关、AND、OR、NOT 等逻辑元件，使最终输出满足目标状态。切换输入时实时计算并显示电路信号。设计多个逐渐复杂的关卡，完成后展示使用元件数量和连线数量。",
+    "tags": ["logic", "circuit", "educational"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "projectile-lab",
+    "title": "弹道实验室",
+    "description": "调整角度和力度击中不同位置的目标",
+    "requirement_seed": "制作一个物理弹射挑战。玩家调整发射角度和力度，把球体射向目标。模拟重力和基础碰撞，地图中加入墙壁、弹性板和移动目标。每关限制发射次数，命中目标即可过关。显示当前角度、力度、剩余次数，并绘制上一发的运动轨迹。",
+    "tags": ["physics", "trajectory", "puzzle"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "balance-builder",
+    "title": "平衡建筑",
+    "description": "利用不同形状搭建不会倒塌的结构",
+    "requirement_seed": "制作一个物理平衡搭建游戏。玩家依次获得不同尺寸和形状的物体，通过鼠标选择位置后让物体落下。物体受到重力影响并发生碰撞，目标是在有限区域内搭出指定高度且保持数秒不倒。倒塌则失败，完成后按高度和使用物体数量评分。",
+    "tags": ["physics", "building", "casual"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "domino-chain",
+    "title": "连锁机关",
+    "description": "摆放机关创造尽可能长的连锁反应",
+    "requirement_seed": "制作一个连锁反应沙盒小游戏。玩家可以在场地中放置多米诺、弹球、斜坡和触发器，点击启动后按照简单物理规则运动。目标是让最后一个目标装置被成功触发。提供编辑、清空、启动和重置按钮，并统计成功触发的机关数量。",
+    "tags": ["physics", "sandbox", "creative"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "traffic-control",
+    "title": "城市交通指挥",
+    "description": "控制路口信号避免拥堵和事故",
+    "requirement_seed": "制作一个交通调度游戏。车辆不断从不同道路进入路口，玩家点击交通灯切换红绿状态，需要让尽可能多的车辆安全通过。车辆等待过久会增加拥堵值，两车相撞立即失败。随着时间增加车流密度和道路数量，显示通过车辆数、拥堵值和最高纪录。",
+    "tags": ["simulation", "traffic", "strategy"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "tiny-ecosystem",
+    "title": "微型生态箱",
+    "description": "观察植物、食草动物和捕食者形成生态平衡",
+    "requirement_seed": "制作一个微型生态模拟器。地图中包含植物、食草动物和捕食者，植物自动生长，动物寻找食物、消耗能量并繁殖。玩家可以调整初始数量和环境参数后运行模拟。实时显示各物种数量曲线，并提供暂停、加速、重新生成和参数调整。",
+    "tags": ["simulation", "ecosystem", "sandbox"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "factory-conveyor",
+    "title": "迷你流水线",
+    "description": "布置传送带和机器完成自动生产",
+    "requirement_seed": "制作一个迷你工厂自动化游戏。玩家在网格中放置传送带、加工机器和出口，原材料会持续生成并沿传送带移动。不同机器把原料加工为不同产品，正确产品送到出口即可获得金币。提供建造、旋转、拆除功能，并逐渐解锁更复杂的生产目标。",
+    "tags": ["automation", "factory", "strategy"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "tiny-shop",
+    "title": "迷你商店经营",
+    "description": "进货、定价并满足不断变化的顾客需求",
+    "requirement_seed": "制作一个轻量商店经营游戏。每天开始前玩家使用资金购买商品并设置售价，营业后顾客按照价格和需求决定是否购买。一天结束后统计收入、成本、利润和满意度。市场需求每天轻微变化，玩家可升级货架容量和商店吸引力，目标是在限定天数赚取指定利润。",
+    "tags": ["management", "economy", "simulation"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "turn-tactics",
+    "title": "网格战术",
+    "description": "在小型棋盘上进行回合制战斗",
+    "requirement_seed": "制作一个小型回合制战术游戏。地图采用方格棋盘，玩家控制 2～4 个单位，每个单位每回合可以移动并执行一次攻击。不同角色拥有不同攻击范围和生命值。敌方回合自动行动。消灭全部敌人获胜，玩家单位全部阵亡失败，并显示行动范围和攻击范围。",
+    "tags": ["strategy", "turn-based", "grid"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "territory-capture",
+    "title": "区域争夺",
+    "description": "通过扩张与包围占领更多地图区域",
+    "requirement_seed": "制作一个区域争夺策略小游戏。地图由大量相邻区域组成，玩家每回合选择自己的区域向相邻区域扩张。不同区域拥有不同兵力，攻击结果根据双方兵力计算。地图上存在多个电脑势力。限定回合结束后按照控制区域数量评分，支持重新生成地图。",
+    "tags": ["strategy", "territory", "turn-based"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "resource-island",
+    "title": "孤岛资源管理",
+    "description": "在有限土地和资源下维持居民生存",
+    "requirement_seed": "制作一个简化资源管理游戏。玩家管理一座小岛，需要分配居民采集食物、木材和石材，并建造住房、农田和仓库。每天居民消耗食物，资源不足会降低人口。提供时间暂停和加速，显示人口、库存和每日产量，目标是在指定天数内达到人口要求。",
+    "tags": ["management", "resource", "strategy"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "particle-sandbox",
+    "title": "粒子实验沙盒",
+    "description": "自由绘制不同粒子并观察相互作用",
+    "requirement_seed": "制作一个粒子沙盒。玩家可以选择沙、水、石头、火等材料并用鼠标绘制到画布上。不同粒子具有简单规则：沙子下落堆积，水流动扩散，石头固定，火会向可燃物传播并逐渐消失。提供画笔大小、暂停、清空和随机场景按钮。",
+    "tags": ["sandbox", "simulation", "particles"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "gravity-painter",
+    "title": "重力绘画",
+    "description": "放置引力源创造独特粒子轨迹",
+    "requirement_seed": "制作一个交互式重力绘画工具。画布中持续生成运动粒子，用户点击可放置引力源，粒子会受到附近引力影响形成弯曲轨迹。支持拖动调整引力源位置，滚轮调整强度，并提供暂停、清空、随机生成和轨迹淡出效果，让最终结果具有视觉表现力。",
+    "tags": ["creative", "physics", "generative"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
+  },
+  {
+    "template_id": "constellation-maker",
+    "title": "星座绘制器",
+    "description": "连接星点创作自己的动态星座",
+    "requirement_seed": "制作一个星座创作小游戏。画布随机生成星点，玩家点击两颗星可建立连接，形成自己的星座图案。连接数量有限，完成后根据覆盖面积、对称性和连接长度计算一个趣味评分。星点缓慢闪烁，支持撤销、清空、重新生成以及保存当前星座名称。",
+    "tags": ["creative", "drawing", "casual"],
+    "engine": "canvas",
+    "verified": false,
+    "reference_artifact": null
   }
 ]

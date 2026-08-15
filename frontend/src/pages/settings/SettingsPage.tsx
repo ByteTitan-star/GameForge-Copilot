@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/i18n/use-t'
 import { cn } from '@/lib/cn'
+import { isTrialUser } from '@/lib/trial'
 import { useAuthStore } from '@/stores/auth-store'
 import { toast } from '@/stores/toast-store'
 import { ProfilePanel } from './ProfilePanel'
@@ -20,6 +21,7 @@ export function SettingsPage() {
   const t = useT()
   const user = useAuthStore((s) => s.user)
   const token = useAuthStore((s) => s.access_token)
+  const trial = isTrialUser(user)
   const location = useLocation()
   const state = location.state as { tab?: SettingsTab } | null
   const [tab, setTab] = useState<SettingsTab>(state?.tab ?? 'account')
@@ -107,51 +109,57 @@ export function SettingsPage() {
 
           <section className="gf-glass rounded-2xl p-5">
             <h2 className="gf-page-body text-lg">{t('changePassword')}</h2>
-            <p className="gf-page-muted mt-1 text-xs">{t('changePasswordHint')}</p>
-            <form className="mt-4 max-w-md space-y-3" onSubmit={onChangePassword}>
-              <Input
-                name="old_password"
-                label={t('oldPassword')}
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-              <Input
-                name="new_password"
-                label={t('newPassword')}
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
-              <Input
-                name="confirm_password"
-                label={t('confirmPassword')}
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
-              <Button type="submit" className="gf-btn-primary !rounded-xl !border-0" disabled={pwdLoading}>
-                {pwdLoading ? t('savingPassword') : t('changePassword')}
-              </Button>
-            </form>
-            <p className="gf-page-muted mt-3 text-xs">
-              {t('forgotOldPwd')}{' '}
-              <Link to="/forgot-password" className="gf-text-accent opacity-80 underline-offset-2 hover:underline">
-                {t('forgot')}
-              </Link>
-            </p>
+            {trial ? (
+              <p className="gf-page-muted mt-3 text-sm">{t('trialAccountReadOnly')}</p>
+            ) : (
+              <>
+                <p className="gf-page-muted mt-1 text-xs">{t('changePasswordHint')}</p>
+                <form className="mt-4 max-w-md space-y-3" onSubmit={onChangePassword}>
+                  <Input
+                    name="old_password"
+                    label={t('oldPassword')}
+                    type="password"
+                    value={oldPassword}
+                    onChange={(e) => setOldPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                  <Input
+                    name="new_password"
+                    label={t('newPassword')}
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                  <Input
+                    name="confirm_password"
+                    label={t('confirmPassword')}
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                  <Button type="submit" className="gf-btn-primary !rounded-xl !border-0" disabled={pwdLoading}>
+                    {pwdLoading ? t('savingPassword') : t('changePassword')}
+                  </Button>
+                </form>
+                <p className="gf-page-muted mt-3 text-xs">
+                  {t('forgotOldPwd')}{' '}
+                  <Link to="/forgot-password" className="gf-text-accent opacity-80 underline-offset-2 hover:underline">
+                    {t('forgot')}
+                  </Link>
+                </p>
+              </>
+            )}
           </section>
         </div>
       ) : tab === 'profile' && token ? (
-        <ProfilePanel accessToken={token} />
+        <ProfilePanel accessToken={token} readOnly={trial} />
       ) : tab === 'appearance' ? (
         <ThemePanel />
       ) : (
