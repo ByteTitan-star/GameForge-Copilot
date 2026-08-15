@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     create_run_idempotency_ttl: int = 86_400
     max_concurrent_runs: int = 3  # 每用户同时进行中的 run 上限（docs/05）
     max_concurrent_tasks: int = 3  # worker 进程内同时处理的任务数（RabbitMQ prefetch_count）
+    # LLM 熔断（按 user+provider）：连续失败达阈值后短时拒绝，避免雪崩打坏 key/配额
+    llm_circuit_enabled: bool = True
+    llm_circuit_failure_threshold: int = 5
+    llm_circuit_open_s: int = 60
     max_versions_per_game: int = 20  # 版本保留上限（docs/04），超出删最旧
     max_drafts_per_user: int = 20  # 每用户草稿游戏数上限
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
