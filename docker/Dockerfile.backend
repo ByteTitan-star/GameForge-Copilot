@@ -16,6 +16,7 @@ RUN uv sync --frozen --no-dev
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
+COPY backend/scripts ./scripts
 
 RUN useradd -m -u 1001 app && chown -R app:app /app
 USER app
