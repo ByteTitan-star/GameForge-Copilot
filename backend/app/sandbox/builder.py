@@ -35,6 +35,13 @@ def resolve_store_path(raw: str | None = None) -> Path:
     return path
 
 
+def _docker_user_spec() -> str:
+    """与宿主同 uid/gid，避免 bind mount 产物无法清理（CI runner ≠ node:1000）。"""
+    if os.name == "nt":
+        return "node"
+    return f"{os.getuid()}:{os.getgid()}"
+
+
 def _ensure_bind_mount_permissions(path: Path) -> None:
     """Docker builder 以 node(1000) 运行，bind mount 需对容器用户可读写（CI 临时目录常为 root）。"""
     if os.name == "nt" or not path.exists():
@@ -149,6 +156,7 @@ class DockerBuilder:
             "Image": self.image,
             "Cmd": list(cmd),
             "WorkingDir": "/workspace",
+            "User": _docker_user_spec(),
             "Env": [
                 "HOME=/tmp",
                 "COREPACK_HOME=/tmp/corepack",
