@@ -1470,6 +1470,24 @@
               "default": "updated_at",
               "title": "Sort"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -1527,6 +1545,24 @@
               "default": 20,
               "title": "Size"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -1569,6 +1605,24 @@
               "type": "string",
               "title": "Slug"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -2812,6 +2866,26 @@
         ],
         "summary": "List Official Games",
         "operationId": "list_official_games_api_v1_official_games_get",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en",
+              "title": "Locale"
+            },
+            "description": "zh | en"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2819,6 +2893,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_list_OfficialGameItem__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -5373,6 +5457,22 @@
             "schema": {
               "type": "string",
               "title": "Slug"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lang"
             }
           }
         ],
@@ -8831,6 +8931,11 @@
           "play_count": {
             "type": "integer",
             "title": "Play Count"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured",
+            "default": false
           },
           "like_count": {
             "type": "integer",
