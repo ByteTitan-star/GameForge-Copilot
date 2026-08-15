@@ -51,6 +51,7 @@ def test_offline_install_shell_has_frozen_flags() -> None:
     assert "--offline" in shell
     assert "--frozen-lockfile" in shell
     assert "--frozen-store" in shell
+    assert "--trust-lockfile" in shell
     assert shell.endswith(f"{pnpm_cli()} build")
 
 

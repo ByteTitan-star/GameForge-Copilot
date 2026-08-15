@@ -113,10 +113,11 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
 
 
 def offline_install_shell(setup: str) -> str:
+    """离线安装：prepare 阶段已在线校验 lockfile，此处信任 lockfile 避免无网复检。"""
     pnpm = pnpm_cli()
     return (
         f"{setup} && "
-        f"{pnpm} install --offline --frozen-lockfile --frozen-store && "
+        f"{pnpm} install --offline --frozen-lockfile --frozen-store --trust-lockfile && "
         f"{pnpm} build"
     )
 
