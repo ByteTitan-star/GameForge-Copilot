@@ -13,6 +13,7 @@ class CreatorBrief(BaseModel):
 
 
 class PublicGameMeta(PublicGameItem):
+    featured: bool = False
     like_count: int = 0
     favorite_count: int = 0
     creator: CreatorBrief | None = None

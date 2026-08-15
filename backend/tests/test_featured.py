@@ -19,5 +19,10 @@ async def test_featured_games(
     assert featured.status_code == 200
     assert any(g["game_id"] == str(gid) for g in featured.json()["data"])
 
+    public = await verified_client.get("/api/v1/games/public")
+    assert public.status_code == 200
+    pub_row = next(g for g in public.json()["data"] if g["game_id"] == str(gid))
+    assert pub_row["featured"] is True
+
     logs = await admin_client.get("/api/v1/admin/audit-logs")
     assert any(row["action"] == "feature_game" for row in logs.json()["data"])

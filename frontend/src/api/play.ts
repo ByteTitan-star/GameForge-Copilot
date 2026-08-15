@@ -21,7 +21,7 @@ function toPlayMeta(game: PublicGame): PlayMeta {
 }
 
 export const playApi = {
-  /** 通过契约端点 GET /games/public/{slug} 解析试玩页元数据。 */
+  /** Resolve play page metadata via GET /games/public/{slug}. */
   async getMeta(slug: string, locale?: string): Promise<PlayMeta> {
     const game = await publicGamesApi.getBySlug(slug, locale)
     return toPlayMeta(game)

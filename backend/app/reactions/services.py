@@ -142,6 +142,7 @@ async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
         ),
         published_at=game.published_at,
         play_count=game.play_count,
+        featured=game.featured_rank is not None,
         like_count=like_count,
         favorite_count=favorite_count,
         creator=CreatorBrief(handle=handle, display_name=display_name),

@@ -111,6 +111,7 @@ async def _public_item(db: DbSession, game: Game, locale: str | None = None) -> 
         cover_url=(f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None),
         published_at=game.published_at,
         play_count=game.play_count,
+        featured=game.featured_rank is not None,
         like_count=like_count,
         favorite_count=favorite_count,
         creator=CreatorBrief(handle=handle, display_name=display_name),
