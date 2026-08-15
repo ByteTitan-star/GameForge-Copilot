@@ -6,6 +6,10 @@
 
 ---
 
+- ADDED: `POST /api/v1/games/{game_id}/versions/{version}/preview-token` — owner 签发 draft 多文件 preview token（§19.2），返回 `preview_url` + `expires_in_s`；Vite dist 试玩 iframe 用 token 路径加载 assets。
+- ADDED: `GET /preview/{token}/{game_id}/{version}/` 及 `/{path}` — draft 多文件产物 token 鉴权试玩（hosting 根路由，非 `/api/v1`）。
+- ADDED: `PreviewTokenResp` schema — `preview_url`、`expires_in_s`。
+
 - ADDED: `GET /games/{game_id}/messages` — 按游戏读取持久化的 Forge 用户可见对话历史，支持 `limit` / `before` 游标分页。
 
 - ADDED: `GET /games/{game_id}/versions/{version}/download` — 仅游戏所有者可下载指定版本的独立 HTML 附件；版本、产物缺失或非所有者均返回 404，前端以 Bearer 请求后保存 Blob。
