@@ -121,3 +121,34 @@ async def test_p1_vite_ts_demo_build_local(monkeypatch: pytest.MonkeyPatch) -> N
     assert result.ok, result.error or result.logs
     assert "index.html" in result.dist
     assert "pnpm-lock.yaml" in result.build_snapshot
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_react_demo_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    if os.getenv("RUN_BUILD_PIPELINE") not in ("1", "local"):
+        pytest.skip("set RUN_BUILD_PIPELINE=1 or local with builder available")
+
+    if os.getenv("RUN_BUILD_PIPELINE") == "local":
+        monkeypatch.setattr("app.core.config.settings.builder_backend", "local")
+    result = await BuildPipeline().run_react_demo()
+    assert result.ok, result.error or result.logs
+    assert "index.html" in result.dist
+    html = result.dist["index.html"].decode("utf-8")
+    assert "./assets/" in html or 'src="./assets/' in html
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_phaser_matter_demo_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    if os.getenv("RUN_BUILD_PIPELINE") not in ("1", "local"):
+        pytest.skip("set RUN_BUILD_PIPELINE=1 or local with builder available")
+
+    if os.getenv("RUN_BUILD_PIPELINE") == "local":
+        monkeypatch.setattr("app.core.config.settings.builder_backend", "local")
+    result = await BuildPipeline().run_phaser_matter_demo()
+    assert result.ok, result.error or result.logs
+    assert "index.html" in result.dist
+    pkg = result.build_snapshot.get("package.json", b"").decode()
+    assert "phaser" in pkg
+    assert "matter-js" in pkg

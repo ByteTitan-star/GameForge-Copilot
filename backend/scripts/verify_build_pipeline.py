@@ -7,12 +7,17 @@
     # 本地 pnpm fallback（§24，需 pnpm 11+ 与 Node）
     BUILDER_BACKEND=local RUN_BUILD_PIPELINE=local uv run python -m scripts.verify_build_pipeline
 
-对应 docs/build-pipeline.md §26 验证点 1–5。
+    # 额外 demo：VERIFY_BUILD_DEMOS=all|react|phaser-matter
+    # BUILDER_BACKEND=local RUN_BUILD_PIPELINE=local VERIFY_BUILD_DEMOS=all \\
+    #   uv run python -m scripts.verify_build_pipeline
+
+对应 docs/build-pipeline.md §26 验证点 1–7（demo 部分）。
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from app.core.config import settings
@@ -45,6 +50,26 @@ def _check_pnpm_version() -> None:
         print(f"pnpm {out}")
 
 
+async def _verify_demo(name: str, coro) -> int:
+    print(f"\n=== {name} ===")
+    result = await coro
+    if not result.ok:
+        print("FAIL:", result.error or "unknown")
+        if result.logs:
+            print("--- logs (tail) ---")
+            tail = result.logs[-4000:]
+            sys.stdout.buffer.write(tail.encode("utf-8", errors="replace") + b"\n")
+        return 1
+    print("OK: dist/index.html 已生成")
+    print(f"dist files: {sorted(result.dist)}")
+    html = result.dist.get("index.html", b"").decode("utf-8", errors="replace")
+    if "./assets/" not in html and 'src="./assets/' not in html:
+        print("WARN: index.html 未检测到相对 assets 路径")
+    else:
+        print("OK: dist 资源为相对路径")
+    return 0
+
+
 async def _run() -> int:
     mode = settings.builder_backend
     print(f"builder_backend={mode} builder_image={settings.builder_image}")
@@ -53,36 +78,50 @@ async def _run() -> int:
     if mode == "local":
         _check_pnpm_version()
 
-    result = await BuildPipeline().run_vite_ts_demo()
+    pipeline = BuildPipeline()
+    print("\n=== Vite+TS (§26.4) ===")
+    result = await pipeline.run_vite_ts_demo()
+    code = 0 if result.ok else 1
     if not result.ok:
         print("FAIL:", result.error or "unknown")
         if result.logs:
-            print("--- logs (tail) ---")
             tail = result.logs[-4000:]
             sys.stdout.buffer.write(tail.encode("utf-8", errors="replace") + b"\n")
         return 1
-
     print("OK: dist/index.html 已生成")
     print(f"dist files: {sorted(result.dist)}")
+    html = result.dist.get("index.html", b"").decode("utf-8", errors="replace")
+    if "./assets/" in html or 'src="./assets/' in html:
+        print("OK: dist 资源为相对路径")
+
+    demos = os.getenv("VERIFY_BUILD_DEMOS", "").strip().lower()
+    if demos in ("all", "react"):
+        code = await _verify_demo("React (§26.6)", pipeline.run_react_demo())
+        if code != 0:
+            return code
+    if demos in ("all", "phaser", "phaser-matter"):
+        code = await _verify_demo(
+            "Phaser+Matter (§26.7)", pipeline.run_phaser_matter_demo()
+        )
+        if code != 0:
+            return code
+
     if result.build_snapshot:
         print(f"build snapshot: {sorted(result.build_snapshot)}")
     if result.prepare and result.prepare.skipped:
         print("prepare: cache hit")
 
-    html = result.dist.get("index.html", b"").decode("utf-8", errors="replace")
-    if "./assets/" not in html and 'src="./assets/' not in html:
-        print("WARN: index.html 未检测到相对 assets 路径（硬约束③ base:'./'）")
-    else:
-        print("OK: dist 资源为相对路径")
-
-    asset_js = next((k for k in result.dist if k.startswith("assets/") and k.endswith(".js")), None)
+    asset_js = next(
+        (k for k in result.dist if k.startswith("assets/") and k.endswith(".js")),
+        None,
+    )
     if asset_js:
         print(f"OK: {asset_js} ({len(result.dist[asset_js])} bytes)")
 
-    if "pnpm-lock.yaml" not in result.build_snapshot:
-        print("WARN: build snapshot 缺少 pnpm-lock.yaml")
-    else:
+    if result.build_snapshot and "pnpm-lock.yaml" in result.build_snapshot:
         print("OK: pnpm-lock.yaml 已保存")
+    elif result.build_snapshot:
+        print("WARN: build snapshot 缺少 pnpm-lock.yaml")
 
     return 0
 

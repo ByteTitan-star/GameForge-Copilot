@@ -7,6 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.forge.build.constants import BUILD_SNAPSHOT_FILES
+from app.forge.build.demos import (
+    PHASER_MATTER_DEMO_ROUTING,
+    PHASER_MATTER_DEMO_SOURCE,
+    REACT_DEMO_ROUTING,
+    REACT_DEMO_SOURCE,
+)
 from app.forge.build.dependency_preparer import DependencyPreparer, PrepareResult
 from app.forge.build.manifest import merge_workspace
 from app.forge.build.profile import BuildProfile, default_build_profile
@@ -88,6 +94,22 @@ class BuildPipeline:
             if result.ok:
                 result.source = source_bytes
             return result
+
+    async def run_react_demo(
+        self, profile: BuildProfile | None = None
+    ) -> BuildPipelineResult:
+        """§26.6：固定 React Demo → dist/。"""
+        return await self.run_project(
+            REACT_DEMO_SOURCE, REACT_DEMO_ROUTING, profile
+        )
+
+    async def run_phaser_matter_demo(
+        self, profile: BuildProfile | None = None
+    ) -> BuildPipelineResult:
+        """§26.7：固定 Phaser + Matter → dist/（generate 部分用固定源码代替 LLM）。"""
+        return await self.run_project(
+            PHASER_MATTER_DEMO_SOURCE, PHASER_MATTER_DEMO_ROUTING, profile
+        )
 
     async def _run_workspace(
         self, workspace: Path, profile: BuildProfile
