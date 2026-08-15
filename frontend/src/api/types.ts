@@ -31,6 +31,7 @@ export type CreateGameResponse = S['GameResp']
 export type GameDeleteResponse = S['GameDeleteResp']
 export type GamePatchRequest = S['GamePatch']
 export type GameBatchDeleteResponse = S['GameBatchDeleteResp']
+export type PreviewTokenResp = S['PreviewTokenResp']
 
 export type RunSummary = S['RunResp']
 export type RunDetail = S['RunStatusResp']

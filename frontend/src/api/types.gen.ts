@@ -712,6 +712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/games/{game_id}/versions/{version}/preview-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Preview Token
+         * @description 签发 draft 多文件 preview token（owner only，§19.2）。
+         */
+        post: operations["create_preview_token_api_v1_games__game_id__versions__version__preview_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/games/{game_id}/versions/{version}/files/{file_path}": {
         parameters: {
             query?: never;
@@ -1494,7 +1514,7 @@ export interface paths {
         patch: operations["patch_game_featured_api_v1_admin_games__game_id__featured_patch"];
         trace?: never;
     };
-    "/play/{slug}": {
+    "/play/template/{template_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1502,30 +1522,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Play
-         * @description 已发布游戏入口，公开。非 published 一律 404。
+         * Play Template
+         * @description 模板 reference 产物试玩（catalog.json reference_artifact），公开。
          */
-        get: operations["play_play__slug__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/draft/{game_id}/{version}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Draft
-         * @description 草稿试玩，仅 owner。非 owner/不存在 → 404 不泄露。
-         */
-        get: operations["draft_draft__game_id___version__get"];
+        get: operations["play_template_play_template__template_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1546,6 +1546,146 @@ export interface paths {
          * @description 已发布游戏封面截图，公开。不触发 PV 统计。
          */
         get: operations["play_thumb_play__slug__thumb_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/play/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play
+         * @description 已发布游戏入口，公开。非 published 一律 404。
+         */
+        get: operations["play_play__slug__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/play/{slug}/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play Asset
+         * @description 已发布游戏 dist 子资源（assets/* 等），公开。
+         */
+        get: operations["play_asset_play__slug___path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/draft/{game_id}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Draft
+         * @description 草稿试玩 index.html，仅 owner。非 owner/不存在 → 404 不泄露。
+         */
+        get: operations["draft_draft__game_id___version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/draft/{game_id}/{version}/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Draft Asset
+         * @description 草稿 dist 子资源，仅 owner。
+         */
+        get: operations["draft_asset_draft__game_id___version___path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preview/{token}/{game_id}/{version}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Index
+         * @description Draft 多文件 preview 入口（短期 token，§19.2）。
+         */
+        get: operations["preview_index_preview__token___game_id___version___get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preview/{token}/{game_id}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Index
+         * @description Draft 多文件 preview 入口（短期 token，§19.2）。
+         */
+        get: operations["preview_index_preview__token___game_id___version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preview/{token}/{game_id}/{version}/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Asset
+         * @description Draft 多文件 preview 子资源（与 index 共享 token 授权）。
+         */
+        get: operations["preview_asset_preview__token___game_id___version___path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1875,6 +2015,10 @@ export interface components {
         ApiResponse_PasswordResetResp_: {
             data: components["schemas"]["PasswordResetResp"];
         };
+        /** ApiResponse[PreviewTokenResp] */
+        ApiResponse_PreviewTokenResp_: {
+            data: components["schemas"]["PreviewTokenResp"];
+        };
         /** ApiResponse[PublicGameMeta] */
         ApiResponse_PublicGameMeta_: {
             data: components["schemas"]["PublicGameMeta"];
@@ -2155,26 +2299,6 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
-        };
-        /** FavoriteGameItem */
-        FavoriteGameItem: {
-            /**
-             * Game Id
-             * Format: uuid
-             */
-            game_id: string;
-            /** Title */
-            title: string;
-            /** Slug */
-            slug: string;
-            status: components["schemas"]["GameStatus"];
-            /** Play Count */
-            play_count: number;
-            /**
-             * Favorited At
-             * Format: date-time
-             */
-            favorited_at: string;
         };
         /**
          * FeedbackReq
@@ -2667,17 +2791,6 @@ export interface components {
             /** Size */
             size: number;
         };
-        /** PaginatedData[FavoriteGameItem] */
-        PaginatedData_FavoriteGameItem_: {
-            /** Data */
-            data: components["schemas"]["FavoriteGameItem"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Size */
-            size: number;
-        };
         /** PaginatedData[GameListItem] */
         PaginatedData_GameListItem_: {
             /** Data */
@@ -2771,6 +2884,16 @@ export interface components {
              * @default true
              */
             sent: boolean;
+        };
+        /** PreviewTokenResp */
+        PreviewTokenResp: {
+            /** Preview Url */
+            preview_url: string;
+            /**
+             * Expires In S
+             * @description token 有效期（秒）
+             */
+            expires_in_s: number;
         };
         /** ProfilePatch */
         ProfilePatch: {
@@ -3157,6 +3280,18 @@ export interface components {
             requirement_seed: string;
             /** Tags */
             tags: string[];
+            /**
+             * Engine
+             * @default canvas
+             */
+            engine: string;
+            /**
+             * Playable
+             * @default false
+             */
+            playable: boolean;
+            /** Play Url */
+            play_url?: string | null;
         };
         /** TokenResp */
         TokenResp: {
@@ -3705,6 +3840,15 @@ export interface operations {
             };
             /** @description 未认证或 token 失效 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 试用账号只读 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4955,6 +5099,47 @@ export interface operations {
             };
         };
     };
+    create_preview_token_api_v1_games__game_id__versions__version__preview_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PreviewTokenResp_"];
+                };
+            };
+            /** @description 游戏不存在或不可见 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     fetch_version_file_api_v1_games__game_id__versions__version__files__file_path__get: {
         parameters: {
             query?: never;
@@ -5329,6 +5514,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponse_UserProfile_"];
                 };
             };
+            /** @description 试用账号只读 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description handle 冲突 */
             409: {
                 headers: {
@@ -5407,7 +5601,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedData_FavoriteGameItem_"];
+                    "application/json": components["schemas"]["PaginatedData_PublicGameMeta_"];
                 };
             };
             /** @description Validation Error */
@@ -6890,12 +7084,106 @@ export interface operations {
             };
         };
     };
+    play_template_play_template__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    play_thumb_play__slug__thumb_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     play_play__slug__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    play_asset_play__slug___path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                path: string;
             };
             cookie?: never;
         };
@@ -6953,12 +7241,114 @@ export interface operations {
             };
         };
     };
-    play_thumb_play__slug__thumb_png_get: {
+    draft_asset_draft__game_id___version___path__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                slug: string;
+                game_id: string;
+                version: number;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_index_preview__token___game_id___version___get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                game_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_index_preview__token___game_id___version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                game_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_asset_preview__token___game_id___version___path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                game_id: string;
+                version: number;
+                path: string;
             };
             cookie?: never;
         };

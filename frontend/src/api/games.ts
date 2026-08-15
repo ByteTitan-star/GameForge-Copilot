@@ -10,6 +10,7 @@ import type {
   GameVersion,
   HitlResolveRequest,
   HitlResolveResponse,
+  PreviewTokenResp,
   PublishSubmitResponse,
   RunControlResponse,
   RunDetail,
@@ -205,7 +206,7 @@ export const gamesApi = {
 
   /** 签发 draft 多文件 preview token（owner only，§19.2） */
   createPreviewToken(gameId: string, version: number, accessToken: string) {
-    return apiRequest<PreviewTokenResponse>(
+    return apiRequest<PreviewTokenResp>(
       `/games/${gameId}/versions/${version}/preview-token`,
       { method: 'POST', token: accessToken },
     )
@@ -228,7 +229,3 @@ export type ActiveRunItem = {
   ws_url: string
 }
 
-export type PreviewTokenResponse = {
-  preview_url: string
-  expires_in_s: number
-}
