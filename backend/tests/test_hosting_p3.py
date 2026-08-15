@@ -8,8 +8,10 @@ from sqlalchemy import select
 
 from app.core import db
 from app.hosting import preview_token, store
+from app.main import app
 from app.models.game import Game
 from app.models.game_version import GameVersion
+from tests.conftest import _sent
 
 _HTML = (
     '<!doctype html><html><head>'
@@ -129,3 +131,32 @@ async def test_create_preview_token_api(verified_client: httpx.AsyncClient) -> N
     assert data["expires_in_s"] > 0
     r2 = await verified_client.get(data["preview_url"])
     assert r2.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_create_preview_token_non_owner_404(
+    verified_client: httpx.AsyncClient,
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_project_version(gid, 1)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as other:
+        await other.post(
+            "/api/v1/auth/register",
+            json={"email": "other@v.com", "password": "password123"},
+        )
+        token = _sent["verify:other@v.com"]
+        await other.post(
+            "/api/v1/auth/verify-email",
+            json={"email": "other@v.com", "code": token},
+        )
+        login = await other.post(
+            "/api/v1/auth/login",
+            json={"email": "other@v.com", "password": "password123"},
+        )
+        other.headers["Authorization"] = (
+            f"Bearer {login.json()['data']['access_token']}"
+        )
+        r = await other.post(f"/api/v1/games/{gid}/versions/1/preview-token")
+        assert r.status_code == 404
