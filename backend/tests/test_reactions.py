@@ -25,7 +25,27 @@ async def test_like_and_favorite(
 
     listing = await verified_client.get("/api/v1/me/favorites")
     assert listing.status_code == 200
-    assert any(g["game_id"] == str(gid) for g in listing.json()["data"])
+    fav = next(g for g in listing.json()["data"] if g["game_id"] == str(gid))
+    assert fav["slug"]
+    assert "published_at" in fav
+    assert fav["play_count"] >= 0
+
+
+async def test_favorites_return_public_metadata_not_owned_shape(
+    verified_client: httpx.AsyncClient, admin_client: httpx.AsyncClient
+) -> None:
+    """收藏项应携带公开元数据（slug/play URL），而非可被 GameCard 误用的 owned 字段。"""
+    from tests.helpers_publish import publish_test_game
+
+    gid = await publish_test_game(verified_client, admin_client)
+    await verified_client.post(f"/api/v1/games/{gid}/favorite")
+    listing = await verified_client.get("/api/v1/me/favorites")
+    assert listing.status_code == 200, listing.text
+    item = next(g for g in listing.json()["data"] if g["game_id"] == str(gid))
+    assert item["slug"]
+    assert "current_version" not in item
+    assert "updated_at" not in item
+    assert "creator" in item
 
 
 async def test_get_reaction_state_reflects_toggle(
