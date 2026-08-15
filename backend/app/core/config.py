@@ -122,7 +122,6 @@ class Settings(BaseSettings):
     audit_interval_ms: int = 500  # 输出审核最小间隔（ms）：两次审核间最小时间窗
     audit_min_chars_between: int = 80  # 输出审核最小字符增量：攒够这么多字才触发一次
     audit_max_buffer_chars: int = 1500  # 审核滑窗上限：只取最近这么多字，避免越审越贵
-    audit_max_tokens: int = 256  # 审核调用 max_tokens（小，省钱）
     audit_request_timeout: int = 20  # 审核读超时（秒，短，避免拖垮打字机体验）
     audit_quick_filter: bool = True  # 正则前置快筛开关：命中即决，不调 LLM
 

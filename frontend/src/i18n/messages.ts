@@ -209,6 +209,7 @@ export const messages = {
     trialLlmLocked: '试用账号不能配置或测试密钥。注册正式账号后即可使用。',
     trialForgeLocked: '试用账号不能发起生成。你可以浏览预置样例，或注册后开始做游戏。',
     trialGamesHint: '试用预览：可查看预置样例，不能新建、删除或提交发布。',
+    trialAccountReadOnly: '试用预览账号为只读，不能修改密码或公开资料。注册正式账号后可自由设置。',
     themeTitle: '外观主题',
     collapseSidebar: '收起侧边栏',
     expandSidebar: '展开侧边栏',
@@ -864,6 +865,8 @@ export const messages = {
     trialForgeLocked:
       'The trial account cannot start generation. Browse samples, or sign up to make your own game.',
     trialGamesHint: 'Preview mode: browse sample games only. Creating, deleting, and publishing are off.',
+    trialAccountReadOnly:
+      'The shared preview account is read-only. Password and profile changes are disabled. Sign up for a full account to customize yours.',
     themeTitle: 'Appearance',
     collapseSidebar: 'Collapse sidebar',
     expandSidebar: 'Expand sidebar',

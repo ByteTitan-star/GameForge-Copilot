@@ -432,7 +432,7 @@ async def _parse_openai_stream(
 
     若 provider 不返回 usage 帧（部分 compat 实现），上层 complete_stream 会兜底估算。
     """
-    chunk_count = 0
+    char_count = 0
     final_usage: Usage | None = None
     async for _event_name, data in _iter_sse(resp):
         if data == "[DONE]":
@@ -455,18 +455,19 @@ async def _parse_openai_stream(
         # content 才是正文；reasoning_content（思考链）丢弃
         text = delta.get("content")
         if text:
-            chunk_count += 1
+            char_count += len(text)
             yield StreamChunk(delta=text)
     if final_usage is not None:
         yield StreamChunk(delta="", usage=final_usage)
-    elif chunk_count:
-        # 兜底：provider 没给 usage，用 chunk 计数粗估 output，input 记 0。
-        # 与 docs「不估算」原则的已知例外（compat 流式 usage 缺失），上层会 log warning。
-        est = Usage(input_tokens=0, output_tokens=chunk_count)
+    elif char_count:
+        # 兜底：provider 没给 usage，按字符数估 output（中英混合代码 ~4 chars/token），
+        # input 记 0（解析器拿不到 prompt）。与 docs「不估算」原则的已知例外
+        # （compat 流式 usage 缺失），比此前按 chunk 计数更接近真实值。
+        est = Usage(input_tokens=0, output_tokens=max(1, char_count // 4))
         yield StreamChunk(delta="", usage=est)
         log.warning(
-            "llm stream usage missing, estimated by chunk count",
-            extra={"stage": "http", "chunks": chunk_count},
+            "llm stream usage missing, estimated by char count",
+            extra={"stage": "http", "chars": char_count},
         )
 
 

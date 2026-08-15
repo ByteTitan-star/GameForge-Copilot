@@ -10,15 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import GameStatus, Role
+from app.llm import crypto
 from app.models.audit_log import AuditLog
 from app.models.game import Game
 from app.models.system_setting import SystemSetting
 from app.models.user import User
-from app.schemas.admin import AdminSettings
+from app.schemas.admin import AdminAuditLlmSettings, AdminSettings
 from app.usage import quota as quota_mod
 
 _LIMITS_KEY = "limits"
 _GENERAL_KEY = "general"
+_AUDIT_LLM_KEY = "audit_llm"
+
+
+def _mask_apikey(apikey: str) -> str:
+    return f"{apikey[:3]}***{apikey[-3:]}" if len(apikey) > 6 else "***"
 
 
 async def get_admin_contact_email(db: AsyncSession) -> str:
@@ -39,6 +45,37 @@ async def get_admin_contact_email(db: AsyncSession) -> str:
 async def disabled_user_message(db: AsyncSession) -> str:
     contact = await get_admin_contact_email(db)
     return f"当前账号已违规，请联系管理员<{contact}>申请解封"
+
+
+async def get_audit_llm_config(db: AsyncSession) -> dict:
+    """审核模型生效配置（明文 key）：DB 覆盖优先，逐字段回退 env。
+
+    被 guard.build_guard（worker 侧）和 admin 测试端点共用；guard 侧调用若
+    DB 异常需自行 try/except 回退纯 env。
+    """
+    row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
+    v = (row.value or {}) if row is not None else {}
+    apikey_enc = v.get("apikey_enc", "")
+    apikey = crypto.decrypt_apikey(apikey_enc) if apikey_enc else settings.audit_apikey
+    return {
+        "enabled": bool(v.get("enabled", settings.audit_enabled)),
+        "provider": str(v.get("provider") or settings.audit_provider),
+        "model": str(v.get("model") or settings.audit_model).strip(),
+        "apikey": apikey,
+        "base_url": str(v.get("base_url") or settings.audit_base_url),
+    }
+
+
+async def get_audit_llm_settings_view(db: AsyncSession) -> AdminAuditLlmSettings:
+    """admin 设置页回显：apikey 一律 masked（无 key 返回空串），不泄漏明文/密文。"""
+    cfg = await get_audit_llm_config(db)
+    return AdminAuditLlmSettings(
+        enabled=cfg["enabled"],
+        provider=cfg["provider"],
+        model=cfg["model"],
+        apikey=_mask_apikey(cfg["apikey"]) if cfg["apikey"] else "",
+        base_url=cfg["base_url"],
+    )
 
 
 async def _active_admin_count(db: AsyncSession) -> int:
@@ -148,6 +185,7 @@ async def get_settings(db: AsyncSession) -> AdminSettings:
         default_monthly_token_limit=monthly,
         default_rate_limit_per_min=rate,
         admin_contact_email=await get_admin_contact_email(db),
+        audit_llm=await get_audit_llm_settings_view(db),
     )
 
 
@@ -173,16 +211,64 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     else:
         general.value = general_value
         general.updated_by = admin.id
+    audit_value: dict | None = None
+    if req.audit_llm is not None:
+        audit_value = await _merge_audit_llm_value(db, req.audit_llm)
+        audit_row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
+        if audit_row is None:
+            db.add(
+                SystemSetting(
+                    key=_AUDIT_LLM_KEY, value=audit_value, updated_by=admin.id
+                )
+            )
+        else:
+            audit_row.value = audit_value
+            audit_row.updated_by = admin.id
     db.add(
         AuditLog(
             actor_id=admin.id,
             action="update_settings",
             target=_LIMITS_KEY,
-            detail={**value, **general_value},
+            detail={
+                **value,
+                **general_value,
+                # 审核模型只记非敏感字段，apikey 任何形态都不进审计日志
+                **({"audit_llm": _audit_log_detail(req.audit_llm)} if req.audit_llm else {}),
+            },
         )
     )
     await db.commit()
     return req
+
+
+async def _merge_audit_llm_value(
+    db: AsyncSession, req: AdminAuditLlmSettings
+) -> dict:
+    """合并审核模型配置：apikey 为空或 masked → 保留 DB 旧密文；否则加密新 key。"""
+    existing = await db.get(SystemSetting, _AUDIT_LLM_KEY)
+    old_enc = (existing.value or {}).get("apikey_enc", "") if existing else ""
+    apikey = req.apikey.strip()
+    apikey_enc = (
+        old_enc if not apikey or "***" in apikey else crypto.encrypt_apikey(apikey)
+    )
+    return {
+        "enabled": req.enabled,
+        "provider": req.provider,
+        "model": req.model.strip(),
+        "apikey_enc": apikey_enc,
+        "base_url": req.base_url.strip(),
+    }
+
+
+def _audit_log_detail(req: AdminAuditLlmSettings) -> dict:
+    """AuditLog detail 里的审核模型快照：仅非敏感字段，绝不记 apikey。"""
+    return {
+        "enabled": req.enabled,
+        "provider": req.provider,
+        "model": req.model,
+        "base_url": req.base_url,
+        "apikey_changed": bool(req.apikey.strip()) and "***" not in req.apikey,
+    }
 
 
 async def get_effective_limits(db: AsyncSession) -> tuple[int, int, int]:

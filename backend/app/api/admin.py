@@ -6,9 +6,14 @@ from fastapi import APIRouter, Query
 
 from app.admin import services
 from app.auth.deps import AdminUser, DbSession, RedisClient
+from app.auth.ratelimit import check_rate_limit
+from app.core.config import settings
 from app.core.response import ApiResponse, ErrorResponse, PaginatedData
-from app.enums import GameStatus, Role
+from app.enums import GameStatus, LLMProvider, Role
+from app.llm import provider as llm_provider
 from app.schemas.admin import (
+    AdminAuditLlmSettings,
+    AdminAuditLlmTestResp,
     AdminGameFeaturedPatch,
     AdminGameItem,
     AdminGameSchedulePatch,
@@ -21,6 +26,7 @@ from app.schemas.admin import (
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 ERR_404 = {404: {"model": ErrorResponse, "description": "用户不存在"}}
+ERR_429 = {429: {"model": ErrorResponse, "description": "探测限流"}}
 
 
 @router.get("/users", response_model=PaginatedData[AdminUserItem])
@@ -106,6 +112,45 @@ async def update_settings(
     admin: AdminUser, db: DbSession, req: AdminSettings
 ) -> ApiResponse[AdminSettings]:
     return ApiResponse(data=await services.update_settings(db, admin, req))
+
+
+@router.post(
+    "/settings/audit-llm/test",
+    response_model=ApiResponse[AdminAuditLlmTestResp],
+    responses=ERR_429,
+)
+async def test_audit_llm(
+    admin: AdminUser,
+    db: DbSession,
+    r: RedisClient,
+    req: AdminAuditLlmSettings,
+) -> ApiResponse[AdminAuditLlmTestResp]:
+    """审核模型连通测试（表单当前值 dry-test，不落库）。
+
+    apikey 为空/masked 时回退 DB 已存密钥（只改 model 不重填 key 也能测）。
+    纯付费 LLM 调用，按 admin 限流防成本放大（同用户 LLM 配置探测限流）。
+    """
+    await check_rate_limit(
+        r,
+        f"rl:llm-probe:{admin.id}",
+        settings.llm_probe_rate_limit_per_min,
+        60,
+    )
+    apikey = req.apikey.strip()
+    if not apikey or "***" in apikey:
+        cfg = await services.get_audit_llm_config(db)
+        apikey = cfg["apikey"]
+    try:
+        prov = LLMProvider(req.provider)
+    except ValueError:
+        prov = LLMProvider.OPENAI_COMPAT
+    ok, err = await llm_provider.test_connectivity(
+        prov,
+        apikey,
+        req.model.strip(),
+        req.base_url.strip() or None,
+    )
+    return ApiResponse(data=AdminAuditLlmTestResp(tested_ok=ok, error=err))
 
 
 @router.get("/audit-logs", response_model=PaginatedData[AuditLogItem])

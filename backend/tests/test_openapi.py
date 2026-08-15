@@ -31,6 +31,8 @@ REQUIRED_PATHS = {
     "/api/v1/admin/usage",
     "/api/v1/admin/audit-logs",
     "/api/v1/admin/games",
+    "/api/v1/admin/settings",
+    "/api/v1/admin/settings/audit-llm/test",
     "/api/v1/games",
     "/api/v1/games/{game_id}",
     "/api/v1/games/{game_id}/versions",

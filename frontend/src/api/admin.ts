@@ -1,5 +1,7 @@
 import { apiRequest, apiRequestList } from './client'
 import type {
+  AdminAuditLlmSettings,
+  AdminAuditLlmTestResp,
   AdminSettings,
   AdminUsage,
   AdminUser,
@@ -74,6 +76,15 @@ export const adminApi = {
   updateSettings(body: AdminSettings, accessToken: string) {
     return apiRequest<AdminSettings>('/admin/settings', {
       method: 'PUT',
+      token: accessToken,
+      body,
+    })
+  },
+
+  /** 审核模型连通测试（表单当前值 dry-test，不落库）。apikey 空/masked 时后端回退 DB 已存 key。 */
+  testAuditLlm(body: AdminAuditLlmSettings, accessToken: string) {
+    return apiRequest<AdminAuditLlmTestResp>('/admin/settings/audit-llm/test', {
+      method: 'POST',
       token: accessToken,
       body,
     })
