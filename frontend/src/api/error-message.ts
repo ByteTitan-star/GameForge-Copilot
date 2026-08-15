@@ -1,10 +1,55 @@
+import type { MessageKey } from '@/i18n/messages'
 import { ErrorCode } from './enums'
 import { ApiError, isApiError } from './errors'
 
-/** 将契约错误码映射为可行动引导文案 */
-export function formatApiError(err: unknown, fallback = '请求失败'): string {
+export type ErrorTranslator = (key: MessageKey) => string
+
+function isInvalidCredentialsMessage(message?: string): boolean {
+  if (!message) return false
+  const lower = message.toLowerCase()
+  return (
+    message.includes('邮箱或密码') ||
+    message.includes('密码不正确') ||
+    lower.includes('password') ||
+    lower.includes('credentials')
+  )
+}
+
+/** 将契约错误码映射为可行动引导文案（需传入 t 才会本地化；无 t 时不注入硬编码文案） */
+export function guideForCode(
+  code: string,
+  message: string | undefined,
+  t?: ErrorTranslator,
+): string | null {
+  if (!t) {
+    if (code === ErrorCode.LLM_CONFIG_INVALID && message) return message
+    return null
+  }
+  switch (code) {
+    case ErrorCode.EMAIL_NOT_VERIFIED:
+      return t('errEmailNotVerified')
+    case ErrorCode.QUOTA_EXCEEDED:
+      return t('errQuotaExceeded')
+    case ErrorCode.RATE_LIMITED:
+      return t('errRateLimited')
+    case ErrorCode.LLM_CONFIG_INVALID:
+      return message || t('errLlmConfigInvalid')
+    case ErrorCode.UNAUTHORIZED:
+      return isInvalidCredentialsMessage(message)
+        ? t('errInvalidCredentials')
+        : t('errSessionExpired')
+    default:
+      return null
+  }
+}
+
+export function formatApiError(
+  err: unknown,
+  fallback = '请求失败',
+  t?: ErrorTranslator,
+): string {
   if (isApiError(err)) {
-    const guided = guideForCode(err.code, err.message)
+    const guided = guideForCode(err.code, err.message, t)
     if (guided) return guided
     return err.message || fallback
   }
@@ -16,6 +61,7 @@ export function formatApiError(err: unknown, fallback = '请求失败'): string 
       lower.includes('load failed') ||
       err.message.includes('无法连接后端')
     ) {
+      if (t) return t('errNetworkFailed')
       return (
         err.message.includes('无法连接后端')
           ? err.message
@@ -23,28 +69,10 @@ export function formatApiError(err: unknown, fallback = '请求失败'): string 
             '若刚拉代码，请在 backend/ 执行 uv run alembic upgrade head'
       )
     }
-    return err.message || '无法连接后端，请确认 API 已启动'
+    return err.message || (t ? t('errNetworkFailed') : '无法连接后端，请确认 API 已启动')
   }
   if (err instanceof Error && err.message) return err.message
   return fallback
-}
-
-export function guideForCode(code: string, message?: string): string | null {
-  switch (code) {
-    case ErrorCode.EMAIL_NOT_VERIFIED:
-      return '邮箱未验证：请先到设置页完成验证后再发起生成。'
-    case ErrorCode.QUOTA_EXCEEDED:
-      return '今日 token 配额已用尽：请明天再试，或联系管理员提高配额。'
-    case ErrorCode.RATE_LIMITED:
-      return '请求过于频繁，请稍后再试。'
-    case ErrorCode.LLM_CONFIG_INVALID:
-      if (message) return message
-      return 'LLM 配置无效或连通失败：请检查 apikey、model 与 base_url。'
-    case ErrorCode.UNAUTHORIZED:
-      return '登录已失效，请重新登录。'
-    default:
-      return null
-  }
 }
 
 export function isQuotaOrVerifyError(err: unknown): err is ApiError {
