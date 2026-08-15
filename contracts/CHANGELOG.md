@@ -19,7 +19,9 @@
 
 ## 未发布（working copy）
 
-## 未发布（working copy）
+- MODIFIED: `GET /games/public`、`GET /games/featured`、`GET /official/games` — 增 `locale` query（zh | en，官方样例标题随 locale 切换）
+- MODIFIED: `GET /play/{slug}/` — 增 `locale` query（en 时优先返回英文静态页）
+- MODIFIED: `PublicGameMeta` — 增 `featured: bool`（由 `featured_rank` 推导）
 
 - ADDED: Run 事件 Redis 缓冲 + WS 连接时 replay；`GET /runs/{id}/events` HTTP 回退
 - ADDED: `GET /me/runs/active` — 跨游戏进行中的 run 列表（刷新/跳转后找回）
