@@ -134,6 +134,24 @@ async def test_create_preview_token_api(verified_client: httpx.AsyncClient) -> N
 
 
 @pytest.mark.asyncio
+async def test_preview_expired_token_http_403(
+    verified_client: httpx.AsyncClient, redis_client
+) -> None:
+    gid = await _make_game(verified_client)
+    await _make_project_version(gid, 1)
+    async with db.SessionLocal() as s:
+        game = (await s.scalars(select(Game).where(Game.id == gid))).first()
+        assert game is not None
+        owner_id = game.owner_id
+    token = await preview_token.mint_preview_token(
+        redis_client, game_id=gid, version=1, owner_id=owner_id
+    )
+    await redis_client.delete(f"preview:{token}")
+    r = await verified_client.get(f"/preview/{token}/{gid}/1/")
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_create_preview_token_non_owner_404(
     verified_client: httpx.AsyncClient,
 ) -> None:

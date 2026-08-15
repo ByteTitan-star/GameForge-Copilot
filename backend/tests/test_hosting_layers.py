@@ -43,3 +43,24 @@ async def test_write_version_layers_rejects_oversized_source(
             build_snapshot={"package.json": b"{}"},
             dist={"index.html": b"<html></html>"},
         )
+
+
+@pytest.mark.asyncio
+async def test_write_version_layers_excludes_node_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§26.11：持久化产物不含 node_modules。"""
+    monkeypatch.setattr("app.core.config.settings.hosting_root", str(tmp_path))
+    gid = uuid.uuid4()
+    await local_store.write_version_layers(
+        gid,
+        1,
+        source={"src/main.ts": b"x"},
+        build_snapshot={"package.json": b"{}"},
+        dist={"index.html": b"<html></html>", "assets/app.js": b"js"},
+    )
+    base = local_store.artifact_dir(gid, 1)
+    for path in base.rglob("*"):
+        rel = path.relative_to(base).as_posix()
+        assert "node_modules" not in rel.split("/")
+        assert ".pnpm-store" not in rel.split("/")
