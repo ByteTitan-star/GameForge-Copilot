@@ -81,7 +81,6 @@ async def main(argv: list[str]) -> int:
 
     from app.core.config import settings
     from app.core.errors import AppError
-    from app.hosting import local as local_store
     from app.hosting.factory import get_hosting_backend
 
     if settings.hosting_backend != "s3":
@@ -121,9 +120,15 @@ async def main(argv: list[str]) -> int:
     unit = "KB"
     size_disp = f"{total_bytes / 1024:.1f} {unit}"
     if args.dry_run:
-        print(f"\n[dry-run] 回填预览完成：共 {total_files} 个文件 / {size_disp}。去掉 --dry-run 实际执行。")
+        print(
+            f"\n[dry-run] 回填预览完成：共 {total_files} 个文件 / {size_disp}。"
+            "去掉 --dry-run 实际执行。"
+        )
     else:
-        print(f"\n[done] 回填完成：{len(artifacts)} 个版本 / {total_files} 个文件 / {size_disp} 已上传到 OSS。")
+        print(
+            f"\n[done] 回填完成：{len(artifacts)} 个版本 / {total_files} 个文件"
+            f" / {size_disp} 已上传到 OSS。"
+        )
         print("       可用 `uv run python -m scripts.verify_oss` 不适用（它只测连通）；")
         print("       直接 list OSS 前缀或在后端起来后试玩验证。")
     return 0

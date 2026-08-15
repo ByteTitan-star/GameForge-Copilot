@@ -39,7 +39,10 @@ def upgrade() -> None:
         sa.Column("attempts", sa.Integer(), nullable=False),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column(
-            "next_attempt_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+            "next_attempt_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
         ),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(

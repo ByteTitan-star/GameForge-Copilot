@@ -26,8 +26,9 @@ class LocalSandbox:
             for rel, content in source.items():
                 p = workspace / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
-                # 显式 UTF-8：LLM 产物以 str 传入，Windows 默认 CP936(GBK) 会让含中文的
-                # HTML 以 GBK 落盘，后续 qa_node 的 read_text(encoding="utf-8") 直接 UnicodeDecodeError。
+                # 显式 UTF-8：LLM 产物以 str 传入，Windows 默认 CP936(GBK)
+                # 会让含中文的 HTML 以 GBK 落盘，后续 qa_node 的
+                # read_text(encoding="utf-8") 直接 UnicodeDecodeError。
                 p.write_text(content, encoding="utf-8")
             if build_cmd is not None:
                 logs, error = await self._run_build(workspace, list(build_cmd))

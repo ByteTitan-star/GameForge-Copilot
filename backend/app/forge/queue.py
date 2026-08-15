@@ -9,9 +9,8 @@ resume_run：worker 执行入口校验该凭据，命中即消费并清除；缺
 
 import uuid
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 import redis.asyncio as redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.forge import state as ckpt
 from app.messaging.factory import get_task_publisher
