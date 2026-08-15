@@ -95,11 +95,10 @@ class Settings(BaseSettings):
     max_drafts_per_user: int = 20  # 每用户草稿游戏数上限
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
-    code_max_retries: int = 3  # code/qa 失败重试上限（docs/03）
-    qa_max_retries: int = 2  # QA 试玩失败回退 code 重试上限
+    # CodeQaLoop 总 attempt（含首次 generate）；infra/product/build 共用此预算。
+    code_qa_max_attempts: int = 3
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
-    # 封面截图开关：QA 通过后用 Playwright 截当前版本画面当封面。
-    # 实际是否产出还依赖 PLAYTEST_USE_PLAYWRIGHT=1 且 worker 装了 chromium；否则降级无封面。
+    # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
     models_cache_ttl_s: int = 600  # /models 短期缓存（docs/05）
 

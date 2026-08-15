@@ -565,6 +565,9 @@ async def retry_run(
     run.status = RunStatus.RUNNING.value
     run.phase = RunPhase.CODE.value
     run.ended_at = None
+    # 下一轮 CodeQaLoop 从 attempt==1 开始
+    st = {**st, "code_qa_reset": True}
+    await ckpt.save_state(r, run_id, st, db)
     await add_message(
         db,
         game_id=run.game_id,

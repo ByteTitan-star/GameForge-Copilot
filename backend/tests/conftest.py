@@ -57,9 +57,20 @@ def _playtest_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.sandbox.playtest import PlaytestResult
 
     async def _ok(_html: str, **_kwargs: object) -> PlaytestResult:
-        return PlaytestResult(ok=True, errors=[], console_logs=["mock playtest ok"])
+        return PlaytestResult(
+            ok=True,
+            errors=[],
+            console_logs=["mock playtest ok"],
+            motion_signal="raf",
+        )
 
-    monkeypatch.setattr("app.forge.graph.run_playtest", _ok)
+    for target in (
+        "app.forge.graph.run_playtest",
+        "app.forge.graph.run_playtest_dist",
+        "app.forge.code_qa_exec.run_playtest",
+        "app.forge.code_qa_exec.run_playtest_dist",
+    ):
+        monkeypatch.setattr(target, _ok)
 
 
 def _valid_design_doc_json() -> str:

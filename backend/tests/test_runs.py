@@ -204,30 +204,30 @@ async def test_grant_consumed_after_done_prevents_replay(
     assert r.json()["data"] == versions_after_done
 
 
-async def test_qa_playtest_failure_retries_then_fails(
+async def test_qa_playtest_failure_retries_then_pauses(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """QA 试玩失败 → 自动回退 code 修复；预算耗尽后直接 FAILED（不再进 HITL）。
-
-    新版流程在策划确认后不再为 sandbox/qa 失败插入人工确认点：重试耗尽即终态
-    失败，但 checkpoint 仍写 qa_failed，便于 /retry 重投。failed run 不再暴露
-    可点击的 current_hitl。
-    """
+    """QA 试玩失败 → CodeQaLoop 修复；预算耗尽后 PAUSED（qa_failed HITL）。"""
     from app.sandbox.playtest import PlaytestResult
 
     calls = {"n": 0}
 
     async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
         calls["n"] += 1
-        return PlaytestResult(ok=False, errors=["mock js error"], console_logs=["err"])
+        return PlaytestResult(
+            ok=False,
+            errors=["mock js error"],
+            console_logs=["err"],
+            failure_kind="product",
+        )
 
-    monkeypatch.setattr("app.forge.graph.run_playtest", _fail_playtest)
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail_playtest)
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "qa_max_retries", 1)
+    monkeypatch.setattr(settings, "code_qa_max_attempts", 1)
 
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
@@ -239,8 +239,9 @@ async def test_qa_playtest_failure_retries_then_fails(
     await run_generation(ctx, rid, resume=True, decision="select_a")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
-    assert r.json()["data"]["status"] == "failed"
-    assert r.json()["data"]["current_hitl"] is None
+    assert r.json()["data"]["status"] == "paused"
+    assert r.json()["data"]["current_hitl"] is not None
+    assert r.json()["data"]["current_hitl"]["node"] == "qa_failed"
     assert calls["n"] >= 1
 
 

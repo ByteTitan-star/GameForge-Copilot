@@ -1,4 +1,5 @@
 # gameforge/worker：RabbitMQ consumer。build context = 仓库根目录
+# CodeQaLoop 硬门禁要求本镜像具备 Playwright + Chromium。
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -8,8 +9,14 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Chromium 系统依赖（playwright install --with-deps 需要 root）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra playwright \
+    && uv run playwright install --with-deps chromium
 
 COPY backend/app ./app
 COPY backend/alembic ./alembic

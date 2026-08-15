@@ -34,7 +34,8 @@ The default values are suitable for local Docker-backed dependencies. Do not com
 | `backend/.env` | `RABBITMQ_URL` | `amqp://gameforge:gameforge@localhost:5672/` | Worker queue and real-time events |
 | `backend/.env` | `CORS_ORIGINS` | `http://127.0.0.1:5173,...` | browser origins allowed by the API |
 | `backend/.env` | `SANDBOX_BACKEND` | `local` | local development build backend; use `docker` only after building the sandbox image |
-| `backend/.env` | `THUMBNAIL_ENABLED` | `true` | allows optional game-cover capture after a successful browser playtest |
+| `backend/.env` | `THUMBNAIL_ENABLED` | `true` | after a successful Playwright QA pass, optionally capture a game-card cover |
+| `backend/.env` | `CODE_QA_MAX_ATTEMPTS` | `3` | CodeQaLoop attempts (generate + repair), including the first generate |
 | `frontend/.env` | `VITE_API_BASE_URL` | `http://127.0.0.1:8000/api/v1` | REST API base URL |
 | `frontend/.env` | `VITE_HOSTING_BASE_URL` | optional | hosting root for `/play` and `/draft` pages |
 | `frontend/.env` | `VITE_WS_BASE_URL` | optional | WebSocket root; inferred when omitted |
@@ -143,32 +144,28 @@ docker compose exec backend uv run python -m scripts.seed_official_games
 
 The frontend is normally run locally with `pnpm run dev` during development.
 
-## Optional Browser Playtest and Generated Covers
+## Required Browser Playtest (CodeQaLoop)
 
-The default Worker performs static checks on generated HTML. A Worker can additionally run a real Chromium playtest and capture the first viewport as a game-card cover. This is optional: without Chromium or with either setting disabled, generation continues normally and cards use their gradient fallback.
+Generation Workers **must** run real Chromium playtests. Static DOM checks are diagnostics only and cannot mark QA as passed. Without Playwright/Chromium, CodeQaLoop records `failure_kind=infra` and cannot reach `done`.
 
-Both controls must be enabled for cover capture:
-
-- `THUMBNAIL_ENABLED=true` in `backend/.env` (the runtime switch; it defaults to `true`).
-- `PLAYTEST_USE_PLAYWRIGHT=1` in the environment of the Worker process.
-
-Install the optional dependency and Chromium on the machine that runs the Worker:
+Install Playwright + Chromium on every Worker host:
 
 ```bash
 cd backend
 uv sync --extra playwright
 uv run playwright install chromium
-export PLAYTEST_USE_PLAYWRIGHT=1
 ```
 
-In Windows PowerShell, set the Worker environment variable for the current terminal before starting the Worker:
+Windows PowerShell:
 
 ```powershell
-$env:PLAYTEST_USE_PLAYWRIGHT = "1"
+cd backend
+uv sync --extra playwright
+uv run playwright install chromium
 uv run python -m app.messaging.worker
 ```
 
-For Linux containers, install the browser dependencies as part of the Worker image or use `uv run playwright install chromium --with-deps` where supported. Browser or screenshot failures fall back without blocking game generation.
+Linux containers should bake browser dependencies into the Worker image (`docker/Dockerfile.worker` installs Chromium via `playwright install --with-deps`). Screenshot failures only affect covers (`THUMBNAIL_ENABLED`); missing Chromium blocks QA pass.
 
 ## Windows Troubleshooting
 
@@ -180,7 +177,7 @@ For Linux containers, install the browser dependencies as part of the Worker ima
 | `/ready` reports an unavailable dependency | Start Docker Desktop, run `docker compose ps`, and verify PostgreSQL, Redis, and RabbitMQ are healthy. |
 | No verification code or a Forge run remains queued | Ensure the Worker terminal is running and connected to RabbitMQ. |
 | Forge generation fails before it begins | Verify the account email, then save and test a working LLM provider configuration in Settings. |
-| A game card has no screenshot cover | This is expected unless the Worker has Playwright and Chromium installed, `PLAYTEST_USE_PLAYWRIGHT=1` is set, and `THUMBNAIL_ENABLED` is enabled. Generation is unaffected. |
+| A game card has no screenshot cover | Expected unless the Worker has Playwright + Chromium and `THUMBNAIL_ENABLED=true`. Missing Chromium also blocks CodeQaLoop from passing. |
 | A local environment has stale schema | Run `cd backend` followed by `uv run alembic upgrade head`. |
 
 ## Ports
