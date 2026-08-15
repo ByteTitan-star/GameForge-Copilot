@@ -35,6 +35,32 @@ def resolve_store_path(raw: str | None = None) -> Path:
     return path
 
 
+def _ensure_bind_mount_permissions(path: Path) -> None:
+    """Docker builder 以 node(1000) 运行，bind mount 需对容器用户可读写（CI 临时目录常为 root）。"""
+    if os.name == "nt" or not path.exists():
+        return
+    import stat
+
+    def _chmod(target: Path) -> None:
+        mode = (
+            stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO
+            if target.is_dir()
+            else stat.S_IRUSR
+            | stat.S_IWUSR
+            | stat.S_IRGRP
+            | stat.S_IWGRP
+            | stat.S_IROTH
+            | stat.S_IWOTH
+        )
+        with contextlib.suppress(OSError):
+            os.chmod(target, mode)
+
+    _chmod(path)
+    if path.is_dir():
+        for child in path.rglob("*"):
+            _chmod(child)
+
+
 def pnpm_cli() -> str:
     """Docker/Linux 直接用 pnpm；Windows 本地 fallback 须走 corepack 避免全局旧版 pnpm。"""
     return "corepack pnpm" if os.name == "nt" else "pnpm"
@@ -112,6 +138,8 @@ class DockerBuilder:
         timeout_s: int | None = None,
     ) -> BuilderRunResult:
         timeout = timeout_s or settings.builder_timeout_s
+        _ensure_bind_mount_permissions(workspace.resolve())
+        _ensure_bind_mount_permissions(self.store_path.resolve())
         store_mode = "ro" if store_readonly else "rw"
         binds = [
             f"{workspace.resolve()}:/workspace:rw",
