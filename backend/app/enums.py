@@ -22,6 +22,15 @@ class RunStatus(StrEnum):
     FAILED = "failed"
 
 
+class PauseReason(StrEnum):
+    """paused 细分原因（ADR-05：不新增 RunStatus）。"""
+
+    WAITING_USER = "waiting_user"
+    RECOVERABLE_ERROR = "recoverable_error"
+    QUOTA_BLOCKED = "quota_blocked"
+    MANUAL_HOLD = "manual_hold"
+
+
 class RunPhase(StrEnum):
     PLAN = "plan"
     ART = "art"

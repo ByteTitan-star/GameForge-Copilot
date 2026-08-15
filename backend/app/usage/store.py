@@ -75,12 +75,18 @@ async def record_usage(
     calls: int = 1,
     game_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
-) -> None:
-    """M4 LLM 层调用：累加 user/sys 的 day/month/total + 月榜 ZSET。一次 pipeline。
+    idempotency_key: str | None = None,
+) -> bool:
+    """累加 user/sys 的 day/month/total + 月榜 ZSET。
 
-    day/month key 设 TTL（只增数据不无限堆积），total 不设。
-    可选 game_id/run_id 维度（B3）。
+    若提供 idempotency_key 且已记账，则跳过累加并返回 False；成功记账返回 True。
     """
+    if idempotency_key is not None:
+        from app.forge.reliability.idempotency import try_begin_side_effect
+
+        if not await try_begin_side_effect(r, idempotency_key):
+            return False
+
     total = input_tokens + output_tokens
     uid = str(user_id)
     pipe = r.pipeline()
@@ -116,6 +122,7 @@ async def record_usage(
         pipe.sadd(idx, str(run_id))
         pipe.expire(idx, 40 * 86400)
     await pipe.execute()
+    return True
 
 
 async def _bucket(r: redis.Redis, key: str) -> UsageBucket:

@@ -41,6 +41,11 @@ class BuildDonePayload(BaseModel):
     version: int
     artifact_path: str
     preview_url: str
+    # ADR-01：三分立；构建成功即可预览，未过 QA 不得 publishable
+    generation_success: bool = True
+    previewable: bool = True
+    publishable: bool = False
+    qa_ok: bool = False
 
 
 class QaReportPayload(BaseModel):
@@ -78,6 +83,10 @@ class DonePayload(BaseModel):
     game_id: uuid.UUID
     version: int
     preview_url: str
+    generation_success: bool = True
+    previewable: bool = True
+    publishable: bool = True
+    qa_ok: bool = True
 
 
 class ErrorPayload(BaseModel):
