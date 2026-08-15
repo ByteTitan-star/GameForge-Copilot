@@ -1,0 +1,25 @@
+# suspect/politics — 政治类灰名单（高精短清单；命中不即决，升级 LLM）
+# AUDIT_MODEL 为空或审核失败时 fail-open。禁止游戏玩法词与过宽词。
+# 故意保持短清单，避免流式窗高频刷 LLM。
+
+分裂国家
+暴力夺权
+颠覆政权
+恐怖宣传
+煽动颠覆
+分裂主义活动
+颠覆国家政权
+煽动暴力抗争
+非法集会游行
+境外敌对势力
+政治颠覆活动
+煽动民族仇恨
+破坏国家统一
+
+# ---- English (short list; escalate to LLM) ----
+overthrow the government
+incite subversion
+separatist movement
+violent seizure of power
+undermine national unity
+incite ethnic hatred

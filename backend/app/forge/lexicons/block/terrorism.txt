@@ -1,5 +1,6 @@
-﻿# block/terrorism — 暴恐（高精裁剪，命中即决）
-# 来源裁剪自 konsheng/Sensitive-lexicon（MIT）
+# block/terrorism — 暴恐（高精裁剪，命中即决）
+# 来源：人工整理 + konsheng/Sensitive-lexicon（MIT）裁剪思路
+# 不收录「射击/爆炸/炸弹」等可出现在普通射击/解谜游戏中的短词
 
 恐怖袭击
 自制炸弹
@@ -7,3 +8,20 @@
 暴力恐怖
 爆炸装置
 暗杀行动
+恐怖分子
+恐怖组织
+制造爆炸
+炸弹袭击
+自杀式袭击
+暴力袭击事件
+恐怖活动
+极端暴力组织
+
+# ---- English (avoid bare bomb/shoot/gun — common in games) ----
+terrorist attack
+suicide bombing
+terrorist organization
+homemade explosive device
+car bomb attack
+terrorist recruitment
+extremist violence

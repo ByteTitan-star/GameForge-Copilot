@@ -17,11 +17,16 @@ def _to_halfwidth(ch: str) -> str:
 
 
 def normalize(text: str) -> str:
-    """归一化文本供 AC 扫描；不回映原文区间（P1 evidence 用命中词面）。"""
+    """归一化文本供 AC 扫描；不回映原文区间（P1 evidence 用命中词面）。
+
+    拉丁字母统一小写，避免英文大小写绕过；CJK 不变。
+    """
     out: list[str] = []
     for ch in text:
         ch = _to_halfwidth(ch)
         if ch in _NOISE:
             continue
+        if "A" <= ch <= "Z":
+            ch = ch.lower()
         out.append(ch)
     return "".join(out)
