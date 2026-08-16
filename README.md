@@ -1,9 +1,11 @@
 <h1 align="center">🎮 GameForge</h1>
 
+
 <p align="center">
   <img src="https://img.shields.io/badge/English-0A66C2?style=for-the-badge" alt="English" />
   <a href="./README_zh.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge" alt="Chinese" /></a>
 </p>
+
 
 > Use natural language to turn a game idea into a playable browser game —
 > from single-file HTML to Vite/React and Phaser projects — then iterate,
