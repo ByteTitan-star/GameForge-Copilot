@@ -1,6 +1,6 @@
 # 本地开发
 
-[中文产品 README](../README.md)
+[中文产品 README](../README_zh.md) · [English README](../README.md)
 
 本说明收录从产品介绍首页移出的详细启动、配置、验证和排错信息。
 

@@ -1,77 +1,75 @@
 # GameForge
 
-<p align="right">
-  <strong>简体中文</strong> · <a href="README.en.md">English</a>
-</p>
+English | [中文](./README_zh.md)
 
-> 用自然语言，把游戏想法推进为可在浏览器直接试玩、管理与交付的作品。
+> Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">
-    <img src="docs/showcase/assets/gameforge-home-v2.gif" alt="GameForge 产品首页" width="100%" />
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">
+    <img src="docs/showcase/assets/gameforge-home-v2.gif" alt="GameForge product home" width="100%" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">打开产品展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">Open product showcase</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html#watch">观看试玩展示</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en#watch">Watch game showcases</a>
 </p>
 
-## GameForge 是什么
+## What is GameForge?
 
-GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者从一句玩法描述开始，经过 AI 策划、人工确认和游戏生成，即可得到能够直接试玩的浏览器游戏，并继续完成版本管理、下载与发布。
+GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description, move through AI planning, human review, and game generation, then receive a browser game they can play immediately, manage as versions, download, or publish.
 
-## 产品链路
+## Product flow
 
-| 阶段 | 关键动作 | 阶段结果 |
+| Stage | Key action | Stage output |
 | --- | --- | --- |
-| 创意输入 | 在 Forge 工作区用自然语言说明玩法、角色和规则。 | 清晰的玩法描述 |
-| AI 策划 | 将创作意图整理为可查看、可确认的游戏设计。 | 结构化策划方案 |
-| 人工确认 | 在生成前审阅设计方向，不满意可继续调整。 | 已确认的生成方案 |
-| 游戏生成 | 将方案转化为可运行的浏览器游戏并反馈进度。 | 可管理的游戏版本 |
-| 浏览器试玩 | 直接打开游戏，验证玩法与操作体验。 | 真实试玩反馈 |
-| 下载或发布 | 下载独立 HTML，或提交进入发布流程。 | 可交付的游戏作品 |
+| Creative input | Describe the gameplay, characters, and rules in natural language in the Forge workspace. | A clear gameplay brief |
+| AI planning | Turn the creative direction into a game design that can be reviewed and confirmed. | A structured design plan |
+| Human review | Review the direction before generation and continue refining it when needed. | An approved generation plan |
+| Game generation | Turn the plan into a runnable browser game with live progress feedback. | A manageable game version |
+| Browser playtest | Open the game directly and validate the gameplay and controls. | Real playtest feedback |
+| Download or publish | Download a standalone HTML build or submit the game for publishing. | A deliverable game |
 
-## 开发游戏展示
+## Created game showcase
 
-### 像素跑酷
+### Pixel Runner
 
-<img src="docs/showcase/assets/demo-pixel-runner-v2.gif" alt="像素跑酷动态游戏画面" width="100%" />
+<img src="docs/showcase/assets/demo-pixel-runner-v2.gif" alt="Animated Pixel Runner gameplay" width="100%" />
 
-霓虹重力跑酷：空格或点击反转重力，避开障碍并累计分数。
+A neon gravity runner. Press Space or click to reverse gravity, avoid obstacles, and build your score.
 
-### 塔防雏形
+### Tower Defense Prototype
 
-<img src="docs/showcase/assets/demo-tower-defense-v2.gif" alt="塔防动态游戏画面" width="100%" />
+<img src="docs/showcase/assets/demo-tower-defense-v2.gif" alt="Animated tower defense gameplay" width="100%" />
 
-卡通塔防原型：放置防御塔、拦截敌人波次，并观察关卡进度。
+A colorful tower defense prototype. Place defensive towers, stop enemy waves, and track level progress.
 
-## 产品界面
+## Product interface
 
-| Forge 工作区 | 浏览器试玩 |
+| Forge workspace | Browser playtest |
 | --- | --- |
-| <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge 工作区" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge 浏览器试玩页" width="100%" /> |
-| 描述创意、查看 AI 策划并确认生成方向。 | 打开生成结果，直接验证玩法与操作体验。 |
+| <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge workspace" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge browser playtest" width="100%" /> |
+| Describe an idea, review the AI plan, and confirm the generation direction. | Open the generated result and validate the gameplay and controls directly. |
 
-## 核心特性
+## Core features
 
-| 核心特性 | 说明 |
+| Core feature | Description |
 | --- | --- |
-| 自然语言驱动 | 不需要编写代码，通过描述玩法开始创作。 |
-| 人机协同把关 | AI 负责策划与生成，创作者决定最终方向。 |
-| 浏览器原生 | 无需安装，生成结果可以立即打开试玩。 |
-| 独立作品交付 | 游戏可作为独立 HTML 下载、保存与分享。 |
-| 版本可追溯 | 统一管理草稿、历史版本和公开作品。 |
-| 作品生态 | 支持发布、发现、收藏、点赞与分享。 |
+| Natural-language driven | Start creating by describing the gameplay instead of writing code. |
+| Human-guided AI | AI handles planning and generation while the creator controls the final direction. |
+| Browser native | Open and play generated results immediately without extra installation. |
+| Standalone delivery | Download, save, and share games as independent HTML files. |
+| Traceable versions | Manage drafts, previous versions, and public creations in one place. |
+| Creation ecosystem | Publish, discover, favorite, like, and share game creations. |
 
 <p align="center">
-  <strong>体验完整产品链路</strong><br /><br />
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">打开在线产品展示</a>
+  <strong>Experience the complete product flow</strong><br /><br />
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">Open the online product showcase</a>
   &nbsp;·&nbsp;
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html#watch">观看试玩视频</a>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en#watch">Watch the game showcase video</a>
 </p>
 
-## 许可证
+## License
 
 [MIT](LICENSE)
