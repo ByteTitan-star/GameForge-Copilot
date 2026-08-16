@@ -1,90 +1,130 @@
-# CLAUDE.md
+# 技术规范
 
-> 本文件给在本仓库工作的 AI 助手（Claude 等）提供项目约定。务必先读。
+## 编码与架构原则
 
-## 项目定位
+- 始终使用简体中文回复
+- 你是一个优秀的技术架构师和优秀的程序员，在进行架构分析、功能模块分析，
+  以及进行编码的时候，请遵循如下规则：
+  1. 分析问题和技术架构、代码模块组合等的时候请遵循"第一性原理"
+  2. 在编码的时候，请遵循 "DRY原则"、"KISS原则"、"SOLID原则"、"YAGNI原则"
+  3. 如果单独的类、函数或代码文件超过500行，请进行识别分解和分离，
+     在识别、分解、分离的过程中请遵循以上原则
 
-GameForge-Copilot：Web 端多轮对话 → 从 0 到 1 生成并发布在线可运行小游戏。生产级服务，不是 demo。详见 [README.md](README.md) 与 [docs/](docs/)。
+## 代码风格
 
-## 目录结构（规划）
+- 遵循项目现有约定和代码风格，保持与周边代码一致
+- 使用有意义的变量名和函数名，命名即文档
+- 单个函数不超过 50 行，超过时考虑拆分
+- 仅对复杂逻辑添加注释，避免显而易见的注释
 
-```
-autoGame/
-├─ README.md
-├─ CLAUDE.md
-├─ docs/                # 设计文档（已存在）
-├─ backend/             # FastAPI 后端
-│  ├─ app/
-│  │  ├─ main.py        # 入口
-│  │  ├─ api/           # 路由
-│  │  ├─ auth/          # 认证/权限
-│  │  ├─ forge/         # 游戏生成编排（LangGraph）
-│  │  │  ├─ graph.py    # 主状态图
-│  │  │  ├─ subgraphs/  # 策划/美术/代码/质检子图
-│  │  │  ├─ skills/     # 生成 skill/prompt 体系
-│  │  │  └─ sandbox.py  # 沙箱 execute_code 封装
-│  │  ├─ hosting/       # 游戏产物托管与版本
-│  │  ├─ publish/       # 发布审批工作流
-│  │  ├─ usage/         # token 用量计量（Redis）
-│  │  ├─ llm/           # LLM provider 抽象（用户自带 key）
-│  │  ├─ models/        # ORM 模型
-│  │  ├─ schemas/       # Pydantic schema
-│  │  ├─ core/          # 配置/依赖/安全
-│  │  └─ ws/            # 流式/事件总线
-│  ├─ alembic/          # 迁移
-│  ├─ tests/
-│  └─ pyproject.toml    # uv 管理
-├─ frontend/            # React + Vite + TS
-│  ├─ src/
-│  │  ├─ pages/         # 设计/展示/管理后台
-│  │  ├─ components/
-│  │  ├─ api/
-│  │  ├─ stores/
-│  │  └─ ws/
-│  └─ package.json      # pnpm
-└─ docker/              # Dockerfile / compose
-```
+## 沟通原则
 
-## 编码约定
+- 与用户的对话、分析说明、方案汇报：使用简体中文，并统一遵循金字塔原理
+- **GitHub 上的 Commit message、PR 标题与正文必须使用英文**
+  （见下方 Git 工作流）；Issue 若面向仓库协作者，默认英文
+- 表达时先结论后论据，先全局后细节，先结果后过程；
+  避免先堆砌细节再给结论
+- 结构化表达时，优先将信息按互斥且穷尽的方式分组，
+  避免内容交叉、重复和跳跃
+- 在撰写 Issue、PR 等说明性内容时，优先使用如下顺序：
+  Purpose / Background / Changes / Impact & Risks / Verification
+- 如果用户提供的原始内容结构混乱，你需要主动按金字塔原理重组后再输出
 
-- **语言**：始终用简体中文写文档、注释、commit message 主体、Issue/PR；变量/函数名用英文。
-- **风格**：遵循 DRY/KISS/SOLID/YAGNI；单函数 ≤ 50 行，单文件 > 500 行拆分。
-- **后端**：Python 3.12，类型注解必填；async 优先（IO 密集：LLM/沙箱/DB/Redis/邮件）；依赖 uv。
-- **前端**：TS 严格模式；pnpm；组件优先 shadcn/ui，避免重复造轮子。
-- **安全**：禁硬编码密钥；外部输入必校验；错误显式处理，禁止静默吞异常。
-- **测试**：公共逻辑写完同步补测试，放 `backend/tests/`；改动公共逻辑同步改测试。
-- **文档**：架构/方案文档进 `docs/`，不进代码目录。
-- **Git**：GitHub Flow，从 `main` 拉分支、PR 合回；commit 走 Conventional Commits（feat/fix/refactor/docs/test/chore），原子提交。
+## 安全规范
 
-## 关键架构约束
+- 禁止硬编码密钥、API Key、密码等敏感信息，统一使用环境变量或配置中心
+- 对用户输入进行校验，不信任任何外部输入
+- 错误必须显式处理，禁止静默失败
 
-- **编排用 LangGraph**，不自研 agent loop，不直接套 Claude Agent SDK 当全套 harness。
-- **LLM provider 不硬编码**：用户在 Web 端 setting 自配 provider/model/apikey；后端 `llm/` 抽象一层，按用户配置动态构造客户端。
-- **token 用量取 LLM 响应 `usage` 字段**（input_tokens/output_tokens），写 Redis；不估算。
-- **游戏产物静态托管**：沙箱里生成+构建，产物落对象存储/本地静态目录，按 slug 路由可玩；不在业务代码里硬编码任何游戏逻辑。
-- **可见性**：未发布游戏仅创建者可见（管理员不可见）；发布后管理员统一管理审批/上下架。
+## 历史教训（必须牢记）
 
-## 开发流程
+- 后端生产代码必须使用异步非阻塞 I/O
+  （如 `httpx.AsyncClient`、`aiohttp`、`asyncio`），
+  严禁使用同步阻塞调用（如 `requests.get`）
+- 涉及 Matplotlib、Pillow 等绘图库生成图片/图表的场景，
+  必须确保 Dockerfile 中已安装中文字体（如 `fonts-wqy-zenhei`）并正确配置，
+  否则图表中文会渲染为方框乱码
+- 构建 Dockerfile 时必须执行以下三项检查：
+  - 包名拼写检查：逐一核实 `apt-get install` 或 `pip install` 中的包名是否正确
+  - 解压工具检查：若代码涉及解压 `.zip`、`.tar.gz` 等压缩文件，
+    必须确保镜像中已安装对应解压工具（如 `unzip`、`tar`）
 
-1. 改动前先读相关 `docs/` 与周边代码，确认理解。
-2. 多步任务先列计划，每步挂验证点（跑测试/构建/看输出）。
-3. 写完代码同步写测试，`uv run pytest` / `pnpm test` 通过。
-4. 提交前自检：diff 每行对应一个具体需求；顺手清理自己留下的孤儿导入/变量。
-5. Conventional Commits，PR 说明按"目的→背景→改动点→影响→验证结果"。
+## 依赖管理
 
-## 常用命令（落地后）
+- 前端一般使用 pnpm 进行依赖管理
+- 后端是 Python 的时候使用 uv 进行依赖管理
 
-```bash
-# 后端
-cd backend && uv sync && uv run pytest && uv run ruff check .
-# 前端
-cd frontend && pnpm install && pnpm test && pnpm build
-# 依赖
-docker compose up -d postgres redis worker
-```
+## Git 工作流
 
-## 不要做
+- 采用 GitHub Flow：main 为默认稳定分支；
+  所有功能/修复分支均从 main 拉出并通过 PR 合并回 main；禁止直接提交到 main
+- **所有 Commit message 必须使用英文**；
+  遵循 Conventional Commits：`feat` / `fix` / `refactor` / `docs` /
+  `test` / `chore` 等（subject 英文，必要时 body 也英文）
+- **所有 PR 标题与正文必须使用英文**
+  （Summary / Background / Changes / Test plan 等章节用英文撰写）
+- 保持原子提交，一个 Commit 只解决一个关注点
+- 提交前必须先跑 pre-commit（见 `.pre-commit-config.yaml`），
+  再显式确认改动范围：先列出工作区全部改动（`git status` / `git diff`），
+  区分"本次提交关注点"与"无关残留改动"
+- 若存在不属于本次提交的无关改动，必须先询问用户是否一并提交，
+  再决定 `git add` 范围；禁止 `git add -A` / `git add .` 一把梭、
+  禁止擅自只提交部分文件而不告知
+- 禁止向 main 分支强制推送（force push）
 
-- 不在业务代码里硬编码任何具体游戏玩法/规则约束——玩法由 Agent 生成。
-- 不为不会发生的场景提前抽象、提前兜错。
-- 不顺手重构相邻代码；不静默跳过中文字体/IO 阻塞等历史教训点。
+注意：当用户指令不是最佳实践时，你需要及时提醒
+
+取舍：以上整体偏稳、不偏快。真正琐碎的改动（错别字、一行显而易见的小修）
+自行放宽，别硬套全套流程。
+
+## 编码前思考
+
+先想清楚再动手，别把困惑憋在心里。
+
+- 拿不准就问，别替我拍板做假设；有歧义就摆出几种理解让我选，别默默定一个。
+- 有更省事的路子就直说，该反对就反对。
+- 会欠下技术债、或有现成轮子能复用，提前讲一声。
+
+## 极简优先
+
+能 50 行搞定就别写 200 行，写多了就推倒重来。
+
+- 需求没点名的特性、灵活性、可配置项，一概不加。
+- 一次性代码不做抽象；不为压根不会发生的场景兜错。
+- 交付前自检一句：这段是不是绕得没必要？是就砍到最简。
+
+## 精准修改
+
+只碰非改不可的地方，只收拾自己弄出的烂摊子。
+
+- 先读懂上下文再下手，改动范围紧贴需求，别外扩。
+- 不顺手"美化"相邻代码、注释或格式；没坏的不重构；
+  跟着现有风格走，哪怕你有更顺手的写法。
+- 撞见无关的死代码：只提醒、不删；
+  但自己改动留下的孤儿导入/变量/函数，要顺手清干净。
+- 底线：每一行 diff 都能对上某个具体需求。
+
+## 目标驱动执行
+
+给足成功标准，让它自己循环到达标，而不是一步一停等你喂指令。
+
+- 把祈使句翻成可验证目标：与其说"修个 bug"，
+  不如说"先写一个能复现的测试，再让它变绿"。
+- 多步任务先摆出计划，每一步都挂一个验证点
+  （改完就跑测试/构建/看输出）。
+- 标准越硬，它越能自己迭代；
+  标准越含糊（"能跑就行"），越要没完没了地来回确认。
+
+## 前端教训（Flex 布局）
+
+- 容器「是否撑满父级高度」必须由布局链路自身决定，禁止与业务态 class 耦合。
+  - 反例：`.hero` 默认 `height:auto`，仅当挂上 `--stage-open`
+    （绑定「试玩区开关」）时才 `flex:1 1 0`。开关一关，hero 塌成内容高度，
+    中间大片留白、输入框浮空。
+  - 正解：hero 永久 `flex:1 1 0` 撑满；
+    业务态 class 只影响内部分栏方向等纯视觉，不碰高度。
+- 排查高度类 bug 自顶向下：先确认祖先链每一层都有确定高度
+  （`100dvh`/`flex-1`/`min-h-0`），再查叶子面板的
+  `flex flex-col` + `flex-1 overflow-y-auto`，断点往往在最外层而非内层。
+- 未分层 CSS（如 `.gf-forge-split{flex:0 0 auto}`）会压过同特异性的
+  Tailwind `flex-1`；依赖工具类撑高时，别在 CSS 里留相反的默认值。

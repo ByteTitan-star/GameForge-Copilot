@@ -40,5 +40,5 @@ htmlcov/
 .pnpm-store/
 
 # 本地备份 / 工作副本（勿入库）
-backend/备份/
-backend/后端prompt/
+backups/
+/db_backup_*.sql
