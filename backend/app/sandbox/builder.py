@@ -50,7 +50,8 @@ def _docker_user_spec() -> str:
     """与宿主同 uid/gid，避免 bind mount 产物无法清理（CI runner ≠ node:1000）。"""
     if os.name == "nt":
         return "node"
-    return f"{os.getuid()}:{os.getgid()}"
+    # POSIX-only APIs; Windows mypy stubs omit them.
+    return f"{os.getuid()}:{os.getgid()}"  # type: ignore[attr-defined]
 
 
 def _ensure_bind_mount_permissions(path: Path, *, recursive: bool = True) -> None:
@@ -131,8 +132,7 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
     reg = registry.replace("'", "")
     st = store.replace("'", "")
     return (
-        f"{prefix}{cache_cfg}pnpm config set registry '{reg}' "
-        f"&& pnpm config set store-dir '{st}'"
+        f"{prefix}{cache_cfg}pnpm config set registry '{reg}' && pnpm config set store-dir '{st}'"
     )
 
 
@@ -216,7 +216,7 @@ class DockerBuilder:
                 "Memory": 1024 * 1024 * 1024,
                 "NanoCpus": 2_000_000_000,
                 "ReadonlyRootfs": True,
-                "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=512m"},
+                "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=512m"},  # nosec B108
                 "SecurityOpt": ["no-new-privileges:true"],
                 "CapDrop": ["ALL"],
             },
@@ -229,7 +229,8 @@ class DockerBuilder:
             except DockerError:
                 await docker.images.pull(self.image)
             container = await docker.containers.create_or_replace(
-                name=f"gf-builder-{workspace.name}", config=config
+                name=f"gf-builder-{workspace.name}",
+                config=config,  # type: ignore[arg-type]
             )
             await container.start()
             try:
