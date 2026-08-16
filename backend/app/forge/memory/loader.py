@@ -1,4 +1,4 @@
-"""从 DB 装配 ContextBuilder 输入（P1）。"""
+"""从 DB 装配 ContextBuilder 输入（P1）；P5 为正式 Node 唯一拼装入口。"""
 
 from __future__ import annotations
 
@@ -21,6 +21,11 @@ from app.models.forge_message import ForgeMessage
 from app.models.game import Game
 
 
+def use_context_builder() -> bool:
+    """Builder 或 Enforcement 任一开启时，正式 Node 必须走 build_node_context。"""
+    return bool(settings.memory_context_builder or settings.memory_context_enforcement)
+
+
 async def build_node_context(
     db: AsyncSession,
     *,
@@ -31,7 +36,7 @@ async def build_node_context(
     design_doc: dict | None = None,
     recent_limit: int = 12,
 ) -> BuiltContext:
-    """规范路径：新节点应经此入口拼装，而非自行拼历史。"""
+    """规范路径：正式节点必须经此入口拼装，禁止自行拼历史/偏好。"""
     summary = coerce_session_summary(game.session_summary_json)
     prefs: list[dict] = []
     if settings.memory_preferences:
@@ -54,15 +59,27 @@ async def build_node_context(
         ]
 
     artifacts = ContextArtifacts(design_doc=design_doc) if design_doc else ContextArtifacts()
-    return ContextBuilder.build(
-        node=node,
-        current_input=current_input,
-        session_summary=dict(summary) if summary else None,
-        recent_turns=turns,
-        preferences=prefs,
-        artifacts=artifacts,
-        budget_tokens=settings.memory_context_budget_tokens,
-    )
+    from app.forge.tracing import observe_context_build, observe_subsystem
+
+    with observe_subsystem("memory", "build_node_context", metadata={"node": node}):
+        built = ContextBuilder.build(
+            node=node,
+            current_input=current_input,
+            session_summary=dict(summary) if summary else None,
+            recent_turns=turns,
+            preferences=prefs,
+            artifacts=artifacts,
+            budget_tokens=settings.memory_context_budget_tokens,
+        )
+        section_lens = {k: len(v or "") for k, v in built.sections.items()}
+        with observe_context_build(
+            node=built.node,
+            token_estimate=built.token_estimate,
+            fingerprint=built.fingerprint,
+            section_lens=section_lens,
+        ):
+            pass
+    return built
 
 
 async def maybe_touch_session_summary_flag(db: AsyncSession, game_id: uuid.UUID) -> bool:

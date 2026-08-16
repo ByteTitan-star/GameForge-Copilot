@@ -18,25 +18,28 @@ def resolve_skills_for_node(
 
     Art 节点不会看到 billing/sandbox admin 等未登记 Skill（catalog 白名单即边界）。
     """
+    from app.forge.tracing import observe_subsystem
+
     hints = hints or {}
-    metas = list_skill_metas()
-    node_key = _normalize_node(node)
+    with observe_subsystem("skill", "resolve", metadata={"node": node}):
+        metas = list_skill_metas()
+        node_key = _normalize_node(node)
 
-    policy_metas = [
-        m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)
-    ]
-    candidates = [
-        m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)
-    ]
-    chosen = _choose_methodology(node_key, candidates, hints)
+        policy_metas = [
+            m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)
+        ]
+        candidates = [
+            m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)
+        ]
+        chosen = _choose_methodology(node_key, candidates, hints)
 
-    policy = tuple(_load(m) for m in policy_metas)
-    methodology = tuple(_load(m) for m in chosen)
-    return ResolvedSkills(
-        policy=policy,
-        methodology=methodology,
-        loaded_body_count=len(policy) + len(methodology),
-    )
+        policy = tuple(_load(m) for m in policy_metas)
+        methodology = tuple(_load(m) for m in chosen)
+        return ResolvedSkills(
+            policy=policy,
+            methodology=methodology,
+            loaded_body_count=len(policy) + len(methodology),
+        )
 
 
 def _normalize_node(node: str) -> str:

@@ -318,7 +318,9 @@ async def _compose_plan_input(
             ctx.s, user_id=ctx.game.owner_id, text=current_input
         )
     wrapped = _wrap_user_input(current_input)
-    if not settings.memory_context_builder:
+    from app.forge.memory.loader import build_node_context, use_context_builder
+
+    if not use_context_builder():
         if design_doc is None:
             return wrapped
         return (
@@ -327,9 +329,7 @@ async def _compose_plan_input(
             "【用户修改意见】\n"
             f"{wrapped}"
         )
-    from app.forge.memory.loader import build_node_context
-
-    # revise 场景：设计稿仍用显式标签前置（对齐 PLAN_REVISE）；Memory 走 Builder
+    # revise：设计稿用显式标签前置（对齐 PLAN_REVISE）；Memory 走 Builder
     built = await build_node_context(
         ctx.s,
         node="plan",
@@ -378,12 +378,12 @@ async def _compose_art_input(
     else:
         prompt_input = current_input
     wrapped = _wrap_user_input(prompt_input)
-    if not settings.memory_context_builder:
+    from app.forge.memory.loader import build_node_context, use_context_builder
+
+    if not use_context_builder():
         if not current_input.strip():
             return design_block
         return f"{design_block}\n\n【用户反馈】\n{wrapped}"
-    from app.forge.memory.loader import build_node_context
-
     built = await build_node_context(
         ctx.s,
         node="art",
@@ -395,6 +395,39 @@ async def _compose_art_input(
     if not current_input.strip():
         return f"{design_block}\n\n{built.user_message}"
     return f"{design_block}\n\n【用户反馈】\n{built.user_message}"
+
+
+async def _compose_art_detail_input(
+    ctx: _Ctx,
+    *,
+    design_doc: dict[str, Any],
+    selected_option: dict[str, Any],
+) -> str:
+    """Art detail：经 ContextBuilder 注入 Memory；设计稿/选项作任务载荷。"""
+    if settings.memory_session_summary:
+        from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+        await refresh_session_summary_if_needed(ctx.s, ctx.game)
+    option_json = json.dumps(selected_option, ensure_ascii=False)
+    task = (
+        "【已确认游戏策划稿 JSON】\n"
+        f"{design_doc_to_text(design_doc)}\n\n"
+        "【用户选定的美术方向】\n"
+        f"{option_json}"
+    )
+    from app.forge.memory.loader import build_node_context, use_context_builder
+
+    if not use_context_builder():
+        return task
+    built = await build_node_context(
+        ctx.s,
+        node="art_detail",
+        game=ctx.game,
+        user_id=ctx.game.owner_id,
+        current_input="请基于已确认策划稿与选定美术方向生成详细实现设计。",
+        design_doc=design_doc,
+    )
+    return f"{task}\n\n{built.user_message}"
 
 
 async def _streamed_llm_or_fallback(
@@ -968,12 +1001,15 @@ def _build_graph(ctx: _Ctx) -> Any:
             last_error = "未知错误"
             for attempt in range(1, settings.art_max_retries + 1):
                 try:
+                    user_msg = await _compose_art_detail_input(
+                        ctx,
+                        design_doc=design_doc,
+                        selected_option=selected_option,
+                    )
                     raw = await _streamed_llm_or_fallback(
                         ctx,
                         ART_DETAIL_PROMPT,
-                        f"【已确认游戏策划稿 JSON】\n{design_doc_to_text(design_doc)}\n\n"
-                        "【用户选定的美术方向】\n"
-                        + json.dumps(selected_option, ensure_ascii=False),
+                        user_msg,
                         "art",
                         emit_delta=False,
                     )

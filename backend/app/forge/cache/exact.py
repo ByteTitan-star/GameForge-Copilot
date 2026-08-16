@@ -98,7 +98,10 @@ async def exact_cache_get(
         skill_bundle_hash=skill_bundle_hash,
         preference_revision=preference_revision,
     )
-    raw = await r.get(key)
+    from app.forge.tracing import observe_subsystem
+
+    with observe_subsystem("cache", "exact_get", metadata={"node": node}):
+        raw = await r.get(key)
     if raw is None:
         return None
     try:
@@ -129,5 +132,8 @@ async def exact_cache_set(
         preference_revision=preference_revision,
     )
     ttl = ttl_s if ttl_s is not None else settings.exact_cache_ttl_s
-    await r.set(key, json.dumps(value, ensure_ascii=False, default=str), ex=ttl)
+    from app.forge.tracing import observe_subsystem
+
+    with observe_subsystem("cache", "exact_set", metadata={"node": node, "ttl_s": ttl}):
+        await r.set(key, json.dumps(value, ensure_ascii=False, default=str), ex=ttl)
     return True

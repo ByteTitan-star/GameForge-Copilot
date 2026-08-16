@@ -18,7 +18,12 @@ _sandbox: Sandbox | None = None
 def get_sandbox_backend() -> SandboxBackend:
     global _backend
     if _backend is None:
-        _backend = _build_backend(settings.sandbox_backend)
+        from app.forge.tracing import observe_subsystem
+
+        with observe_subsystem(
+            "sandbox", "select_backend", metadata={"backend": settings.sandbox_backend}
+        ):
+            _backend = _build_backend(settings.sandbox_backend)
     return _backend
 
 
