@@ -19,25 +19,24 @@ repos:
       - id: mixed-line-ending
         args: ["--fix=lf"]
 
-  # Point at backend/pyproject.toml (line-length=100); root has no [tool.ruff]
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
-    hooks:
-      - id: ruff
-        args: ["--fix", "--config", "backend/pyproject.toml"]
-        files: "^backend/"
-      - id: ruff-format
-        args: ["--config", "backend/pyproject.toml"]
-        files: "^backend/"
-
-  # ✅ 改用官方 repo，避免 npx 网络问题
-  - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.17.2
-    hooks:
-      - id: markdownlint-cli2
-
+  # Run ruff from backend/ (same cwd as CI) so isort first-party matches.
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff (legacy alias)
+        entry: uv run --no-project python scripts/run_backend_tool.py ruff check --fix
+        language: system
+        types: [python]
+        pass_filenames: true
+        files: "^backend/"
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --no-project python scripts/run_backend_tool.py ruff format
+        language: system
+        types: [python]
+        pass_filenames: true
+        files: "^backend/"
+
       - id: secret-scan
         name: secret-scan
         entry: uv run --no-project python scripts/secret_scan.py --staged
@@ -57,6 +56,12 @@ repos:
         language: system
         pass_filenames: true  # ✅ 只检查改动文件
         files: '^backend/app/.*\.py$'
+
+  # ✅ 改用官方 repo，避免 npx 网络问题
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.2.0

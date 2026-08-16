@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as redis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.enums import GameStatus, Role, RunStatus, WSEventType
 from app.forge import state as ckpt
@@ -15,8 +18,6 @@ from app.models.game import Game
 from app.models.generation_run import GenerationRun
 from app.models.user import User
 from app.publish import services as publish_services
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _pick_admin(db: AsyncSession) -> User | None:
