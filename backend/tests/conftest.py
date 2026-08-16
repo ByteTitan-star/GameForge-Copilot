@@ -248,6 +248,8 @@ def _fake_llm(monkeypatch: pytest.MonkeyPatch):
 
     def _decide(system: str):
         """按 system prompt 决定返回内容 + usage。流式/非流式共用。"""
+        if "Skill 路由器" in system or "skill_ids" in system:
+            return '{"skill_ids":[]}', Usage(5, 2)
         if "方向提案" in system or "上一轮两个视觉方向" in system:
             return _valid_art_options_json(), Usage(10, 5)
         if "前端动效负责人" in system:
@@ -314,12 +316,18 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     _orig_messaging = settings.messaging_backend
     _orig_admin_contact = settings.admin_contact_email
     _orig_log_dir = settings.log_dir
+    _orig_sandbox_backend = settings.sandbox_backend
     # langfuse：.env 可能带真实 key，测试全程禁用，避免 observe_* 触发云上报
     _orig_langfuse_pub = settings.langfuse_public_key
     _orig_langfuse_sec = settings.langfuse_secret_key
     settings.hosting_root = str(tmp_path)
     # hosting 强制 local：.env 切到 s3 时测试产物（含 60MB 配额用例）会泄进真实 OSS
     settings.hosting_backend = "local"
+    # sandbox 强制 local：默认 e2b 无 key 回退 docker；CI 有 Docker 会卡住 HITL
+    settings.sandbox_backend = "local"
+    from app.sandbox import reset_sandbox_for_tests
+
+    reset_sandbox_for_tests()
     settings.messaging_backend = "memory"
     settings.admin_contact_email = ""
     settings.log_dir = "-"
@@ -350,6 +358,10 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     settings.hosting_root = _orig_hosting
     settings.hosting_backend = _orig_hosting_backend
     reset_hosting_for_tests()
+    settings.sandbox_backend = _orig_sandbox_backend
+    from app.sandbox import reset_sandbox_for_tests
+
+    reset_sandbox_for_tests()
     settings.messaging_backend = _orig_messaging
     settings.admin_contact_email = _orig_admin_contact
     settings.log_dir = _orig_log_dir

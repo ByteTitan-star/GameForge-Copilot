@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.forge.adr_evidence import collect_adr_evidence, evidence_all_machine_checks_ok
 
 
@@ -11,13 +13,18 @@ def test_adr_machine_evidence_all_pass() -> None:
     failed = [c for c in checks if not c.ok]
     assert failed == [], f"ADR evidence failed: {failed}"
     assert evidence_all_machine_checks_ok(checks) is True
+    ids = {c.check_id for c in checks}
+    assert "semantic_soft_hard_thresholds" in ids
+    assert "embedding_default_bge_small" in ids
 
 
 def test_adr_evidence_module_documents_invariants() -> None:
-    from pathlib import Path
-
-    text = Path(__file__).resolve().parents[1].joinpath(
-        "app", "forge", "adr_evidence.py"
-    ).read_text(encoding="utf-8")
-    assert "Accepted" in text
-    assert "semantic_direct_hit" in text
+    text = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        .joinpath("app", "forge", "adr_evidence.py")
+        .read_text(encoding="utf-8")
+    )
+    assert "ADR-06" in text
+    assert "semantic_soft_hard_thresholds" in text
