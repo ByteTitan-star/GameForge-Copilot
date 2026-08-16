@@ -16,6 +16,7 @@
 | `memory_session_summary_llm` | `false` | 额外费用 | 失败回落确定性 |
 | `skills_router_enabled` | `true` | | Policy 始终注入 |
 | `skills_llm_selection` | `false` | 费用 / 误选 | Policy 永不 LLM |
+| `skills_quality_lift_llm` | `false` | 付费 A/B | 无 complete 则退回 mock |
 | `exact_cache_enabled` | `true` | | 仅白名单节点 |
 | `semantic_cache_shadow_enabled` | `false` | Redis 膨胀 | **禁止** direct hit |
 | `reliability_node_timeout` | `true` | | |
