@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from typing import Any
 
@@ -10,6 +11,31 @@ from app.forge.build.constants import BUILDER_ALLOWED_BUILDS
 from app.forge.build.profile import BuildProfile, default_build_profile
 from app.forge.build.routing import BuildRouting, resolve_package_versions
 from app.forge.build.template import load_vite_ts_template_files
+
+# LLM source_files 不得覆盖的平台 manifest（ADR-07 P0-2）
+PROTECTED_WORKSPACE_FILES = frozenset(
+    {
+        "package.json",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "package-lock.json",
+        "yarn.lock",
+        "tsconfig.json",
+        "build-profile.json",
+    }
+)
+PROTECTED_WORKSPACE_GLOBS = ("vite.config.*",)
+
+
+def _normalize_workspace_rel(rel: str) -> str:
+    return rel.replace("\\", "/").lstrip("./")
+
+
+def is_protected_workspace_file(rel: str) -> bool:
+    name = _normalize_workspace_rel(rel)
+    if name in PROTECTED_WORKSPACE_FILES:
+        return True
+    return any(fnmatch.fnmatch(name, pattern) for pattern in PROTECTED_WORKSPACE_GLOBS)
 
 
 def _split_deps(resolved: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
@@ -121,7 +147,10 @@ def merge_workspace(
 ) -> dict[str, str]:
     """平台 manifest + LLM 业务源码；缺 index.html 时平台注入。"""
     workspace = dict(generate_manifest_files(routing, profile))
-    workspace.update(source_files)
+    for rel, content in source_files.items():
+        if is_protected_workspace_file(rel):
+            continue
+        workspace[rel] = content
     if "index.html" not in workspace:
         workspace["index.html"] = generate_platform_index_html()
     return workspace

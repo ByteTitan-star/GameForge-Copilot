@@ -3,12 +3,15 @@
 路由薄，业务在 app.auth.services；错误经 AppError 转 ErrorResponse；限流走 Redis。
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Request, status
 
 from app.auth import services
 from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.auth.ratelimit import check_rate_limit
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
 from app.email import queue as email_queue
 from app.enums import Role
@@ -35,10 +38,16 @@ from app.schemas.common import UserPublic
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # docs/10 §3 错误码对应响应，供 openapi 标注
-ERR_401 = {401: {"model": ErrorResponse, "description": "未认证或 token 失效"}}
-ERR_400 = {400: {"model": ErrorResponse, "description": "token 无效或已过期"}}
-ERR_409 = {409: {"model": ErrorResponse, "description": "邮箱已注册"}}
-ERR_429 = {429: {"model": ErrorResponse, "description": "限流"}}
+ERR_401: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorResponse, "description": "未认证或 token 失效"}
+}
+ERR_400: dict[int | str, dict[str, Any]] = {
+    400: {"model": ErrorResponse, "description": "token 无效或已过期"}
+}
+ERR_409: dict[int | str, dict[str, Any]] = {
+    409: {"model": ErrorResponse, "description": "邮箱已注册"}
+}
+ERR_429: dict[int | str, dict[str, Any]] = {429: {"model": ErrorResponse, "description": "限流"}}
 
 
 @router.post(
@@ -51,8 +60,10 @@ async def register(
     req: RegisterReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[RegisterResp]:
     await check_rate_limit(
-        r, f"rl:register:{request.client.host if request.client else 'na'}",
-        settings.default_rate_limit_per_min, 60,
+        r,
+        f"rl:register:{request.client.host if request.client else 'na'}",
+        settings.default_rate_limit_per_min,
+        60,
     )
     user, code = await services.register_user(db, req.email, req.password)
     await email_queue.enqueue_verification(user.email, code)
@@ -64,8 +75,10 @@ async def login(
     req: LoginReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[LoginResp]:
     await check_rate_limit(
-        r, f"rl:login:{request.client.host if request.client else 'na'}",
-        settings.default_rate_limit_per_min, 60,
+        r,
+        f"rl:login:{request.client.host if request.client else 'na'}",
+        settings.default_rate_limit_per_min,
+        60,
     )
     user, access, refresh = await services.login_user(db, r, req.email, req.password)
     return ApiResponse(
@@ -74,8 +87,10 @@ async def login(
             refresh_token=refresh,
             expires_in=settings.jwt_access_ttl,
             user=UserPublic(
-                user_id=user.id, email=user.email,
-                role=Role(user.role), email_verified=user.email_verified,
+                user_id=user.id,
+                email=user.email,
+                role=Role(user.role),
+                email_verified=user.email_verified,
             ),
         )
     )
@@ -91,9 +106,43 @@ async def refresh(req: RefreshReq, db: DbSession, r: RedisClient) -> ApiResponse
     )
 
 
-@router.post("/verify-email", response_model=ApiResponse[VerifyEmailResp], responses=ERR_400)
-async def verify_email(req: VerifyEmailReq, db: DbSession) -> ApiResponse[VerifyEmailResp]:
-    user = await services.verify_email(db, req.email, req.code)
+@router.post(
+    "/verify-email",
+    response_model=ApiResponse[VerifyEmailResp],
+    responses={**ERR_400, **ERR_429},
+)
+async def verify_email(
+    req: VerifyEmailReq, request: Request, db: DbSession, r: RedisClient
+) -> ApiResponse[VerifyEmailResp]:
+    host = request.client.host if request.client else "na"
+    email_key = req.email.strip().lower()
+    await check_rate_limit(
+        r,
+        f"rl:verify:{host}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
+    await check_rate_limit(
+        r,
+        f"rl:verify:email:{email_key}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
+    fail_key = f"verify_fail:{email_key}"
+    try:
+        user = await services.verify_email(db, req.email, req.code)
+    except AppError:
+        fails = int(await r.incr(fail_key))
+        await r.expire(fail_key, settings.verify_email_ttl)
+        if fails >= settings.verify_email_max_failures:
+            await services.invalidate_pending_verifications_for_email(db, req.email)
+            await r.delete(fail_key)
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "验证失败次数过多，请重新获取验证码",
+            ) from None
+        raise
+    await r.delete(fail_key)
     return ApiResponse(data=VerifyEmailResp(user_id=user.id))
 
 
@@ -152,9 +201,7 @@ async def password_reset_confirm(
     req: PasswordResetConfirmReq, db: DbSession
 ) -> ApiResponse[PasswordResetConfirmResp]:
     user = await services.confirm_password_reset(db, req.token, req.new_password)
-    return ApiResponse(
-        data=PasswordResetConfirmResp(user_id=user.id, email=user.email)
-    )
+    return ApiResponse(data=PasswordResetConfirmResp(user_id=user.id, email=user.email))
 
 
 @router.post(

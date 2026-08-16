@@ -106,6 +106,14 @@ async def resend_verification(db: AsyncSession, email: str) -> str | None:
     return await _issue_verification_code(db, user.id)
 
 
+async def invalidate_pending_verifications_for_email(db: AsyncSession, email: str) -> None:
+    """作废某邮箱用户全部未使用验证码（爆破达限后调用）。"""
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None:
+        return
+    await _invalidate_pending_verifications(db, user.id)
+
+
 async def verify_email(db: AsyncSession, email: str, code: str) -> User:
     user = await db.scalar(select(User).where(User.email == email))
     if user is None:
@@ -137,9 +145,7 @@ async def login_user(
     return await issue_session(db, r, user)
 
 
-async def issue_session(
-    db: AsyncSession, r: redis.Redis, user: User
-) -> tuple[User, str, str]:
+async def issue_session(db: AsyncSession, r: redis.Redis, user: User) -> tuple[User, str, str]:
     if user.disabled:
         raise AppError(ErrorCode.FORBIDDEN, await disabled_user_message(db))
     access = create_access_token(user_id=user.id, role=user.role)
@@ -147,9 +153,7 @@ async def issue_session(
     return user, access, refresh
 
 
-async def refresh_tokens(
-    db: AsyncSession, r: redis.Redis, refresh_token: str
-) -> tuple[str, str]:
+async def refresh_tokens(db: AsyncSession, r: redis.Redis, refresh_token: str) -> tuple[str, str]:
     rotated = await rotate_refresh(r, refresh_token)
     if rotated is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "refresh token 无效")
@@ -167,9 +171,7 @@ async def logout(r: redis.Redis, refresh_token: str) -> None:
     await revoke_refresh(r, refresh_token)
 
 
-async def request_password_reset(
-    db: AsyncSession, email: str
-) -> tuple[str, str] | None:
+async def request_password_reset(db: AsyncSession, email: str) -> tuple[str, str] | None:
     """防枚举：用户不存在时返回 None，调用方仍恒返回 sent=true。"""
     user = await db.scalar(select(User).where(User.email == email))
     if user is None or is_trial_user(user):
@@ -186,9 +188,7 @@ async def request_password_reset(
     return user.email, token
 
 
-async def confirm_password_reset(
-    db: AsyncSession, token: str, new_password: str
-) -> User:
+async def confirm_password_reset(db: AsyncSession, token: str, new_password: str) -> User:
     row = await _consume_token(db, PasswordResetToken, token)
     user = await db.get(User, row.user_id)
     if user is None:
@@ -222,7 +222,9 @@ async def _consume_token(
     """校验+消费 token：未过期、未使用，否则 VALIDATION_ERROR。"""
     stmt = select(model).where(model.token_hash == _hash_token(token))
     row = await db.scalar(stmt)
-    if row is None or row.used_at is not None:
+    if not isinstance(row, (EmailVerification, PasswordResetToken)):
+        raise AppError(ErrorCode.VALIDATION_ERROR, "token 无效或已用")
+    if row.used_at is not None:
         raise AppError(ErrorCode.VALIDATION_ERROR, "token 无效或已用")
     if _utcnow() > _aware(row.expires_at):
         raise AppError(ErrorCode.VALIDATION_ERROR, "token 已过期")

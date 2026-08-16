@@ -30,6 +30,7 @@ from app.core.errors import register_exception_handlers
 from app.core.langfuse import flush_langfuse, init_langfuse
 from app.core.logging import setup_logging
 from app.core.metrics import register_metrics
+from app.core.security_boot import assert_production_secrets
 from app.games.official import seed_official_games
 from app.hosting import routes as hosting_routes
 from app.ws import runs as ws_runs
@@ -44,6 +45,7 @@ API_V1 = "/api/v1"
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """启动：init langfuse + dev 自动 seed 官方游戏；停机 flush 缓冲 trace（docs/02 §可观测）。"""
+    assert_production_secrets(settings)
     init_langfuse()
     if settings.env == "development":
         await _dev_seed_official_games()
@@ -70,8 +72,7 @@ async def _dev_seed_official_games() -> None:
         )
     except Exception:
         log.exception(
-            "dev seed 失败（不阻断启动），请手动执行 "
-            "`uv run python -m scripts.seed_official_games`"
+            "dev seed 失败（不阻断启动），请手动执行 `uv run python -m scripts.seed_official_games`"
         )
 
 
@@ -97,7 +98,7 @@ register_metrics(app)
 
 app.include_router(health.router)
 app.include_router(auth.router, prefix=API_V1)
-if settings.env == "development":
+if settings.dev_routes_enabled:
     app.include_router(dev.router, prefix=API_V1)
 app.include_router(llm_config.router, prefix=API_V1)
 app.include_router(games.router, prefix=API_V1)

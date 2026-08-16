@@ -96,6 +96,7 @@ async def _github_profile(code: str) -> OAuthProfile:
         email = data.get("email") or f"{data['id']}@users.noreply.github.com"
         return OAuthProfile(provider_sub=str(data["id"]), email=email, name=data.get("login"))
 
+
 async def _google_profile(code: str) -> OAuthProfile:
     async with httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
@@ -148,6 +149,11 @@ async def oauth_callback(
 
     existing = await db.scalar(select(User).where(User.email == profile.email))
     if existing is not None:
+        if not existing.email_verified:
+            raise AppError(
+                ErrorCode.EMAIL_NOT_VERIFIED,
+                "该邮箱已注册但未验证，请先完成邮箱验证后再关联 OAuth",
+            )
         db.add(
             OAuthAccount(
                 user_id=existing.id,

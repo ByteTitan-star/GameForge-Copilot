@@ -4,7 +4,12 @@ import redis.asyncio as redis
 
 from app.core.config import settings
 
-pool = redis.ConnectionPool.from_url(settings.redis_url, decode_responses=True)
+pool = redis.ConnectionPool.from_url(
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=settings.redis_socket_connect_timeout,
+    socket_timeout=settings.redis_socket_timeout,
+)
 
 
 async def get_redis() -> AsyncIterator[redis.Redis]:

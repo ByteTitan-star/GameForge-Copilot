@@ -7,6 +7,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,16 @@ from aiodocker.exceptions import DockerError
 from app.core.config import settings
 from app.core.metrics import SANDBOX_RUNS
 from app.forge.build.profile import BuildProfile
+
+_PACKAGE_MANAGER_RE = re.compile(r"^pnpm@\d+(\.\d+)*$")
+
+
+def sanitize_package_manager_version(package_manager: str) -> str | None:
+    """Return pnpm version only when packageManager matches ADR-07 whitelist."""
+    pm = (package_manager or "").strip()
+    if not _PACKAGE_MANAGER_RE.fullmatch(pm):
+        return None
+    return pm.split("@", 1)[1]
 
 
 @dataclass
@@ -39,7 +50,8 @@ def _docker_user_spec() -> str:
     """与宿主同 uid/gid，避免 bind mount 产物无法清理（CI runner ≠ node:1000）。"""
     if os.name == "nt":
         return "node"
-    return f"{os.getuid()}:{os.getgid()}"
+    # POSIX-only APIs; Windows mypy stubs omit them.
+    return f"{os.getuid()}:{os.getgid()}"  # type: ignore[attr-defined]
 
 
 def _ensure_bind_mount_permissions(path: Path, *, recursive: bool = True) -> None:
@@ -90,8 +102,9 @@ def corepack_activate_shell(workspace: Path) -> str:
     pkg_path = workspace / "package.json"
     if pkg_path.is_file():
         pm = json.loads(pkg_path.read_text(encoding="utf-8")).get("packageManager", "")
-        if pm.startswith("pnpm@"):
-            version = pm.split("@", 1)[1]
+        sanitized = sanitize_package_manager_version(str(pm or ""))
+        if sanitized:
+            version = sanitized
     return f"corepack prepare pnpm@{version} --activate && "
 
 
@@ -119,8 +132,7 @@ def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None =
     reg = registry.replace("'", "")
     st = store.replace("'", "")
     return (
-        f"{prefix}{cache_cfg}pnpm config set registry '{reg}' "
-        f"&& pnpm config set store-dir '{st}'"
+        f"{prefix}{cache_cfg}pnpm config set registry '{reg}' && pnpm config set store-dir '{st}'"
     )
 
 
@@ -204,7 +216,7 @@ class DockerBuilder:
                 "Memory": 1024 * 1024 * 1024,
                 "NanoCpus": 2_000_000_000,
                 "ReadonlyRootfs": True,
-                "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=512m"},
+                "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=512m"},  # nosec B108
                 "SecurityOpt": ["no-new-privileges:true"],
                 "CapDrop": ["ALL"],
             },
@@ -217,7 +229,8 @@ class DockerBuilder:
             except DockerError:
                 await docker.images.pull(self.image)
             container = await docker.containers.create_or_replace(
-                name=f"gf-builder-{workspace.name}", config=config
+                name=f"gf-builder-{workspace.name}",
+                config=config,  # type: ignore[arg-type]
             )
             await container.start()
             try:

@@ -4,7 +4,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True, future=True)
+_connect_args: dict[str, object] = {}
+if settings.database_url.startswith("postgresql"):
+    _connect_args = {
+        "timeout": settings.db_connect_timeout,
+        "command_timeout": settings.db_command_timeout,
+    }
+
+engine = create_async_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    future=True,
+    connect_args=_connect_args,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
