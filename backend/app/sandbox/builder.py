@@ -18,6 +18,8 @@ from aiodocker.exceptions import DockerError
 from app.core.config import settings
 from app.core.metrics import SANDBOX_RUNS
 from app.forge.build.profile import BuildProfile
+from app.sandbox.procutil import run_local_process
+from app.sandbox.resources import docker_log_host_config, docker_user_spec
 
 _PACKAGE_MANAGER_RE = re.compile(r"^pnpm@\d+(\.\d+)*$")
 
@@ -44,14 +46,6 @@ def resolve_store_path(raw: str | None = None) -> Path:
         path = Path.cwd() / path
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def _docker_user_spec() -> str:
-    """与宿主同 uid/gid，避免 bind mount 产物无法清理（CI runner ≠ node:1000）。"""
-    if os.name == "nt":
-        return "node"
-    # POSIX-only APIs; Windows mypy stubs omit them.
-    return f"{os.getuid()}:{os.getgid()}"  # type: ignore[attr-defined]
 
 
 def _ensure_bind_mount_permissions(path: Path, *, recursive: bool = True) -> None:
@@ -204,7 +198,7 @@ class DockerBuilder:
             "Image": self.image,
             "Cmd": cmd_list,
             "WorkingDir": "/workspace",
-            "User": _docker_user_spec(),
+            "User": docker_user_spec(),
             "Env": [
                 "HOME=/tmp",
                 "PATH=/usr/local/bin:/pnpm:/usr/bin:/bin",
@@ -219,6 +213,7 @@ class DockerBuilder:
                 "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=512m"},  # nosec B108
                 "SecurityOpt": ["no-new-privileges:true"],
                 "CapDrop": ["ALL"],
+                **docker_log_host_config(),
             },
         }
         docker = aiodocker.Docker()
@@ -239,7 +234,7 @@ class DockerBuilder:
                 await container.kill()
                 SANDBOX_RUNS.labels("builder", "timeout").inc()
                 return BuilderRunResult(ok=False, error="构建超时")
-            logs = await container.log(stdout=True, stderr=True)
+            logs = await container.log(stdout=True, stderr=True, tail=settings.sandbox_log_tail)
             log_text = "".join(logs) if isinstance(logs, list) else str(logs)
             info = await container.show()
             code = (info.get("State") or {}).get("ExitCode", 1)
@@ -279,32 +274,22 @@ class LocalBuilder:
         script = _shell_script(cmd)
         try:
             if script is not None and os.name == "nt":
-                proc = await asyncio.create_subprocess_shell(
-                    script,
+                code, logs = await run_local_process(
+                    [],
                     cwd=workspace,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
                     env=env,
+                    timeout_s=timeout,
+                    shell=True,  # nosec B604 — Windows local builder only; script from controlled cmd
+                    shell_script=script,
                 )
             else:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    cwd=workspace,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
+                code, logs = await run_local_process(cmd, cwd=workspace, env=env, timeout_s=timeout)
         except FileNotFoundError as e:
             return BuilderRunResult(ok=False, error=str(e))
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except TimeoutError:
-            proc.kill()
-            await proc.wait()
+        if code == -1 and logs == "构建超时":
             return BuilderRunResult(ok=False, error="构建超时")
-        logs = (stdout or b"").decode(errors="replace") + (stderr or b"").decode(errors="replace")
-        if proc.returncode != 0:
-            return BuilderRunResult(ok=False, logs=logs, error=f"构建退出码 {proc.returncode}")
+        if code != 0:
+            return BuilderRunResult(ok=False, logs=logs, error=f"构建退出码 {code}")
         return BuilderRunResult(ok=True, logs=logs or "builder ok")
 
 

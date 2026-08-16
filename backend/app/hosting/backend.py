@@ -26,6 +26,16 @@ class HostingBackend(Protocol):
         self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
     ) -> Path: ...
 
+    async def write_version_layers(
+        self,
+        game_id: uuid.UUID,
+        version: int,
+        *,
+        source: dict[str, bytes],
+        build_snapshot: dict[str, bytes],
+        dist: dict[str, bytes],
+    ) -> Path: ...
+
     def index_path(self, game_id: uuid.UUID, version: int) -> Path | None: ...
 
     async def read_bytes(self, game_id: uuid.UUID, version: int, rel: str) -> bytes | None: ...
@@ -34,6 +44,4 @@ class HostingBackend(Protocol):
         self, game_id: uuid.UUID, version: int, rel: str, data: bytes
     ) -> None: ...
 
-    async def list_files(
-        self, game_id: uuid.UUID, version: int
-    ) -> list[ArtifactFileMeta]: ...
+    async def list_files(self, game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]: ...

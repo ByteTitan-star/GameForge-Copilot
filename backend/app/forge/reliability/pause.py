@@ -46,6 +46,34 @@ def build_pause_checkpoint(
     return state
 
 
+def merge_pause_checkpoint(
+    existing: dict[str, Any] | None,
+    *,
+    phase: str,
+    pause_reason: PauseReason,
+    design_doc: dict[str, Any] | str | None = None,
+    recovery: RecoveryInfo | None = None,
+    drop_keys: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """以现有 checkpoint 为底覆盖暂停字段，避免丢掉 art/code 进度（ADR-10）。"""
+    base = dict(existing or {})
+    remove = drop_keys or frozenset({"pause_reason", "recovery"})
+    for key in remove:
+        base.pop(key, None)
+    doc = design_doc if design_doc is not None else base.get("design_doc")
+    return build_pause_checkpoint(
+        phase=phase,
+        pause_reason=pause_reason,
+        design_doc=doc,
+        recovery=recovery,
+        extra={
+            k: v
+            for k, v in base.items()
+            if k not in {"phase", "pause_reason", "recovery", "design_doc"}
+        },
+    )
+
+
 def pause_reason_from_state(state: dict[str, Any] | None) -> PauseReason | None:
     if not state:
         return None

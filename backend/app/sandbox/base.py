@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 @dataclass
@@ -19,6 +19,8 @@ class BuildResult:
     files: dict[str, bytes] = field(default_factory=dict)
     logs: str = ""
     error: str | None = None
+    # ADR-11：infra/build/timeout/oom；None 表示成功或未分类
+    failure_kind: Literal["infra", "build", "timeout", "oom"] | None = None
 
 
 @dataclass
