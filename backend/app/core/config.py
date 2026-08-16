@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     sandbox_default_tier: str = "standard"
     # ADR-03：E2B 默认关闭；仅批准的 benchmark/PoC 可显式打开
     sandbox_e2b_enabled: bool = False
+    e2b_api_key: str = ""
+    e2b_timeout_s: int = 120
+    # PoC 默认不开外网，降低 UGC 出站风险；对照网络 benchmark 时可显式打开
+    e2b_allow_internet: bool = False
 
     # 构建链（docs/build-pipeline.md P1+）
     build_pipeline_enabled: bool = False
