@@ -15,6 +15,7 @@ from app.models.run_checkpoint import RunCheckpoint
 from app.models.system_setting import SystemSetting
 from app.models.task_outbox import TaskOutbox
 from app.models.user import User
+from app.models.user_preference import UserPreference
 
 __all__ = [
     "Base",
@@ -22,6 +23,7 @@ __all__ = [
     "PasswordResetToken",
     "User",
     "UserLLMConfig",
+    "UserPreference",
     "Game",
     "GameReaction",
     "GameVersion",

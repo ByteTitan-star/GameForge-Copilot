@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     reliability_node_timeout: bool = True
     # P0 可靠性：副作用幂等（promote / usage 等）；关则跳过 Redis NX 门闩
     reliability_idempotent_side_effects: bool = True
+    # P1 Memory：ContextBuilder 规范路径；关则节点保持旧拼装
+    memory_context_builder: bool = True
+    # P1 Memory：注入/写入 Explicit Preferences
+    memory_preferences: bool = True
+    # P1 Memory：ContextBuilder 总 token 预算（后续用 trace 标定）
+    memory_context_budget_tokens: int = 4000
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
