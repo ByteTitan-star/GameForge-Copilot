@@ -16,7 +16,7 @@ from app.forge.memory.context_builder import (
     estimate_tokens,
 )
 from app.forge.memory.preferences import list_active_preferences, preference_to_context_dict
-from app.forge.memory.summary import coerce_session_summary
+from app.forge.memory.summary import coerce_session_summary, should_refresh_summary
 from app.models.forge_message import ForgeMessage
 from app.models.game import Game
 
@@ -66,11 +66,10 @@ async def build_node_context(
 
 
 async def maybe_touch_session_summary_flag(db: AsyncSession, game_id: uuid.UUID) -> bool:
-    """若消息量超阈返回 True（调用方再决定是否跑 LLM 摘要；P1 MVP 只暴露触发条件）。"""
+    """若消息量超阈返回 True（兼容旧调用点）。"""
     count = await db.scalar(
         select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game_id)
     ) or 0
-    # 粗估：取最近 50 条内容长度
     rows = (
         await db.scalars(
             select(ForgeMessage.content)
@@ -80,6 +79,4 @@ async def maybe_touch_session_summary_flag(db: AsyncSession, game_id: uuid.UUID)
         )
     ).all()
     tokens = sum(estimate_tokens(c or "") for c in rows)
-    from app.forge.memory.summary import should_refresh_summary
-
     return should_refresh_summary(message_count=int(count), historical_tokens=tokens)

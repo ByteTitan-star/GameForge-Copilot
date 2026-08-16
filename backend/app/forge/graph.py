@@ -307,6 +307,10 @@ async def _compose_plan_input(
     ctx: _Ctx, *, current_input: str, design_doc: dict[str, Any] | None = None
 ) -> str:
     """Plan/revise 用户消息：可选写入 Explicit 偏好，并经 ContextBuilder 拼装。"""
+    if settings.memory_session_summary:
+        from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+        await refresh_session_summary_if_needed(ctx.s, ctx.game)
     if settings.memory_preferences:
         from app.forge.memory.preferences import upsert_explicit_from_text
 
@@ -341,6 +345,56 @@ async def _compose_plan_input(
         f"{design_doc_to_text(design_doc)}\n\n"
         + built.user_message
     )
+
+
+async def _compose_art_input(
+    ctx: _Ctx,
+    *,
+    current_input: str,
+    design_doc: dict[str, Any],
+    previous_options: dict[str, Any] | None = None,
+) -> str:
+    """Art/revise 用户消息：经 ContextBuilder 注入 summary/preferences。"""
+    if settings.memory_session_summary:
+        from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+        await refresh_session_summary_if_needed(ctx.s, ctx.game)
+    if settings.memory_preferences and current_input.strip():
+        from app.forge.memory.preferences import upsert_explicit_from_text
+
+        await upsert_explicit_from_text(
+            ctx.s, user_id=ctx.game.owner_id, text=current_input
+        )
+    design_block = (
+        "【已确认游戏策划稿 JSON】\n" + design_doc_to_text(design_doc)
+    )
+    if previous_options is not None:
+        design_block += (
+            "\n\n【上一轮方向 JSON】\n"
+            + json.dumps(previous_options, ensure_ascii=False)
+        )
+    if not current_input.strip():
+        prompt_input = "请基于已确认策划稿给出美术方向选项。"
+    else:
+        prompt_input = current_input
+    wrapped = _wrap_user_input(prompt_input)
+    if not settings.memory_context_builder:
+        if not current_input.strip():
+            return design_block
+        return f"{design_block}\n\n【用户反馈】\n{wrapped}"
+    from app.forge.memory.loader import build_node_context
+
+    built = await build_node_context(
+        ctx.s,
+        node="art",
+        game=ctx.game,
+        user_id=ctx.game.owner_id,
+        current_input=wrapped,
+        design_doc=None,
+    )
+    if not current_input.strip():
+        return f"{design_block}\n\n{built.user_message}"
+    return f"{design_block}\n\n【用户反馈】\n{built.user_message}"
 
 
 async def _streamed_llm_or_fallback(
@@ -813,10 +867,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "failed": ctrl == "cancel",
                 }
             try:
-                art_options = await generate_art_options(
-                    ART_OPTIONS_PROMPT,
-                    f"【已确认游戏策划稿 JSON】\n{design_doc_to_text(design_doc)}",
+                user_msg = await _compose_art_input(
+                    ctx, current_input="", design_doc=design_doc
                 )
+                art_options = await generate_art_options(ART_OPTIONS_PROMPT, user_msg)
             except ContentAttacked:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
@@ -850,10 +904,11 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "failed": ctrl == "cancel",
                 }
             previous = state.get("art_options") or {}
-            user_msg = (
-                f"【已确认游戏策划稿 JSON】\n{design_doc_to_text(design_doc)}\n\n"
-                f"【上一轮方向 JSON】\n{json.dumps(previous, ensure_ascii=False)}\n\n"
-                f"【用户反馈】\n{_wrap_user_input(state.get('modify_text') or '')}"
+            user_msg = await _compose_art_input(
+                ctx,
+                current_input=state.get("modify_text") or "",
+                design_doc=design_doc,
+                previous_options=previous if isinstance(previous, dict) else {},
             )
             try:
                 art_options = await generate_art_options(
