@@ -323,7 +323,7 @@ async def _env(tmp_path: Path) -> AsyncIterator[dict[str, str]]:
     settings.hosting_root = str(tmp_path)
     # hosting 强制 local：.env 切到 s3 时测试产物（含 60MB 配额用例）会泄进真实 OSS
     settings.hosting_backend = "local"
-    # sandbox 强制 local：默认 e2b 无 key 会回退 docker；CI runner 有 Docker 会走真容器导致 HITL 流卡住
+    # sandbox 强制 local：默认 e2b 无 key 回退 docker；CI 有 Docker 会卡住 HITL
     settings.sandbox_backend = "local"
     from app.sandbox import reset_sandbox_for_tests
 
