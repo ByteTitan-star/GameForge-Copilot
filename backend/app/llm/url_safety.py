@@ -41,10 +41,8 @@ def validate_llm_base_url(base_url: str | None, *, env: str | None = None) -> No
     if not host:
         raise AppError(ErrorCode.LLM_CONFIG_INVALID, "base_url 缺少主机名")
 
-    if scheme == "https":
-        pass
-    elif scheme == "http" and current_env == "development" and _host_allowed_in_development(
-        host
+    if scheme == "https" or (
+        scheme == "http" and current_env == "development" and _host_allowed_in_development(host)
     ):
         pass
     else:

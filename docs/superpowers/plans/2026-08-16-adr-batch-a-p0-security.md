@@ -38,6 +38,7 @@
 ### 任务 1：JWT 生产门禁（ADR-07 §1 / P0-1）
 
 **文件：**
+
 - 创建：`backend/app/core/security_boot.py`
 - 修改：`backend/app/main.py`（lifespan）、`backend/app/messaging/worker.py`（main 启动）
 - 测试：`backend/tests/test_security_boot.py`
@@ -76,7 +77,7 @@ def test_assert_allows_strong_secret_in_production() -> None:
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`cd backend && uv run pytest tests/test_security_boot.py -v`  
+运行：`cd backend && uv run pytest tests/test_security_boot.py -v`
 预期：FAIL（模块不存在）
 
 - [ ] **步骤 3：编写最少实现**
@@ -105,7 +106,7 @@ def assert_production_secrets(settings) -> None:
 
 - [ ] **步骤 5：Commit**
 
-`test(security): add JWT production fail-fast boot checks`  
+`test(security): add JWT production fail-fast boot checks`
 `feat(security): reject default JWT_SECRET outside development`
 
 ---
@@ -113,6 +114,7 @@ def assert_production_secrets(settings) -> None:
 ### 任务 2：manifest 黑名单 + packageManager 白名单（ADR-07 §2 / P0-2）
 
 **文件：**
+
 - 修改：`backend/app/forge/build/manifest.py`、`backend/app/sandbox/builder.py`
 - 测试：`backend/tests/test_build_p2.py`（追加）或 `backend/tests/test_manifest_protect.py`
 
@@ -188,6 +190,7 @@ def merge_workspace(...):
 ### 任务 3：verify-email 限流 + 失败作废（ADR-07 §3 / P1-17）
 
 **文件：**
+
 - 修改：`backend/app/api/auth.py`、`backend/app/auth/services.py`、`backend/app/core/config.py`（可选阈值）
 - 测试：`backend/tests/test_auth.py` 追加
 
@@ -200,7 +203,7 @@ def merge_workspace(...):
 
 ### 任务 4：OAuth 仅绑定已验证邮箱（ADR-07 §3 / P1-18）
 
-**文件：** `backend/app/auth/oauth.py`  
+**文件：** `backend/app/auth/oauth.py`
 **测试：** `backend/tests/test_oauth_bind.py`（新建，mock db）
 
 - [ ] existing 用户且 `email_verified is False` → 抛 `AppError`（FORBIDDEN/VALIDATION），不 `add(OAuthAccount)`。
@@ -212,6 +215,7 @@ def merge_workspace(...):
 ### 任务 5：openai_compat base_url SSRF 防护（ADR-07 §4 / P1-19）
 
 **文件：**
+
 - 创建：`backend/app/llm/url_safety.py`
 - 修改：`backend/app/llm/services.py`
 - 测试：`backend/tests/test_url_safety.py`
@@ -225,7 +229,7 @@ def merge_workspace(...):
 
 ### 任务 6：dev 路由显式开关（ADR-07 §5 / P1-20）
 
-**文件：** `config.py`、`main.py`、`.env.example`  
+**文件：** `config.py`、`main.py`、`.env.example`
 **测试：** `backend/tests/test_dev_routes_gate.py`
 
 - [ ] 新增 `dev_routes_enabled: bool = False`。
@@ -248,7 +252,7 @@ def merge_workspace(...):
 
 ### 任务 8：Worker 消息路径加固（ADR-08 §1/§3/§4）
 
-**文件：** `backend/app/messaging/worker.py`  
+**文件：** `backend/app/messaging/worker.py`
 **测试：** `backend/tests/test_worker_run_one.py`（对 `_run_one` 用假 message）
 
 - [ ] `decode_task` 纳入 try；解码失败记日志并 `_publish_to_dlq`（或显式吞并 ack）。
@@ -261,7 +265,7 @@ def merge_workspace(...):
 
 ### 任务 9：基建超时 + done TimeoutPolicy + audit wait_for + retry_on（ADR-09）
 
-**文件：** `config.py`、`db.py`、`redis.py`、`policy.py`、`graph.py`、`guard.py`  
+**文件：** `config.py`、`db.py`、`redis.py`、`policy.py`、`graph.py`、`guard.py`
 **测试：** `backend/tests/test_reliability_policy.py`、`test_guard_audit_timeout.py`
 
 - [ ] config 增加：`db_pool_timeout`、`db_command_timeout`、`redis_socket_timeout`、`redis_connect_timeout`（合理默认，如 10/60/5/5）。
@@ -298,7 +302,7 @@ cd backend && uv run ruff check app/core/security_boot.py app/forge/build/manife
 
 ## 自检
 
-- ADR-07 §1–5 → 任务 1–6  
-- ADR-08 §1、§2A、§3、§4 busy → 任务 7–8  
-- ADR-09 核心 → 任务 9  
-- 无「TODO/后续补充」占位任务  
+- ADR-07 §1–5 → 任务 1–6
+- ADR-08 §1、§2A、§3、§4 busy → 任务 7–8
+- ADR-09 核心 → 任务 9
+- 无「TODO/后续补充」占位任务

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.core.config import Settings
 
-DEFAULT_JWT_SECRET = "dev-secret-change-me-to-a-32-byte-random-string"
+DEFAULT_JWT_SECRET = "dev-secret-change-me-to-a-32-byte-random-string"  # nosec B105
 
 
 def assert_production_secrets(settings: Settings) -> None:
