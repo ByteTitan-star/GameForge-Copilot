@@ -10,7 +10,13 @@ from app.enums import EntryPhase
 from app.forge.cache.exact import exact_cache_get, exact_cache_set
 from app.forge.engine_router import normalize_engine_id
 from app.forge.entry_router import classify_entry_phase
+from app.forge.skills.catalog import catalog_skill_bundle_hash
 from app.forge.templates.loader import get_template, list_templates
+
+
+def _skill_hash() -> str:
+    """Skill 变更后 key 失效（进程内 catalog 缓存；部署重启后生效）。"""
+    return catalog_skill_bundle_hash()
 
 
 async def classify_entry_phase_cached(
@@ -23,7 +29,10 @@ async def classify_entry_phase_cached(
         "requirement": (requirement or "").strip(),
         "has_prior_version": bool(has_prior_version),
     }
-    hit = await exact_cache_get(r, node="entry_router", input_payload=payload)
+    skill_h = _skill_hash()
+    hit = await exact_cache_get(
+        r, node="entry_router", input_payload=payload, skill_bundle_hash=skill_h
+    )
     if isinstance(hit, str):
         try:
             return EntryPhase(hit)
@@ -31,18 +40,36 @@ async def classify_entry_phase_cached(
             pass
     result = classify_entry_phase(requirement, has_prior_version=has_prior_version)
     await exact_cache_set(
-        r, node="entry_router", input_payload=payload, value=result.value
+        r,
+        node="entry_router",
+        input_payload=payload,
+        value=result.value,
+        skill_bundle_hash=skill_h,
+    )
+    from app.forge.cache.semantic import semantic_shadow_record
+
+    await semantic_shadow_record(
+        r, node="entry_router", query=payload, actual_output=result.value
     )
     return result
 
 
 async def normalize_engine_id_cached(r: redis.Redis, value: object) -> str:
     payload = {"value": value if isinstance(value, str) else repr(value)}
-    hit = await exact_cache_get(r, node="engine_router", input_payload=payload)
+    skill_h = _skill_hash()
+    hit = await exact_cache_get(
+        r, node="engine_router", input_payload=payload, skill_bundle_hash=skill_h
+    )
     if isinstance(hit, str) and hit:
         return hit
     result = normalize_engine_id(value)
-    await exact_cache_set(r, node="engine_router", input_payload=payload, value=result)
+    await exact_cache_set(
+        r,
+        node="engine_router",
+        input_payload=payload,
+        value=result,
+        skill_bundle_hash=skill_h,
+    )
     return result
 
 
@@ -56,11 +83,20 @@ async def get_template_cached(
         "template_id": template_id,
         "require_verified": bool(require_verified),
     }
-    hit = await exact_cache_get(r, node="template_selection", input_payload=payload)
+    skill_h = _skill_hash()
+    hit = await exact_cache_get(
+        r, node="template_selection", input_payload=payload, skill_bundle_hash=skill_h
+    )
     if isinstance(hit, dict) and hit.get("template_id"):
         return hit
     result = get_template(template_id, require_verified=require_verified)
-    await exact_cache_set(r, node="template_selection", input_payload=payload, value=result)
+    await exact_cache_set(
+        r,
+        node="template_selection",
+        input_payload=payload,
+        value=result,
+        skill_bundle_hash=skill_h,
+    )
     return result
 
 
@@ -70,9 +106,18 @@ async def list_templates_cached(
     verified_only: bool = False,
 ) -> list[dict[str, Any]]:
     payload = {"verified_only": bool(verified_only), "op": "list"}
-    hit = await exact_cache_get(r, node="template_selection", input_payload=payload)
+    skill_h = _skill_hash()
+    hit = await exact_cache_get(
+        r, node="template_selection", input_payload=payload, skill_bundle_hash=skill_h
+    )
     if isinstance(hit, list):
         return hit
     result = list_templates(verified_only=verified_only)
-    await exact_cache_set(r, node="template_selection", input_payload=payload, value=result)
+    await exact_cache_set(
+        r,
+        node="template_selection",
+        input_payload=payload,
+        value=result,
+        skill_bundle_hash=skill_h,
+    )
     return result

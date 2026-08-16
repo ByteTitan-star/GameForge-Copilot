@@ -124,3 +124,9 @@ def skill_bundle_hash(skill_ids: list[str] | tuple[str, ...]) -> str:
         h.update(body.encode("utf-8"))
         h.update(b"\n")
     return h.hexdigest()
+
+
+@lru_cache(maxsize=1)
+def catalog_skill_bundle_hash() -> str:
+    """全量 catalog hash：任一 Skill 正文变更后进程重启即打穿 Exact Cache。"""
+    return skill_bundle_hash(tuple(m.id for m in list_skill_metas()))
