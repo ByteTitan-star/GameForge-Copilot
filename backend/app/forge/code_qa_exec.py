@@ -110,14 +110,33 @@ async def execute_code_or_repair(
         qa_diagnosis = state.get("qa_diagnosis") or ""
         attempt = int(state.get("attempt") or 0) + 1
 
-        base_user_msg = f"【已确认设计稿 JSON】\n{design_text}"
+        # P5：Memory/设计稿经 ContextBuilder；assets/scaffold/repair 仍为任务载荷追加
+        from app.forge.memory.loader import build_node_context, use_context_builder
+
+        entry_block = (entry_req or "").strip() or "请按已确认设计稿实现可运行游戏。"
+        if use_context_builder():
+            if settings.memory_session_summary:
+                from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+                await refresh_session_summary_if_needed(ctx.s, ctx.game)
+            built = await build_node_context(
+                ctx.s,
+                node="code" if attempt <= 1 and not entry_req else "repair",
+                game=ctx.game,
+                user_id=ctx.game.owner_id,
+                current_input=entry_block,
+                design_doc=design_doc,
+            )
+            base_user_msg = built.user_message
+        else:
+            base_user_msg = f"【已确认设计稿 JSON】\n{design_text}"
+            if entry_req:
+                base_user_msg += f"\n\n【本次实现变更要求】\n{entry_req}"
         if art_direction:
             base_user_msg += (
                 "\n\n【已确认美术实现设计稿 JSON】\n"
                 + json.dumps(art_direction, ensure_ascii=False, indent=2)
             )
-        if entry_req:
-            base_user_msg += f"\n\n【本次实现变更要求】\n{entry_req}"
         generation_user_msg = base_user_msg
         if assets_block:
             generation_user_msg += f"\n\n【可用内置素材】{assets_block}"
