@@ -359,17 +359,8 @@ async def _compose_plan_input(
     await _refresh_session_summary(ctx)
     await _upsert_preferences_from_text(ctx, current_input)
     wrapped = _wrap_user_input(current_input)
-    from app.forge.memory.loader import build_node_context, use_context_builder
+    from app.forge.memory.loader import build_node_context
 
-    if not use_context_builder():
-        if design_doc is None:
-            return wrapped
-        return (
-            "【当前完整设计稿 JSON】\n"
-            f"{design_doc_to_text(design_doc)}\n\n"
-            "【用户修改意见】\n"
-            f"{wrapped}"
-        )
     # revise：设计稿用显式标签前置（对齐 PLAN_REVISE）；Memory 走 Builder
     built = await build_node_context(
         ctx.s,
@@ -411,12 +402,8 @@ async def _compose_art_input(
     else:
         prompt_input = current_input
     wrapped = _wrap_user_input(prompt_input)
-    from app.forge.memory.loader import build_node_context, use_context_builder
+    from app.forge.memory.loader import build_node_context
 
-    if not use_context_builder():
-        if not current_input.strip():
-            return design_block
-        return f"{design_block}\n\n【用户反馈】\n{wrapped}"
     built = await build_node_context(
         ctx.s,
         node="art",
@@ -445,10 +432,8 @@ async def _compose_art_detail_input(
         "【用户选定的美术方向】\n"
         f"{option_json}"
     )
-    from app.forge.memory.loader import build_node_context, use_context_builder
+    from app.forge.memory.loader import build_node_context
 
-    if not use_context_builder():
-        return task
     built = await build_node_context(
         ctx.s,
         node="art_detail",

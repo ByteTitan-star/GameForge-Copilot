@@ -109,9 +109,9 @@ class Settings(BaseSettings):
     reliability_node_timeout: bool = True
     # P0 可靠性：副作用幂等（promote / usage 等）；关则跳过 Redis NX 门闩
     reliability_idempotent_side_effects: bool = True
-    # P1 Memory：ContextBuilder 规范路径；关则节点保持旧拼装
+    # P1 Memory：ContextBuilder 是否注入 recent turns；关则仍走 Builder，仅不带历史
     memory_context_builder: bool = True
-    # P5：正式 Node 强制经 build_node_context；开则禁用 plan/art/code 遗留 concat
+    # P5：遗留 concat 已拆除；flag 仅兼容配置，不再切换拼装路径
     memory_context_enforcement: bool = True
     # P1 Memory：注入/写入 Explicit Preferences
     memory_preferences: bool = True

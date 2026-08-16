@@ -119,12 +119,11 @@ def test_empty_optional_sections_still_build() -> None:
     assert built.fingerprint
 
 
-def test_use_context_builder_respects_enforcement(monkeypatch) -> None:
+def test_use_context_builder_always_on_after_concat_removal(monkeypatch) -> None:
+    """遗留 concat 已删：即使双 flag 关闭，正式路径仍视为必须走 Builder。"""
     from app.core.config import settings
     from app.forge.memory.loader import use_context_builder
 
     monkeypatch.setattr(settings, "memory_context_builder", False)
     monkeypatch.setattr(settings, "memory_context_enforcement", False)
-    assert use_context_builder() is False
-    monkeypatch.setattr(settings, "memory_context_enforcement", True)
     assert use_context_builder() is True
