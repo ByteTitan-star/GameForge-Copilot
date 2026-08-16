@@ -1,4 +1,4 @@
-"""P1：ContextBuilder 统一拼装入口与 token budget。"""
+"""P1：ContextBuilder 统一拼装入口与 token budget；P5 fingerprint。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from app.forge.memory.context_builder import (
     ContextArtifacts,
     ContextBuilder,
     ContextTurn,
+    context_fingerprint,
 )
 
 
@@ -34,6 +35,28 @@ def test_build_includes_required_sections_and_data_fence() -> None:
     assert built.sections["current_request"]
     assert built.token_estimate > 0
     assert built.token_estimate <= 2000
+    assert built.fingerprint
+    assert len(built.fingerprint) == 16
+
+
+def test_fingerprint_stable_for_identical_inputs() -> None:
+    kwargs = dict(
+        node="code",
+        current_input="实现关卡",
+        session_summary={"current_goal": "g"},
+        recent_turns=[ContextTurn(role="user", content="hi")],
+        preferences=[],
+        artifacts=ContextArtifacts(design_doc={"title": "t"}),
+        budget_tokens=800,
+    )
+    a = ContextBuilder.build(**kwargs)
+    b = ContextBuilder.build(**kwargs)
+    assert a.fingerprint == b.fingerprint
+    assert a.fingerprint == context_fingerprint(
+        node=a.node, sections=a.sections, token_estimate=a.token_estimate
+    )
+    c = ContextBuilder.build(**{**kwargs, "current_input": "另一请求"})
+    assert c.fingerprint != a.fingerprint
 
 
 def test_budget_truncates_recent_turns_first() -> None:
@@ -93,3 +116,15 @@ def test_empty_optional_sections_still_build() -> None:
     )
     assert "hello" in built.user_message
     assert built.token_estimate <= 200
+    assert built.fingerprint
+
+
+def test_use_context_builder_respects_enforcement(monkeypatch) -> None:
+    from app.core.config import settings
+    from app.forge.memory.loader import use_context_builder
+
+    monkeypatch.setattr(settings, "memory_context_builder", False)
+    monkeypatch.setattr(settings, "memory_context_enforcement", False)
+    assert use_context_builder() is False
+    monkeypatch.setattr(settings, "memory_context_enforcement", True)
+    assert use_context_builder() is True

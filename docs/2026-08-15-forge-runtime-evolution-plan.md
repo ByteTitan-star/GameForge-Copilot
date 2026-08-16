@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P4 MVP 已落地**；P3 E2B 生产切换与 P4.5 Semantic 仍 gated；P5 未开始）
+* Status: In Progress（**P0–P4 MVP 已落地**；**P5 Enforcement 推进中**；P3 E2B 生产切换与 P4.5 Semantic 仍 gated）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -8,7 +8,7 @@
   * [CodeQaLoop 设计](./superpowers/specs/2026-08-15-code-qa-loop-design.md)（硬约束）
   * `backend/app/forge/graph.py` / `subgraphs/code_qa_loop.py`
   * `backend/app/sandbox/`、`backend/app/forge/skills/`、`backend/app/forge/cache/`
-  * `backend/app/forge/memory/`（P1 ContextBuilder / Summary / Preferences）
+  * `backend/app/forge/memory/`（P1 ContextBuilder / Summary / Preferences；P5 Enforcement）
 * ADR 状态:
   * **ADR-01** Degraded Artifact Publishing — **Accepted**
   * **ADR-05** Recoverable Pause Representation — **Accepted**
@@ -22,8 +22,8 @@
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
   * **P2** ✅ Skills catalog/router（PR `#75`）
   * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
-  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；Semantic Cache 未开
-  * **P5** 未开始
+  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；Semantic Cache 未开（PR `#78`）
+  * **P5** 🚧 ContextBuilder Enforcement + fingerprint + Memory/Skill/Sandbox/Cache spans（diagnose 任务载荷仍可外挂）
 
 ---
 
@@ -779,6 +779,8 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 * Migration cleanup、Feature flag 收敛、废弃路径删除
 * Chaos / Load / Security 测试
 * 文档与 ADR 归档
+
+**MVP 进度（本仓库）**：`memory_context_enforcement` 默认开；`BuiltContext.fingerprint` + `observe_context_build`；plan/art/art_detail/code|repair 经 `build_node_context`；Skill/Sandbox/Cache 挂 `observe_subsystem`。diagnose 的错误/HTML 摘录仍为任务载荷（非 Memory SoT）。Chaos/Load/Security 与 ADR 归档另开。
 
 ---
 
