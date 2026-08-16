@@ -286,11 +286,7 @@ class Guard:
 
             parsed = _parse_verdict(content)
             if parsed is not None:
-                return (
-                    _LlmAuditStatus.MALICIOUS
-                    if parsed
-                    else _LlmAuditStatus.CLEAN
-                )
+                return _LlmAuditStatus.MALICIOUS if parsed else _LlmAuditStatus.CLEAN
 
             last_raw = content.strip()
             if attempt < _AUDIT_MAX_RETRIES:
@@ -299,8 +295,7 @@ class Guard:
                     extra={"attempt": attempt + 1, "raw_preview": last_raw[:50]},
                 )
                 user_msg = (
-                    f"{user_msg}\n\n{_AUDIT_RETRY_HINT}\n"
-                    f"上次输出：{last_raw[:80] or '(empty)'}"
+                    f"{user_msg}\n\n{_AUDIT_RETRY_HINT}\n上次输出：{last_raw[:80] or '(empty)'}"
                 )
                 continue
 
@@ -401,9 +396,7 @@ def _resolve_provider(value: str) -> LLMProvider:
         return LLMProvider.OPENAI_COMPAT
 
 
-async def _emit_attacked(
-    ctx: Any, *, side: str, res: AuditResult, phase: str
-) -> None:
+async def _emit_attacked(ctx: Any, *, side: str, res: AuditResult, phase: str) -> None:
     """发 ATTACKED 事件。前端收到后断 WS + 弹友好提示。run 终态由 run_generation 处理。"""
     await publish_event(
         ctx.run.id,
@@ -439,8 +432,14 @@ async def run_streamed_llm(
     """
     guard = await build_guard(ctx)
 
-    # 1) 输入侧审核
-    in_res = await guard.audit(user_msg)
+    # 1) 输入侧审核（受 audit_request_timeout 约束，超时视为未命中）
+    try:
+        in_res = await asyncio.wait_for(
+            guard.audit(user_msg),
+            timeout=settings.audit_request_timeout,
+        )
+    except TimeoutError:
+        in_res = None
     if in_res is not None and in_res.is_malicious:
         await _emit_attacked(ctx, side="input", res=in_res, phase=phase)
         raise ContentAttacked(
@@ -452,9 +451,9 @@ async def run_streamed_llm(
 
     started = time.monotonic()
     content_parts: list[str] = []
-    batch_buf: list[str] = []          # 微批缓冲：攒够发一个 LLM_DELTA
+    batch_buf: list[str] = []  # 微批缓冲：攒够发一个 LLM_DELTA
     last_flush = started
-    pending: list[str] = []            # 自上次输出审核以来的增量
+    pending: list[str] = []  # 自上次输出审核以来的增量
     last_audit_at = started
     usage = llm_provider.Usage()
     audit_task: asyncio.Task | None = None  # 后台审核 task：不阻塞 token 流
@@ -490,9 +489,7 @@ async def run_streamed_llm(
                 batch_buf.append(chunk.delta)
                 pending.append(chunk.delta)
                 if emit_delta:
-                    last_flush = await _maybe_flush(
-                        ctx, phase, batch_buf, last_flush, force=False
-                    )
+                    last_flush = await _maybe_flush(ctx, phase, batch_buf, last_flush, force=False)
             if chunk.usage is not None:
                 usage = chunk.usage
             # 已启动的后台审核完成 → 立刻检查结果（不阻塞 token 流）
@@ -524,7 +521,7 @@ async def run_streamed_llm(
             audit_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await audit_task
-        await gen.aclose()
+        await gen.aclose()  # type: ignore[attr-defined]
 
     # 流结束：emit_delta 时 flush 残留微批；再发 LLM_CALL（usage，对齐现有 _llm 事件字段）
     if emit_delta and batch_buf:
@@ -568,4 +565,3 @@ def _detect_provider(ctx: Any) -> str:
     """
     provider = getattr(getattr(ctx, "run", None), "provider", None)
     return str(provider) if provider else "unknown"
-

@@ -72,9 +72,7 @@ from app.sandbox.playtest import run_playtest, run_playtest_dist  # noqa: F401
 PLAN_MAX_ATTEMPTS = 3
 
 # resume 时需要推进凭据 resume_grant 的 HITL 检查点阶段；与 app.api.runs._HITL_PHASES 对齐。
-_HITL_RESUME_PHASES = frozenset(
-    {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"}
-)
+_HITL_RESUME_PHASES = frozenset({"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"})
 
 log = logging.getLogger(__name__)
 
@@ -93,9 +91,7 @@ def _read_html(path: Path) -> str:
         return data.decode("gbk", errors="replace")
 
 
-async def _save_thumbnail(
-    s: AsyncSession, game: Game, version: int, png: bytes
-) -> None:
+async def _save_thumbnail(s: AsyncSession, game: Game, version: int, png: bytes) -> None:
     """把 QA 通过时截的封面落盘并写库（GameVersion.thumbnail_path + Game.cover_path）。
 
     截图是封面增强项：任何异常只 log、不 raise，run 继续进 done（静默降级，卡片回退渐变）。
@@ -238,9 +234,7 @@ def _ensure_charset(html: str) -> str:
     # 没有 <head>：紧跟 <!DOCTYPE html> 之后插入一个最小 head。
     m = re.search(r"<!doctype html\s*>", html, re.IGNORECASE)
     if m:
-        return (
-            html[: m.end()] + "<head><meta charset=\"utf-8\"></head>" + html[m.end() :]
-        )
+        return html[: m.end()] + '<head><meta charset="utf-8"></head>' + html[m.end() :]
     return html
 
 
@@ -283,9 +277,7 @@ class RunFinalized(Exception):
 
 
 class _Ctx:
-    def __init__(
-        self, s: AsyncSession, r: redis.Redis, run: GenerationRun, game: Game
-    ) -> None:
+    def __init__(self, s: AsyncSession, r: redis.Redis, run: GenerationRun, game: Game) -> None:
         self.s = s
         self.r = r
         self.run = run
@@ -331,9 +323,7 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
                 )
                 return content
 
-            return await synthesize_summary_via_llm(
-                turns, previous, complete=complete
-            )
+            return await synthesize_summary_via_llm(turns, previous, complete=complete)
 
     await refresh_session_summary_if_needed(ctx.s, ctx.game, summarizer=summarizer)
 
@@ -367,11 +357,7 @@ async def _compose_plan_input(
     )
     if design_doc is None:
         return built.user_message
-    return (
-        "【当前完整设计稿 JSON】\n"
-        f"{design_doc_to_text(design_doc)}\n\n"
-        + built.user_message
-    )
+    return f"【当前完整设计稿 JSON】\n{design_doc_to_text(design_doc)}\n\n" + built.user_message
 
 
 async def _compose_art_input(
@@ -384,13 +370,10 @@ async def _compose_art_input(
     """Art/revise 用户消息：经 ContextBuilder 注入 summary/preferences。"""
     await _refresh_session_summary(ctx)
     await _upsert_preferences_from_text(ctx, current_input)
-    design_block = (
-        "【已确认游戏策划稿 JSON】\n" + design_doc_to_text(design_doc)
-    )
+    design_block = "【已确认游戏策划稿 JSON】\n" + design_doc_to_text(design_doc)
     if previous_options is not None:
-        design_block += (
-            "\n\n【上一轮方向 JSON】\n"
-            + json.dumps(previous_options, ensure_ascii=False)
+        design_block += "\n\n【上一轮方向 JSON】\n" + json.dumps(
+            previous_options, ensure_ascii=False
         )
     if not current_input.strip():
         prompt_input = "请基于已确认策划稿给出美术方向选项。"
@@ -450,9 +433,7 @@ async def _streamed_llm_or_fallback(
     打字机价值低且避免产生上千事件）。
     """
     if settings.stream_enabled:
-        return await run_streamed_llm(
-            ctx, system, user_msg, phase=phase, emit_delta=emit_delta
-        )
+        return await run_streamed_llm(ctx, system, user_msg, phase=phase, emit_delta=emit_delta)
     return await _llm(ctx, system, user_msg)
 
 
@@ -625,11 +606,7 @@ async def _pause_recoverable(
         pause_reason=PauseReason.RECOVERABLE_ERROR,
         design_doc=existing.get("design_doc"),
         recovery=recovery,
-        extra={
-            k: v
-            for k, v in existing.items()
-            if k not in {"pause_reason", "recovery", "phase"}
-        },
+        extra={k: v for k, v in existing.items() if k not in {"pause_reason", "recovery", "phase"}},
     )
     await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
     await add_message(
@@ -697,9 +674,7 @@ async def _check_ctrl(
 
 
 def _build_graph(ctx: _Ctx) -> Any:
-    async def generate_design_doc(
-        system_prompt: str, user_msg: str
-    ) -> dict[str, Any]:
+    async def generate_design_doc(system_prompt: str, user_msg: str) -> dict[str, Any]:
         """生成并真实校验策划稿；格式错误时把具体问题反馈给模型自修复。"""
         issues: list[str] = []
         design_doc: dict[str, Any] = {}
@@ -808,9 +783,7 @@ def _build_graph(ctx: _Ctx) -> Any:
     async def revise_plan_node(state: ForgeState) -> dict:
         with observe_phase("plan"):
             await _set_phase(ctx, RunPhase.PLAN)
-            current_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
+            current_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
             user_msg = await _compose_plan_input(
                 ctx,
                 current_input=state.get("modify_text") or "",
@@ -914,9 +887,7 @@ def _build_graph(ctx: _Ctx) -> Any:
 
     async def art_options_node(state: ForgeState) -> dict:
         with observe_phase("art"):
-            design_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
+            design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
             await _set_phase(ctx, RunPhase.ART)
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
@@ -926,9 +897,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "failed": ctrl == "cancel",
                 }
             try:
-                user_msg = await _compose_art_input(
-                    ctx, current_input="", design_doc=design_doc
-                )
+                user_msg = await _compose_art_input(ctx, current_input="", design_doc=design_doc)
                 art_hints = {
                     "requirement": ctx.game.requirement or "",
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
@@ -947,9 +916,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 "art_options": art_options,
             }
             await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
-            await _pause_hitl(
-                ctx, "art_confirm", design_doc, extra={"art_options": art_options}
-            )
+            await _pause_hitl(ctx, "art_confirm", design_doc, extra={"art_options": art_options})
             return {
                 "design_doc": design_doc,
                 "art_options": art_options,
@@ -959,9 +926,7 @@ def _build_graph(ctx: _Ctx) -> Any:
     async def revise_art_options_node(state: ForgeState) -> dict:
         with observe_phase("art"):
             await _set_phase(ctx, RunPhase.ART)
-            design_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
+            design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
                 return {
@@ -1000,9 +965,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 },
                 ctx.s,
             )
-            await _pause_hitl(
-                ctx, "art_confirm", design_doc, extra={"art_options": art_options}
-            )
+            await _pause_hitl(ctx, "art_confirm", design_doc, extra={"art_options": art_options})
             return {
                 "design_doc": design_doc,
                 "art_options": art_options,
@@ -1014,9 +977,7 @@ def _build_graph(ctx: _Ctx) -> Any:
     async def art_detail_node(state: ForgeState) -> dict:
         with observe_phase("art"):
             await _set_phase(ctx, RunPhase.ART)
-            design_doc = coerce_design_doc(
-                state.get("design_doc") or {}, ctx.game.title
-            )
+            design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
                 return {
@@ -1126,9 +1087,7 @@ def _build_graph(ctx: _Ctx) -> Any:
 
     async def code_qa_loop_node(state: ForgeState) -> dict:
         """主图包装：调用子图；ok 则 promote，exhausted 则 PAUSED HITL。"""
-        design_doc = coerce_design_doc(
-            state.get("design_doc") or {}, ctx.game.title
-        )
+        design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
         loop_in: dict[str, Any] = {
             "design_doc": design_doc,
             "artifacts": state.get("artifacts") or [],
@@ -1148,10 +1107,10 @@ def _build_graph(ctx: _Ctx) -> Any:
         else:
             loop_in["attempt"] = int(state.get("attempt") or 0)
 
-        subgraph = build_code_qa_loop(
-            code_or_repair=code_or_repair_node,
-            playtest=playtest_node,
-            diagnose=diagnose_node,
+        subgraph = build_code_qa_loop(  # type: ignore[arg-type]
+            code_or_repair=code_or_repair_node,  # type: ignore[arg-type]
+            playtest=playtest_node,  # type: ignore[arg-type]
+            diagnose=diagnose_node,  # type: ignore[arg-type]
         )
         result = await subgraph.ainvoke(loop_in)
 
@@ -1173,9 +1132,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "design_doc": design_doc,
                     "playtest_errors": ["qa_ok 但缺少 candidate_version"],
                 }
-            key = side_effect_key(
-                ctx.run.id, "code_qa_loop", f"v{int(version)}", "promote"
-            )
+            key = side_effect_key(ctx.run.id, "code_qa_loop", f"v{int(version)}", "promote")
             if await try_begin_side_effect(ctx.r, key):
                 promote_candidate(ctx.game, int(version))
                 await ctx.s.commit()
@@ -1208,9 +1165,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "art_direction": result.get("art_direction")
                     or state.get("art_direction")
                     or {},
-                    "artifacts": result.get("artifacts")
-                    or state.get("artifacts")
-                    or [],
+                    "artifacts": result.get("artifacts") or state.get("artifacts") or [],
                     "candidate_version": result.get("candidate_version"),
                     **gate.as_dict(),
                 },
@@ -1284,11 +1239,11 @@ def _build_graph(ctx: _Ctx) -> Any:
             return {}
 
     def after_plan(state: ForgeState) -> Literal["__end__"]:
-        return END
+        return END  # type: ignore[return-value]
 
     def after_art(state: ForgeState) -> Literal["code_qa_loop", "__end__"]:
         if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
-            return END
+            return END  # type: ignore[return-value]
         return "code_qa_loop"
 
     def after_code_qa(
@@ -1296,9 +1251,9 @@ def _build_graph(ctx: _Ctx) -> Any:
     ) -> Literal["done", "__end__"]:
         if state.get("qa_ok"):
             return "done"
-        return END
+        return END  # type: ignore[return-value]
 
-    def _node_kwargs(policy_key: str) -> dict[str, object]:
+    def _node_kwargs(policy_key: str) -> Any:
         if not settings.reliability_node_timeout:
             return {}
         return {
@@ -1313,7 +1268,7 @@ def _build_graph(ctx: _Ctx) -> Any:
     g.add_node("revise_art_options", revise_art_options_node, **_node_kwargs("art"))
     g.add_node("art_detail", art_detail_node, **_node_kwargs("art"))
     g.add_node("code_qa_loop", code_qa_loop_node, **_node_kwargs("code_qa_loop"))
-    g.add_node("done", done_node)
+    g.add_node("done", done_node, **_node_kwargs("done"))
     g.add_conditional_edges(
         START,
         route_start,
@@ -1328,18 +1283,12 @@ def _build_graph(ctx: _Ctx) -> Any:
     )
     g.add_conditional_edges("plan", after_plan, {END: END})
     g.add_conditional_edges("revise_plan", after_plan, {END: END})
-    g.add_conditional_edges(
-        "art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END}
-    )
+    g.add_conditional_edges("art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END})
     g.add_conditional_edges(
         "revise_art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END}
     )
-    g.add_conditional_edges(
-        "art_detail", after_art, {"code_qa_loop": "code_qa_loop", END: END}
-    )
-    g.add_conditional_edges(
-        "code_qa_loop", after_code_qa, {"done": "done", END: END}
-    )
+    g.add_conditional_edges("art_detail", after_art, {"code_qa_loop": "code_qa_loop", END: END})
+    g.add_conditional_edges("code_qa_loop", after_code_qa, {"done": "done", END: END})
     g.add_edge("done", END)
     return g.compile()
 
@@ -1381,15 +1330,11 @@ async def run_generation(
             inactive = run.status in (RunStatus.FAILED.value, RunStatus.DONE.value)
             duplicate_execute = not resume and run.status != RunStatus.RUNNING.value
             if inactive or duplicate_execute or run.ended_at is not None:
-                log.warning(
-                    "skip inactive run", extra={"stage": stage, "status": run.status}
-                )
+                log.warning("skip inactive run", extra={"stage": stage, "status": run.status})
                 return
             try:
                 with observe_run(str(run_id)):
-                    await _run_body(
-                        s, r, run, game, run_id, resume, decision, modify_text
-                    )
+                    await _run_body(s, r, run, game, run_id, resume, decision, modify_text)
                 duration = round(time.monotonic() - started, 3)
                 log.info(
                     "request completed",
@@ -1452,13 +1397,11 @@ async def run_generation(
                     return
 
                 classified = (
-                    e
-                    if isinstance(e, FatalError) or is_recoverable(e)
-                    else classify_exception(e)
+                    e if isinstance(e, FatalError) or is_recoverable(e) else classify_exception(e)
                 )
                 if is_fatal(classified) or isinstance(e, AppError):
                     fail_code = (
-                        e.code.value if isinstance(e, AppError) else classified.error_code
+                        e.code.value if isinstance(e, AppError) else classified.error_code  # type: ignore[attr-defined]
                     )
                     fail_msg = f"本轮生成失败：{e}"
                     run.status = RunStatus.FAILED.value
@@ -1487,7 +1430,7 @@ async def run_generation(
                     await _pause_recoverable(
                         forge_ctx,
                         phase=run.phase or "code",
-                        error_code=classified.error_code,
+                        error_code=classified.error_code,  # type: ignore[attr-defined]
                         message=f"可恢复故障，已暂停：{classified}",
                         attempts=1,
                     )

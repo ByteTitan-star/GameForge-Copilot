@@ -22,7 +22,7 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data    # 缓存数据
-    healthcheck:    # 健康检查  
+    healthcheck:    # 健康检查
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
@@ -33,6 +33,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: gameforge
       RABBITMQ_DEFAULT_PASS: gameforge
+      # ADR-08: raise consumer_timeout so long code_qa runs are not force-closed (~2h)
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 7200000"
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -48,6 +50,7 @@ services:
       dockerfile: docker/Dockerfile.backend
     # aiodocker 需访问 docker.sock；生产 K8s 用 sidecar/ DinD，勿长期 root
     user: "0:0"
+    restart: unless-stopped
     env_file:
       - ./backend/.env.example
     environment:
@@ -85,6 +88,7 @@ services:
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
     user: "0:0"
+    restart: unless-stopped
     env_file:
       - ./backend/.env.example
     environment:

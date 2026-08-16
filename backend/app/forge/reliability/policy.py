@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from langgraph.types import RetryPolicy, TimeoutPolicy
 
 from app.core.config import settings
+from app.core.errors import AppError
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +31,7 @@ NODE_EXECUTION_POLICIES: dict[str, NodeExecutionPolicy] = {
     "code_or_repair": NodeExecutionPolicy(run_timeout_margin_s=120.0, max_attempts=2),
     "playtest": NodeExecutionPolicy(fixed_run_timeout_s=90.0, max_attempts=2),
     "diagnose": NodeExecutionPolicy(run_timeout_margin_s=30.0, max_attempts=2),
-    # 外墙：给满 attempt 预算的粗上限；细粒度 timeout 在子图节点上
+    "done": NodeExecutionPolicy(fixed_run_timeout_s=30.0, max_attempts=1),
     "code_qa_loop": NodeExecutionPolicy(
         fixed_run_timeout_s=None,
         run_timeout_margin_s=0.0,
@@ -45,7 +46,6 @@ def resolve_node_run_timeout(node: str) -> float:
         return float(policy.fixed_run_timeout_s)
     llm = float(settings.llm_request_timeout)
     if node == "code_qa_loop":
-        # attempt × (code + playtest + diagnose) 粗算，避免外墙先于子步骤超时
         attempts = max(1, int(settings.code_qa_max_attempts))
         per = (
             resolve_node_run_timeout("code_or_repair")
@@ -53,17 +53,35 @@ def resolve_node_run_timeout(node: str) -> float:
             + resolve_node_run_timeout("diagnose")
         )
         return float(attempts * per)
+    if node == "code_or_repair" and settings.build_pipeline_enabled:
+        build_budget = float(
+            max(1, settings.build_max_retries) * max(1, settings.builder_timeout_s)
+        )
+        return llm + float(policy.run_timeout_margin_s) + build_budget
     return llm + float(policy.run_timeout_margin_s)
 
 
 def langgraph_timeout_policy(node: str) -> TimeoutPolicy:
     policy = NODE_EXECUTION_POLICIES[node]
-    kwargs: dict[str, float] = {"run_timeout": resolve_node_run_timeout(node)}
+    run_timeout = resolve_node_run_timeout(node)
     if policy.idle_timeout_s is not None:
-        kwargs["idle_timeout"] = float(policy.idle_timeout_s)
-    return TimeoutPolicy(**kwargs)
+        return TimeoutPolicy(
+            run_timeout=run_timeout,
+            idle_timeout=float(policy.idle_timeout_s),
+        )
+    return TimeoutPolicy(run_timeout=run_timeout)
+
+
+def _default_retry_on(exc: Exception) -> bool:
+    """Exclude business-terminal errors from LangGraph node retries (ADR-09)."""
+    if isinstance(exc, AppError):
+        return False
+    return type(exc).__name__ not in {"ContentAttacked", "RunFinalized"}
 
 
 def langgraph_retry_policy(node: str) -> RetryPolicy:
     policy = NODE_EXECUTION_POLICIES[node]
-    return RetryPolicy(max_attempts=max(1, policy.max_attempts))
+    return RetryPolicy(
+        max_attempts=max(1, policy.max_attempts),
+        retry_on=_default_retry_on,
+    )

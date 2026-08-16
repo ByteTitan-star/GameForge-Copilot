@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://gameforge:gameforge@localhost:5672/"
     # rabbitmq | memory（pytest 默认 memory，见 conftest）
     messaging_backend: str = "rabbitmq"
+    # ADR-09：基建客户端超时（秒）
+    db_connect_timeout: int = 10
+    db_command_timeout: int = 60
+    redis_socket_connect_timeout: float = 5.0
+    redis_socket_timeout: float = 5.0
 
     # 加密与签名
     jwt_secret: str = "dev-secret-change-me-to-a-32-byte-random-string"
