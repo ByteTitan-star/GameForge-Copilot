@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P5 MVP 主体已落地**；P3 E2B 生产切换、P4.5 Semantic、Pending ADR 细项仍 gated）
+* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；剩余主要为人工门禁：ADR Accept、E2B 生产切换 Go、真实 LLM A/B、全量 Load）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -25,7 +25,7 @@
   * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关；code_qa 传 `engine_id` hints）；data-flow / benchmark 清单
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**；**Load smoke**（并发 Exact Cache / Skill / tier）
-  * **仍 gated** 带真实 LLM 的 quality-lift A/B / E2B 生产切换（SDK 已接但默认关）/ ADR Accept 签字 / **全量** Load·Chaos 实验窗
+  * **仍 gated（人工/实验）** 真实 LLM quality-lift A/B / E2B 生产默认切换 / ADR-02·03·04 Accept 签字（见 `docs/adr/ACCEPT-CHECKLIST.md`）/ 全量 Load·Chaos
 
 ---
 
