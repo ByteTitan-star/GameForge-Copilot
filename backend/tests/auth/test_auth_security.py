@@ -5,6 +5,7 @@ import uuid
 import fakeredis.aioredis
 import jwt
 import pytest
+
 from app.auth.security import (
     create_access_token,
     decode_access_token,

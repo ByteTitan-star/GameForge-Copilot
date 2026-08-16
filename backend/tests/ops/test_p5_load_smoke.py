@@ -10,6 +10,7 @@ import asyncio
 
 import fakeredis.aioredis
 import pytest
+
 from app.core.config import settings
 from app.forge.cache.exact import exact_cache_get, exact_cache_set
 from app.forge.skills.router import resolve_skills_for_node

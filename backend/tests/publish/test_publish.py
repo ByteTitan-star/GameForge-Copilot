@@ -3,11 +3,12 @@
 import uuid
 
 import httpx
+from sqlalchemy import select
+
 from app.core import db
 from app.hosting import store
 from app.models.game import Game
 from app.models.game_version import GameVersion
-from sqlalchemy import select
 
 _GAME = {"title": "贪吃蛇", "requirement": "方向键"}
 _HTML = "<html><body>game</body></html>"

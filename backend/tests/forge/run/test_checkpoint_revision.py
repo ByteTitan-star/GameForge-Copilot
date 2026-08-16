@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import uuid
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.forge import state as ckpt
 from app.models.run_checkpoint import RunCheckpoint
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def test_load_state_rejects_stale_redis_revision(

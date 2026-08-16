@@ -6,13 +6,14 @@ import uuid
 
 import httpx
 import pytest
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
 from app.enums import WSEventType
 from app.forge.events import publish_event
 from app.main import app
 from app.messaging.factory import get_ws_bus
 from app.ws.runs import _relay_memory
-from starlette.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
 _GAME = {"title": "贪吃蛇", "requirement": "方向键"}
 _RUN = {"requirement": "加速道具"}

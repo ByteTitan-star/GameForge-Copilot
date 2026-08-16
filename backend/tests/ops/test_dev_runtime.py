@@ -4,14 +4,15 @@ import uuid
 
 import httpx
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.enums import RunStatus
 from app.messaging.factory import get_task_publisher
 from app.messaging.memory import MemoryTaskPublisher
 from app.messaging.tasks import TASK_EXECUTE_RUN, run_id_payload
 from app.models.generation_run import GenerationRun
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import httpx
-from app.models.user_preference import UserPreference
 from sqlalchemy import select
+
+from app.models.user_preference import UserPreference
 
 
 async def test_preferences_crud_roundtrip(verified_client: httpx.AsyncClient) -> None:

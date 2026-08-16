@@ -5,11 +5,12 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.forge.memory.refresh import refresh_session_summary_if_needed
 from app.forge.messages import add_message
 from app.models.game import Game
 from app.models.user import User
-from sqlalchemy import select
 
 
 @pytest.mark.asyncio

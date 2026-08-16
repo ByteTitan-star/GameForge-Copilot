@@ -7,13 +7,14 @@ _save_thumbnail 是 qa_node 通过分支调用的纯副作用函数（不进 Lan
 import uuid
 
 import pytest
+from sqlalchemy import select
+
 from app.core import db
 from app.forge.graph import _save_thumbnail
 from app.hosting import store
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.user import User
-from sqlalchemy import select
 
 
 async def _seed_owner_and_game() -> tuple[uuid.UUID, uuid.UUID, int]:

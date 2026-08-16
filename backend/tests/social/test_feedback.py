@@ -8,6 +8,7 @@ import uuid
 
 import httpx
 import pytest
+
 from app.core.config import settings
 
 GAME_BODY = {"title": "测试游戏", "requirement": "方向键移动"}

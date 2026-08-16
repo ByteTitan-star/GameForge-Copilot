@@ -4,13 +4,14 @@ import uuid
 
 import httpx
 import pytest
+from sqlalchemy import select
+from tests.conftest import _sent
+
 from app.core import db
 from app.hosting import preview_token, store
 from app.main import app
 from app.models.game import Game
 from app.models.game_version import GameVersion
-from sqlalchemy import select
-from tests.conftest import _sent
 
 _HTML = (
     '<!doctype html><html><head><script src="./assets/app.js"></script></head><body></body></html>'

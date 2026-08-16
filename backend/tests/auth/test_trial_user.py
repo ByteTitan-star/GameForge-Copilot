@@ -3,9 +3,10 @@
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.auth.trial import TRIAL_EMAIL, TRIAL_PASSWORD, ensure_trial_user
 from app.games.official import seed_official_games
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest_asyncio.fixture

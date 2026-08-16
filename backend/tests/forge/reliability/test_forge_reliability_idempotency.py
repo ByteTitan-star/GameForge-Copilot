@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+
 from app.forge.reliability.idempotency import (
     already_applied,
     side_effect_key,

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from app.forge.build.constants import BUILD_SNAPSHOT_FILES
 from app.forge.build.dependency_preparer import DependencyPreparer, PrepareResult
 from app.forge.build.pipeline import BuildPipeline

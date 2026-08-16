@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from app.forge.art_direction import parse_art_detail, parse_art_options
 
 

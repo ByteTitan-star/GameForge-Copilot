@@ -11,6 +11,8 @@ import uuid
 import fakeredis.aioredis
 import httpx
 import pytest
+from sqlalchemy import select
+
 from app.core import db
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
@@ -22,7 +24,6 @@ from app.models.game_version import GameVersion
 from app.models.publish_request import PublishRequest
 from app.models.run_checkpoint import RunCheckpoint
 from app.models.user import User
-from sqlalchemy import select
 
 GAME_BODY = {"title": "贪吃蛇", "requirement": "方向键"}
 RUN_BODY = {"requirement": "加入加速道具"}

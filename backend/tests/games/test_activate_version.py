@@ -3,11 +3,12 @@
 import uuid
 
 import httpx
+from sqlalchemy import select
+
 from app.games import services
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.user import User
-from sqlalchemy import select
 
 
 async def _make_game(client: httpx.AsyncClient) -> uuid.UUID:

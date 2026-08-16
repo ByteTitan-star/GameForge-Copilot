@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from app.sandbox.playtest import make_playtest_result, run_playtest_dist
 
 _CANVAS_HTML = """<!doctype html><html><body>

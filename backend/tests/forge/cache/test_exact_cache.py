@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fakeredis.aioredis
 import pytest
+
 from app.core.config import settings
 from app.enums import EntryPhase
 from app.forge.cache.exact import (

@@ -5,10 +5,11 @@ from datetime import UTC, datetime
 
 import fakeredis.aioredis
 import httpx
+from sqlalchemy import select
+
 from app.analytics import store as analytics_store
 from app.core import db
 from app.models.game import Game
-from sqlalchemy import select
 
 
 async def test_record_play_increments_count(

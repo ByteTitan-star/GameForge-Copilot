@@ -4,6 +4,7 @@ import shutil
 import uuid
 
 import httpx
+
 from app.games.official import OFFICIAL_CATALOG, seed_official_games
 
 

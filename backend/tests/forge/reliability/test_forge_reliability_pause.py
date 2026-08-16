@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.enums import PauseReason, RunStatus
 from app.forge.reliability.pause import (
     RecoveryInfo,

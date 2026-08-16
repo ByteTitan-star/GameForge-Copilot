@@ -5,6 +5,8 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import func, select
+
 from app.core.config import settings
 from app.forge.memory.inferred import extract_inferred_preferences
 from app.forge.memory.llm_extract import extract_preferences_via_llm
@@ -15,7 +17,6 @@ from app.forge.memory.preferences import (
 )
 from app.models.user import User
 from app.models.user_preference import UserPreference
-from sqlalchemy import func, select
 
 
 def test_inferred_extracts_pixel_without_explicit_marker() -> None:

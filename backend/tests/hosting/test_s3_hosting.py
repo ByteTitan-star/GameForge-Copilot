@@ -3,6 +3,7 @@
 import uuid
 
 import pytest
+
 from app.core.config import settings
 from app.core.errors import AppError
 from app.hosting.s3 import S3HostingBackend, _object_key

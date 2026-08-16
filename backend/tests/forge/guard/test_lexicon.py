@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from app.core.config import settings
 from app.forge import guard
 from app.forge.lexicon import normalize

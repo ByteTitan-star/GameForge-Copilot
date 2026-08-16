@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+
 from app.auth import oauth as oauth_mod
 from app.core.errors import AppError, ErrorCode
 

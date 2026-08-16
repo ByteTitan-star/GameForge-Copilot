@@ -4,10 +4,11 @@ import json
 import uuid
 
 import httpx
+from starlette.testclient import TestClient
+
 from app.enums import WSEventType
 from app.forge.events import publish_event
 from app.main import app
-from starlette.testclient import TestClient
 
 _GAME = {"title": "贪吃蛇", "requirement": "方向键"}
 _RUN = {"requirement": "加速道具"}

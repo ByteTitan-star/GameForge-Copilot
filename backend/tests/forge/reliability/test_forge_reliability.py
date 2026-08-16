@@ -2,6 +2,8 @@ import json
 import uuid
 
 import httpx
+from sqlalchemy import select
+
 from app.core import db
 from app.enums import WSEventType
 from app.forge import state as ckpt
@@ -11,7 +13,6 @@ from app.messaging.memory import MemoryTaskPublisher
 from app.messaging.outbox import dispatch_pending
 from app.models.run_checkpoint import RunCheckpoint
 from app.models.task_outbox import TaskOutbox
-from sqlalchemy import select
 
 
 async def _make_run(client: httpx.AsyncClient) -> uuid.UUID:

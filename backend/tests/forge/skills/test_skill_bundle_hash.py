@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
 from app.forge.skills.catalog import catalog_skill_bundle_hash, skill_bundle_hash
 
 

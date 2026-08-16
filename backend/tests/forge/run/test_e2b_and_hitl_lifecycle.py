@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
 from app.core.config import settings
 from app.core.errors import AppError
 from app.sandbox.e2b import E2BSandbox, clear_e2b_live_for_tests

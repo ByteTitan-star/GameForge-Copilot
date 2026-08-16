@@ -5,6 +5,7 @@ provider.test_connectivity 被 monkeypatch，不打真实网络。
 
 import httpx
 import pytest
+
 from app.llm import provider
 
 BASE = "/api/v1/me/llm-configs"

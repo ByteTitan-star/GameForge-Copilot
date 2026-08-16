@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.sandbox.benchmark import run_benchmark
 
 

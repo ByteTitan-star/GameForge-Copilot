@@ -4,10 +4,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from sqlalchemy import select
+
 from app.core import db
 from app.models.game import Game
 from app.scheduler.services import scan_scheduled
-from sqlalchemy import select
 
 
 async def test_scan_scheduled_take_down(

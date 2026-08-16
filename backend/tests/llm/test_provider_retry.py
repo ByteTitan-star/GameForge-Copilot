@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+
 from app.core.errors import AppError
 from app.enums import LLMProvider
 from app.llm import provider

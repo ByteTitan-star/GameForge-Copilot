@@ -7,12 +7,13 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.enums import RunStatus
 from app.models.game import Game
 from app.models.generation_run import GenerationRun
 from app.scheduler.services import expire_stale_running_runs
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

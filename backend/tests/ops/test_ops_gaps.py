@@ -6,6 +6,8 @@ import uuid
 
 import httpx
 import pytest
+from sqlalchemy import select
+
 from app.core import db
 from app.core.config import settings
 from app.core.logging import JsonFormatter, setup_logging
@@ -14,7 +16,6 @@ from app.llm import provider as llm_provider
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.usage import quota as quota_mod
-from sqlalchemy import select
 
 
 async def test_ready_ok(client: httpx.AsyncClient) -> None:

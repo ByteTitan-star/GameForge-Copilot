@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.sandbox.motion import png_frames_differ
 from app.sandbox.playtest import (
     PlaytestResult,

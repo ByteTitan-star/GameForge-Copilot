@@ -4,6 +4,7 @@ import uuid
 
 import fakeredis.aioredis
 import httpx
+
 from app.usage.store import record_usage
 
 
@@ -13,9 +14,10 @@ async def test_usage_breakdown_by_game(
 ) -> None:
     r = await verified_client.post("/api/v1/games", json={"title": "t", "requirement": "r"})
     gid = uuid.UUID(r.json()["data"]["game_id"])
+    from sqlalchemy import select
+
     from app.core import db
     from app.models.game import Game
-    from sqlalchemy import select
 
     async with db.SessionLocal() as s:
         game = (await s.scalars(select(Game).where(Game.id == gid))).first()
@@ -38,9 +40,10 @@ async def test_game_usage_owner(
 ) -> None:
     r = await verified_client.post("/api/v1/games", json={"title": "u", "requirement": "x"})
     gid = uuid.UUID(r.json()["data"]["game_id"])
+    from sqlalchemy import select
+
     from app.core import db
     from app.models.game import Game
-    from sqlalchemy import select
 
     async with db.SessionLocal() as s:
         game = (await s.scalars(select(Game).where(Game.id == gid))).first()

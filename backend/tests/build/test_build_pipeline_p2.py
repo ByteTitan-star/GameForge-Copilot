@@ -1,6 +1,7 @@
 """P2 pipeline.run_project 单元测试（mock builder）。"""
 
 import pytest
+
 from app.forge.build.dependency_preparer import DependencyPreparer, PrepareResult
 from app.forge.build.pipeline import BuildPipeline
 from app.forge.build.routing import BuildRouting

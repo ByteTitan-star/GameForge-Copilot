@@ -3,11 +3,12 @@
 import uuid
 
 import httpx
+from sqlalchemy import select
+
 from app.core import db
 from app.hosting import store
 from app.models.game import Game
 from app.models.game_version import GameVersion
-from sqlalchemy import select
 
 
 async def test_rename_draft(verified_client: httpx.AsyncClient) -> None:

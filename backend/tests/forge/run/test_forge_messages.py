@@ -1,9 +1,10 @@
 from uuid import UUID, uuid4
 
 import httpx
+from sqlalchemy import select
+
 from app.forge import state as ckpt
 from app.models.forge_message import ForgeMessage
-from sqlalchemy import select
 
 
 async def test_forge_message_history_is_owner_scoped(

@@ -9,6 +9,7 @@ import uuid
 import fakeredis.aioredis
 import httpx
 import pytest
+
 from app.enums import RunStatus, WSEventType
 from app.forge import guard
 from app.forge.event_log import list_events

@@ -8,11 +8,12 @@ import os
 import uuid
 
 import pytest
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.models import Base
 from app.models.game import Game
 from app.models.user import User
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.integration
 

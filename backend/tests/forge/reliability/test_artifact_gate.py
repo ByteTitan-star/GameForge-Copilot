@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.forge.reliability.artifact_gate import ArtifactGate, derive_artifact_gate
 
 

@@ -6,10 +6,11 @@ draft 封面路由已移除（<img> 无法带 owner Bearer，会 401）；草稿
 import uuid
 
 import httpx
+from sqlalchemy import select
+
 from app.core import db
 from app.hosting import store
 from app.models.game import Game
-from sqlalchemy import select
 
 _PNG = b"\x89PNG\r\n\x1a\n fake thumbnail"
 

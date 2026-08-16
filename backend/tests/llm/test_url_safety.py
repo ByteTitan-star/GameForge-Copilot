@@ -1,6 +1,7 @@
 """ADR-07 P1-19: openai_compat base_url SSRF checks."""
 
 import pytest
+
 from app.core.errors import AppError
 from app.llm.url_safety import validate_llm_base_url
 

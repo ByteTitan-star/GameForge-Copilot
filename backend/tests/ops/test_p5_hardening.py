@@ -7,6 +7,7 @@ from pathlib import Path
 
 import fakeredis.aioredis
 import pytest
+
 from app.forge.cache.exact import exact_cache_get, exact_cache_set, is_cacheable_node
 from app.forge.prompts import (
     build_art_detail_prompt,

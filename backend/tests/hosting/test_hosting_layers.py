@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+
 from app.core.errors import AppError
 from app.hosting import local as local_store
 

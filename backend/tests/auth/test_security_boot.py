@@ -1,6 +1,7 @@
 """ADR-07: production JWT secret fail-fast."""
 
 import pytest
+
 from app.core.config import Settings
 from app.core.security_boot import DEFAULT_JWT_SECRET, assert_production_secrets
 

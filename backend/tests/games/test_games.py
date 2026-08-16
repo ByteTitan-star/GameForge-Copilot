@@ -3,8 +3,9 @@
 import uuid
 
 import httpx
-from app.models.game import Game
 from sqlalchemy import select
+
+from app.models.game import Game
 
 _BODY = {"title": "贪吃蛇", "requirement": "方向键控制，计分"}
 

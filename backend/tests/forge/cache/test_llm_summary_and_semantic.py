@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fakeredis.aioredis
 import pytest
+
 from app.core.config import settings
 from app.forge.cache.pinecone_store import (
     InMemoryPineconeStore,

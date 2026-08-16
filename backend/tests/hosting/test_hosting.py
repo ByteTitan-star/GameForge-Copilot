@@ -7,12 +7,13 @@ import uuid
 
 import httpx
 import pytest
+from sqlalchemy import select
+
 from app.core import db
 from app.core.errors import AppError
 from app.hosting import store
 from app.models.game import Game
 from app.models.game_version import GameVersion
-from sqlalchemy import select
 
 _HTML = "<!doctype html><html><body><h1>stub game</h1></body></html>"
 _GAME = {"title": "贪吃蛇", "requirement": "方向键"}

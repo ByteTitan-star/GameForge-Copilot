@@ -8,6 +8,7 @@ from collections.abc import Iterable
 
 import httpx
 import pytest
+
 from app.enums import LLMProvider
 from app.llm import provider
 

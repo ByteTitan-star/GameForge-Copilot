@@ -4,6 +4,7 @@ import uuid
 
 import fakeredis.aioredis
 import httpx
+
 from app.usage.store import record_usage
 
 

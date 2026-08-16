@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+
 from app.core.logging import BEIJING, beijing_date_key, setup_logging
 from app.enums import LLMProvider
 from app.llm import provider

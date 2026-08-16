@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from app.core.config import settings
 from app.games.official import SeedResult
 from app.main import lifespan
