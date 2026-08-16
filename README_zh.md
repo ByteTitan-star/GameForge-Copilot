@@ -1,7 +1,9 @@
-# GameForge
+<h1 align="center">🎮 GameForge</h1>
 
-[![English](https://img.shields.io/badge/English-555555?style=for-the-badge)](./README.md)
-![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-0A66C2?style=for-the-badge)
+<p align="center">
+  <a href="./README.md"><img src="https://img.shields.io/badge/English-555555?style=for-the-badge" alt="English" /></a>
+  <img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-0A66C2?style=for-the-badge" alt="中文" />
+</p>
 
 > 用自然语言，把游戏想法推进为可在浏览器直接试玩、管理与交付的作品。
 
