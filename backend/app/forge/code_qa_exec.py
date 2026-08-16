@@ -620,12 +620,32 @@ async def execute_diagnose(
         async def _call(system: str, user_msg: str) -> str:
             return await llm(ctx, system, user_msg)
 
+        memory_prefix: str | None = None
+        from app.forge.memory.loader import build_node_context, use_context_builder
+
+        if use_context_builder():
+            if settings.memory_session_summary:
+                from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+                await refresh_session_summary_if_needed(ctx.s, ctx.game)
+            built = await build_node_context(
+                ctx.s,
+                node="diagnose",
+                game=ctx.game,
+                user_id=ctx.game.owner_id,
+                current_input="请根据自动试玩证据诊断失败根因并给出可执行修复方案。",
+                design_doc=design_doc,
+            )
+            memory_prefix = built.user_message
+
         diagnosis = await diagnose_playtest_failure(
             llm=_call,
-            design_doc=design_doc,
+            design_doc=None if memory_prefix else design_doc,
             errors=errors,
             console_logs=console_logs,
             source_excerpt=qa_source,
+            memory_prefix=memory_prefix,
+            failure_kind=str(state.get("failure_kind") or "product"),
         )
         return {
             "qa_ok": False,

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.core.cdn_policy import ALLOWED_CDN_HOSTS
 from app.core.config import settings
 from app.forge.engine_router import (
@@ -318,6 +320,52 @@ ART_DETAIL_PROMPT = """
 }
 """.strip()
 
+
+def _art_skill_appendix(hints: dict[str, Any] | None = None) -> str:
+    if not settings.skills_router_enabled:
+        return ""
+    resolved = resolve_skills_for_node("art", hints=hints or {})
+    parts = [resolved.policy_text(), resolved.methodology_text()]
+    return "\n\n".join(p for p in parts if p)
+
+
+def build_art_options_prompt(hints: dict[str, Any] | None = None) -> str:
+    """P2/P5：Art options system prompt + Methodology Skill。"""
+    appendix = _art_skill_appendix(hints)
+    if not appendix:
+        return ART_OPTIONS_PROMPT
+    return f"{ART_OPTIONS_PROMPT}\n\n{appendix}"
+
+
+def build_art_options_revise_prompt(hints: dict[str, Any] | None = None) -> str:
+    appendix = _art_skill_appendix(hints)
+    if not appendix:
+        return ART_OPTIONS_REVISE_PROMPT
+    return f"{ART_OPTIONS_REVISE_PROMPT}\n\n{appendix}"
+
+
+def build_art_detail_prompt(hints: dict[str, Any] | None = None) -> str:
+    appendix = _art_skill_appendix(hints)
+    if not appendix:
+        return ART_DETAIL_PROMPT
+    return f"{ART_DETAIL_PROMPT}\n\n{appendix}"
+
+
+def build_qa_prompt(*, failure_kind: str = "product") -> str:
+    """Diagnose system prompt；可选注入 repair/playtest Methodology。"""
+    if not settings.skills_router_enabled:
+        return QA_PROMPT
+    resolved = resolve_skills_for_node(
+        "diagnose", hints={"failure_kind": failure_kind}
+    )
+    appendix = "\n\n".join(
+        p for p in (resolved.policy_text(), resolved.methodology_text()) if p
+    )
+    if not appendix:
+        return QA_PROMPT
+    return f"{QA_PROMPT}\n\n{appendix}"
+
+
 def build_code_prompt(engine_id: str) -> str:
     """按选定引擎拼装代码生成 system prompt：通用骨架 + 引擎方法论 + 钉死 CDN。
 
@@ -594,8 +642,12 @@ __all__ = [
     "ART_OPTIONS_REVISE_PROMPT",
     "ART_DETAIL_PROMPT",
     "QA_PROMPT",
+    "build_art_detail_prompt",
+    "build_art_options_prompt",
+    "build_art_options_revise_prompt",
     "build_code_prompt",
     "build_project_prompt",
     "build_project_repair_prompt",
+    "build_qa_prompt",
     "build_repair_prompt",
 ]
