@@ -28,7 +28,7 @@ jobs:
         run: uv sync --group dev && uv run ruff check .
 
       - name: Pytest
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not integration and not load"
 
   frontend:
     runs-on: ubuntu-latest

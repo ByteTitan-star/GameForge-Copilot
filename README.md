@@ -1,15 +1,11 @@
 <h1 align="center">🎮 GameForge</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/English-0A66C2?style=for-the-badge" alt="English" />
-  <a href="./README_zh.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge" alt="Chinese" /></a>
-</p>
-
-<p align="center">
   <a href="https://github.com/ByteTitan-star/GameForge-Copilot/releases/tag/v0.3.0"><img src="https://img.shields.io/badge/GameForge-v0.3.0-6e40c9" alt="GameForge v0.3.0" /></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-  <a href="https://github.com/ByteTitan-star/GameForge-Copilot"><img src="https://img.shields.io/github/stars/ByteTitan-star/GameForge-Copilot?style=social" alt="GitHub Stars" /></a>
+  <img src="https://img.shields.io/badge/English-0A66C2" alt="English" />
+  <a href="./README_zh.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555" alt="Chinese" /></a>
 </p>
 
 > Use natural language to turn a game idea into a playable browser game —
