@@ -62,20 +62,12 @@ async def test_llm_select_falls_back_on_bad_json(monkeypatch: pytest.MonkeyPatch
 
 
 def test_offline_eval_deterministic_precision_on_fixtures() -> None:
-    """轻量 offline eval：确定性路由在固定 fixtures 上的 precision@1。"""
-    fixtures = [
-        ("art", {"style": "像素风"}, "art/pixel-art"),
-        ("code", {"engine_id": "phaser3"}, "code/phaser3"),
-        ("repair", {"engine_id": "canvas", "failure_kind": "product"}, "repair/runtime-error"),
-    ]
-    hits = 0
-    for node, hints, expected in fixtures:
-        resolved = resolve_skills_for_node(node, hints=hints)
-        top = resolved.methodology[0].id if resolved.methodology else ""
-        if top == expected or expected in {s.id for s in resolved.methodology}:
-            hits += 1
-    precision = hits / len(fixtures)
-    assert precision >= 1.0
+    """轻量 offline eval：委托完整套件（见 test_skills_offline_eval）。"""
+    from app.forge.skills.offline_eval import EVAL_FIXTURES, evaluate_routing
+
+    report = evaluate_routing(EVAL_FIXTURES)
+    assert report.precision_at_1 >= 0.95
+    assert report.expected_hit_rate >= 0.95
 
 
 @pytest.mark.asyncio
