@@ -36,6 +36,7 @@ dev = [
     "httpx>=0.28",
     "ruff>=0.5",
     "mypy>=1.10",
+    "bandit>=1.7",
     "aiosqlite>=0.20",
     "fakeredis>=2.20",
     "httpx2>=2.0",
@@ -54,6 +55,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = ["B101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

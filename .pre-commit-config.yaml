@@ -1,0 +1,68 @@
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.11
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # ✅ 改用官方 repo，避免 npx 网络问题
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret-scan
+        entry: uv run --no-project python scripts/secret_scan.py --staged
+        language: system
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy
+        entry: uv run --no-project python scripts/run_backend_tool.py mypy --install-types --non-interactive
+        language: system
+        pass_filenames: true  # ✅ 只检查改动文件
+        files: '^backend/.*\.py$'
+
+      - id: bandit
+        name: bandit
+        entry: uv run --no-project python scripts/run_backend_tool.py bandit -q -c pyproject.toml
+        language: system
+        pass_filenames: true  # ✅ 只检查改动文件
+        files: '^backend/.*\.py$'
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.2.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - --strict
+          - feat
+          - fix
+          - refactor
+          - perf
+          - test
+          - docs
+          - build
+          - ci
+          - chore
