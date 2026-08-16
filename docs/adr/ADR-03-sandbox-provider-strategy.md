@@ -1,28 +1,26 @@
 # ADR-03: Sandbox Provider Strategy
 
-* Status: **Proposed**（生产默认仍为 Docker；E2B 仅 PoC）
+* Status: **Accepted**
 * Date: 2026-08-16
+* Accepted-by: ByteTitan-star
 * Related: [sandbox-data-flow.md](./sandbox-data-flow.md), [../sandbox-e2b-benchmark.md](../sandbox-e2b-benchmark.md)
 
 ## Context
 
-Choose production sandbox provider: Docker vs E2B (or hybrid), with domestic data-egress constraints.
+Choose sandbox provider for isolated game build/execute: Docker vs E2B (or hybrid).
 
-## Proposed Decision
+## Decision
 
-1. **Production default: `DockerSandbox`** (`sandbox_backend=docker`).
-2. **E2B remains PoC-only** until Go criteria below are met; `sandbox_e2b_enabled` stays
-   default **false**. Adapter may exist, but enabling it is not a production approval.
-3. LocalSandbox remains the default for developer machines (`sandbox_backend=local`).
-4. Hybrid (Docker domestic + E2B overseas) requires a **new** ADR amendment, not silent flag flips.
+1. **Preferred backend: E2B** (`sandbox_backend=e2b`, `sandbox_e2b_enabled=true`).
+2. **Secret**: `E2B_API_KEY` must come from environment / secret store — never committed.
+3. **Fallback**: if E2B is selected but key missing / disabled, factory falls back to
+   `docker`, then `local` so developer machines and CI do not hard-fail.
+4. **Tier auto**: `sandbox_tier_auto=true` picks `lite|standard|heavy` from engine/size/telemetry;
+   base tier remains `sandbox_default_tier=standard`.
+5. Network: `e2b_allow_internet=false` by default.
 
-## Go criteria for E2B production (all required)
+## Consequences
 
-* Data-flow diagram reviewed (source/prompt/assets egress paths).
-* Contract/DPA + retention policy acceptable.
-* Domestic network latency/cost benchmark vs Docker recorded.
-* Security review of UGC execution surface.
-
-## No-Go default
-
-Until Accepted with Go criteria checked: **do not** set E2B as production `sandbox_backend`.
+* Production-like runs should set a real `E2B_API_KEY`.
+* Benchmark table in `sandbox-e2b-benchmark.md` remains the ops scorecard for cost/latency.
+* Data egress via E2B is accepted by Owner for this project configuration.

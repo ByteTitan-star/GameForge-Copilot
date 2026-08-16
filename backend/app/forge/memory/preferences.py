@@ -53,12 +53,14 @@ async def upsert_preference(
         )
         db.add(row)
         await db.flush()
+        await _enforce_active_cap(db, user_id)
         return row
     existing.value_json = value_json
     existing.source = source
     existing.confidence = confidence
     existing.status = status
     await db.flush()
+    await _enforce_active_cap(db, user_id)
     return existing
 
 
@@ -136,3 +138,25 @@ def preference_to_context_dict(row: UserPreference) -> dict[str, Any]:
         "source": row.source,
         "confidence": row.confidence,
     }
+
+
+async def _enforce_active_cap(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """active 偏好上限：优先归档最旧 inferred，再归档最旧 explicit。"""
+    from app.core.config import settings
+
+    cap = max(1, int(settings.memory_preferences_max_active))
+    active = await list_active_preferences(db, user_id)
+    overflow = len(active) - cap
+    if overflow <= 0:
+        return
+    # 最旧 updated_at 优先；同刻 inferred 先于 explicit
+    ordered = sorted(
+        active,
+        key=lambda r: (
+            0 if r.source == "inferred" else 1,
+            r.updated_at or r.created_at,
+        ),
+    )
+    for row in ordered[:overflow]:
+        row.status = "archived"
+    await db.flush()

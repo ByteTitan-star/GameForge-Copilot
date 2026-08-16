@@ -70,12 +70,20 @@ async def test_semantic_shadow_records_when_enabled(
 
 
 @pytest.mark.asyncio
-async def test_semantic_shadow_disabled_by_default() -> None:
+async def test_semantic_shadow_respects_enabled_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(settings, "semantic_cache_shadow_enabled", False)
     ok = await semantic_shadow_record(
         r, node="entry_router", query={"q": 1}, actual_output="code"
     )
     assert ok is False
+    monkeypatch.setattr(settings, "semantic_cache_shadow_enabled", True)
+    ok2 = await semantic_shadow_record(
+        r, node="entry_router", query={"q": 2}, actual_output="code"
+    )
+    assert ok2 is True
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""ADR Accept 证据自动核验：只报告 pass/fail，永不改 ADR Status 为 Accepted。"""
+"""ADR Accept 证据核验（Accepted 后仍校验运行时不变量）。"""
 
 from __future__ import annotations
 
@@ -19,31 +19,36 @@ class EvidenceCheck:
 
 
 def collect_adr_evidence() -> list[EvidenceCheck]:
-    """机器可核验项；文案/合规签字仍须人工。"""
+    """机器可核验项（与 Accepted 决策对齐）。"""
     checks: list[EvidenceCheck] = [
         EvidenceCheck(
             "ADR-02",
-            "inferred_flag_default_off",
-            settings.memory_preferences_inferred is False,
-            f"memory_preferences_inferred={settings.memory_preferences_inferred!r}",
+            "inferred_enabled_with_cap",
+            settings.memory_preferences_inferred is True
+            and settings.memory_preferences_max_active == 50,
+            (
+                f"inferred={settings.memory_preferences_inferred!r} "
+                f"cap={settings.memory_preferences_max_active!r}"
+            ),
         ),
         EvidenceCheck(
             "ADR-03",
-            "e2b_disabled_by_default",
-            settings.sandbox_e2b_enabled is False,
+            "e2b_enabled_by_default",
+            settings.sandbox_e2b_enabled is True,
             f"sandbox_e2b_enabled={settings.sandbox_e2b_enabled!r}",
         ),
         EvidenceCheck(
             "ADR-03",
-            "default_backend_not_e2b",
-            (settings.sandbox_backend or "").lower() != "e2b",
-            f"sandbox_backend={settings.sandbox_backend!r}",
+            "config_default_backend_is_e2b",
+            _settings_field_default("sandbox_backend") == "e2b",
+            "Settings.sandbox_backend field default must be e2b "
+            "(runtime .env may still override for local)",
         ),
         EvidenceCheck(
             "ADR-03",
             "semantic_direct_hit_forbidden",
             semantic_direct_hit_allowed() is False,
-            "semantic_direct_hit_allowed() must stay False until calibration",
+            "semantic direct hit remains forbidden (shadow-only; no Pinecone)",
         ),
         EvidenceCheck(
             "ADR-04",
@@ -63,6 +68,12 @@ def collect_adr_evidence() -> list[EvidenceCheck]:
 
 def _accept_checklist_path() -> Path:
     return Path(__file__).resolve().parents[3] / "docs" / "adr" / "ACCEPT-CHECKLIST.md"
+
+
+def _settings_field_default(name: str) -> object:
+    from app.core.config import Settings
+
+    return Settings.model_fields[name].default
 
 
 def evidence_all_machine_checks_ok(checks: list[EvidenceCheck] | None = None) -> bool:
