@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.security_boot import assert_production_secrets
 from app.messaging.handlers import dispatch_task  # 任务分发器
 from app.messaging.rabbit import _task_channel, close_connection  # RabbitMQ 连接管理
 from app.messaging.tasks import (  # 队列名称和消息解码
@@ -297,6 +298,7 @@ def main() -> None:
     """
     # 初始化日志：服务标识为 "worker"，按配置的级别和目录输出
     setup_logging(settings.log_level, service="worker", log_dir=settings.log_dir)
+    assert_production_secrets(settings)
     # worker 是独立进程，需各自注册 langfuse 单例（run_generation 在此进程跑）
     from app.core.langfuse import init_langfuse
 

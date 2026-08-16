@@ -30,6 +30,7 @@ from app.core.errors import register_exception_handlers
 from app.core.langfuse import flush_langfuse, init_langfuse
 from app.core.logging import setup_logging
 from app.core.metrics import register_metrics
+from app.core.security_boot import assert_production_secrets
 from app.games.official import seed_official_games
 from app.hosting import routes as hosting_routes
 from app.ws import runs as ws_runs
@@ -44,6 +45,7 @@ API_V1 = "/api/v1"
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """启动：init langfuse + dev 自动 seed 官方游戏；停机 flush 缓冲 trace（docs/02 §可观测）。"""
+    assert_production_secrets(settings)
     init_langfuse()
     if settings.env == "development":
         await _dev_seed_official_games()
