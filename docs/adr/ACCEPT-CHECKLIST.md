@@ -50,6 +50,14 @@
 
 ---
 
+## 机器证据核验（不自动 Accept）
+
+```bash
+cd backend && uv run pytest tests/test_adr_evidence.py -q
+```
+
+实现：`app/forge/adr_evidence.py`。通过 ≠ Accepted；签字区仍须人工填写。
+
 ## 签字区（人工）
 
 | ADR | Reviewer | Date | Decision |
