@@ -109,6 +109,8 @@ class Settings(BaseSettings):
     memory_context_enforcement: bool = True
     # P1 Memory：注入/写入 Explicit Preferences
     memory_preferences: bool = True
+    # P1 尾巴：从单次需求推断弱偏好；默认关；不得覆盖 Explicit
+    memory_preferences_inferred: bool = False
     # P1 Memory：ContextBuilder 总 token 预算（后续用 trace 标定）
     memory_context_budget_tokens: int = 4000
 
