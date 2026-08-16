@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.user_preference import UserPreference
 
 
@@ -76,35 +77,20 @@ async def clear_preferences(db: AsyncSession, user_id: uuid.UUID) -> int:
     return count
 
 
-async def upsert_explicit_from_text(
+async def upsert_preferences_from_text(
     db: AsyncSession, *, user_id: uuid.UUID, text: str
 ) -> list[UserPreference]:
-    from app.forge.memory.explicit import extract_explicit_preferences
+    """正式路径：仅 LLM 抽取；未配置模型则不写。inferred 不覆盖 explicit。"""
+    if not settings.memory_preferences:
+        return []
+    from app.forge.memory.llm_extract import extract_preferences_via_llm
 
+    items = await extract_preferences_via_llm(text)
     written: list[UserPreference] = []
-    for item in extract_explicit_preferences(text):
-        row = await upsert_preference(
-            db,
-            user_id=user_id,
-            category=str(item["category"]),
-            key=str(item["key"]),
-            value_json=dict(item["value_json"]),
-            source=str(item.get("source") or "explicit"),
-            confidence=float(item.get("confidence") or 0.8),
-            status=str(item.get("status") or "active"),
-        )
-        written.append(row)
-    return written
-
-
-async def upsert_inferred_from_text(
-    db: AsyncSession, *, user_id: uuid.UUID, text: str
-) -> list[UserPreference]:
-    """写入 Inferred；若同 category/key 已是 Explicit 则跳过，避免降级覆盖。"""
-    from app.forge.memory.inferred import extract_inferred_preferences
-
-    written: list[UserPreference] = []
-    for item in extract_inferred_preferences(text):
+    for item in items:
+        source = str(item.get("source") or "inferred")
+        if source == "inferred" and not settings.memory_preferences_inferred:
+            continue
         category = str(item["category"])
         key = str(item["key"])
         existing = await db.scalar(
@@ -114,7 +100,11 @@ async def upsert_inferred_from_text(
                 UserPreference.key == key,
             )
         )
-        if existing is not None and existing.source == "explicit":
+        if (
+            source == "inferred"
+            and existing is not None
+            and existing.source == "explicit"
+        ):
             continue
         row = await upsert_preference(
             db,
@@ -122,12 +112,26 @@ async def upsert_inferred_from_text(
             category=category,
             key=key,
             value_json=dict(item["value_json"]),
-            source="inferred",
+            source=source,
             confidence=float(item.get("confidence") or 0.4),
             status=str(item.get("status") or "active"),
         )
         written.append(row)
     return written
+
+
+async def upsert_explicit_from_text(
+    db: AsyncSession, *, user_id: uuid.UUID, text: str
+) -> list[UserPreference]:
+    """兼容旧调用：走 LLM 正式路径（不再用规则引擎）。"""
+    return await upsert_preferences_from_text(db, user_id=user_id, text=text)
+
+
+async def upsert_inferred_from_text(
+    db: AsyncSession, *, user_id: uuid.UUID, text: str
+) -> list[UserPreference]:
+    """兼容旧调用：走 LLM 正式路径。"""
+    return await upsert_preferences_from_text(db, user_id=user_id, text=text)
 
 
 def preference_to_context_dict(row: UserPreference) -> dict[str, Any]:
@@ -141,15 +145,12 @@ def preference_to_context_dict(row: UserPreference) -> dict[str, Any]:
 
 
 async def _enforce_active_cap(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """active 偏好上限：优先归档最旧 inferred，再归档最旧 explicit。"""
-    from app.core.config import settings
-
+    """active 偏好上限：物理删除最早 inferred，再删最早 explicit。"""
     cap = max(1, int(settings.memory_preferences_max_active))
     active = await list_active_preferences(db, user_id)
     overflow = len(active) - cap
     if overflow <= 0:
         return
-    # 最旧 updated_at 优先；同刻 inferred 先于 explicit
     ordered = sorted(
         active,
         key=lambda r: (
@@ -158,5 +159,5 @@ async def _enforce_active_cap(db: AsyncSession, user_id: uuid.UUID) -> None:
         ),
     )
     for row in ordered[:overflow]:
-        row.status = "archived"
+        await db.delete(row)
     await db.flush()

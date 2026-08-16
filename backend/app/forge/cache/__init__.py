@@ -16,6 +16,7 @@ from app.forge.cache.routers import (
 )
 from app.forge.cache.semantic import (
     semantic_cache_lookup,
+    semantic_cache_store,
     semantic_direct_hit_allowed,
     semantic_shadow_record,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "list_templates_cached",
     "normalize_engine_id_cached",
     "semantic_cache_lookup",
+    "semantic_cache_store",
     "semantic_direct_hit_allowed",
     "semantic_shadow_record",
 ]

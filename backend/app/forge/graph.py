@@ -339,17 +339,12 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
 
 
 async def _upsert_preferences_from_text(ctx: _Ctx, text: str) -> None:
-    """写入 Explicit；可选写入 Inferred（不覆盖 Explicit）。"""
+    """LLM 抽取偏好（未配置抽取模型则跳过）。"""
     if not text.strip():
         return
-    if settings.memory_preferences:
-        from app.forge.memory.preferences import upsert_explicit_from_text
+    from app.forge.memory.preferences import upsert_preferences_from_text
 
-        await upsert_explicit_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
-    if settings.memory_preferences_inferred:
-        from app.forge.memory.preferences import upsert_inferred_from_text
-
-        await upsert_inferred_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
+    await upsert_preferences_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
 
 
 async def _compose_plan_input(

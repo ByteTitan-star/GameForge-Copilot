@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.config import settings
-from app.forge.cache.semantic import semantic_direct_hit_allowed
 from app.models.forge_message import ForgeMessage
 
 
@@ -45,10 +44,20 @@ def collect_adr_evidence() -> list[EvidenceCheck]:
             "(runtime .env may still override for local)",
         ),
         EvidenceCheck(
-            "ADR-03",
-            "semantic_direct_hit_forbidden",
-            semantic_direct_hit_allowed() is False,
-            "semantic direct hit remains forbidden (shadow-only; no Pinecone)",
+            "ADR-06",
+            "semantic_soft_hard_thresholds",
+            settings.semantic_cache_soft_threshold == 0.85
+            and settings.semantic_cache_hard_threshold == 0.95,
+            (
+                f"soft={settings.semantic_cache_soft_threshold!r} "
+                f"hard={settings.semantic_cache_hard_threshold!r}"
+            ),
+        ),
+        EvidenceCheck(
+            "ADR-06",
+            "embedding_default_bge_small",
+            _settings_field_default("embedding_model") == "bge-small-zh-v1.5",
+            f"embedding_model default={_settings_field_default('embedding_model')!r}",
         ),
         EvidenceCheck(
             "ADR-04",

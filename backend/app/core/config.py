@@ -136,9 +136,43 @@ class Settings(BaseSettings):
     # P4 Exact Cache：仅白名单低熵节点
     exact_cache_enabled: bool = True
     exact_cache_ttl_s: int = 86_400
-    # P4.5：Semantic shadow 记 Redis 标定样本（非 Pinecone；仍禁止 direct hit）
+    # P4.5 / ADR-06：Semantic shadow + Pinecone 分层命中
     semantic_cache_shadow_enabled: bool = True
     semantic_cache_shadow_ttl_s: int = 604_800
+    semantic_cache_direct_hit_enabled: bool = True
+    # < soft miss；[soft, hard) LLM 确认；>= hard 直接返回
+    semantic_cache_soft_threshold: float = 0.85
+    semantic_cache_hard_threshold: float = 0.95
+
+    # Embedding（OpenAI-compat /embeddings）；默认轻量中文 bge-small-zh-v1.5
+    embedding_enabled: bool = True
+    embedding_provider: str = "openai_compat"
+    embedding_model: str = "bge-small-zh-v1.5"
+    embedding_apikey: str = ""
+    embedding_base_url: str = ""
+    embedding_timeout_s: int = 30
+
+    # Pinecone（无 api_key+host 则语义命中空操作；REST，不强制 pinecone SDK）
+    pinecone_enabled: bool = True
+    pinecone_api_key: str = ""
+    pinecone_host: str = ""  # 例：xxxx.svc.aped-xxxx.pinecone.io
+    pinecone_index: str = "gameforge-semantic"
+    pinecone_namespace: str = "default"
+    pinecone_cloud: str = "aws"
+    pinecone_region: str = "us-east-1"
+
+    # 偏好抽取：仅轻量 chat；未配置 model 则不自动写偏好（禁止规则正式路径）
+    preference_extract_enabled: bool = True
+    preference_extract_provider: str = "openai_compat"
+    preference_extract_model: str = ""
+    preference_extract_apikey: str = ""
+    preference_extract_base_url: str = ""
+
+    # 语义软命中确认 LLM（空则回退 preference_extract_*）
+    semantic_confirm_provider: str = "openai_compat"
+    semantic_confirm_model: str = ""
+    semantic_confirm_apikey: str = ""
+    semantic_confirm_base_url: str = ""
 
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
