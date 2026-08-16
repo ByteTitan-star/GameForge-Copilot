@@ -25,10 +25,10 @@ from app.forge.design_doc import coerce_design_doc, design_doc_to_text
 from app.forge.engine_router import engine_scaffold
 from app.forge.events import publish_event
 from app.forge.prompts import (
-    build_code_prompt,
+    build_code_prompt_async,
     build_project_prompt,
     build_project_repair_prompt,
-    build_repair_prompt,
+    build_repair_prompt_async,
 )
 from app.forge.qa.diagnose import diagnose_playtest_failure
 from app.forge.reliability.artifact_gate import derive_artifact_gate
@@ -236,7 +236,12 @@ async def execute_code_or_repair(
                 repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
             repair_parts.append(f"【当前完整 index.html】\n{masked_html}")
             user_msg = "\n\n".join(repair_parts)
-            system_prompt = build_repair_prompt(design_doc["engine"]["id"])
+            system_prompt = await build_repair_prompt_async(
+                design_doc["engine"]["id"],
+                complete=lambda s, u: streamed_llm(
+                    ctx, s, u, "code", emit_delta=False
+                ),
+            )
             raw_output = await streamed_llm(
                 ctx, system_prompt, user_msg, "code", emit_delta=False
             )
@@ -250,7 +255,12 @@ async def execute_code_or_repair(
                     list(design_routing.dependencies),
                 )
             else:
-                system_prompt = build_code_prompt(engine_id)
+                system_prompt = await build_code_prompt_async(
+                    engine_id,
+                    complete=lambda s, u: streamed_llm(
+                        ctx, s, u, "code", emit_delta=False
+                    ),
+                )
             raw_output = await streamed_llm(
                 ctx, system_prompt, user_msg, "code", emit_delta=False
             )

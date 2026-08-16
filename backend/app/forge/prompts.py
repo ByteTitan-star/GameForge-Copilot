@@ -329,9 +329,36 @@ def _art_skill_appendix(hints: dict[str, Any] | None = None) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
+async def _art_skill_appendix_async(
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    if not settings.skills_router_enabled:
+        return ""
+    from app.forge.skills import resolve_skills_for_node_async
+
+    resolved = await resolve_skills_for_node_async(
+        "art", hints=hints or {}, complete=complete
+    )
+    parts = [resolved.policy_text(), resolved.methodology_text()]
+    return "\n\n".join(p for p in parts if p)
+
+
 def build_art_options_prompt(hints: dict[str, Any] | None = None) -> str:
     """P2/P5：Art options system prompt + Methodology Skill。"""
     appendix = _art_skill_appendix(hints)
+    if not appendix:
+        return ART_OPTIONS_PROMPT
+    return f"{ART_OPTIONS_PROMPT}\n\n{appendix}"
+
+
+async def build_art_options_prompt_async(
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    appendix = await _art_skill_appendix_async(hints, complete=complete)
     if not appendix:
         return ART_OPTIONS_PROMPT
     return f"{ART_OPTIONS_PROMPT}\n\n{appendix}"
@@ -344,6 +371,17 @@ def build_art_options_revise_prompt(hints: dict[str, Any] | None = None) -> str:
     return f"{ART_OPTIONS_REVISE_PROMPT}\n\n{appendix}"
 
 
+async def build_art_options_revise_prompt_async(
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    appendix = await _art_skill_appendix_async(hints, complete=complete)
+    if not appendix:
+        return ART_OPTIONS_REVISE_PROMPT
+    return f"{ART_OPTIONS_REVISE_PROMPT}\n\n{appendix}"
+
+
 def build_art_detail_prompt(hints: dict[str, Any] | None = None) -> str:
     appendix = _art_skill_appendix(hints)
     if not appendix:
@@ -351,13 +389,25 @@ def build_art_detail_prompt(hints: dict[str, Any] | None = None) -> str:
     return f"{ART_DETAIL_PROMPT}\n\n{appendix}"
 
 
-def build_qa_prompt(*, failure_kind: str = "product") -> str:
+async def build_art_detail_prompt_async(
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    appendix = await _art_skill_appendix_async(hints, complete=complete)
+    if not appendix:
+        return ART_DETAIL_PROMPT
+    return f"{ART_DETAIL_PROMPT}\n\n{appendix}"
+
+
+def build_qa_prompt(
+    *, failure_kind: str = "product", hints: dict[str, Any] | None = None
+) -> str:
     """Diagnose system prompt；可选注入 repair/playtest Methodology。"""
     if not settings.skills_router_enabled:
         return QA_PROMPT
-    resolved = resolve_skills_for_node(
-        "diagnose", hints={"failure_kind": failure_kind}
-    )
+    merged = {"failure_kind": failure_kind, **(hints or {})}
+    resolved = resolve_skills_for_node("diagnose", hints=merged)
     appendix = "\n\n".join(
         p for p in (resolved.policy_text(), resolved.methodology_text()) if p
     )
@@ -366,14 +416,16 @@ def build_qa_prompt(*, failure_kind: str = "product") -> str:
     return f"{QA_PROMPT}\n\n{appendix}"
 
 
-def build_code_prompt(engine_id: str) -> str:
+def build_code_prompt(
+    engine_id: str, hints: dict[str, Any] | None = None
+) -> str:
     """按选定引擎拼装代码生成 system prompt：通用骨架 + 引擎方法论 + 钉死 CDN。
 
     不同引擎的专属写法（Scene 结构 / Ticker / 裸 RAF）从独立方法论 md 注入，
     避免把多种引擎细节挤进单个提示词。非法 engine_id 在 router 内回退 canvas。
     """
     if settings.skills_router_enabled:
-        return _build_code_prompt_routed(engine_id)
+        return _build_code_prompt_routed(engine_id, hints=hints)
     methodology = engine_methodology(engine_id)
     return "\n\n".join(
         part
@@ -394,10 +446,55 @@ def build_code_prompt(engine_id: str) -> str:
     )
 
 
-def _build_code_prompt_routed(engine_id: str) -> str:
+async def build_code_prompt_async(
+    engine_id: str,
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    merged = {"engine_id": normalize_engine_id(engine_id), **(hints or {})}
+    if settings.skills_router_enabled and (
+        settings.skills_llm_selection or merged.get("methodology_ids")
+    ):
+        from app.forge.skills import resolve_skills_for_node_async
+
+        resolved = await resolve_skills_for_node_async(
+            "code", hints=merged, complete=complete
+        )
+        merged["methodology_ids"] = [s.id for s in resolved.methodology]
+    return build_code_prompt(engine_id, hints=merged)
+
+
+async def build_repair_prompt_async(
+    engine_id: str,
+    hints: dict[str, Any] | None = None,
+    *,
+    complete: Any | None = None,
+) -> str:
+    merged = {
+        "engine_id": normalize_engine_id(engine_id),
+        "failure_kind": "product",
+        **(hints or {}),
+    }
+    if settings.skills_router_enabled and (
+        settings.skills_llm_selection or merged.get("methodology_ids")
+    ):
+        from app.forge.skills import resolve_skills_for_node_async
+
+        resolved = await resolve_skills_for_node_async(
+            "repair", hints=merged, complete=complete
+        )
+        merged["methodology_ids"] = [s.id for s in resolved.methodology]
+    return build_repair_prompt(engine_id, hints=merged)
+
+
+def _build_code_prompt_routed(
+    engine_id: str, hints: dict[str, Any] | None = None
+) -> str:
     """P2：Policy 强制注入 + 仅加载所选引擎 Methodology（不全量 skill 正文）。"""
     eid = normalize_engine_id(engine_id)
-    resolved = resolve_skills_for_node("code", hints={"engine_id": eid})
+    merged = {"engine_id": eid, **(hints or {})}
+    resolved = resolve_skills_for_node("code", hints=merged)
     policy = resolved.policy_text()
     methodology = resolved.methodology_text()
     return "\n\n".join(
@@ -420,13 +517,15 @@ def _build_code_prompt_routed(engine_id: str) -> str:
     )
 
 
-def build_repair_prompt(engine_id: str) -> str:
+def build_repair_prompt(
+    engine_id: str, hints: dict[str, Any] | None = None
+) -> str:
     """修复工程师 prompt：在当前实现基础上修根因，保持原引擎选型不变。
 
     与 build_code_prompt 共享通用骨架与引擎方法论，额外约束「不切换引擎」防回归。
     """
     if settings.skills_router_enabled:
-        return _build_repair_prompt_routed(engine_id)
+        return _build_repair_prompt_routed(engine_id, hints=hints)
     methodology = engine_methodology(engine_id)
     repair_specific = (
         "修复规则：\n"
@@ -464,11 +563,12 @@ def build_repair_prompt(engine_id: str) -> str:
     )
 
 
-def _build_repair_prompt_routed(engine_id: str) -> str:
+def _build_repair_prompt_routed(
+    engine_id: str, hints: dict[str, Any] | None = None
+) -> str:
     eid = normalize_engine_id(engine_id)
-    resolved = resolve_skills_for_node(
-        "repair", hints={"engine_id": eid, "failure_kind": "product"}
-    )
+    merged = {"engine_id": eid, "failure_kind": "product", **(hints or {})}
+    resolved = resolve_skills_for_node("repair", hints=merged)
     repair_specific = (
         "修复规则：\n"
         "1. 优先做范围清晰的根因修复，保留当前已经正常工作的玩法、视觉、关卡和交互。\n"
@@ -643,11 +743,16 @@ __all__ = [
     "ART_DETAIL_PROMPT",
     "QA_PROMPT",
     "build_art_detail_prompt",
+    "build_art_detail_prompt_async",
     "build_art_options_prompt",
+    "build_art_options_prompt_async",
     "build_art_options_revise_prompt",
+    "build_art_options_revise_prompt_async",
     "build_code_prompt",
+    "build_code_prompt_async",
     "build_project_prompt",
     "build_project_repair_prompt",
     "build_qa_prompt",
     "build_repair_prompt",
+    "build_repair_prompt_async",
 ]

@@ -41,9 +41,9 @@ from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
-    build_art_detail_prompt,
-    build_art_options_prompt,
-    build_art_options_revise_prompt,
+    build_art_detail_prompt_async,
+    build_art_options_prompt_async,
+    build_art_options_revise_prompt_async,
 )
 from app.forge.reliability import (
     FatalError,
@@ -937,9 +937,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "requirement": ctx.game.requirement or "",
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
                 }
-                art_options = await generate_art_options(
-                    build_art_options_prompt(art_hints), user_msg
+                system_prompt = await build_art_options_prompt_async(
+                    art_hints, complete=lambda s, u: _llm(ctx, s, u)
                 )
+                art_options = await generate_art_options(system_prompt, user_msg)
             except ContentAttacked:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
@@ -985,9 +986,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "requirement": ctx.game.requirement or "",
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
                 }
-                art_options = await generate_art_options(
-                    build_art_options_revise_prompt(art_hints), user_msg
+                system_prompt = await build_art_options_revise_prompt_async(
+                    art_hints, complete=lambda s, u: _llm(ctx, s, u)
                 )
+                art_options = await generate_art_options(system_prompt, user_msg)
             except ContentAttacked:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
@@ -1047,16 +1049,16 @@ def _build_graph(ctx: _Ctx) -> Any:
                         design_doc=design_doc,
                         selected_option=selected_option,
                     )
+                    system_prompt = await build_art_detail_prompt_async(
+                        {
+                            "style": json.dumps(selected_option, ensure_ascii=False),
+                            "goal": (design_doc.get("title") or ctx.game.title or ""),
+                        },
+                        complete=lambda s, u: _llm(ctx, s, u),
+                    )
                     raw = await _streamed_llm_or_fallback(
                         ctx,
-                        build_art_detail_prompt(
-                            {
-                                "style": json.dumps(
-                                    selected_option, ensure_ascii=False
-                                ),
-                                "goal": (design_doc.get("title") or ctx.game.title or ""),
-                            }
-                        ),
+                        system_prompt,
                         user_msg,
                         "art",
                         emit_delta=False,

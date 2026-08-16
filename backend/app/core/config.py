@@ -121,6 +121,8 @@ class Settings(BaseSettings):
 
     # P2 Skills：节点经 catalog/router 选择 Methodology；Policy 仍强制注入
     skills_router_enabled: bool = True
+    # P2 尾巴：Methodology 可由 LLM 自选（失败回落确定性）；Policy 永不交给 LLM
+    skills_llm_selection: bool = False
 
     # P4 Exact Cache：仅白名单低熵节点；关则全部 miss
     exact_cache_enabled: bool = True

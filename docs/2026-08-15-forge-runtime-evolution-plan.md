@@ -21,11 +21,11 @@
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）；可选 LLM summary（PR `#81`）；可选 Inferred 偏好
-  * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt 已接 Methodology
+  * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt；可选 LLM Methodology 自选（`skills_llm_selection` 默认关）
   * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）
-  * **仍 gated** LLM 自选 Skill / 离线 eval / E2B 真 SDK+benchmark / HITL destroy+restore / ADR Accept 签字
+  * **仍 gated** 离线 eval 完整套件 / E2B 真 SDK+benchmark / HITL destroy+restore / ADR Accept 签字 / Flag 彻底删遗留 concat
 
 ---
 

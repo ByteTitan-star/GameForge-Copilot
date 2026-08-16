@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
+from app.core.config import settings
 from app.forge.skills.catalog import list_skill_metas
 from app.forge.skills.loader import load_skill_body
 from app.forge.skills.models import LoadedSkill, ResolvedSkills, SkillMeta
+
+LlmComplete = Callable[[str, str], Awaitable[str]]
 
 
 def resolve_skills_for_node(
@@ -17,29 +21,73 @@ def resolve_skills_for_node(
     """discover(metadata) → choose → load(bodies)。
 
     Art 节点不会看到 billing/sandbox admin 等未登记 Skill（catalog 白名单即边界）。
+    hints.methodology_ids 若提供：仅在候选白名单内覆盖 Methodology 选择（Policy 仍强制）。
     """
     from app.forge.tracing import observe_subsystem
 
     hints = hints or {}
     with observe_subsystem("skill", "resolve", metadata={"node": node}):
-        metas = list_skill_metas()
-        node_key = _normalize_node(node)
+        return _resolve(node, hints)
 
-        policy_metas = [
-            m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)
-        ]
-        candidates = [
-            m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)
-        ]
-        chosen = _choose_methodology(node_key, candidates, hints)
 
-        policy = tuple(_load(m) for m in policy_metas)
-        methodology = tuple(_load(m) for m in chosen)
-        return ResolvedSkills(
-            policy=policy,
-            methodology=methodology,
-            loaded_body_count=len(policy) + len(methodology),
-        )
+async def resolve_skills_for_node_async(
+    node: str,
+    *,
+    hints: dict[str, Any] | None = None,
+    complete: LlmComplete | None = None,
+) -> ResolvedSkills:
+    """可选 LLM 自选 Methodology；失败或关 flag 时回落确定性路由。Policy 始终强制。"""
+    from app.forge.tracing import observe_subsystem
+
+    hints = dict(hints or {})
+    with observe_subsystem(
+        "skill",
+        "resolve_async",
+        metadata={"node": node, "llm": bool(settings.skills_llm_selection and complete)},
+    ):
+        if (
+            settings.skills_llm_selection
+            and complete is not None
+            and "methodology_ids" not in hints
+        ):
+            node_key = _normalize_node(node)
+            candidates = [
+                m
+                for m in list_skill_metas()
+                if m.kind == "methodology" and _node_allowed(m, node_key)
+            ]
+            from app.forge.skills.llm_select import select_methodology_ids_via_llm
+
+            selected = await select_methodology_ids_via_llm(
+                node=node_key,
+                candidates=candidates,
+                hints=hints,
+                complete=complete,
+            )
+            if selected is not None:
+                hints["methodology_ids"] = selected
+        return _resolve(node, hints)
+
+
+def _resolve(node: str, hints: dict[str, Any]) -> ResolvedSkills:
+    metas = list_skill_metas()
+    node_key = _normalize_node(node)
+
+    policy_metas = [
+        m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)
+    ]
+    candidates = [
+        m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)
+    ]
+    chosen = _choose_methodology(node_key, candidates, hints)
+
+    policy = tuple(_load(m) for m in policy_metas)
+    methodology = tuple(_load(m) for m in chosen)
+    return ResolvedSkills(
+        policy=policy,
+        methodology=methodology,
+        loaded_body_count=len(policy) + len(methodology),
+    )
 
 
 def _normalize_node(node: str) -> str:
@@ -66,11 +114,16 @@ def _choose_methodology(
 ) -> list[SkillMeta]:
     if not candidates:
         return []
+    override = hints.get("methodology_ids")
+    if isinstance(override, (list, tuple)) and override:
+        by_id = {m.id: m for m in candidates}
+        picked = [by_id[i] for i in override if isinstance(i, str) and i in by_id]
+        if picked:
+            return picked[:3]
     if node in {"art"}:
         return _choose_art(candidates, hints)
     if node in {"code", "repair", "qa", "diagnose"}:
         return _choose_code_or_repair(node, candidates, hints)
-    # plan 等：默认不塞 methodology，只保留 policy（若有）
     return []
 
 
@@ -88,7 +141,6 @@ def _choose_art(candidates: list[SkillMeta], hints: dict[str, Any]) -> list[Skil
     if "art/visual-composition" in by_id and len(picked) < 2:
         picked.append(by_id["art/visual-composition"])
     if not picked:
-        # 默认轻量组合，避免全量注入
         for skill_id in ("art/visual-composition", "art/hud-design"):
             if skill_id in by_id:
                 picked.append(by_id[skill_id])
