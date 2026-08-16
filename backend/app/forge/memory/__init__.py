@@ -12,6 +12,7 @@ from app.forge.memory.summary import (
     coerce_session_summary,
     empty_session_summary,
     should_refresh_summary,
+    synthesize_summary_from_turns,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "empty_session_summary",
     "estimate_tokens",
     "should_refresh_summary",
+    "synthesize_summary_from_turns",
 ]
