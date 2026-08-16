@@ -5,6 +5,7 @@ from app.forge.memory.context_builder import (
     ContextArtifacts,
     ContextBuilder,
     ContextTurn,
+    context_fingerprint,
     estimate_tokens,
 )
 from app.forge.memory.summary import (
@@ -22,6 +23,7 @@ __all__ = [
     "ContextTurn",
     "SessionSummary",
     "coerce_session_summary",
+    "context_fingerprint",
     "empty_session_summary",
     "estimate_tokens",
     "should_refresh_summary",

@@ -1,10 +1,11 @@
-"""Context Builder：统一拼装 Session / Preference / Artifact 注入文本（P1 MVP）。
+"""Context Builder：统一拼装 Session / Preference / Artifact 注入文本（P1 MVP / P5 Enforcement）。
 
 历史与偏好永远是 data，不得当作 instruction（防注入）。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +16,20 @@ def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     return max(1, (len(text) + 3) // 4)
+
+
+def context_fingerprint(*, node: str, sections: dict[str, str], token_estimate: int) -> str:
+    """Prompt fingerprint：node + section 内容哈希 + token 估计（可观测 / cache 对齐）。"""
+    h = hashlib.sha256()
+    h.update((node or "").encode("utf-8"))
+    h.update(b"\0")
+    for key in sorted(sections):
+        h.update(key.encode("utf-8"))
+        h.update(b"=")
+        h.update((sections.get(key) or "").encode("utf-8"))
+        h.update(b"\n")
+    h.update(str(token_estimate).encode("utf-8"))
+    return h.hexdigest()[:16]
 
 
 @dataclass(frozen=True)
@@ -35,6 +50,7 @@ class BuiltContext:
     sections: dict[str, str]
     token_estimate: int
     node: str
+    fingerprint: str = ""
 
 
 # 预算占比（与演进计划一致；后续用 trace 标定）
@@ -97,11 +113,15 @@ class ContextBuilder:
                 body = _assemble(sections)
                 break
 
+        token_estimate = estimate_tokens(body)
         return BuiltContext(
             user_message=body,
             sections=sections,
-            token_estimate=estimate_tokens(body),
+            token_estimate=token_estimate,
             node=node,
+            fingerprint=context_fingerprint(
+                node=node, sections=sections, token_estimate=token_estimate
+            ),
         )
 
 
