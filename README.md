@@ -1,6 +1,7 @@
 # GameForge
 
-English | [中文](./README_zh.md)
+![English](https://img.shields.io/badge/English-0A66C2?style=for-the-badge)
+[![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge)](./README_zh.md)
 
 > Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
 
