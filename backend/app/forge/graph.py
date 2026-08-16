@@ -303,14 +303,46 @@ def _wrap_user_input(text: str) -> str:
     )
 
 
+async def _refresh_session_summary(ctx: _Ctx) -> None:
+    """超阈刷新 Session Summary；可选 LLM（失败回落确定性）。"""
+    if not settings.memory_session_summary:
+        return
+    from app.forge.memory.refresh import refresh_session_summary_if_needed
+
+    summarizer = None
+    if settings.memory_session_summary_llm:
+        from app.forge.memory.context_builder import ContextTurn
+        from app.forge.memory.llm_summary import synthesize_summary_via_llm
+        from app.forge.memory.summary import SessionSummary
+
+        async def summarizer(
+            turns: list[ContextTurn], previous: SessionSummary | None
+        ) -> SessionSummary:
+            async def complete(system: str, user_msg: str) -> str:
+                content, _usage, _prov = await llm_client.call_llm(
+                    ctx.s,
+                    ctx.r,
+                    ctx.run.user_id,
+                    ctx.run.llm_config_id,
+                    system,
+                    user_msg,
+                    game_id=ctx.game.id,
+                    run_id=ctx.run.id,
+                )
+                return content
+
+            return await synthesize_summary_via_llm(
+                turns, previous, complete=complete
+            )
+
+    await refresh_session_summary_if_needed(ctx.s, ctx.game, summarizer=summarizer)
+
+
 async def _compose_plan_input(
     ctx: _Ctx, *, current_input: str, design_doc: dict[str, Any] | None = None
 ) -> str:
     """Plan/revise 用户消息：可选写入 Explicit 偏好，并经 ContextBuilder 拼装。"""
-    if settings.memory_session_summary:
-        from app.forge.memory.refresh import refresh_session_summary_if_needed
-
-        await refresh_session_summary_if_needed(ctx.s, ctx.game)
+    await _refresh_session_summary(ctx)
     if settings.memory_preferences:
         from app.forge.memory.preferences import upsert_explicit_from_text
 
@@ -355,10 +387,7 @@ async def _compose_art_input(
     previous_options: dict[str, Any] | None = None,
 ) -> str:
     """Art/revise 用户消息：经 ContextBuilder 注入 summary/preferences。"""
-    if settings.memory_session_summary:
-        from app.forge.memory.refresh import refresh_session_summary_if_needed
-
-        await refresh_session_summary_if_needed(ctx.s, ctx.game)
+    await _refresh_session_summary(ctx)
     if settings.memory_preferences and current_input.strip():
         from app.forge.memory.preferences import upsert_explicit_from_text
 
@@ -404,10 +433,7 @@ async def _compose_art_detail_input(
     selected_option: dict[str, Any],
 ) -> str:
     """Art detail：经 ContextBuilder 注入 Memory；设计稿/选项作任务载荷。"""
-    if settings.memory_session_summary:
-        from app.forge.memory.refresh import refresh_session_summary_if_needed
-
-        await refresh_session_summary_if_needed(ctx.s, ctx.game)
+    await _refresh_session_summary(ctx)
     option_json = json.dumps(selected_option, ensure_ascii=False)
     task = (
         "【已确认游戏策划稿 JSON】\n"
