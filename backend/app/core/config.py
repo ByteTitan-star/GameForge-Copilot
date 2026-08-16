@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     # P2 Skills：节点经 catalog/router 选择 Methodology；Policy 仍强制注入
     skills_router_enabled: bool = True
 
+    # P4 Exact Cache：仅白名单低熵节点；关则全部 miss
+    exact_cache_enabled: bool = True
+    exact_cache_ttl_s: int = 86_400
+
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
