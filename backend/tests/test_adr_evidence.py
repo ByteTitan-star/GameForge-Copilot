@@ -1,4 +1,4 @@
-"""ADR Accept：机器证据核验（不自动 Accept）。"""
+"""ADR Accept：机器证据核验。"""
 
 from __future__ import annotations
 
@@ -13,10 +13,11 @@ def test_adr_machine_evidence_all_pass() -> None:
     assert evidence_all_machine_checks_ok(checks) is True
 
 
-def test_adr_evidence_never_claims_accepted_in_module_doc() -> None:
+def test_adr_evidence_module_documents_invariants() -> None:
     from pathlib import Path
 
     text = Path(__file__).resolve().parents[1].joinpath(
         "app", "forge", "adr_evidence.py"
     ).read_text(encoding="utf-8")
-    assert "永不改 ADR Status" in text or "never" in text.lower()
+    assert "Accepted" in text
+    assert "semantic_direct_hit" in text

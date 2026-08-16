@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；剩余主要为人工门禁：ADR Accept、E2B 生产切换 Go、真实 LLM A/B、全量 Load）
+* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；ADR-02/03/04 **Accepted** by ByteTitan-star；E2B/Skill LLM/偏好等默认已按 Owner 配置开启）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -13,9 +13,9 @@
 * ADR 状态:
   * **ADR-01** Degraded Artifact Publishing — **Accepted**（见 `docs/adr/`）
   * **ADR-05** Recoverable Pause Representation — **Accepted**（见 `docs/adr/`）
-  * **ADR-02** Preference Retention — **Proposed**（Explicit 保留；Inferred 不覆盖 Explicit；删 Game 不自动清 Inferred）
-  * **ADR-03** Sandbox Provider Strategy — **Proposed**（生产默认 Docker；E2B 仅 PoC）
-  * **ADR-04** Conversation Storage Migration — **Proposed**（`forge_messages` 唯一 SoT）
+  * **ADR-02** Preference Retention — **Accepted**（ByteTitan-star；active cap=50）
+  * **ADR-03** Sandbox Provider Strategy — **Accepted**（ByteTitan-star；E2B preferred + fallback）
+  * **ADR-04** Conversation Storage Migration — **Accepted**（ByteTitan-star；`forge_messages` SoT）
 * Implementation decisions（非 ADR）:
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
 * 落地进度（相对本仓库）:

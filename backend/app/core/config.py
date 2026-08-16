@@ -53,17 +53,17 @@ class Settings(BaseSettings):
     s3_connect_timeout: int = 10
     s3_read_timeout: int = 60
 
-    # 沙箱（local=子进程联调；docker=生产隔离，docs/09）
-    sandbox_backend: str = "local"  # local|docker|e2b（e2b 仅 PoC，见 sandbox_e2b_enabled）
+    # 沙箱：优先 E2B（需 E2B_API_KEY）；无 key 时工厂回退 docker→local
+    sandbox_backend: str = "e2b"  # local|docker|e2b
     sandbox_image: str = "gameforge/sandbox"
     sandbox_default_tier: str = "standard"
-    # P3.3：按 telemetry/启发式自动选 lite|standard|heavy；默认关，避免过度降档
-    sandbox_tier_auto: bool = False
-    # ADR-03：E2B 默认关闭；仅批准的 benchmark/PoC 可显式打开
-    sandbox_e2b_enabled: bool = False
+    # P3.3：按源码体量 / engine / 近期 OOM·超时自动选 lite|standard|heavy
+    sandbox_tier_auto: bool = True
+    # E2B 已启用；真实调用仍需环境变量 E2B_API_KEY（禁止写入仓库）
+    sandbox_e2b_enabled: bool = True
     e2b_api_key: str = ""
     e2b_timeout_s: int = 120
-    # PoC 默认不开外网，降低 UGC 出站风险；对照网络 benchmark 时可显式打开
+    # 默认不开外网，降低 UGC 出站风险；需要 CDN 拉取时再开
     e2b_allow_internet: bool = False
 
     # 构建链（docs/build-pipeline.md P1+）
@@ -115,28 +115,29 @@ class Settings(BaseSettings):
     memory_context_enforcement: bool = True
     # P1 Memory：注入/写入 Explicit Preferences
     memory_preferences: bool = True
-    # P1 尾巴：从单次需求推断弱偏好；默认关；不得覆盖 Explicit
-    memory_preferences_inferred: bool = False
+    # 从对话推断弱偏好；不得覆盖 Explicit；与 Explicit 合计最多 N 条 active
+    memory_preferences_inferred: bool = True
+    memory_preferences_max_active: int = 50
     # P1 Memory：ContextBuilder 总 token 预算（后续用 trace 标定）
     memory_context_budget_tokens: int = 4000
 
-    # P1 Memory：超阈时刷新并持久化 Session Summary（确定性 synthesizer）
+    # P1 Memory：超阈时刷新并持久化 Session Summary
     memory_session_summary: bool = True
-    # P1 尾巴：Session Summary 走 LLM（失败回落确定性）；默认关以避免额外费用
-    memory_session_summary_llm: bool = False
+    # Session Summary 优先 LLM（失败回落确定性）
+    memory_session_summary_llm: bool = True
 
-    # P2 Skills：节点经 catalog/router 选择 Methodology；Policy 仍强制注入
+    # P2 Skills：节点经 catalog/router；先暴露 name/description，正文按需加载
     skills_router_enabled: bool = True
-    # P2 尾巴：Methodology 可由 LLM 自选（失败回落确定性）；Policy 永不交给 LLM
-    skills_llm_selection: bool = False
-    # P2：质量 lift A/B 可选用 LLM complete（默认关；无 complete 时仍跑 mock body 对比）
-    skills_quality_lift_llm: bool = False
+    # Methodology 由 LLM 在节点候选内自选（仅看 id/name/description）；Policy 永不 LLM
+    skills_llm_selection: bool = True
+    # 质量 lift A/B 允许走 LLM complete（评估脚本用）
+    skills_quality_lift_llm: bool = True
 
-    # P4 Exact Cache：仅白名单低熵节点；关则全部 miss
+    # P4 Exact Cache：仅白名单低熵节点
     exact_cache_enabled: bool = True
     exact_cache_ttl_s: int = 86_400
-    # P4.5：Semantic shadow 仅记标定样本，禁止 direct hit
-    semantic_cache_shadow_enabled: bool = False
+    # P4.5：Semantic shadow 记 Redis 标定样本（非 Pinecone；仍禁止 direct hit）
+    semantic_cache_shadow_enabled: bool = True
     semantic_cache_shadow_ttl_s: int = 604_800
 
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
