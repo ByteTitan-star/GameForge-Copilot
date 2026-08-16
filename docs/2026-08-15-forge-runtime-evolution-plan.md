@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P4 MVP 已落地**；**P5 Enforcement 推进中**；P3 E2B 生产切换与 P4.5 Semantic 仍 gated）
+* Status: In Progress（**P0–P5 MVP 主体已落地**；P3 E2B 生产切换、P4.5 Semantic、Pending ADR 细项仍 gated）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -9,9 +9,10 @@
   * `backend/app/forge/graph.py` / `subgraphs/code_qa_loop.py`
   * `backend/app/sandbox/`、`backend/app/forge/skills/`、`backend/app/forge/cache/`
   * `backend/app/forge/memory/`（P1 ContextBuilder / Summary / Preferences；P5 Enforcement）
+  * [ADR 归档](./adr/README.md)
 * ADR 状态:
-  * **ADR-01** Degraded Artifact Publishing — **Accepted**
-  * **ADR-05** Recoverable Pause Representation — **Accepted**
+  * **ADR-01** Degraded Artifact Publishing — **Accepted**（见 `docs/adr/`）
+  * **ADR-05** Recoverable Pause Representation — **Accepted**（见 `docs/adr/`）
   * **ADR-02** Preference Retention — Pending（阻塞 P1 Preference 写入策略细项；MVP 已按「Explicit 保留」落地）
   * **ADR-03** Sandbox Provider Strategy — **Pending**（国内源码/数据出境不默认允许；P3 仅 PoC）
   * **ADR-04** Conversation Storage Migration — Pending（阻塞 P1 message SoT 选型；MVP 继续以 `forge_messages` 为唯一 SoT，不平行建表）
@@ -20,10 +21,10 @@
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
-  * **P2** ✅ Skills catalog/router（PR `#75`）
+  * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt 已接 Methodology
   * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
   * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；Semantic Cache 未开（PR `#78`）
-  * **P5** 🚧 ContextBuilder Enforcement + fingerprint + Memory/Skill/Sandbox/Cache spans（diagnose 任务载荷仍可外挂）
+  * **P5** ✅ ContextBuilder Enforcement + fingerprint + spans（PR `#79`）；diagnose Memory 信封 / Art skill 接线 / ADR 归档 / 安全与 cache chaos 轻量测
 
 ---
 
@@ -780,7 +781,7 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 * Chaos / Load / Security 测试
 * 文档与 ADR 归档
 
-**MVP 进度（本仓库）**：`memory_context_enforcement` 默认开；`BuiltContext.fingerprint` + `observe_context_build`；plan/art/art_detail/code|repair 经 `build_node_context`；Skill/Sandbox/Cache 挂 `observe_subsystem`。diagnose 的错误/HTML 摘录仍为任务载荷（非 Memory SoT）。Chaos/Load/Security 与 ADR 归档另开。
+**MVP 进度（本仓库）**：`memory_context_enforcement` 默认开；`BuiltContext.fingerprint` + `observe_context_build`；plan/art/art_detail/code|repair/**diagnose** 经 `build_node_context`；Art/QA system prompt 接 Methodology；Skill/Sandbox/Cache 挂 `observe_subsystem`；`docs/adr/` 已归档 Accepted/Pending；`test_p5_hardening.py` 覆盖 secret scan 与 forbid-cache concurrency。P4.5 Semantic、E2B 生产切换、inferred preference、全量 Load 压测仍 gated。
 
 ---
 
