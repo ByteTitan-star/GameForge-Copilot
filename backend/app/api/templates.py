@@ -3,8 +3,9 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.auth.deps import RedisClient
 from app.core.response import ApiResponse
-from app.forge.templates.loader import list_templates
+from app.forge.cache import list_templates_cached, normalize_engine_id_cached
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -36,5 +37,10 @@ def _to_item(row: dict) -> TemplateItem:
 
 
 @router.get("", response_model=ApiResponse[list[TemplateItem]])
-async def get_templates() -> ApiResponse[list[TemplateItem]]:
-    return ApiResponse(data=[_to_item(t) for t in list_templates()])
+async def get_templates(r: RedisClient) -> ApiResponse[list[TemplateItem]]:
+    rows = await list_templates_cached(r)
+    items: list[TemplateItem] = []
+    for t in rows:
+        engine = await normalize_engine_id_cached(r, t.get("engine"))
+        items.append(_to_item({**t, "engine": engine}))
+    return ApiResponse(data=items)

@@ -119,8 +119,10 @@ async def _public_item(db: DbSession, game: Game, locale: str | None = None) -> 
 
 
 @router.post("", response_model=ApiResponse[GameResp], status_code=201, responses=ERR_403)
-async def create_game(req: GameCreate, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
-    return ApiResponse(data=_to_resp(await services.create_game(db, user, req)))
+async def create_game(
+    req: GameCreate, user: CurrentUser, db: DbSession, r: RedisClient
+) -> ApiResponse[GameResp]:
+    return ApiResponse(data=_to_resp(await services.create_game(db, user, req, r)))
 
 
 @router.get("/public", response_model=PaginatedData[PublicGameMeta])
