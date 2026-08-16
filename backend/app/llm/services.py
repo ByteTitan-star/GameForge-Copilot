@@ -95,14 +95,10 @@ async def _unset_default(db: AsyncSession, user: User) -> None:
     )
 
 
-async def create_config(
-    db: AsyncSession, user: User, req: LLMConfigCreate
-) -> LLMConfigCreateResp:
+async def create_config(db: AsyncSession, user: User, req: LLMConfigCreate) -> LLMConfigCreateResp:
     """连通测试通过才保存（docs/05 §连通性测试）。openai_compat 校验 base_url。"""
     validate_llm_base_url(req.base_url)
-    ok, err = await provider.test_connectivity(
-        req.provider, req.apikey, req.model, req.base_url
-    )
+    ok, err = await provider.test_connectivity(req.provider, req.apikey, req.model, req.base_url)
     if not ok:
         raise AppError(ErrorCode.LLM_CONFIG_INVALID, f"连通测试失败: {err}")
     if req.is_default:
@@ -137,9 +133,7 @@ async def patch_config(
     return _to_resp(cfg)
 
 
-async def delete_config(
-    db: AsyncSession, user: User, config_id: UUID
-) -> LLMConfigDeleteResp:
+async def delete_config(db: AsyncSession, user: User, config_id: UUID) -> LLMConfigDeleteResp:
     cfg = await _get_owned(db, user, config_id)
     if cfg.is_default:
         stmt = select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
@@ -154,15 +148,11 @@ async def delete_config(
 async def test_draft_config(req: LLMConfigTestReq) -> LLMConfigDryTestResp:
     """保存前探测，不写入数据库。"""
     validate_llm_base_url(req.base_url)
-    ok, err = await provider.test_connectivity(
-        req.provider, req.apikey, req.model, req.base_url
-    )
+    ok, err = await provider.test_connectivity(req.provider, req.apikey, req.model, req.base_url)
     return LLMConfigDryTestResp(tested_ok=ok, error=err)
 
 
-async def test_config(
-    db: AsyncSession, user: User, config_id: UUID
-) -> LLMConfigTestResp:
+async def test_config(db: AsyncSession, user: User, config_id: UUID) -> LLMConfigTestResp:
     cfg = await _get_owned(db, user, config_id)
     ok, err = await provider.test_connectivity(
         LLMProvider(cfg.provider),

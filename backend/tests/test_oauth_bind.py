@@ -14,9 +14,7 @@ from app.core.errors import AppError, ErrorCode
 async def test_oauth_callback_rejects_unverified_existing_email(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    existing = SimpleNamespace(
-        id=uuid4(), email="victim@example.com", email_verified=False
-    )
+    existing = SimpleNamespace(id=uuid4(), email="victim@example.com", email_verified=False)
     profile = SimpleNamespace(email="victim@example.com", provider_sub="gh-1")
 
     db = AsyncMock()
@@ -37,9 +35,7 @@ async def test_oauth_callback_rejects_unverified_existing_email(
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    monkeypatch.setattr(
-        oauth_mod, "fetch_oauth_profile", AsyncMock(return_value=profile)
-    )
+    monkeypatch.setattr(oauth_mod, "fetch_oauth_profile", AsyncMock(return_value=profile))
 
     with pytest.raises(AppError) as ei:
         await oauth_mod.oauth_callback(db, r, "github", "code", "state")

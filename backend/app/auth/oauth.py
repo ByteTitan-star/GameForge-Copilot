@@ -96,6 +96,7 @@ async def _github_profile(code: str) -> OAuthProfile:
         email = data.get("email") or f"{data['id']}@users.noreply.github.com"
         return OAuthProfile(provider_sub=str(data["id"]), email=email, name=data.get("login"))
 
+
 async def _google_profile(code: str) -> OAuthProfile:
     async with httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(

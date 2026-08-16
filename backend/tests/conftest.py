@@ -33,9 +33,7 @@ from app.messaging.factory import reset_messaging
 from app.models import Base
 
 # 单连接 in-memory sqlite（StaticPool 保证 create_all 与查询同一库）
-_engine = create_async_engine(
-    "sqlite+aiosqlite:///:memory:", poolclass=StaticPool, future=True
-)
+_engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool, future=True)
 _SessionLocal = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
 
 # email -> token（按用途前缀），供测试读取验证/重置 token；notify 列表存通知
@@ -503,9 +501,7 @@ async def admin_client() -> AsyncIterator[httpx.AsyncClient]:
             json={"email": "admin@b.com", "password": "password123"},
         )
         async with _SessionLocal() as s:
-            user = (
-                await s.scalars(select(User).where(User.email == "admin@b.com"))
-            ).first()
+            user = (await s.scalars(select(User).where(User.email == "admin@b.com"))).first()
             assert user is not None
             user.role = "admin"
             await s.commit()

@@ -72,8 +72,7 @@ async def _dev_seed_official_games() -> None:
         )
     except Exception:
         log.exception(
-            "dev seed 失败（不阻断启动），请手动执行 "
-            "`uv run python -m scripts.seed_official_games`"
+            "dev seed 失败（不阻断启动），请手动执行 `uv run python -m scripts.seed_official_games`"
         )
 
 
