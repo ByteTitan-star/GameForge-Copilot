@@ -1,12 +1,23 @@
-"""生成方法论 skill 文本（docs/03）；非玩法硬编码。"""
+"""生成方法论 skill 文本（docs/03）；非玩法硬编码。
 
-from pathlib import Path
+P2：Platform Policy（强制）与 Agent Skills / Methodology（可选）分层；
+节点通过 ``resolve_skills_for_node`` 做 Progressive Disclosure。
+"""
 
-_DIR = Path(__file__).parent
+from app.forge.skills.catalog import get_skill_meta, list_skill_metas, skill_bundle_hash
+from app.forge.skills.loader import load_skill, load_skill_body, skills_root
+from app.forge.skills.models import LoadedSkill, ResolvedSkills, SkillMeta
+from app.forge.skills.router import resolve_skills_for_node
 
-
-def load_skill(name: str) -> str:
-    path = _DIR / name
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8").strip()
+__all__ = [
+    "LoadedSkill",
+    "ResolvedSkills",
+    "SkillMeta",
+    "get_skill_meta",
+    "list_skill_metas",
+    "load_skill",
+    "load_skill_body",
+    "resolve_skills_for_node",
+    "skill_bundle_hash",
+    "skills_root",
+]
