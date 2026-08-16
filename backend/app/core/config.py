@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     memory_preferences: bool = True
     # P1 Memory：ContextBuilder 总 token 预算（后续用 trace 标定）
     memory_context_budget_tokens: int = 4000
+    # P2 Skills：节点经 catalog/router 选择 Methodology；Policy 仍强制注入
+    skills_router_enabled: bool = True
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
