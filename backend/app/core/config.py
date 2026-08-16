@@ -54,9 +54,11 @@ class Settings(BaseSettings):
     s3_read_timeout: int = 60
 
     # 沙箱（local=子进程联调；docker=生产隔离，docs/09）
-    sandbox_backend: str = "local"
+    sandbox_backend: str = "local"  # local|docker|e2b（e2b 仅 PoC，见 sandbox_e2b_enabled）
     sandbox_image: str = "gameforge/sandbox"
     sandbox_default_tier: str = "standard"
+    # ADR-03：E2B 默认关闭；仅批准的 benchmark/PoC 可显式打开
+    sandbox_e2b_enabled: bool = False
 
     # 构建链（docs/build-pipeline.md P1+）
     build_pipeline_enabled: bool = False

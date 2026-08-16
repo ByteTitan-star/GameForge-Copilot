@@ -158,12 +158,14 @@ async def test_smtp_send_uses_aiosmtplib(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 async def test_docker_sandbox_factory(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.sandbox import get_sandbox, reset_sandbox_for_tests
+    from app.sandbox import get_sandbox, get_sandbox_backend, reset_sandbox_for_tests
+    from app.sandbox.base import OneShotSandboxAdapter
     from app.sandbox.docker import DockerSandbox
 
     monkeypatch.setattr(settings, "sandbox_backend", "docker")
     reset_sandbox_for_tests()
-    assert isinstance(get_sandbox(), DockerSandbox)
+    assert isinstance(get_sandbox_backend(), DockerSandbox)
+    assert isinstance(get_sandbox(), OneShotSandboxAdapter)
     monkeypatch.setattr(settings, "sandbox_backend", "local")
     reset_sandbox_for_tests()
 

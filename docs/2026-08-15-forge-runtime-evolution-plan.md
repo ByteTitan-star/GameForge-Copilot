@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0 已合入**；**P1 Memory 基础已合入（#72）**；**P2 Skills 进行中**）
+* Status: In Progress（**P0/P1/P2 已合入**；**P3 Sandbox 推进中**）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -19,9 +19,10 @@
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
-  * **P1** 🚧 ContextBuilder / Preferences / plan+art 经 Builder；Session Summary **确定性刷新+持久化**已接（LLM 摘要仍为可选后置）；code 节点仍走遗留拼装至 P5
-  * **P2** 🚧 Skill catalog + node router；Policy vs Methodology；≈8 methodology skills；`skills_router_enabled` 接入 code/repair prompts
-  * **P3–P5** 未开始
+  * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
+  * **P2** ✅ Skills catalog/router（PR `#75`）
+  * **P3** 🚧 SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）
+  * **P4–P5** 未开始
 
 ---
 

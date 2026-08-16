@@ -83,7 +83,7 @@ def test_vite_ts_template_skips_build_artifacts() -> None:
 
 @pytest.mark.asyncio
 async def test_local_sandbox_collect_root_dist() -> None:
-    r = await LocalSandbox().execute(
+    r = await LocalSandbox().execute_oneshot(
         source={"dist/index.html": "<html>ok</html>"},
         collect_root="dist",
     )
