@@ -7,6 +7,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,16 @@ from aiodocker.exceptions import DockerError
 from app.core.config import settings
 from app.core.metrics import SANDBOX_RUNS
 from app.forge.build.profile import BuildProfile
+
+_PACKAGE_MANAGER_RE = re.compile(r"^pnpm@\d+(\.\d+)*$")
+
+
+def sanitize_package_manager_version(package_manager: str) -> str | None:
+    """Return pnpm version only when packageManager matches ADR-07 whitelist."""
+    pm = (package_manager or "").strip()
+    if not _PACKAGE_MANAGER_RE.fullmatch(pm):
+        return None
+    return pm.split("@", 1)[1]
 
 
 @dataclass
@@ -90,8 +101,9 @@ def corepack_activate_shell(workspace: Path) -> str:
     pkg_path = workspace / "package.json"
     if pkg_path.is_file():
         pm = json.loads(pkg_path.read_text(encoding="utf-8")).get("packageManager", "")
-        if pm.startswith("pnpm@"):
-            version = pm.split("@", 1)[1]
+        sanitized = sanitize_package_manager_version(str(pm or ""))
+        if sanitized:
+            version = sanitized
     return f"corepack prepare pnpm@{version} --activate && "
 
 
