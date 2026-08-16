@@ -12,7 +12,7 @@ from app.forge.skills.catalog import (
 )
 from app.forge.skills.loader import load_skill, load_skill_body, skills_root
 from app.forge.skills.models import LoadedSkill, ResolvedSkills, SkillMeta
-from app.forge.skills.router import resolve_skills_for_node
+from app.forge.skills.router import resolve_skills_for_node, resolve_skills_for_node_async
 
 __all__ = [
     "LoadedSkill",
@@ -24,6 +24,7 @@ __all__ = [
     "load_skill",
     "load_skill_body",
     "resolve_skills_for_node",
+    "resolve_skills_for_node_async",
     "skill_bundle_hash",
     "skills_root",
 ]
