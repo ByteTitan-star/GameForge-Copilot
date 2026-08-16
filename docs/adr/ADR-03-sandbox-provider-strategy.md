@@ -2,7 +2,7 @@
 
 * Status: **Proposed**（生产默认仍为 Docker；E2B 仅 PoC）
 * Date: 2026-08-16
-* Related: P3 Sandbox
+* Related: [sandbox-data-flow.md](./sandbox-data-flow.md), [../sandbox-e2b-benchmark.md](../sandbox-e2b-benchmark.md)
 
 ## Context
 

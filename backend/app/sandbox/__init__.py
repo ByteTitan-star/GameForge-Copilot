@@ -9,6 +9,7 @@ from app.sandbox.base import (
     SandboxBackend,
     SandboxSession,
 )
+from app.sandbox.lifecycle import destroy_for_hitl, restore_after_hitl
 from app.sandbox.local import LocalSandbox
 
 _backend: SandboxBackend | None = None
@@ -40,6 +41,9 @@ def reset_sandbox_for_tests() -> None:
     global _backend, _sandbox
     _backend = None
     _sandbox = None
+    from app.sandbox.e2b import clear_e2b_live_for_tests
+
+    clear_e2b_live_for_tests()
 
 
 def _build_backend(name: str) -> SandboxBackend:
@@ -66,7 +70,9 @@ __all__ = [
     "Sandbox",
     "SandboxBackend",
     "SandboxSession",
+    "destroy_for_hitl",
     "get_sandbox",
     "get_sandbox_backend",
     "reset_sandbox_for_tests",
+    "restore_after_hitl",
 ]

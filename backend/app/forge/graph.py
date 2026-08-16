@@ -567,6 +567,22 @@ async def _pause_hitl(
         raise RunFinalized
     apply_paused_metadata(ctx.run)
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    extra_data = dict(extra or {})
+    # HITL 长等待：若携带活沙箱会话则显式 destroy，不保留计费会话
+    live_session = extra_data.pop("sandbox_session", None)
+    if live_session is not None:
+        from app.sandbox import get_sandbox_backend
+        from app.sandbox.base import SandboxSession
+        from app.sandbox.lifecycle import destroy_for_hitl, sandbox_session_from_checkpoint
+
+        session_obj = (
+            live_session
+            if isinstance(live_session, SandboxSession)
+            else sandbox_session_from_checkpoint(live_session)
+        )
+        if session_obj is not None and not session_obj.closed:
+            hitl_meta = await destroy_for_hitl(get_sandbox_backend(), session_obj)
+            extra_data["sandbox_hitl"] = hitl_meta
     checkpoint = build_pause_checkpoint(
         phase=str(existing.get("phase") or node),
         pause_reason=PauseReason.WAITING_USER,
@@ -575,7 +591,7 @@ async def _pause_hitl(
             **{k: v for k, v in existing.items() if k not in {"recovery", "pause_reason"}},
             "phase": str(existing.get("phase") or node),
             "design_doc": design_doc,
-            **(extra or {}),
+            **extra_data,
         },
     )
     # build_pause_checkpoint 已写入 pause_reason；去掉可能被 extra 带入的 recovery
