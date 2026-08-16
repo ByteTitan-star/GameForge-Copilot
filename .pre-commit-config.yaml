@@ -1,6 +1,10 @@
 default_language_version:
   python: python3.12
 
+# Install once per clone (hooks were missing locally — commits skipped checks):
+#   pre-commit install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
+# Aligns with CI (.github/workflows/ci.yml): backend ruff + pytest.
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -15,12 +19,16 @@ repos:
       - id: mixed-line-ending
         args: ["--fix=lf"]
 
+  # Point at backend/pyproject.toml (line-length=100); root has no [tool.ruff]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
+    rev: v0.16.1
     hooks:
       - id: ruff
-        args: ["--fix"]
+        args: ["--fix", "--config", "backend/pyproject.toml"]
+        files: "^backend/"
       - id: ruff-format
+        args: ["--config", "backend/pyproject.toml"]
+        files: "^backend/"
 
   # ✅ 改用官方 repo，避免 npx 网络问题
   - repo: https://github.com/DavidAnson/markdownlint-cli2
@@ -49,6 +57,15 @@ repos:
         language: system
         pass_filenames: true  # ✅ 只检查改动文件
         files: '^backend/.*\.py$'
+
+      # Full suite ≈ CI; pre-push keeps day-to-day commits fast (~1min on push)
+      - id: backend-pytest
+        name: backend pytest (CI-aligned)
+        entry: uv run --directory backend pytest -q
+        language: system
+        pass_filenames: false
+        files: "^backend/"
+        stages: [pre-push]
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.2.0
