@@ -24,8 +24,8 @@
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt；可选 LLM Methodology 自选（`skills_llm_selection` 默认关）；**离线 eval 套件**（precision@1 / member hit / body reduction lift）
   * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关）；data-flow / benchmark 清单
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
-  * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**
-  * **仍 gated** 带真实 LLM 的 quality-lift A/B / E2B 生产切换（SDK 已接但默认关）/ ADR Accept 签字 / 全量 Load
+  * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**；**Load smoke**（并发 Exact Cache / Skill / tier）
+  * **仍 gated** 带真实 LLM 的 quality-lift A/B / E2B 生产切换（SDK 已接但默认关）/ ADR Accept 签字 / **全量** Load·Chaos 实验窗
 
 ---
 
@@ -784,9 +784,11 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 * Observability：Memory / Skill / Sandbox / Cache span（Langfuse 等）
 * Migration cleanup、Feature flag 收敛、废弃路径删除
 * Chaos / Load / Security 测试
+
+**本仓库 Load smoke**：`tests/test_p5_load_smoke.py`（asyncio gather：Exact Cache 白名单隔离、Skill 路由稳定、tier telemetry 升级）。**全量** Load / 长时 Chaos 实验窗仍 gated。
 * 文档与 ADR 归档
 
-**MVP 进度（本仓库）**：plan/art/art_detail/code|repair/diagnose **唯一**经 `build_node_context`（遗留 concat 双路径已删）；`BuiltContext.fingerprint` + spans；Art/QA Methodology；`test_legacy_concat_removed.py` 守门。`memory_context_builder` 仅控制是否注入 recent turns。P4.5 Semantic、E2B 生产切换、真实 LLM A/B、全量 Load 仍 gated。
+**MVP 进度（本仓库）**：plan/art/art_detail/code|repair/diagnose **唯一**经 `build_node_context`；Load smoke 已补；P4.5 Semantic、E2B 生产切换、真实 LLM A/B、全量 Load 仍 gated。
 
 ---
 
