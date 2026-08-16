@@ -1,7 +1,9 @@
-# GameForge
+<h1 align="center">🎮 GameForge</h1>
 
-![English](https://img.shields.io/badge/English-0A66C2?style=for-the-badge)
-[![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge)](./README_zh.md)
+<p align="center">
+  <img src="https://img.shields.io/badge/English-0A66C2?style=for-the-badge" alt="English" />
+  <a href="./README_zh.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge" alt="Chinese" /></a>
+</p>
 
 > Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
 
