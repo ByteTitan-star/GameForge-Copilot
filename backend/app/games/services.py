@@ -17,7 +17,7 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import EntryPhase, GameStatus, PauseReason, RunPhase, RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
-from app.forge.entry_router import classify_entry_phase
+from app.forge.cache import classify_entry_phase_cached
 from app.forge.messages import add_message
 from app.forge.queue import enqueue_resume
 from app.forge.reliability.pause import build_pause_checkpoint
@@ -69,14 +69,21 @@ async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> i
     return int(n or 0)
 
 
-async def create_game(db: AsyncSession, user: User, req: GameCreate) -> Game:
+async def create_game(
+    db: AsyncSession, user: User, req: GameCreate, r: redis.Redis | None = None
+) -> Game:
     _require_verified(user)
     title = (req.title or "").strip()
     requirement = (req.requirement or "").strip()
     if req.template_id:
-        from app.forge.templates.loader import get_template
+        if r is not None:
+            from app.forge.cache import get_template_cached
 
-        tpl = get_template(req.template_id)
+            tpl = await get_template_cached(r, req.template_id)
+        else:
+            from app.forge.templates.loader import get_template
+
+            tpl = get_template(req.template_id)
         if not title:
             title = str(tpl["title"])
         if not requirement:
@@ -364,8 +371,8 @@ async def create_run(
             )
             if cfg is None:
                 raise AppError(ErrorCode.LLM_CONFIG_NOT_FOUND, "LLM 配置不存在")
-        entry = classify_entry_phase(
-            req.requirement, has_prior_version=game.current_version > 0
+        entry = await classify_entry_phase_cached(
+            r, req.requirement, has_prior_version=game.current_version > 0
         )
         initial_phase = RunPhase.CODE if entry == EntryPhase.CODE else RunPhase.PLAN
         run = GenerationRun(

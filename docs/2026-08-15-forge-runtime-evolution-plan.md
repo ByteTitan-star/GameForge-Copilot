@@ -1,13 +1,13 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0/P1/P2 已合入**；**P3 Sandbox 推进中**）
+* Status: In Progress（**P0–P4 MVP 已落地**；P3 E2B 生产切换与 P4.5 Semantic 仍 gated；P5 未开始）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
 * Related:
   * [CodeQaLoop 设计](./superpowers/specs/2026-08-15-code-qa-loop-design.md)（硬约束）
   * `backend/app/forge/graph.py` / `subgraphs/code_qa_loop.py`
-  * `backend/app/sandbox/`、`backend/app/forge/skills/`
+  * `backend/app/sandbox/`、`backend/app/forge/skills/`、`backend/app/forge/cache/`
   * `backend/app/forge/memory/`（P1 ContextBuilder / Summary / Preferences）
 * ADR 状态:
   * **ADR-01** Degraded Artifact Publishing — **Accepted**
@@ -21,8 +21,9 @@
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
   * **P2** ✅ Skills catalog/router（PR `#75`）
-  * **P3** 🚧 SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）
-  * **P4–P5** 未开始
+  * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
+  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；Semantic Cache 未开
+  * **P5** 未开始
 
 ---
 
@@ -766,6 +767,8 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 * allowlist 外 0 缓存命中
 * Code/Repair/Art 无 cache
 * Semantic false direct-hit 目标（若上线）极高 precision（如 <0.1%），否则不下发
+
+**MVP 验收（本仓库）**：`exact_cache_enabled` 默认开；`test_exact_cache.py` 覆盖禁止节点不写 Redis、白名单 roundtrip、flag 关闭、entry/engine/template 包装；`create_run` / `GET /templates` / `create_game(template_id)` 已接线。P4.5 Semantic 仍实验未开。
 
 ---
 
