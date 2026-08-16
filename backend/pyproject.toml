@@ -69,4 +69,5 @@ asyncio_mode = "auto"
 pythonpath = ["."]
 markers = [
     "integration: needs real postgres/redis/docker (skipped in default CI)",
+    "load: extended concurrency / stress (opt-in; not full production soak)",
 ]

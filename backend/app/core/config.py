@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     skills_router_enabled: bool = True
     # P2 尾巴：Methodology 可由 LLM 自选（失败回落确定性）；Policy 永不交给 LLM
     skills_llm_selection: bool = False
+    # P2：质量 lift A/B 可选用 LLM complete（默认关；无 complete 时仍跑 mock body 对比）
+    skills_quality_lift_llm: bool = False
 
     # P4 Exact Cache：仅白名单低熵节点；关则全部 miss
     exact_cache_enabled: bool = True
