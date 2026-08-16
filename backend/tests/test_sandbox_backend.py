@@ -58,11 +58,13 @@ def test_factory_rejects_unknown_backend() -> None:
     settings.sandbox_backend = "local"
 
 
-def test_factory_accepts_e2b_name_but_create_still_gated() -> None:
+def test_factory_e2b_falls_back_when_disabled() -> None:
+    """sandbox_backend=e2b 但未启用时回退 docker→local（ADR-03），不再返回 E2B 实例。"""
     reset_sandbox_for_tests()
     settings.sandbox_backend = "e2b"
     settings.sandbox_e2b_enabled = False
     backend = get_sandbox_backend()
-    assert isinstance(backend, E2BSandbox)
+    assert not isinstance(backend, E2BSandbox)
+    assert backend.backend_id in {"docker", "local"}
     reset_sandbox_for_tests()
     settings.sandbox_backend = "local"
