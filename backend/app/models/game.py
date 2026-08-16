@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import Uuid
+from sqlalchemy.types import JSON, Uuid
 
 from app.enums import GameStatus
 from app.models.base import Base, TimestampMixin
@@ -33,3 +33,5 @@ class Game(Base, TimestampMixin):
     # 当前封面图（镜像 current_version 的 thumbnail_path）。None 时卡片回退渐变。
     # 冗余在 Game 表避免列表 join 版本表；qa_node 截图成功与 activate_version 时同步。
     cover_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # P1 Session Summary：结构化摘要 JSON；删 Game 时随行级联，不进 User Preference。
+    session_summary_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

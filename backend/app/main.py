@@ -17,6 +17,7 @@ from app.api import (
     llm_config,
     notifications,
     official,
+    preferences,
     profile,
     publish,
     runs,
@@ -103,6 +104,7 @@ app.include_router(games.router, prefix=API_V1)
 app.include_router(official.router, prefix=API_V1)
 app.include_router(templates.router, prefix=API_V1)
 app.include_router(profile.router, prefix=API_V1)
+app.include_router(preferences.router, prefix=API_V1)
 app.include_router(creator.router, prefix=API_V1)
 app.include_router(favorites.router, prefix=API_V1)
 app.include_router(feedback.router, prefix=API_V1)

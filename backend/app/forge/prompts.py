@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from app.core.cdn_policy import ALLOWED_CDN_HOSTS
+from app.core.config import settings
 from app.forge.engine_router import (
     DEFAULT_ENGINE,
     SUPPORTED_ENGINES,
@@ -15,7 +16,7 @@ from app.forge.engine_router import (
     normalize_engine_id,
     recommended_cdn_url,
 )
-from app.forge.skills import load_skill
+from app.forge.skills import load_skill, resolve_skills_for_node
 
 _CONV = load_skill("conventions.md")
 _PLAYTEST = load_skill("playtest.md")
@@ -323,6 +324,8 @@ def build_code_prompt(engine_id: str) -> str:
     不同引擎的专属写法（Scene 结构 / Ticker / 裸 RAF）从独立方法论 md 注入，
     避免把多种引擎细节挤进单个提示词。非法 engine_id 在 router 内回退 canvas。
     """
+    if settings.skills_router_enabled:
+        return _build_code_prompt_routed(engine_id)
     methodology = engine_methodology(engine_id)
     return "\n\n".join(
         part
@@ -343,11 +346,39 @@ def build_code_prompt(engine_id: str) -> str:
     )
 
 
+def _build_code_prompt_routed(engine_id: str) -> str:
+    """P2：Policy 强制注入 + 仅加载所选引擎 Methodology（不全量 skill 正文）。"""
+    eid = normalize_engine_id(engine_id)
+    resolved = resolve_skills_for_node("code", hints={"engine_id": eid})
+    policy = resolved.policy_text()
+    methodology = resolved.methodology_text()
+    return "\n\n".join(
+        part
+        for part in (
+            _CODE_COMMON,
+            policy,
+            (
+                f"【所选引擎：{eid} 的实现方法论】\n{methodology}"
+                if methodology
+                else ""
+            ),
+            _engine_cdn_clause(eid),
+            (
+                "输出要求：只输出完整 HTML 源码，第一个非空字符必须属于 <!DOCTYPE html>，"
+                "最后必须以 </html> 结束；不要输出 Markdown 代码围栏、解释或文件名。"
+            ),
+        )
+        if part
+    )
+
+
 def build_repair_prompt(engine_id: str) -> str:
     """修复工程师 prompt：在当前实现基础上修根因，保持原引擎选型不变。
 
     与 build_code_prompt 共享通用骨架与引擎方法论，额外约束「不切换引擎」防回归。
     """
+    if settings.skills_router_enabled:
+        return _build_repair_prompt_routed(engine_id)
     methodology = engine_methodology(engine_id)
     repair_specific = (
         "修复规则：\n"
@@ -376,6 +407,44 @@ def build_repair_prompt(engine_id: str) -> str:
             _engine_cdn_clause(engine_id),
             f"工程约定：\n{_CONV}" if _CONV else "",
             f"自动试玩规范：\n{_PLAYTEST}" if _PLAYTEST else "",
+            (
+                "输出要求：只输出完整 HTML 源码，以 <!DOCTYPE html> 开始并以 </html> 结束，"
+                "不要输出 Markdown 代码围栏或任何解释。"
+            ),
+        )
+        if part
+    )
+
+
+def _build_repair_prompt_routed(engine_id: str) -> str:
+    eid = normalize_engine_id(engine_id)
+    resolved = resolve_skills_for_node(
+        "repair", hints={"engine_id": eid, "failure_kind": "product"}
+    )
+    repair_specific = (
+        "修复规则：\n"
+        "1. 优先做范围清晰的根因修复，保留当前已经正常工作的玩法、视觉、关卡和交互。\n"
+        "2. 同时检查修复对菜单、暂停、关卡切换、失败、通关、重开、键盘和触控的回归影响。\n"
+        "3. 如果错误暴露出设计稿中的必需功能尚未实现，必须补齐该功能，而不是绕过检测。\n"
+        "4. 不得隐藏错误、吞掉所有异常、伪造通过结果，或删除碰撞、实体、关卡、胜负条件。\n"
+        "5. 当前 HTML 即使结构不佳，也必须输出一份语法完整、可独立运行的新 HTML；"
+        "不得只返回 diff、代码片段、说明或修复步骤。\n"
+        "6. 保持原 engine 选型不变，不得在修复中切换引擎或改用其他 CDN 版本。\n"
+        "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
+        "保留这些占位符；运行时会在构建前还原真实 data URI。"
+    )
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 HTML5 游戏故障修复工程师。输入会包含已确认设计稿、自动试玩错误、"
+                "QA 根因分析以及当前完整 HTML。请在当前实现基础上修复根因，并返回可直接替换的"
+                "完整 index.html。"
+            ),
+            repair_specific,
+            resolved.policy_text(),
+            resolved.methodology_text(),
+            _engine_cdn_clause(eid),
             (
                 "输出要求：只输出完整 HTML 源码，以 <!DOCTYPE html> 开始并以 </html> 结束，"
                 "不要输出 Markdown 代码围栏或任何解释。"

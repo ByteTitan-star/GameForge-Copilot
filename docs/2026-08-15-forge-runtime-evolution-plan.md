@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: Draft（P0 架构歧义已关闭；见下方 ADR 状态）
+* Status: In Progress（**P0 已合入**；**P1 Memory 基础已合入（#72）**；**P2 Skills 进行中**）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -8,14 +8,20 @@
   * [CodeQaLoop 设计](./superpowers/specs/2026-08-15-code-qa-loop-design.md)（硬约束）
   * `backend/app/forge/graph.py` / `subgraphs/code_qa_loop.py`
   * `backend/app/sandbox/`、`backend/app/forge/skills/`
+  * `backend/app/forge/memory/`（P1 ContextBuilder / Summary / Preferences）
 * ADR 状态:
   * **ADR-01** Degraded Artifact Publishing — **Accepted**
   * **ADR-05** Recoverable Pause Representation — **Accepted**
-  * **ADR-02** Preference Retention — Pending（阻塞 P1 Preference 写入策略细项）
+  * **ADR-02** Preference Retention — Pending（阻塞 P1 Preference 写入策略细项；MVP 已按「Explicit 保留」落地）
   * **ADR-03** Sandbox Provider Strategy — **Pending**（国内源码/数据出境不默认允许；P3 仅 PoC）
-  * **ADR-04** Conversation Storage Migration — Pending（阻塞 P1 message SoT 选型）
+  * **ADR-04** Conversation Storage Migration — Pending（阻塞 P1 message SoT 选型；MVP 继续以 `forge_messages` 为唯一 SoT，不平行建表）
 * Implementation decisions（非 ADR）:
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
+* 落地进度（相对本仓库）:
+  * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
+  * **P1** 🚧 ContextBuilder / Preferences / plan+art 经 Builder；Session Summary **确定性刷新+持久化**已接（LLM 摘要仍为可选后置）；code 节点仍走遗留拼装至 P5
+  * **P2** 🚧 Skill catalog + node router；Policy vs Methodology；≈8 methodology skills；`skills_router_enabled` 接入 code/repair prompts
+  * **P3–P5** 未开始
 
 ---
 

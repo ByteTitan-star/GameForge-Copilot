@@ -3021,6 +3021,100 @@
         ]
       }
     },
+    "/api/v1/me/preferences": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "List Preferences",
+        "operationId": "list_preferences_api_v1_me_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceList_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Upsert Preference",
+        "operationId": "upsert_preference_api_v1_me_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceItem_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Clear Preferences",
+        "operationId": "clear_preferences_api_v1_me_preferences_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_str__int__"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/u/{handle}": {
       "get": {
         "tags": [
@@ -6667,6 +6761,30 @@
         ],
         "title": "ApiResponse[PasswordResetResp]"
       },
+      "ApiResponse_PreferenceItem_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreferenceItem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreferenceItem]"
+      },
+      "ApiResponse_PreferenceList_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreferenceList"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreferenceList]"
+      },
       "ApiResponse_PreviewTokenResp_": {
         "properties": {
           "data": {
@@ -6944,6 +7062,22 @@
           "data"
         ],
         "title": "ApiResponse[dict]"
+      },
+      "ApiResponse_dict_str__int__": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[dict[str, int]]"
       },
       "ApiResponse_dict_str__str__": {
         "properties": {
@@ -8858,6 +8992,113 @@
         },
         "type": "object",
         "title": "PasswordResetResp"
+      },
+      "PreferenceItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Value Json"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "key",
+          "value_json",
+          "source",
+          "confidence",
+          "status"
+        ],
+        "title": "PreferenceItem"
+      },
+      "PreferenceList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PreferenceList"
+      },
+      "PreferenceUpsert": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "value_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Value Json"
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Status",
+            "default": "active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "key",
+          "value_json"
+        ],
+        "title": "PreferenceUpsert"
       },
       "PreviewTokenResp": {
         "properties": {

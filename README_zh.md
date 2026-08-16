@@ -1,9 +1,15 @@
-# GameForge
+<h1 align="center">🎮 GameForge</h1>
 
-[![English](https://img.shields.io/badge/English-555555?style=for-the-badge)](./README.md)
-![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-0A66C2?style=for-the-badge)
 
-> 用自然语言，把游戏想法推进为可在浏览器直接试玩、管理与交付的作品。
+<p align="center">
+  <a href="./README.md"><img src="https://img.shields.io/badge/English-555555?style=for-the-badge" alt="English" /></a>
+  <img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-0A66C2?style=for-the-badge" alt="中文" />
+</p>
+
+
+> 用自然语言，把游戏想法做成可玩的浏览器游戏——
+> 既支持单文件 HTML，也支持 Vite/React、Phaser 等工程化构建，
+> 再迭代、试玩与发布。
 
 <p align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html">
@@ -19,7 +25,7 @@
 
 ## GameForge 是什么
 
-GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者从一句玩法描述开始，经过 AI 策划、人工确认和游戏生成，即可得到能够直接试玩的浏览器游戏，并继续完成版本管理、下载与发布。
+GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者从一句玩法描述开始，经过 AI 策划、人工确认和游戏生成，即可得到能直接在浏览器试玩的结果——可以是轻量单文件 HTML，也可以是 Vite 工程（React UI，以及 Canvas / Phaser / PixiJS 等渲染栈）——并继续完成版本管理、下载与发布。
 
 ## 产品链路
 
@@ -59,8 +65,9 @@ GameForge 是一个面向浏览器游戏的 AI 辅助创作工作区。创作者
 | --- | --- |
 | 自然语言驱动 | 不需要编写代码，通过描述玩法开始创作。 |
 | 人机协同把关 | AI 负责策划与生成，创作者决定最终方向。 |
+| 多技术栈生成 | 支持单文件 HTML，或 Vite 工程（React UI，以及 Canvas / Phaser / PixiJS 等）。 |
 | 浏览器原生 | 无需安装，生成结果可以立即打开试玩。 |
-| 独立作品交付 | 游戏可作为独立 HTML 下载、保存与分享。 |
+| 可交付产物 | 下载、保存与分享可玩的浏览器构建。 |
 | 版本可追溯 | 统一管理草稿、历史版本和公开作品。 |
 | 作品生态 | 支持发布、发现、收藏、点赞与分享。 |
 

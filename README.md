@@ -1,9 +1,15 @@
-# GameForge
+<h1 align="center">🎮 GameForge</h1>
 
-![English](https://img.shields.io/badge/English-0A66C2?style=for-the-badge)
-[![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge)](./README_zh.md)
 
-> Use natural language to turn a game idea into a browser-ready experience that can be played, managed, and delivered.
+<p align="center">
+  <img src="https://img.shields.io/badge/English-0A66C2?style=for-the-badge" alt="English" />
+  <a href="./README_zh.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-555555?style=for-the-badge" alt="Chinese" /></a>
+</p>
+
+
+> Use natural language to turn a game idea into a playable browser game —
+> from single-file HTML to Vite/React and Phaser projects — then iterate,
+> playtest, and publish.
 
 <p align="center">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/ByteTitan-star/GameForge-Copilot/main/docs/showcase/index.html?lang=en">
@@ -19,7 +25,7 @@
 
 ## What is GameForge?
 
-GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description, move through AI planning, human review, and game generation, then receive a browser game they can play immediately, manage as versions, download, or publish.
+GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description, move through AI planning, human review, and game generation, then receive a playable result in the browser — whether as a compact HTML build or a Vite project (React UI, Canvas / Phaser / PixiJS, and more) — and can keep managing versions, downloading, or publishing.
 
 ## Product flow
 
@@ -59,8 +65,9 @@ A colorful tower defense prototype. Place defensive towers, stop enemy waves, an
 | --- | --- |
 | Natural-language driven | Start creating by describing the gameplay instead of writing code. |
 | Human-guided AI | AI handles planning and generation while the creator controls the final direction. |
+| Flexible game stacks | Generate single-file HTML or Vite projects with React UI and engines such as Canvas, Phaser, and PixiJS. |
 | Browser native | Open and play generated results immediately without extra installation. |
-| Standalone delivery | Download, save, and share games as independent HTML files. |
+| Deliverable builds | Download, save, and share playable browser builds. |
 | Traceable versions | Manage drafts, previous versions, and public creations in one place. |
 | Creation ecosystem | Publish, discover, favorite, like, and share game creations. |
 
