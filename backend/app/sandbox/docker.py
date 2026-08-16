@@ -1,12 +1,14 @@
 """Docker 沙箱：aiodocker 拉起一次性容器（无网络 / 资源分级 / 用完销毁）。
 
 docs/09 §沙箱运维；生产默认。Docker 不可用时调用方应回退 LocalSandbox。
+P3：实现 create / execute(session) / destroy；HITL 长等待应 destroy，不保留长会话。
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import shutil
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -17,10 +19,9 @@ from aiodocker.exceptions import DockerError
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.metrics import SANDBOX_RUNS
-from app.sandbox.base import BuildResult
+from app.sandbox.base import BuildResult, SandboxSession
 from app.sandbox.collect import collect_artifact_files
 
-# 资源分级（docs/09）
 _TIERS: dict[str, dict] = {
     "standard": {"mem_limit": "512m", "nano_cpus": 1_000_000_000, "timeout_s": 60},
     "heavy": {"mem_limit": "1g", "nano_cpus": 2_000_000_000, "timeout_s": 120},
@@ -28,37 +29,72 @@ _TIERS: dict[str, dict] = {
 
 
 class DockerSandbox:
-    """按 run 拉起 sandbox 镜像，network=none，只读根 + 工作目录可写。"""
+    """按 session 准备工作区；execute 时拉起 sandbox 镜像，network=none，用完可 destroy。"""
+
+    backend_id = "docker"
 
     def __init__(self, image: str | None = None, tier: str | None = None) -> None:
         self.image = image or settings.sandbox_image
-        self.tier = tier or settings.sandbox_default_tier
+        self.default_tier = tier or settings.sandbox_default_tier
+
+    async def create(self, *, tier: str | None = None) -> SandboxSession:
+        workspace = Path(tempfile.mkdtemp(prefix="gf-docker-sandbox-"))
+        return SandboxSession.new(
+            self.backend_id,
+            tier=tier or self.default_tier,
+            handle=str(workspace),
+        )
 
     async def execute(
         self,
+        session: SandboxSession,
         source: dict[str, str],
         build_cmd: Sequence[str] | None = None,
         *,
         collect_root: str = ".",
     ) -> BuildResult:
-        limits = _TIERS.get(self.tier, _TIERS["standard"])
-        with tempfile.TemporaryDirectory() as ws:
-            workspace = Path(ws)
-            for rel, content in source.items():
-                p = workspace / rel
-                p.parent.mkdir(parents=True, exist_ok=True)
-                # 显式 UTF-8：与 LocalSandbox 同源，避免 Windows 默认 GBK 把含中文 HTML 写坏。
-                p.write_text(content, encoding="utf-8")
-            try:
-                result = await self._run_container(workspace, build_cmd, limits, collect_root)
-                SANDBOX_RUNS.labels("docker", "ok" if result.ok else "fail").inc()
-                return result
-            except DockerError as e:
-                SANDBOX_RUNS.labels("docker", "error").inc()
-                return BuildResult(ok=False, error=f"docker error: {e}")
-            except Exception as e:  # noqa: BLE001
-                SANDBOX_RUNS.labels("docker", "error").inc()
-                return BuildResult(ok=False, error=str(e))
+        if session.closed or not session.handle:
+            return BuildResult(ok=False, error="sandbox session closed")
+        limits = _TIERS.get(session.tier, _TIERS["standard"])
+        workspace = Path(session.handle)
+        for rel, content in source.items():
+            p = workspace / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+        try:
+            result = await self._run_container(workspace, build_cmd, limits, collect_root)
+            SANDBOX_RUNS.labels("docker", "ok" if result.ok else "fail").inc()
+            return result
+        except DockerError as e:
+            SANDBOX_RUNS.labels("docker", "error").inc()
+            return BuildResult(ok=False, error=f"docker error: {e}")
+        except Exception as e:  # noqa: BLE001
+            SANDBOX_RUNS.labels("docker", "error").inc()
+            return BuildResult(ok=False, error=str(e))
+
+    async def destroy(self, session: SandboxSession) -> None:
+        if session.closed:
+            return
+        if session.handle:
+            shutil.rmtree(session.handle, ignore_errors=True)
+        session.closed = True
+        session.handle = None
+
+    async def execute_oneshot(
+        self,
+        source: dict[str, str],
+        build_cmd: Sequence[str] | None = None,
+        *,
+        collect_root: str = ".",
+        tier: str | None = None,
+    ) -> BuildResult:
+        session = await self.create(tier=tier)
+        try:
+            return await self.execute(
+                session, source, build_cmd, collect_root=collect_root
+            )
+        finally:
+            await self.destroy(session)
 
     async def _run_container(
         self,
@@ -126,4 +162,3 @@ def _parse_mem(spec: str) -> int:
     if s.endswith("m"):
         return int(float(s[:-1]) * 1024**2)
     return int(s)
-
