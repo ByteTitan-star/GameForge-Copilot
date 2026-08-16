@@ -26,7 +26,7 @@
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**；**Load smoke**（并发 Exact Cache / Skill / tier）
   * **Closeout batch（本 PR）** tier `engine_id` hints / HITL tier restore / ADR Accept+Flag 清单 / diagnose playtest policy / mock quality-lift A/B / ADR-04 SoT 守门 / semantic shadow 并发 / catalog hash 稳定性
-  * **仍 gated（人工/实验）** 真实 LLM quality-lift A/B / E2B 生产默认切换 / ADR-02·03·04 Accept 签字（见 `docs/adr/ACCEPT-CHECKLIST.md`）/ 全量 Load·Chaos
+  * **仍 gated（人工/实验）** 真实付费 LLM A/B（`skills_quality_lift_llm`+真实 complete）/ E2B **生产默认**切换（dry-run/live harness 已备）/ ADR-02·03·04 **人工签字** Accept（机器证据 `adr_evidence`）/ 生产级长时 soak（`pytest -m load` 为扩展并发非 soak）
 
 ---
 
