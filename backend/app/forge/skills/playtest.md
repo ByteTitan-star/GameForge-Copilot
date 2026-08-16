@@ -1,4 +1,7 @@
-# QA 试玩约定（CodeQaLoop · B 档硬门禁）
+# QA 试玩约定（Platform Policy · CodeQaLoop · B 档硬门禁）
+
+> 本文件是 **Platform Policy**，强制注入；Agent 不可选择跳过。
+> 观察/报告手法见 Methodology Skill：`playtest/observation`。
 
 生成后由 **CodeQaLoop** 对当前 candidate 做 **Playwright 可交互冒烟**，不靠 LLM 自评，也不允许静态 DOM 检测冒充通过。
 
