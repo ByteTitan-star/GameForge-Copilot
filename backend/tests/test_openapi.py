@@ -28,6 +28,7 @@ REQUIRED_PATHS = {
     "/api/v1/me/llm-configs/{config_id}/test",
     "/api/v1/me/usage",
     "/api/v1/me/notifications",
+    "/api/v1/me/preferences",
     "/api/v1/admin/usage",
     "/api/v1/admin/audit-logs",
     "/api/v1/admin/games",
