@@ -8,7 +8,9 @@
 1. `cd backend && uv sync --extra e2b`
 2. Set `SANDBOX_E2B_ENABLED=true`, `E2B_API_KEY=...`, `SANDBOX_BACKEND=e2b`
 3. Prefer `E2B_ALLOW_INTERNET=false` unless the benchmark explicitly needs CDN fetch
-4. Record rows below; keep Docker baseline on the same machine/workload
+4. **Dry-run (no E2B, safe):** `uv run python scripts/sandbox_benchmark_dryrun.py --rounds 5`
+5. **Live E2B (opt-in):** `E2B_BENCHMARK_LIVE=1 uv run python scripts/sandbox_benchmark_dryrun.py --rounds 3`
+6. Paste JSON metrics into the table below; keep Docker baseline on the same machine/workload
 
 ## Metrics table
 
