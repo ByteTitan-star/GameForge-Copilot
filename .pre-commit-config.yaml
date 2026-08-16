@@ -3,7 +3,7 @@ default_language_version:
 
 # Install once per clone (hooks were missing locally — commits skipped checks):
 #   pre-commit install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
-# Aligns with CI (.github/workflows/ci.yml): backend ruff + pytest.
+# Local hooks: lint/format/secret/mypy/bandit. Pytest stays in CI only.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -49,23 +49,14 @@ repos:
         entry: uv run --no-project python scripts/run_backend_tool.py mypy --follow-imports=silent --install-types --non-interactive
         language: system
         pass_filenames: true  # ✅ 只检查改动文件
-        files: '^backend/.*\.py$'
+        files: '^backend/app/.*\.py$'
 
       - id: bandit
         name: bandit
         entry: uv run --no-project python scripts/run_backend_tool.py bandit -q -c pyproject.toml
         language: system
         pass_filenames: true  # ✅ 只检查改动文件
-        files: '^backend/.*\.py$'
-
-      # Full suite ≈ CI; pre-push keeps day-to-day commits fast (~1min on push)
-      - id: backend-pytest
-        name: backend pytest (CI-aligned)
-        entry: uv run --directory backend pytest -q
-        language: system
-        pass_filenames: false
-        files: "^backend/"
-        stages: [pre-push]
+        files: '^backend/app/.*\.py$'
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.2.0

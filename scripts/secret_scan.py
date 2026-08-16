@@ -34,6 +34,11 @@ _SKIP_SUFFIXES = {
     ".woff2",
 }
 
+# Test fixtures may embed fake keys (e.g. private_key sample for the scanner itself).
+_SKIP_PATH_PREFIXES = (
+    "backend/tests/",
+)
+
 
 def _staged_files() -> list[Path]:
     out = subprocess.check_output(
@@ -69,6 +74,9 @@ def main(argv: list[str] | None = None) -> int:
     findings: list[str] = []
     for path in files:
         if not path.is_file() or path.suffix.lower() in _SKIP_SUFFIXES:
+            continue
+        posix = path.as_posix()
+        if any(posix.startswith(prefix) for prefix in _SKIP_PATH_PREFIXES):
             continue
         try:
             text = path.read_text(encoding="utf-8")
