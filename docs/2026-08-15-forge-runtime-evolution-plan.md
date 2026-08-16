@@ -656,7 +656,7 @@ Art 不得看见 billing / sandbox admin / 内部 security runbook。
 * Skill 变更使依赖其的 cache key 失效（若已上 Exact Cache）
 * 离线 eval：selection precision / quality lift；无 lift 则停扩 catalog
 
-**本仓库**：`forge/skills/offline_eval.py` + `tests/test_skills_offline_eval.py`（≥12 fixtures；precision@1 / member hit / vs 全量注入 body reduction；Art 跨域违规=0）。真实 LLM A/B quality-lift 仍 gated。
+**本仓库**：`forge/skills/offline_eval.py` + `tests/test_skills_offline_eval.py`（≥12 fixtures；precision@1 / member hit / vs 全量注入 body reduction；Art 跨域违规=0）。`skills/ab_eval.py` 提供 **mock** quality-lift A/B（无真实 LLM）。真实付费 A/B 仍 gated。
 
 ---
 
