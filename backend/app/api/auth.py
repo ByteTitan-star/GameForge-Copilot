@@ -9,6 +9,7 @@ from app.auth import services
 from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.auth.ratelimit import check_rate_limit
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
 from app.email import queue as email_queue
 from app.enums import Role
@@ -91,9 +92,43 @@ async def refresh(req: RefreshReq, db: DbSession, r: RedisClient) -> ApiResponse
     )
 
 
-@router.post("/verify-email", response_model=ApiResponse[VerifyEmailResp], responses=ERR_400)
-async def verify_email(req: VerifyEmailReq, db: DbSession) -> ApiResponse[VerifyEmailResp]:
-    user = await services.verify_email(db, req.email, req.code)
+@router.post(
+    "/verify-email",
+    response_model=ApiResponse[VerifyEmailResp],
+    responses={**ERR_400, **ERR_429},
+)
+async def verify_email(
+    req: VerifyEmailReq, request: Request, db: DbSession, r: RedisClient
+) -> ApiResponse[VerifyEmailResp]:
+    host = request.client.host if request.client else "na"
+    email_key = req.email.strip().lower()
+    await check_rate_limit(
+        r,
+        f"rl:verify:{host}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
+    await check_rate_limit(
+        r,
+        f"rl:verify:email:{email_key}",
+        settings.default_rate_limit_per_min,
+        60,
+    )
+    fail_key = f"verify_fail:{email_key}"
+    try:
+        user = await services.verify_email(db, req.email, req.code)
+    except AppError:
+        fails = int(await r.incr(fail_key))
+        await r.expire(fail_key, settings.verify_email_ttl)
+        if fails >= settings.verify_email_max_failures:
+            await services.invalidate_pending_verifications_for_email(db, req.email)
+            await r.delete(fail_key)
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "验证失败次数过多，请重新获取验证码",
+            ) from None
+        raise
+    await r.delete(fail_key)
     return ApiResponse(data=VerifyEmailResp(user_id=user.id))
 
 

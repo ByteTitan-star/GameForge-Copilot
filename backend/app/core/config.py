@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     default_daily_token_limit: int = 500_000
     default_monthly_token_limit: int = 10_000_000
     default_rate_limit_per_min: int = 30
+    verify_email_max_failures: int = 5  # 验证码连续失败达限后作废 pending 码
     # LLM 连通测试（真实付费调用）每分钟上限，比通用限流更紧
     llm_probe_rate_limit_per_min: int = 5
     # create_run 幂等缓存有效期（秒）：同一 Idempotency-Key 在窗口内复用同一 run
@@ -234,6 +235,8 @@ class Settings(BaseSettings):
 
     # 全局
     env: str = "development"
+    # ADR-07 P1-20：dev 调试路由显式开关（默认关；本地/pytest 在 .env 或 conftest 打开）
+    dev_routes_enabled: bool = False
     log_level: str = "INFO"
     # 落盘目录：空=仓库根 logs/；-=仅 stdout（pytest）
     log_dir: str = ""

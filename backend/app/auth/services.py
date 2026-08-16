@@ -106,6 +106,16 @@ async def resend_verification(db: AsyncSession, email: str) -> str | None:
     return await _issue_verification_code(db, user.id)
 
 
+async def invalidate_pending_verifications_for_email(
+    db: AsyncSession, email: str
+) -> None:
+    """作废某邮箱用户全部未使用验证码（爆破达限后调用）。"""
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None:
+        return
+    await _invalidate_pending_verifications(db, user.id)
+
+
 async def verify_email(db: AsyncSession, email: str, code: str) -> User:
     user = await db.scalar(select(User).where(User.email == email))
     if user is None:

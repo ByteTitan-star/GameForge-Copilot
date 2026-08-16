@@ -1,6 +1,7 @@
 """M1 认证全闭环：register→verify→login→refresh→logout + 错误路径。"""
 
 import httpx
+import pytest
 
 PWD = "password123"
 EMAIL = "a@b.com"
@@ -165,3 +166,25 @@ async def test_unverified_cannot_create_game_403(client: httpx.AsyncClient) -> N
     )
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+
+
+async def test_verify_email_failures_invalidate_code(
+    client: httpx.AsyncClient, sent: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-07：连续验证失败达限后作废 pending 码。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "verify_email_max_failures", 3)
+    email = "vf@b.com"
+    await client.post("/api/v1/auth/register", json={"email": email, "password": PWD})
+    good = sent[f"verify:{email}"]
+    for _ in range(3):
+        resp = await client.post(
+            "/api/v1/auth/verify-email", json={"email": email, "code": "000000"}
+        )
+        assert resp.status_code == 400
+    # 达限后正确码也应失效
+    resp = await client.post(
+        "/api/v1/auth/verify-email", json={"email": email, "code": good}
+    )
+    assert resp.status_code == 400

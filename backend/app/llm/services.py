@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
 from app.llm import crypto, provider
+from app.llm.url_safety import validate_llm_base_url
 from app.models.llm_config import UserLLMConfig
 from app.models.user import User
 from app.schemas.llm_config import (
@@ -98,6 +99,7 @@ async def create_config(
     db: AsyncSession, user: User, req: LLMConfigCreate
 ) -> LLMConfigCreateResp:
     """连通测试通过才保存（docs/05 §连通性测试）。openai_compat 校验 base_url。"""
+    validate_llm_base_url(req.base_url)
     ok, err = await provider.test_connectivity(
         req.provider, req.apikey, req.model, req.base_url
     )
@@ -151,6 +153,7 @@ async def delete_config(
 
 async def test_draft_config(req: LLMConfigTestReq) -> LLMConfigDryTestResp:
     """保存前探测，不写入数据库。"""
+    validate_llm_base_url(req.base_url)
     ok, err = await provider.test_connectivity(
         req.provider, req.apikey, req.model, req.base_url
     )

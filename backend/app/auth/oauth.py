@@ -148,6 +148,11 @@ async def oauth_callback(
 
     existing = await db.scalar(select(User).where(User.email == profile.email))
     if existing is not None:
+        if not existing.email_verified:
+            raise AppError(
+                ErrorCode.EMAIL_NOT_VERIFIED,
+                "该邮箱已注册但未验证，请先完成邮箱验证后再关联 OAuth",
+            )
         db.add(
             OAuthAccount(
                 user_id=existing.id,

@@ -99,7 +99,7 @@ register_metrics(app)
 
 app.include_router(health.router)
 app.include_router(auth.router, prefix=API_V1)
-if settings.env == "development":
+if settings.dev_routes_enabled:
     app.include_router(dev.router, prefix=API_V1)
 app.include_router(llm_config.router, prefix=API_V1)
 app.include_router(games.router, prefix=API_V1)

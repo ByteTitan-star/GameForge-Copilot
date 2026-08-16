@@ -3,6 +3,11 @@
 `uv run pytest` 无需 docker。每测建表/清表隔离；email enqueue 替换为捕获。
 """
 
+import os
+
+# ADR-07：dev 路由默认关闭；测试依赖 /api/v1/dev/*，须在导入 app / Settings 前打开。
+os.environ["DEV_ROUTES_ENABLED"] = "true"
+
 import json
 import uuid
 from collections import defaultdict
