@@ -22,7 +22,7 @@ _REGISTRY: tuple[SkillMeta, ...] = (
         id="policy/playtest",
         name="Playtest Policy",
         kind="policy",
-        nodes=("code", "repair", "qa"),
+        nodes=("code", "repair", "qa", "diagnose"),
         description="B-tier Playwright gate; static checks cannot synthesize qa_ok.",
         path="playtest.md",
     ),
