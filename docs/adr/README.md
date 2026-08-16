@@ -10,6 +10,7 @@ Full narrative lives in [2026-08-15-forge-runtime-evolution-plan.md](../2026-08-
 | [ADR-03](./ADR-03-sandbox-provider-strategy.md) | Sandbox Provider Strategy | **Accepted** | ByteTitan-star |
 | [ADR-04](./ADR-04-conversation-storage-migration.md) | Conversation Storage Migration | **Accepted** | ByteTitan-star |
 | [ADR-05](./ADR-05-recoverable-pause-representation.md) | Recoverable Pause Representation | **Accepted** | (prior) |
+| [ADR-06](./ADR-06-semantic-pinecone-and-preference-ops.md) | Semantic Cache (Pinecone) + Preference Ops | **Proposed** | — |
 
 Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)  
 Feature flag defaults: [FLAG-INVENTORY.md](./FLAG-INVENTORY.md)
