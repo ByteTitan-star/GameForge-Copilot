@@ -98,11 +98,23 @@ async def test_e2b_lifecycle_with_mocked_sdk(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_hitl_destroy_and_restore_local() -> None:
     backend = LocalSandbox()
-    session = await backend.create()
+    session = await backend.create(tier="heavy")
     meta = await destroy_for_hitl(backend, session)
     assert meta["destroyed_for_hitl"] is True
+    assert meta["tier"] == "heavy"
     assert session.closed
-    restored = await restore_after_hitl(backend, tier="standard")
+    from app.sandbox.lifecycle import tier_from_hitl_meta
+
+    restored = await restore_after_hitl(backend, tier=tier_from_hitl_meta(meta))
     assert not restored.closed
+    assert restored.tier == "heavy"
     assert restored.id != session.id
     await backend.destroy(restored)
+
+
+def test_tier_from_hitl_meta_reads_tier() -> None:
+    from app.sandbox.lifecycle import tier_from_hitl_meta
+
+    assert tier_from_hitl_meta({"tier": "lite"}) == "lite"
+    assert tier_from_hitl_meta({}) is None
+    assert tier_from_hitl_meta(None) is None

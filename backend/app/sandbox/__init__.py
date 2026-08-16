@@ -9,7 +9,7 @@ from app.sandbox.base import (
     SandboxBackend,
     SandboxSession,
 )
-from app.sandbox.lifecycle import destroy_for_hitl, restore_after_hitl
+from app.sandbox.lifecycle import destroy_for_hitl, restore_after_hitl, tier_from_hitl_meta
 from app.sandbox.local import LocalSandbox
 
 _backend: SandboxBackend | None = None
@@ -75,4 +75,5 @@ __all__ = [
     "get_sandbox_backend",
     "reset_sandbox_for_tests",
     "restore_after_hitl",
+    "tier_from_hitl_meta",
 ]
