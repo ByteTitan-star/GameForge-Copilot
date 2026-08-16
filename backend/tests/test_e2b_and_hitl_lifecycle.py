@@ -118,3 +118,20 @@ def test_tier_from_hitl_meta_reads_tier() -> None:
     assert tier_from_hitl_meta({"tier": "lite"}) == "lite"
     assert tier_from_hitl_meta({}) is None
     assert tier_from_hitl_meta(None) is None
+
+
+@pytest.mark.asyncio
+async def test_restore_sandbox_from_checkpoint_uses_hitl_tier() -> None:
+    from app.sandbox.lifecycle import destroy_for_hitl, restore_sandbox_from_checkpoint
+
+    backend = LocalSandbox()
+    session = await backend.create(tier="heavy")
+    meta = await destroy_for_hitl(backend, session)
+    restored = await restore_sandbox_from_checkpoint(
+        backend, {"sandbox_hitl": meta}
+    )
+    assert restored is not None
+    assert restored.tier == "heavy"
+    assert restored.id != session.id
+    await backend.destroy(restored)
+    assert await restore_sandbox_from_checkpoint(backend, {}) is None

@@ -38,7 +38,11 @@ perimeter. Do **not** enable for production until ADR-03 Go criteria are Accepte
 ```text
 active SandboxSession
   → destroy_for_hitl (explicit kill; no billing idle session)
-  → checkpoint.sandbox_hitl metadata
+  → checkpoint.sandbox_hitl metadata (includes tier)
   → user resumes
-  → restore_after_hitl (create fresh session; no mandatory snapshot)
+  → restore_sandbox_from_checkpoint / restore_after_hitl(tier=…)
+     (fresh session; no mandatory snapshot)
 ```
+
+Oneshoot CodeQa paths may skip explicit restore and simply `create` on next execute;
+`restore_sandbox_from_checkpoint` exists for callers that hold a live session across HITL.
