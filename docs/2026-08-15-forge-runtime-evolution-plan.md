@@ -22,7 +22,7 @@
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）；可选 LLM summary（PR `#81`）；可选 Inferred 偏好
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt；可选 LLM Methodology 自选（`skills_llm_selection` 默认关）
-  * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；data-flow / benchmark 清单
+  * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关）；data-flow / benchmark 清单
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）
   * **仍 gated** 完整离线 eval / E2B 生产切换（SDK 已接但默认关）/ ADR Accept 签字 / Flag 彻底删遗留 concat / 全量 Load
@@ -702,6 +702,8 @@ Prompt、design_doc、源码、素材是否出境 → Data Flow Diagram → 才�
 ## P3.3 Tier
 
 候选 lite/standard/heavy（或四档）；以 telemetry 为准，避免为省几十 MB 过度调度。
+
+**本仓库 MVP**：`sandbox/tiers.py` + Docker `lite` 档；`sandbox_tier_auto`（默认关）时 OneShot 按源码体量 / engine hint / 近期 OOM·超时 推荐；Prometheus `gameforge_sandbox_tier_executions_total`；进程内环形缓冲非跨实例 SoT。
 
 ## P3.4 复用
 

@@ -23,6 +23,7 @@ from app.sandbox.base import BuildResult, SandboxSession
 from app.sandbox.collect import collect_artifact_files
 
 _TIERS: dict[str, dict] = {
+    "lite": {"mem_limit": "256m", "nano_cpus": 500_000_000, "timeout_s": 45},
     "standard": {"mem_limit": "512m", "nano_cpus": 1_000_000_000, "timeout_s": 60},
     "heavy": {"mem_limit": "1g", "nano_cpus": 2_000_000_000, "timeout_s": 120},
 }
@@ -88,11 +89,21 @@ class DockerSandbox:
         collect_root: str = ".",
         tier: str | None = None,
     ) -> BuildResult:
-        session = await self.create(tier=tier)
+        from app.sandbox.tiers import record_sandbox_outcome, resolve_create_tier
+
+        chosen = resolve_create_tier(source=source, explicit=tier)
+        session = await self.create(tier=chosen)
         try:
-            return await self.execute(
+            result = await self.execute(
                 session, source, build_cmd, collect_root=collect_root
             )
+            record_sandbox_outcome(
+                tier=session.tier,
+                ok=result.ok,
+                error=result.error,
+                backend=self.backend_id,
+            )
+            return result
         finally:
             await self.destroy(session)
 
