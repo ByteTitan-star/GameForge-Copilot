@@ -44,6 +44,12 @@ EVAL_FIXTURES: tuple[tuple[str, dict[str, Any], str, MatchMode], ...] = (
         "member",
     ),
     (
+        "art_detail",
+        {"style": "像素风"},
+        "art/pixel-art",
+        "member",
+    ),
+    (
         "qa",
         {"engine_id": "pixijs", "failure_kind": "product"},
         "repair/runtime-error",

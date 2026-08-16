@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P5 MVP 主体已落地**；P3 E2B 生产切换、P4.5 Semantic、Pending ADR 细项仍 gated）
+* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；剩余主要为人工门禁：ADR Accept、E2B 生产切换 Go、真实 LLM A/B、全量 Load）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -22,10 +22,11 @@
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）；可选 LLM summary（PR `#81`）；可选 Inferred 偏好
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt；可选 LLM Methodology 自选（`skills_llm_selection` 默认关）；**离线 eval 套件**（precision@1 / member hit / body reduction lift）
-  * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关）；data-flow / benchmark 清单
+  * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关；code_qa 传 `engine_id` hints）；data-flow / benchmark 清单
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**；**Load smoke**（并发 Exact Cache / Skill / tier）
-  * **仍 gated** 带真实 LLM 的 quality-lift A/B / E2B 生产切换（SDK 已接但默认关）/ ADR Accept 签字 / **全量** Load·Chaos 实验窗
+  * **Closeout batch（本 PR）** tier `engine_id` hints / HITL tier restore / ADR Accept+Flag 清单 / diagnose playtest policy / mock quality-lift A/B / ADR-04 SoT 守门 / semantic shadow 并发 / catalog hash 稳定性
+  * **仍 gated（人工/实验）** 真实 LLM quality-lift A/B / E2B 生产默认切换 / ADR-02·03·04 Accept 签字（见 `docs/adr/ACCEPT-CHECKLIST.md`）/ 全量 Load·Chaos
 
 ---
 
@@ -656,7 +657,7 @@ Art 不得看见 billing / sandbox admin / 内部 security runbook。
 * Skill 变更使依赖其的 cache key 失效（若已上 Exact Cache）
 * 离线 eval：selection precision / quality lift；无 lift 则停扩 catalog
 
-**本仓库**：`forge/skills/offline_eval.py` + `tests/test_skills_offline_eval.py`（≥12 fixtures；precision@1 / member hit / vs 全量注入 body reduction；Art 跨域违规=0）。真实 LLM A/B quality-lift 仍 gated。
+**本仓库**：`forge/skills/offline_eval.py` + `tests/test_skills_offline_eval.py`（≥12 fixtures；precision@1 / member hit / vs 全量注入 body reduction；Art 跨域违规=0）。`skills/ab_eval.py` 提供 **mock** quality-lift A/B（无真实 LLM）。真实付费 A/B 仍 gated。
 
 ---
 

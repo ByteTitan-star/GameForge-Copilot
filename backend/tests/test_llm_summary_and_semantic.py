@@ -76,3 +76,29 @@ async def test_semantic_shadow_disabled_by_default() -> None:
         r, node="entry_router", query={"q": 1}, actual_output="code"
     )
     assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_semantic_shadow_concurrent_trim_and_no_direct_hit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """并发 shadow 写入不得打开 direct hit；列表长度受 ltrim 约束。"""
+    import asyncio
+
+    r = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(settings, "semantic_cache_shadow_enabled", True)
+
+    async def one(i: int) -> None:
+        await semantic_shadow_record(
+            r,
+            node="engine_router",
+            query={"i": i},
+            actual_output={"v": i},
+            similarity=0.1,
+        )
+        assert await semantic_cache_lookup(r, node="engine_router", query={"i": i}) is None
+
+    await asyncio.gather(*(one(i) for i in range(32)))
+    rows = await r.lrange("forge:semantic:shadow:engine_router", 0, -1)
+    assert 1 <= len(rows) <= 1000
+    assert semantic_direct_hit_allowed() is False

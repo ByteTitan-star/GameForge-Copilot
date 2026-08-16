@@ -75,6 +75,20 @@ def recommend_tier(signals: TierSignals | None = None) -> str:
     return base
 
 
+def tier_hints_from_design_doc(design_doc: dict[str, Any] | None) -> dict[str, Any]:
+    """从 design_doc 提取 sandbox tier 提示（engine_id）。"""
+    if not design_doc:
+        return {}
+    engine = design_doc.get("engine")
+    if isinstance(engine, dict):
+        engine_id = str(engine.get("id") or "").strip()
+    else:
+        engine_id = str(engine or "").strip()
+    if not engine_id:
+        return {}
+    return {"engine_id": engine_id}
+
+
 def resolve_create_tier(
     *,
     source: dict[str, str] | None = None,

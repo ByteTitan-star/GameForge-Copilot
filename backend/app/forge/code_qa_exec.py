@@ -379,7 +379,12 @@ async def execute_code_or_repair(
                 }
 
         html = normalize_html(raw_output)
-        result = await get_sandbox().execute(source={"index.html": html})
+        from app.sandbox.tiers import tier_hints_from_design_doc
+
+        result = await get_sandbox().execute(
+            source={"index.html": html},
+            hints=tier_hints_from_design_doc(design_doc),
+        )
         if result.ok:
             await ctx.s.refresh(ctx.run)
             if (

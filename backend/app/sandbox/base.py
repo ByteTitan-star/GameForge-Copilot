@@ -70,6 +70,8 @@ class Sandbox(Protocol):
         build_cmd: Sequence[str] | None = None,
         *,
         collect_root: str = ".",
+        tier: str | None = None,
+        hints: dict | None = None,
     ) -> BuildResult: ...
 
 

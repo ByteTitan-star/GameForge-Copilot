@@ -31,6 +31,31 @@ async def restore_after_hitl(
     return await backend.create(tier=tier)
 
 
+def tier_from_hitl_meta(meta: dict[str, Any] | None) -> str | None:
+    """从 destroy_for_hitl 元数据恢复档位；无则 None（交给 backend 默认）。"""
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("tier")
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw).strip().lower()
+
+
+async def restore_sandbox_from_checkpoint(
+    backend: SandboxBackend, checkpoint: dict[str, Any] | None
+) -> SandboxSession | None:
+    """若 checkpoint 含 sandbox_hitl，则按原 tier 新建会话；否则返回 None。
+
+    当前 CodeQa 以 oneshot execute 为主；本助手供持有长会话的调用方在 resume 时显式恢复。
+    """
+    if not isinstance(checkpoint, dict):
+        return None
+    meta = checkpoint.get("sandbox_hitl")
+    if not isinstance(meta, dict) or not meta.get("destroyed_for_hitl"):
+        return None
+    return await restore_after_hitl(backend, tier=tier_from_hitl_meta(meta))
+
+
 def sandbox_session_from_checkpoint(raw: dict[str, Any] | None) -> SandboxSession | None:
     """从 checkpoint 中的 sandbox_session 字段还原句柄（可能已 destroy）。"""
     if not isinstance(raw, dict):
