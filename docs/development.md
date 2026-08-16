@@ -1,6 +1,6 @@
 # Local Development
 
-[中文产品 README](../README.md)
+[Chinese product README](../README_zh.md)
 
 This guide contains the detailed setup, configuration, verification, and troubleshooting information kept out of the product-facing README.
 

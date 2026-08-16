@@ -2,7 +2,8 @@
 
 React + Vite + TypeScript + Tailwind。契约见 `../docs/10-contract-and-parallel-dev.md`，视觉见 `../design-system/`，工程约定见 [CONVENTIONS.md](./CONVENTIONS.md)。
 
-**联调环境搭建**见仓库根目录 [README.md](../README.md)「联调启动」。
+**联调环境搭建**见 [docs/development.zh-CN.md](../docs/development.zh-CN.md)；
+产品介绍见仓库根目录 [README_zh.md](../README_zh.md)。
 
 ```bash
 pnpm install
