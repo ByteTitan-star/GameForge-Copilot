@@ -19,7 +19,7 @@
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
-  * **P1** ✅ ContextBuilder / Preferences / plan 经 Builder（PR `#72`）；session summary 刷新见 PR `#74`
+  * **P1** 🚧 ContextBuilder / Preferences / plan+art 经 Builder；Session Summary **确定性刷新+持久化**已接（LLM 摘要仍为可选后置）；code 节点仍走遗留拼装至 P5
   * **P2** 🚧 Skill catalog + node router；Policy vs Methodology；≈8 methodology skills；`skills_router_enabled` 接入 code/repair prompts
   * **P3–P5** 未开始
 
