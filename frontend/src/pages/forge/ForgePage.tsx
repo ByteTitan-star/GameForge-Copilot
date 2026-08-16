@@ -32,6 +32,7 @@ import { formatApiError } from "@/api/error-message";
 import { isApiError } from "@/api/errors";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { ChatPanel, type ChatMsg } from "@/components/forge/ChatPanel";
+import { ForgeComposer } from "@/components/forge/ForgeComposer";
 import { ForgeAiStatusBar } from "@/components/forge/ForgeAiStatusBar";
 import { ForgeLogDock } from "@/components/forge/ForgeLogDock";
 import { ForgeSplitLayout } from "@/components/forge/ForgeSplitLayout";
@@ -942,21 +943,27 @@ export function ForgePage() {
               <span className="text-[11px] font-medium uppercase tracking-[0.12em] gf-page-muted">
                 {t("forge")}
               </span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ring-1",
-                  STATUS_BADGE_CLASS[status.tone].wrap,
-                )}
-              >
+              {!status.blocked &&
+              !(
+                !gameId &&
+                (status.level === "idle" || status.level === "ready")
+              ) ? (
                 <span
                   className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    STATUS_BADGE_CLASS[status.tone].dot,
+                    "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ring-1",
+                    STATUS_BADGE_CLASS[status.tone].wrap,
                   )}
-                  aria-hidden="true"
-                />
-                {t(status.labelKey)}
-              </span>
+                >
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      STATUS_BADGE_CLASS[status.tone].dot,
+                    )}
+                    aria-hidden="true"
+                  />
+                  {t(status.labelKey)}
+                </span>
+              ) : null}
             </div>
             <h1 className="gf-font-display mt-0.5 truncate text-base font-semibold tracking-[-0.01em] text-[var(--gf-text)] md:text-lg">
               {title}
@@ -965,6 +972,17 @@ export function ForgePage() {
         </div>
 
         <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {status.blocked ? (
+            <Link
+              to="/settings"
+              className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-xs text-amber-800 transition hover:bg-amber-100"
+            >
+              {t("forgeLlmNotConfigured")}
+              <span className="font-semibold text-[var(--gf-primary)]">
+                · {t("forgeLlmSetupAction")}
+              </span>
+            </Link>
+          ) : null}
           {quotaHint ? (
             <span className="hidden max-w-40 truncate font-mono text-[11px] gf-page-muted xl:inline">
               {quotaHint}
@@ -1014,25 +1032,27 @@ export function ForgePage() {
               <span className="hidden xl:inline">{t("cancelRunBtn")}</span>
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
-            onClick={() => {
-              userToggledStageRef.current = true;
-              setStageOpen((open) => !open);
-            }}
-            aria-pressed={stageOpen}
-            title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
-          >
-            {stageOpen ? (
-              <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">
-              {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
-            </span>
-          </Button>
+          {previewUrl || gameId || stageOpen ? (
+            <Button
+              variant="ghost"
+              className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
+              onClick={() => {
+                userToggledStageRef.current = true;
+                setStageOpen((open) => !open);
+              }}
+              aria-pressed={stageOpen}
+              title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+            >
+              {stageOpen ? (
+                <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">
+                {stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
+              </span>
+            </Button>
+          ) : null}
           <button
             type="button"
             title={t("captureIssue")}
@@ -1084,58 +1104,76 @@ export function ForgePage() {
         mobileView={mobileView}
         onMobileViewChange={setMobileView}
         left={
-          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-[var(--gf-surface)] shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
-            <ForgeAiStatusBar status={status} />
-            <ChatPanel
-              variant="forge-hero"
-              scrollMode="panel"
-              className="min-h-0 flex-1"
-              messages={messages}
-              canLoadEarlier={messageHistory.hasNextPage}
-              loadingEarlier={messageHistory.isFetchingNextPage}
-              onLoadEarlier={() => void messageHistory.fetchNextPage()}
-              input={input}
-              onInputChange={setInput}
-              onSend={onSend}
-              disabled={busy || trial}
-              sendDisabled={busy || trial || status.blocked || !input.trim()}
-              streaming={busy && !hitl}
-              showComposer={!trial}
-              placeholder={
-                previewUrl ? t("describeIteration") : t("describeNewGame")
-              }
-              conversationFooter={
-                <>
-                  {hitl ? (
-                    <HitlCard
-                      payload={hitl}
-                      onResolve={onResolveHitl}
-                      onReject={onRejectHitl}
-                      busy={busy || trial}
-                    />
-                  ) : null}
-                  {!trial ? (
-                    !gameId ? (
-                      <div className="rounded-xl border border-black/[0.06] bg-black/[0.018] p-3">
-                        <TemplatePicker
-                          selectedId={selectedTemplateId}
-                          onSelect={(tpl: GameTemplate) => {
-                            setSelectedTemplateId(tpl.template_id);
-                            if (tpl.requirement_seed)
-                              setInput(tpl.requirement_seed);
-                          }}
-                        />
-                      </div>
-                    ) : null
-                  ) : (
-                    <p className="gf-banner-warn rounded-xl p-3 text-xs">
-                      {t("trialForgeLocked")}
-                    </p>
-                  )}
-                </>
-              }
-            />
-          </section>
+          !gameId && !trial ? (
+            <section className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-5 pb-10 md:px-8">
+                <div className="flex w-full max-w-[900px] flex-col pt-[clamp(4.5rem,12vh,7.5rem)]">
+                  <h2 className="gf-font-display mb-6 text-center text-[clamp(1.75rem,3.4vw,2.25rem)] font-semibold tracking-[-0.03em] text-[var(--gf-text)]">
+                    {t("forgeEmptyTitle")}
+                  </h2>
+                  <ForgeComposer
+                    className="mb-9"
+                    value={input}
+                    onChange={setInput}
+                    onSend={onSend}
+                    disabled={busy || trial}
+                    sendDisabled={
+                      busy || trial || status.blocked || !input.trim()
+                    }
+                    placeholder={t("describeNewGame")}
+                    density="empty"
+                  />
+                  <TemplatePicker
+                    selectedId={selectedTemplateId}
+                    onSelect={(tpl: GameTemplate) => {
+                      setSelectedTemplateId(tpl.template_id);
+                      if (tpl.requirement_seed) setInput(tpl.requirement_seed);
+                    }}
+                  />
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-[var(--gf-surface)] shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              {!status.blocked ? <ForgeAiStatusBar status={status} /> : null}
+              <ChatPanel
+                variant="forge-hero"
+                scrollMode="panel"
+                className="min-h-0 flex-1"
+                messages={messages}
+                canLoadEarlier={messageHistory.hasNextPage}
+                loadingEarlier={messageHistory.isFetchingNextPage}
+                onLoadEarlier={() => void messageHistory.fetchNextPage()}
+                input={input}
+                onInputChange={setInput}
+                onSend={onSend}
+                disabled={busy || trial}
+                sendDisabled={busy || trial || status.blocked || !input.trim()}
+                streaming={busy && !hitl}
+                showComposer={!trial}
+                placeholder={
+                  previewUrl ? t("describeIteration") : t("describeNewGame")
+                }
+                conversationFooter={
+                  <>
+                    {hitl ? (
+                      <HitlCard
+                        payload={hitl}
+                        onResolve={onResolveHitl}
+                        onReject={onRejectHitl}
+                        busy={busy || trial}
+                      />
+                    ) : null}
+                    {trial ? (
+                      <p className="gf-banner-warn rounded-xl p-3 text-xs">
+                        {t("trialForgeLocked")}
+                      </p>
+                    ) : null}
+                  </>
+                }
+              />
+            </section>
+          )
         }
         right={
           <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
@@ -1282,11 +1320,9 @@ export function ForgePage() {
                         {t("forgeStageEmptyTitle")}
                       </p>
                       <p className="mt-1.5 text-sm leading-relaxed text-[#94A3B8]">
-                        {status.blocked && status.blockedReasonKey
-                          ? t(status.blockedReasonKey)
-                          : busy
-                            ? t("buildingPlayable")
-                            : t("forgeStageEmptyHint")}
+                        {busy
+                          ? t("buildingPlayable")
+                          : t("forgeStageEmptyHint")}
                       </p>
                     </div>
                   </div>
