@@ -13,19 +13,19 @@
 * ADR 状态:
   * **ADR-01** Degraded Artifact Publishing — **Accepted**（见 `docs/adr/`）
   * **ADR-05** Recoverable Pause Representation — **Accepted**（见 `docs/adr/`）
-  * **ADR-02** Preference Retention — Pending（阻塞 P1 Preference 写入策略细项；MVP 已按「Explicit 保留」落地）
-  * **ADR-03** Sandbox Provider Strategy — **Pending**（国内源码/数据出境不默认允许；P3 仅 PoC）
-  * **ADR-04** Conversation Storage Migration — Pending（阻塞 P1 message SoT 选型；MVP 继续以 `forge_messages` 为唯一 SoT，不平行建表）
+  * **ADR-02** Preference Retention — **Proposed**（Explicit 保留；Inferred 不覆盖 Explicit；删 Game 不自动清 Inferred）
+  * **ADR-03** Sandbox Provider Strategy — **Proposed**（生产默认 Docker；E2B 仅 PoC）
+  * **ADR-04** Conversation Storage Migration — **Proposed**（`forge_messages` 唯一 SoT）
 * Implementation decisions（非 ADR）:
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
-  * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
+  * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）；可选 LLM summary（PR `#81`）；可选 Inferred 偏好
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt 已接 Methodology
   * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
-  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；`skill_bundle_hash` 已接入；Semantic **shadow 骨架**（禁止 direct hit）
-  * **P5** ✅ ContextBuilder Enforcement + fingerprint + spans（PR `#79`）；diagnose / Art skill / ADR 归档（PR `#80`）
-  * **尾巴** 🚧 LLM Session Summary（flag 默认关）；Inferred 偏好 / LLM 选 Skill / E2B SDK / ADR-02..04 定稿仍未做
+  * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
+  * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）
+  * **仍 gated** LLM 自选 Skill / 离线 eval / E2B 真 SDK+benchmark / HITL destroy+restore / ADR Accept 签字
 
 ---
 

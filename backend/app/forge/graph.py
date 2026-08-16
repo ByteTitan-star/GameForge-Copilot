@@ -338,17 +338,26 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
     await refresh_session_summary_if_needed(ctx.s, ctx.game, summarizer=summarizer)
 
 
+async def _upsert_preferences_from_text(ctx: _Ctx, text: str) -> None:
+    """写入 Explicit；可选写入 Inferred（不覆盖 Explicit）。"""
+    if not text.strip():
+        return
+    if settings.memory_preferences:
+        from app.forge.memory.preferences import upsert_explicit_from_text
+
+        await upsert_explicit_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
+    if settings.memory_preferences_inferred:
+        from app.forge.memory.preferences import upsert_inferred_from_text
+
+        await upsert_inferred_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
+
+
 async def _compose_plan_input(
     ctx: _Ctx, *, current_input: str, design_doc: dict[str, Any] | None = None
 ) -> str:
     """Plan/revise 用户消息：可选写入 Explicit 偏好，并经 ContextBuilder 拼装。"""
     await _refresh_session_summary(ctx)
-    if settings.memory_preferences:
-        from app.forge.memory.preferences import upsert_explicit_from_text
-
-        await upsert_explicit_from_text(
-            ctx.s, user_id=ctx.game.owner_id, text=current_input
-        )
+    await _upsert_preferences_from_text(ctx, current_input)
     wrapped = _wrap_user_input(current_input)
     from app.forge.memory.loader import build_node_context, use_context_builder
 
@@ -388,12 +397,7 @@ async def _compose_art_input(
 ) -> str:
     """Art/revise 用户消息：经 ContextBuilder 注入 summary/preferences。"""
     await _refresh_session_summary(ctx)
-    if settings.memory_preferences and current_input.strip():
-        from app.forge.memory.preferences import upsert_explicit_from_text
-
-        await upsert_explicit_from_text(
-            ctx.s, user_id=ctx.game.owner_id, text=current_input
-        )
+    await _upsert_preferences_from_text(ctx, current_input)
     design_block = (
         "【已确认游戏策划稿 JSON】\n" + design_doc_to_text(design_doc)
     )

@@ -1,4 +1,4 @@
-"""用户偏好读写（P1 Explicit-only）。"""
+"""用户偏好读写（P1 Explicit；可选 Inferred）。"""
 
 from __future__ import annotations
 
@@ -89,6 +89,39 @@ async def upsert_explicit_from_text(
             value_json=dict(item["value_json"]),
             source=str(item.get("source") or "explicit"),
             confidence=float(item.get("confidence") or 0.8),
+            status=str(item.get("status") or "active"),
+        )
+        written.append(row)
+    return written
+
+
+async def upsert_inferred_from_text(
+    db: AsyncSession, *, user_id: uuid.UUID, text: str
+) -> list[UserPreference]:
+    """写入 Inferred；若同 category/key 已是 Explicit 则跳过，避免降级覆盖。"""
+    from app.forge.memory.inferred import extract_inferred_preferences
+
+    written: list[UserPreference] = []
+    for item in extract_inferred_preferences(text):
+        category = str(item["category"])
+        key = str(item["key"])
+        existing = await db.scalar(
+            select(UserPreference).where(
+                UserPreference.user_id == user_id,
+                UserPreference.category == category,
+                UserPreference.key == key,
+            )
+        )
+        if existing is not None and existing.source == "explicit":
+            continue
+        row = await upsert_preference(
+            db,
+            user_id=user_id,
+            category=category,
+            key=key,
+            value_json=dict(item["value_json"]),
+            source="inferred",
+            confidence=float(item.get("confidence") or 0.4),
             status=str(item.get("status") or "active"),
         )
         written.append(row)
