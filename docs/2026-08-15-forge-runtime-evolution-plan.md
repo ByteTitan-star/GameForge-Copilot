@@ -23,8 +23,9 @@
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt 已接 Methodology
   * **P3** ✅ SandboxBackend create/execute/destroy；local/docker；e2b PoC 默认禁用（ADR-03）（PR `#76`）
-  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；Semantic Cache 未开（PR `#78`）
-  * **P5** ✅ ContextBuilder Enforcement + fingerprint + spans（PR `#79`）；diagnose Memory 信封 / Art skill 接线 / ADR 归档 / 安全与 cache chaos 轻量测
+  * **P4** ✅ Redis Exact Cache 白名单 MVP（entry/engine/template）；`skill_bundle_hash` 已接入；Semantic **shadow 骨架**（禁止 direct hit）
+  * **P5** ✅ ContextBuilder Enforcement + fingerprint + spans（PR `#79`）；diagnose / Art skill / ADR 归档（PR `#80`）
+  * **尾巴** 🚧 LLM Session Summary（flag 默认关）；Inferred 偏好 / LLM 选 Skill / E2B SDK / ADR-02..04 定稿仍未做
 
 ---
 

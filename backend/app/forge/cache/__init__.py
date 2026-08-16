@@ -14,6 +14,11 @@ from app.forge.cache.routers import (
     list_templates_cached,
     normalize_engine_id_cached,
 )
+from app.forge.cache.semantic import (
+    semantic_cache_lookup,
+    semantic_direct_hit_allowed,
+    semantic_shadow_record,
+)
 
 __all__ = [
     "ALLOWLIST",
@@ -26,4 +31,7 @@ __all__ = [
     "is_cacheable_node",
     "list_templates_cached",
     "normalize_engine_id_cached",
+    "semantic_cache_lookup",
+    "semantic_direct_hit_allowed",
+    "semantic_shadow_record",
 ]

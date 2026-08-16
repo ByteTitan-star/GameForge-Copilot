@@ -114,6 +114,8 @@ class Settings(BaseSettings):
 
     # P1 Memory：超阈时刷新并持久化 Session Summary（确定性 synthesizer）
     memory_session_summary: bool = True
+    # P1 尾巴：Session Summary 走 LLM（失败回落确定性）；默认关以避免额外费用
+    memory_session_summary_llm: bool = False
 
     # P2 Skills：节点经 catalog/router 选择 Methodology；Policy 仍强制注入
     skills_router_enabled: bool = True
@@ -121,6 +123,9 @@ class Settings(BaseSettings):
     # P4 Exact Cache：仅白名单低熵节点；关则全部 miss
     exact_cache_enabled: bool = True
     exact_cache_ttl_s: int = 86_400
+    # P4.5：Semantic shadow 仅记标定样本，禁止 direct hit
+    semantic_cache_shadow_enabled: bool = False
+    semantic_cache_shadow_ttl_s: int = 604_800
 
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。

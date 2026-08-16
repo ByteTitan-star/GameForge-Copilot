@@ -8,6 +8,7 @@ from app.forge.memory.context_builder import (
     context_fingerprint,
     estimate_tokens,
 )
+from app.forge.memory.llm_summary import synthesize_summary_via_llm
 from app.forge.memory.summary import (
     SessionSummary,
     coerce_session_summary,
@@ -28,4 +29,5 @@ __all__ = [
     "estimate_tokens",
     "should_refresh_summary",
     "synthesize_summary_from_turns",
+    "synthesize_summary_via_llm",
 ]

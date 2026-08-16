@@ -101,18 +101,51 @@ async def test_exact_cache_disabled_skips(
 async def test_classify_entry_phase_cached_hits(
     redis_client: fakeredis.aioredis.FakeRedis,
 ) -> None:
+    from app.forge.skills.catalog import catalog_skill_bundle_hash
+
     first = await classify_entry_phase_cached(
         redis_client, "把背景改成紫色", has_prior_version=True
     )
     assert first == EntryPhase.CODE
     # 第二次应命中缓存；篡改 Redis 后仍返回缓存值可证明走了 cache
     payload = {"requirement": "把背景改成紫色", "has_prior_version": True}
-    key = build_exact_cache_key(node="entry_router", input_payload=payload)
+    key = build_exact_cache_key(
+        node="entry_router",
+        input_payload=payload,
+        skill_bundle_hash=catalog_skill_bundle_hash(),
+    )
     await redis_client.set(key, '"plan"')
     second = await classify_entry_phase_cached(
         redis_client, "把背景改成紫色", has_prior_version=True
     )
     assert second == EntryPhase.PLAN
+
+
+@pytest.mark.asyncio
+async def test_skill_bundle_hash_change_misses_cache(
+    redis_client: fakeredis.aioredis.FakeRedis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await classify_entry_phase_cached(
+        redis_client, "把背景改成紫色", has_prior_version=True
+    )
+    monkeypatch.setattr(
+        "app.forge.cache.routers.catalog_skill_bundle_hash", lambda: "changed-hash"
+    )
+    # hash 变了应重新计算，不会读到旧 key
+    payload = {"requirement": "把背景改成紫色", "has_prior_version": True}
+    assert (
+        await exact_cache_get(
+            redis_client,
+            node="entry_router",
+            input_payload=payload,
+            skill_bundle_hash="changed-hash",
+        )
+        is None
+    )
+    again = await classify_entry_phase_cached(
+        redis_client, "把背景改成紫色", has_prior_version=True
+    )
+    assert again == EntryPhase.CODE
 
 
 @pytest.mark.asyncio
