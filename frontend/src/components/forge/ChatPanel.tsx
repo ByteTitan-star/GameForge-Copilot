@@ -1,8 +1,8 @@
-import { Bot, Loader2, Send, UserRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Bot, Loader2, UserRound } from "lucide-react";
+import { ForgeComposer } from "@/components/forge/ForgeComposer";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
-import { useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export type ChatMsg = {
   id: string;
@@ -27,7 +27,7 @@ type Props = {
   variant?: "light" | "workshop" | "forge-hero";
   /** document = 由外层容器滚动；panel = 消息区内部滚动 */
   scrollMode?: "panel" | "document";
-  /** 对话消息之后、输入框之前的业务内容，例如 HITL、模板与试用提示 */
+  /** 对话消息之后、输入框之前的业务内容，例如 HITL、试用提示 */
   conversationFooter?: ReactNode;
   canLoadEarlier?: boolean;
   loadingEarlier?: boolean;
@@ -53,7 +53,6 @@ export function ChatPanel({
   onLoadEarlier,
 }: Props) {
   const t = useT();
-  const composerId = useId();
   const workshop = variant === "workshop" || variant === "forge-hero";
   const hero = variant === "forge-hero";
   const documentScroll = hero && scrollMode === "document";
@@ -61,6 +60,7 @@ export function ChatPanel({
   const lastAssistantId = [...messages]
     .reverse()
     .find((m) => m.role === "assistant")?.id;
+
   return (
     <section
       className={cn(
@@ -105,7 +105,9 @@ export function ChatPanel({
               onClick={onLoadEarlier}
               className="gf-interactive gf-page-muted inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loadingEarlier ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {loadingEarlier ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : null}
               {t("forgeLoadEarlier")}
             </button>
           </div>
@@ -181,74 +183,19 @@ export function ChatPanel({
         <div
           className={cn(
             hero
-              ? "shrink-0 border-t border-[var(--gf-border)] bg-[var(--gf-surface)] p-3 md:p-4"
+              ? "shrink-0 border-t border-[var(--gf-border)] bg-[var(--gf-surface)] p-3 md:p-3.5"
               : "gf-border-subtle border-t p-3",
           )}
         >
-          <div className={cn(hero && "gf-forge-composer-wrap")}>
-            <label htmlFor={composerId} className="sr-only">
-              {composerPlaceholder}
-            </label>
-            <textarea
-              id={composerId}
-              name="forge-requirement"
-              autoComplete="off"
-              value={input}
-              onChange={(e) => onInputChange(e.target.value)}
-              rows={hero ? 3 : 3}
-              disabled={disabled}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onSend();
-                }
-              }}
-              className={cn(
-                "w-full resize-none px-3 py-2.5 text-sm outline-none disabled:opacity-50",
-                hero
-                  ? "gf-page-body placeholder:text-[var(--gf-text-muted)] focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.3)]"
-                  : cn(
-                      "rounded-xl border",
-                      workshop
-                        ? "gf-input"
-                        : "border-black/[0.1] bg-[#f5f7f8] text-[#20262d] placeholder:text-[#9099a1] focus-visible:ring-2 focus-visible:ring-[#5271ff]/25",
-                    ),
-              )}
-              placeholder={composerPlaceholder}
-            />
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2",
-                hero ? "px-2 pb-2" : "mt-2",
-              )}
-            >
-              <span
-                className={cn(
-                  "text-[11px]",
-                  workshop ? "gf-page-muted" : "text-[#9099a1]",
-                )}
-              >
-                {t("chatSendHint")}
-              </span>
-              <Button
-                variant="primary"
-                className={cn(
-                  hero
-                    ? "gf-forge-send-btn gf-btn-primary gf-interactive !min-h-11 !border-0 !px-4 !py-2.5"
-                    : "!min-h-10 !rounded-lg !px-4 !py-2",
-                  !hero &&
-                    (workshop
-                      ? "gf-btn-primary gf-interactive !border-0"
-                      : "!bg-[#20262d] !text-white hover:!bg-[#303940]"),
-                )}
-                disabled={sendDisabled ?? (disabled || !input.trim())}
-                onClick={onSend}
-              >
-                <Send className="h-3.5 w-3.5" />
-                {t("sendRequirement")}
-              </Button>
-            </div>
-          </div>
+          <ForgeComposer
+            value={input}
+            onChange={onInputChange}
+            onSend={onSend}
+            disabled={disabled}
+            sendDisabled={sendDisabled}
+            placeholder={composerPlaceholder}
+            density="chat"
+          />
         </div>
       ) : null}
     </section>
