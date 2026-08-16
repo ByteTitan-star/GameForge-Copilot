@@ -1,6 +1,6 @@
 # Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0 已合入 main**；**P1 Memory MVP 进行中**）
+* Status: In Progress（**P0 已合入**；**P1 Memory 基础已合入（#72）**；**P2 Skills 进行中**）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -19,8 +19,9 @@
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
 * 落地进度（相对本仓库）:
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
-  * **P1** 🚧 `ContextBuilder` + token budget、`user_preferences` + `/me/preferences`、`games.session_summary_json`、plan/revise 经 Builder；Session Summary **LLM 自动刷新**尚未接（仅 schema + 触发判定）
-  * **P2–P5** 未开始
+  * **P1** ✅ ContextBuilder / Preferences / plan 经 Builder（PR `#72`）；session summary 刷新见 PR `#74`
+  * **P2** 🚧 Skill catalog + node router；Policy vs Methodology；≈8 methodology skills；`skills_router_enabled` 接入 code/repair prompts
+  * **P3–P5** 未开始
 
 ---
 
