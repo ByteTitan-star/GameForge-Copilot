@@ -39,11 +39,11 @@ from app.forge.guard import ContentAttacked, run_streamed_llm
 from app.forge.messages import add_message, design_message_content, stable_design_key
 from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
-    ART_DETAIL_PROMPT,
-    ART_OPTIONS_PROMPT,
-    ART_OPTIONS_REVISE_PROMPT,
     PLAN_PROMPT,
     PLAN_REVISE_PROMPT,
+    build_art_detail_prompt,
+    build_art_options_prompt,
+    build_art_options_revise_prompt,
 )
 from app.forge.reliability import (
     FatalError,
@@ -903,7 +903,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                 user_msg = await _compose_art_input(
                     ctx, current_input="", design_doc=design_doc
                 )
-                art_options = await generate_art_options(ART_OPTIONS_PROMPT, user_msg)
+                art_hints = {
+                    "requirement": ctx.game.requirement or "",
+                    "goal": (design_doc.get("title") or ctx.game.title or ""),
+                }
+                art_options = await generate_art_options(
+                    build_art_options_prompt(art_hints), user_msg
+                )
             except ContentAttacked:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
@@ -944,8 +950,13 @@ def _build_graph(ctx: _Ctx) -> Any:
                 previous_options=previous if isinstance(previous, dict) else {},
             )
             try:
+                art_hints = {
+                    "modify_text": state.get("modify_text") or "",
+                    "requirement": ctx.game.requirement or "",
+                    "goal": (design_doc.get("title") or ctx.game.title or ""),
+                }
                 art_options = await generate_art_options(
-                    ART_OPTIONS_REVISE_PROMPT, user_msg
+                    build_art_options_revise_prompt(art_hints), user_msg
                 )
             except ContentAttacked:
                 raise
@@ -1008,7 +1019,14 @@ def _build_graph(ctx: _Ctx) -> Any:
                     )
                     raw = await _streamed_llm_or_fallback(
                         ctx,
-                        ART_DETAIL_PROMPT,
+                        build_art_detail_prompt(
+                            {
+                                "style": json.dumps(
+                                    selected_option, ensure_ascii=False
+                                ),
+                                "goal": (design_doc.get("title") or ctx.game.title or ""),
+                            }
+                        ),
                         user_msg,
                         "art",
                         emit_delta=False,
