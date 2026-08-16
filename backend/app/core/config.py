@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     sandbox_backend: str = "local"  # local|docker|e2b（e2b 仅 PoC，见 sandbox_e2b_enabled）
     sandbox_image: str = "gameforge/sandbox"
     sandbox_default_tier: str = "standard"
+    # P3.3：按 telemetry/启发式自动选 lite|standard|heavy；默认关，避免过度降档
+    sandbox_tier_auto: bool = False
     # ADR-03：E2B 默认关闭；仅批准的 benchmark/PoC 可显式打开
     sandbox_e2b_enabled: bool = False
     e2b_api_key: str = ""

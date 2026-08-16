@@ -85,11 +85,23 @@ class OneShotSandboxAdapter:
         build_cmd: Sequence[str] | None = None,
         *,
         collect_root: str = ".",
+        tier: str | None = None,
+        hints: dict | None = None,
     ) -> BuildResult:
-        session = await self._backend.create()
+        from app.sandbox.tiers import record_sandbox_outcome, resolve_create_tier
+
+        chosen = resolve_create_tier(source=source, hints=hints, explicit=tier)
+        session = await self._backend.create(tier=chosen)
         try:
-            return await self._backend.execute(
+            result = await self._backend.execute(
                 session, source, build_cmd, collect_root=collect_root
             )
+            record_sandbox_outcome(
+                tier=session.tier,
+                ok=result.ok,
+                error=result.error,
+                backend=session.backend_id,
+            )
+            return result
         finally:
             await self._backend.destroy(session)

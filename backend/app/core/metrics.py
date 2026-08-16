@@ -36,6 +36,11 @@ SANDBOX_RUNS = Counter(
     "Sandbox executions",
     ["backend", "status"],
 )
+SANDBOX_TIER_RUNS = Counter(
+    "gameforge_sandbox_tier_executions_total",
+    "Sandbox executions by resource tier",
+    ["backend", "tier", "status"],
+)
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
