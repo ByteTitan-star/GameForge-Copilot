@@ -47,9 +47,6 @@ async def select_methodology_ids_via_llm(
     except Exception:  # noqa: BLE001 选路失败必须可回落
         return None
     filtered = [i for i in ids if i in allow][:max_skills]
-    # 空列表视为选路失败（常见于 mock/错 prompt 返回其它 JSON），回落确定性路由
-    if not filtered:
-        return None
     return filtered
 
 
