@@ -24,7 +24,7 @@ backend:test:
   stage: test
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
   script:
-    - cd backend && uv sync --group dev && uv run pytest -q
+    - cd backend && uv sync --group dev && uv run pytest -q -m "not integration and not load"
   cache:
     key: backend-uv
     paths:

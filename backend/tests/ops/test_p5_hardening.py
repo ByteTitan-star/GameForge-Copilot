@@ -80,7 +80,7 @@ async def test_exact_cache_chaos_forbidden_never_writes_under_concurrency() -> N
 def test_secret_scan_script_flags_private_key(tmp_path: Path, monkeypatch) -> None:
     import importlib.util
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     spec = importlib.util.spec_from_file_location(
         "secret_scan", root / "scripts" / "secret_scan.py"
     )
