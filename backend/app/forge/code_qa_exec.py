@@ -21,7 +21,7 @@ from app.forge.build.integration import (
 )
 from app.forge.build.routing import routing_from_design_doc, should_use_vite_pipeline
 from app.forge.code_candidate import claim_candidate_version
-from app.forge.design_doc import coerce_design_doc, design_doc_to_text
+from app.forge.design_doc import coerce_design_doc
 from app.forge.engine_router import engine_scaffold
 from app.forge.events import publish_event
 from app.forge.prompts import (
@@ -88,7 +88,6 @@ async def execute_code_or_repair(
 
     with observe_phase("code"):
         design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
-        design_text = design_doc_to_text(design_doc)
         entry_req = state.get("entry_requirement")
         artifacts = state.get("artifacts") or []
         art_direction = state.get("art_direction") or {}
@@ -110,28 +109,23 @@ async def execute_code_or_repair(
         qa_diagnosis = state.get("qa_diagnosis") or ""
         attempt = int(state.get("attempt") or 0) + 1
 
-        # P5：Memory/设计稿经 ContextBuilder；assets/scaffold/repair 仍为任务载荷追加
-        from app.forge.memory.loader import build_node_context, use_context_builder
+        # P5：Memory/设计稿唯一经 ContextBuilder；assets/scaffold/repair 为任务载荷追加
+        from app.forge.memory.loader import build_node_context
 
         entry_block = (entry_req or "").strip() or "请按已确认设计稿实现可运行游戏。"
-        if use_context_builder():
-            if settings.memory_session_summary:
-                from app.forge.memory.refresh import refresh_session_summary_if_needed
+        if settings.memory_session_summary:
+            from app.forge.memory.refresh import refresh_session_summary_if_needed
 
-                await refresh_session_summary_if_needed(ctx.s, ctx.game)
-            built = await build_node_context(
-                ctx.s,
-                node="code" if attempt <= 1 and not entry_req else "repair",
-                game=ctx.game,
-                user_id=ctx.game.owner_id,
-                current_input=entry_block,
-                design_doc=design_doc,
-            )
-            base_user_msg = built.user_message
-        else:
-            base_user_msg = f"【已确认设计稿 JSON】\n{design_text}"
-            if entry_req:
-                base_user_msg += f"\n\n【本次实现变更要求】\n{entry_req}"
+            await refresh_session_summary_if_needed(ctx.s, ctx.game)
+        built = await build_node_context(
+            ctx.s,
+            node="code" if attempt <= 1 and not entry_req else "repair",
+            game=ctx.game,
+            user_id=ctx.game.owner_id,
+            current_input=entry_block,
+            design_doc=design_doc,
+        )
+        base_user_msg = built.user_message
         if art_direction:
             base_user_msg += (
                 "\n\n【已确认美术实现设计稿 JSON】\n"
@@ -630,31 +624,28 @@ async def execute_diagnose(
         async def _call(system: str, user_msg: str) -> str:
             return await llm(ctx, system, user_msg)
 
-        memory_prefix: str | None = None
-        from app.forge.memory.loader import build_node_context, use_context_builder
+        from app.forge.memory.loader import build_node_context
 
-        if use_context_builder():
-            if settings.memory_session_summary:
-                from app.forge.memory.refresh import refresh_session_summary_if_needed
+        if settings.memory_session_summary:
+            from app.forge.memory.refresh import refresh_session_summary_if_needed
 
-                await refresh_session_summary_if_needed(ctx.s, ctx.game)
-            built = await build_node_context(
-                ctx.s,
-                node="diagnose",
-                game=ctx.game,
-                user_id=ctx.game.owner_id,
-                current_input="请根据自动试玩证据诊断失败根因并给出可执行修复方案。",
-                design_doc=design_doc,
-            )
-            memory_prefix = built.user_message
+            await refresh_session_summary_if_needed(ctx.s, ctx.game)
+        built = await build_node_context(
+            ctx.s,
+            node="diagnose",
+            game=ctx.game,
+            user_id=ctx.game.owner_id,
+            current_input="请根据自动试玩证据诊断失败根因并给出可执行修复方案。",
+            design_doc=design_doc,
+        )
 
         diagnosis = await diagnose_playtest_failure(
             llm=_call,
-            design_doc=None if memory_prefix else design_doc,
+            design_doc=None,
             errors=errors,
             console_logs=console_logs,
             source_excerpt=qa_source,
-            memory_prefix=memory_prefix,
+            memory_prefix=built.user_message,
             failure_kind=str(state.get("failure_kind") or "product"),
         )
         return {

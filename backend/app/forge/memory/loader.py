@@ -22,8 +22,12 @@ from app.models.game import Game
 
 
 def use_context_builder() -> bool:
-    """Builder 或 Enforcement 任一开启时，正式 Node 必须走 build_node_context。"""
-    return bool(settings.memory_context_builder or settings.memory_context_enforcement)
+    """正式 Node 一律经 ContextBuilder；保留函数供测试/兼容，恒为 True。
+
+    回滚粒度改为关闭单项 Memory 能力（summary / preferences / recent turns），
+    不再回退到节点内手写 concat。
+    """
+    return True
 
 
 async def build_node_context(
