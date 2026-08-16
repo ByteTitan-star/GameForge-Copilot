@@ -3,9 +3,11 @@
 路径 game-scoped 与 run-scoped 混合，均 owner 过滤。执行见 app.forge.graph。
 """
 
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
+from sqlalchemy import update
 
 from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.config import settings
@@ -14,6 +16,7 @@ from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, PauseReason, RunPhase, RunStatus
 from app.forge import state as ckpt
 from app.forge.event_log import list_events
+from app.forge.hitl import allowed_decisions_for, is_hitl_phase
 from app.forge.messages import add_message, list_messages, stable_payload_key
 from app.forge.queue import enqueue_resume
 from app.forge.reliability.pause import pause_reason_from_state, recovery_from_state
@@ -38,10 +41,18 @@ from app.schemas.ws import WSEvent
 
 router = APIRouter(tags=["runs"])
 
-ERR_404 = {404: {"model": ErrorResponse, "description": "run 或游戏不存在或不可见"}}
-ERR_403 = {403: {"model": ErrorResponse, "description": "邮箱未验证"}}
-ERR_409 = {409: {"model": ErrorResponse, "description": "状态冲突"}}
-ERR_429 = {429: {"model": ErrorResponse, "description": "配额耗尽"}}
+ERR_404: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorResponse, "description": "run 或游戏不存在或不可见"}
+}
+ERR_403: dict[int | str, dict[str, Any]] = {
+    403: {"model": ErrorResponse, "description": "邮箱未验证"}
+}
+ERR_409: dict[int | str, dict[str, Any]] = {
+    409: {"model": ErrorResponse, "description": "状态冲突"}
+}
+ERR_429: dict[int | str, dict[str, Any]] = {
+    429: {"model": ErrorResponse, "description": "配额耗尽"}
+}
 
 _WS = "/ws/runs/{run_id}"
 
@@ -51,7 +62,7 @@ def _to_resp(run: GenerationRun) -> RunResp:
         run_id=run.id,
         game_id=run.game_id,
         status=RunStatus(run.status),
-        phase=RunPhase(run.phase),
+        phase=RunPhase(run.phase or RunPhase.PLAN.value),
         entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
         ws_url=_WS.format(run_id=run.id),
     )
@@ -103,7 +114,7 @@ async def list_runs(
             RunListItem(
                 run_id=run.id,
                 status=RunStatus(run.status),
-                phase=RunPhase(run.phase),
+                phase=RunPhase(run.phase or RunPhase.PLAN.value),
                 started_at=run.started_at,
                 ended_at=run.ended_at,
             )
@@ -132,7 +143,7 @@ async def get_forge_messages(
                 message_id=row.id,
                 game_id=row.game_id,
                 run_id=row.run_id,
-                role=row.role,
+                role=cast(Literal["user", "assistant", "system"], row.role),
                 kind=row.kind,
                 content=row.content,
                 metadata=row.metadata_json,
@@ -143,9 +154,6 @@ async def get_forge_messages(
     )
 
 
-_HITL_PHASES = {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"}
-
-
 def _hitl_from_state(
     run: GenerationRun, state: dict | None
 ) -> tuple[HitlState | None, HitlWaitDetail | None]:
@@ -154,7 +162,7 @@ def _hitl_from_state(
     if not state or run.status != RunStatus.PAUSED.value:
         return None, None
     phase = state.get("phase")
-    if phase not in _HITL_PHASES:
+    if not is_hitl_phase(str(phase) if phase is not None else None):
         return None, None
     current = HitlState(node=str(phase))
     detail = HitlWaitDetail(
@@ -177,7 +185,7 @@ async def list_active_runs(user: CurrentUser, db: DbSession) -> ApiResponse[list
                 game_id=run.game_id,
                 game_title=game.title,
                 status=RunStatus(run.status),
-                phase=RunPhase(run.phase),
+                phase=RunPhase(run.phase or RunPhase.PLAN.value),
                 entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
                 started_at=run.started_at,
                 ws_url=_WS.format(run_id=run.id),
@@ -198,8 +206,7 @@ async def get_run(
     recovery = None
     artifact_gate = None
     if state and any(
-        k in state
-        for k in ("previewable", "publishable", "qa_ok", "generation_success")
+        k in state for k in ("previewable", "publishable", "qa_ok", "generation_success")
     ):
         artifact_gate = ArtifactGateDetail(
             generation_success=bool(state.get("generation_success", False)),
@@ -226,7 +233,7 @@ async def get_run(
             run_id=run.id,
             game_id=run.game_id,
             status=RunStatus(run.status),
-            phase=RunPhase(run.phase),
+            phase=RunPhase(run.phase or RunPhase.PLAN.value),
             entry_phase=EntryPhase(getattr(run, "entry_phase", "plan") or "plan"),
             ws_url=_WS.format(run_id=run.id),
             current_hitl=current_hitl,
@@ -260,7 +267,9 @@ async def pause_run(
     run = await services.pause_run(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
-            run_id=run.id, status=RunStatus(run.status), phase=RunPhase(run.phase)
+            run_id=run.id,
+            status=RunStatus(run.status),
+            phase=RunPhase(run.phase or RunPhase.PLAN.value),
         )
     )
 
@@ -276,7 +285,9 @@ async def resume_run(
     run = await services.resume_run_control(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
-            run_id=run.id, status=RunStatus.RUNNING, phase=RunPhase(run.phase)
+            run_id=run.id,
+            status=RunStatus.RUNNING,
+            phase=RunPhase(run.phase or RunPhase.PLAN.value),
         )
     )
 
@@ -292,7 +303,9 @@ async def cancel_run(
     run = await services.cancel_run(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
-            run_id=run.id, status=RunStatus(run.status), phase=RunPhase(run.phase)
+            run_id=run.id,
+            status=RunStatus(run.status),
+            phase=RunPhase(run.phase or RunPhase.PLAN.value),
         )
     )
 
@@ -309,7 +322,9 @@ async def retry_run(
     run = await services.retry_run(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
-            run_id=run.id, status=RunStatus.RUNNING, phase=RunPhase(run.phase)
+            run_id=run.id,
+            status=RunStatus.RUNNING,
+            phase=RunPhase(run.phase or RunPhase.PLAN.value),
         )
     )
 
@@ -333,69 +348,63 @@ async def resolve_hitl(
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏或 run 不存在")
     # TTL 收窄到 60s：仅用于拦截同一次 HITL 的并发双击；同一 run 后续 HITL 阶段
     # （如 plan_confirm→qa_failed）不会被遗留锁误阻塞。执行层的重复由 run:executing 兜底。
-    if not await r.set(f"run:hitl:{run_id}", "1", nx=True, ex=60):
+    lock_key = f"run:hitl:{run_id}"
+    if not await r.set(lock_key, "1", nx=True, ex=60):
         raise AppError(ErrorCode.INVALID_STATE, "run 正在处理或已处理")
-    state = await ckpt.load_state(r, run_id, db)
-    if (
-        state is None
-        or state.get("phase") not in _HITL_PHASES
-        or state.get("phase") != req.node
-    ):
-        await r.delete(f"run:hitl:{run_id}")
-        raise AppError(ErrorCode.INVALID_STATE, "run 不在 HITL 等待态")
-    if state.get("pause_reason") == PauseReason.RECOVERABLE_ERROR.value:
-        await r.delete(f"run:hitl:{run_id}")
-        raise AppError(
-            ErrorCode.INVALID_STATE,
-            "可恢复故障请使用 /retry，而非 HITL resolve",
+    try:
+        state = await ckpt.load_state(r, run_id, db)
+        phase = str(state.get("phase") or "") if state else ""
+        if state is None or not is_hitl_phase(phase) or phase != req.node:
+            raise AppError(ErrorCode.INVALID_STATE, "run 不在 HITL 等待态")
+        if state.get("pause_reason") == PauseReason.RECOVERABLE_ERROR.value:
+            raise AppError(
+                ErrorCode.INVALID_STATE,
+                "可恢复故障请使用 /retry，而非 HITL resolve",
+            )
+        if run.status != RunStatus.PAUSED.value:
+            raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
+        if req.decision not in allowed_decisions_for(phase):
+            raise AppError(ErrorCode.INVALID_STATE, "当前 HITL 节点不支持该决策")
+        if req.decision == "modify" and not (req.modify_text or "").strip():
+            raise AppError(ErrorCode.INVALID_STATE, "修改意见不能为空")
+        result = await db.execute(
+            update(GenerationRun)
+            .where(
+                GenerationRun.id == run_id,
+                GenerationRun.status == RunStatus.PAUSED.value,
+            )
+            .values(status=RunStatus.RUNNING.value, ended_at=None)
         )
-    if run.status != RunStatus.PAUSED.value:
-        await r.delete(f"run:hitl:{run_id}")
-        raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
-    allowed_decisions = {
-        "plan_confirm": {"approve", "modify"},
-        "art_confirm": {"select_a", "select_b", "modify"},
-        "sandbox_failed": {"approve", "modify"},
-        "qa_failed": {"approve", "modify"},
-    }
-    if req.decision not in allowed_decisions[state["phase"]]:
-        await r.delete(f"run:hitl:{run_id}")
-        raise AppError(ErrorCode.INVALID_STATE, "当前 HITL 节点不支持该决策")
-    if req.decision == "modify" and not (req.modify_text or "").strip():
-        await r.delete(f"run:hitl:{run_id}")
-        raise AppError(ErrorCode.INVALID_STATE, "修改意见不能为空")
-    run.status = RunStatus.RUNNING.value
-    run.ended_at = None
-    selected_label = {"select_a": "已选择美术方案 A", "select_b": "已选择美术方案 B"}
-    decision_text = (
-        req.modify_text.strip()
-        if req.modify_text
-        else selected_label.get(req.decision, "已确认设计方案")
-    )
-    await add_message(
-        db,
-        game_id=run.game_id,
-        run_id=run.id,
-        user_id=user.id,
-        role="user",
-        kind="hitl_modify" if req.decision == "modify" else "hitl_approve",
-        content=decision_text,
-        metadata={"node": req.node, "decision": req.decision},
-        dedupe_key=stable_payload_key(
-            run.id,
-            f"hitl:{req.node}:{req.decision}",
-            {"design_doc": state.get("design_doc"), "content": decision_text},
-        ),
-    )
-    await enqueue_resume(db, r, run_id, req.decision, req.modify_text)
-    await db.commit()
-    # 锁只覆盖一次 resolve 的并发窗口；下一阶段可能立即出现新的合法 HITL。
-    await r.delete(f"run:hitl:{run_id}")
-    next_phase = (
-        RunPhase.ART
-        if state.get("phase") in {"plan_confirm", "art_confirm"}
-        else RunPhase.CODE
-    )
-    return ApiResponse(
-        data=HitlResolveResp(run_id=run.id, status=RunStatus.RUNNING, phase=next_phase)
-    )
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
+            raise AppError(ErrorCode.INVALID_STATE, "run 已结束或不在 paused")
+        run.status = RunStatus.RUNNING.value
+        run.ended_at = None
+        selected_label = {"select_a": "已选择美术方案 A", "select_b": "已选择美术方案 B"}
+        decision_text = (
+            req.modify_text.strip()
+            if req.modify_text
+            else selected_label.get(req.decision, "已确认设计方案")
+        )
+        await add_message(
+            db,
+            game_id=run.game_id,
+            run_id=run.id,
+            user_id=user.id,
+            role="user",
+            kind="hitl_modify" if req.decision == "modify" else "hitl_approve",
+            content=decision_text,
+            metadata={"node": req.node, "decision": req.decision},
+            dedupe_key=stable_payload_key(
+                run.id,
+                f"hitl:{req.node}:{req.decision}",
+                {"design_doc": state.get("design_doc"), "content": decision_text},
+            ),
+        )
+        await enqueue_resume(db, r, run_id, req.decision, req.modify_text)
+        await db.commit()
+        next_phase = RunPhase.ART if phase in {"plan_confirm", "art_confirm"} else RunPhase.CODE
+        return ApiResponse(
+            data=HitlResolveResp(run_id=run.id, status=RunStatus.RUNNING, phase=next_phase)
+        )
+    finally:
+        await r.delete(lock_key)

@@ -15,6 +15,7 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
+from app.forge.hitl import HITL_PHASES
 from app.forge.queue import enqueue_resume
 from app.messaging.factory import use_memory
 from app.messaging.memory import MemoryTaskPublisher
@@ -50,9 +51,7 @@ _ALL_EPHEMERAL: tuple[RedisScope, ...] = (
     "models_cache",
 )
 
-_HITL_PHASES = frozenset(
-    {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed", "user_pause"}
-)
+_HITL_OR_PAUSE = HITL_PHASES | frozenset({"user_pause"})
 _RETRY_PHASES = frozenset({"sandbox_failed", "qa_failed"})
 
 
@@ -206,7 +205,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
         }
 
     if run.status == RunStatus.FAILED.value:
-        if phase_str not in _RETRY_PHASES and phase_str not in _HITL_PHASES:
+        if phase_str not in _RETRY_PHASES and phase_str not in _HITL_OR_PAUSE:
             raise AppError(ErrorCode.INVALID_STATE, "failed run 无可用检查点，不可 requeue")
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
@@ -231,18 +230,14 @@ async def reset_dev_state(db: AsyncSession, r: redis.Redis) -> dict:
         3. 清空任务队列里残留的 execute_run/resume_run 消息。
     已 failed 的 run 不受 DB 改动影响；终态守卫保证残留消息不会复活它们。
     """
-    active_ids = (
+    active_ids = list(
         (
             await db.scalars(
                 select(GenerationRun.id).where(
-                    GenerationRun.status.in_(
-                        [RunStatus.RUNNING.value, RunStatus.PAUSED.value]
-                    )
+                    GenerationRun.status.in_([RunStatus.RUNNING.value, RunStatus.PAUSED.value])
                 )
             )
-        )
-        .all()
-        .copy()
+        ).all()
     )
     if active_ids:
         await db.execute(

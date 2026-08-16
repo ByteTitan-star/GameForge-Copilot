@@ -114,9 +114,7 @@ class S3HostingBackend:
 
         return await asyncio.to_thread(_get)
 
-    async def write_bytes(
-        self, game_id: uuid.UUID, version: int, rel: str, data: bytes
-    ) -> None:
+    async def write_bytes(self, game_id: uuid.UUID, version: int, rel: str, data: bytes) -> None:
         def _upload() -> None:
             self._client.put_object(
                 Bucket=self._bucket, Key=self._key(game_id, version, rel), Body=data
@@ -129,9 +127,7 @@ class S3HostingBackend:
         # 本地 cache 同步写一份，供 FileResponse / read_bytes 直出（与 write_artifact 行为一致）
         await local_store.write_bytes(game_id, version, rel, data)
 
-    async def list_files(
-        self, game_id: uuid.UUID, version: int
-    ) -> list[ArtifactFileMeta]:
+    async def list_files(self, game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]:
         """列出某版本产物下所有文件。真相源 = OSS（与 read_bytes 一致，不读本地 cache）。
 
         Prefix 末尾必须带 /，否则 version=1 会字符串匹配到 version=10；
@@ -172,3 +168,27 @@ class S3HostingBackend:
             return await asyncio.to_thread(_list)
         except Exception as exc:
             raise AppError(ErrorCode.SANDBOX_FAILED, "对象存储列举失败") from exc
+
+    async def write_version_layers(
+        self,
+        game_id: uuid.UUID,
+        version: int,
+        *,
+        source: dict[str, bytes],
+        build_snapshot: dict[str, bytes],
+        dist: dict[str, bytes],
+    ) -> Path:
+        """三层产物经本后端 write_artifact 上传（OSS SoT + 本地 cache）。"""
+        if "index.html" not in dist:
+            raise AppError(ErrorCode.SANDBOX_FAILED, "dist 缺少 index.html")
+        source_limit = settings.source_artifact_max_size_mb * 1024 * 1024
+        source_bytes = local_store._layer_bytes(source)
+        if source_bytes > source_limit:
+            raise AppError(
+                ErrorCode.QUOTA_EXCEEDED,
+                f"source 产物超出大小上限（{source_bytes} > {source_limit}）",
+            )
+        combined: dict[str, bytes] = dict(dist)
+        combined.update(local_store._prefix_files("source", source))  # type: ignore[arg-type]
+        combined.update(local_store._prefix_files("build", build_snapshot))  # type: ignore[arg-type]
+        return await self.write_artifact(game_id, version, dict(combined))

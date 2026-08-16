@@ -5,6 +5,7 @@ WS 不进 OpenAPI（契约 docs/10 §5）。
 """
 
 import asyncio
+import contextlib
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -48,7 +49,10 @@ async def _relay_memory(
     ready: asyncio.Event | None = None,
     replayed: asyncio.Event | None = None,
 ) -> None:
+    from app.messaging.memory import MemoryWsBus
+
     bus = get_ws_bus()
+    assert isinstance(bus, MemoryWsBus)
     queue = bus.subscribe(run_id)
     if ready is not None:
         ready.set()
@@ -67,7 +71,10 @@ async def _relay_rabbit(
     ready: asyncio.Event | None = None,
     replayed: asyncio.Event | None = None,
 ) -> None:
+    from app.messaging.rabbit import RabbitWsBus
+
     bus = get_ws_bus()
+    assert isinstance(bus, RabbitWsBus)
     channel = None
     try:
         channel, queue = await bus.subscribe_queue(run_id)
@@ -103,9 +110,7 @@ async def run_ws(websocket: WebSocket, run_id: uuid.UUID) -> None:
             await websocket.close(code=4401)
             return
         run = await s.get(GenerationRun, run_id)
-        authorized = run is not None and (
-            run.user_id == user.id or user.role == Role.ADMIN.value
-        )
+        authorized = run is not None and (run.user_id == user.id or user.role == Role.ADMIN.value)
     if not authorized:
         await websocket.close(code=4403)
         return
@@ -119,13 +124,20 @@ async def run_ws(websocket: WebSocket, run_id: uuid.UUID) -> None:
     ready = asyncio.Event()
     replayed = asyncio.Event()
     relay = asyncio.create_task(relay_fn(websocket, run_id, ready, replayed))
-    await ready.wait()
-    await _replay_buffered(websocket, run_id, after)
-    replayed.set()
-    disc = asyncio.create_task(_await_disconnect(websocket))
     try:
-        _done, pending = await asyncio.wait({relay, disc}, return_when=asyncio.FIRST_COMPLETED)
-        for task in pending:
-            task.cancel()
+        await ready.wait()
+        await _replay_buffered(websocket, run_id, after)
+        replayed.set()
+        disc = asyncio.create_task(_await_disconnect(websocket))
+        try:
+            _done, pending = await asyncio.wait({relay, disc}, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+        finally:
+            disc.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await disc
     finally:
         relay.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await relay

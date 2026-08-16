@@ -99,6 +99,10 @@ class Settings(BaseSettings):
 
     # HIL / 用户暂停等待超时：PAUSED 超过此时长自动 FAILED，释放并发额度
     hil_wait_timeout_s: int = 172_800  # 默认 48h
+    # RUNNING 且无执行租约、超过此时长无更新 → FAILED（ADR-10）
+    running_stale_timeout_s: int = 3600
+    # Docker container.log 有界读取行数（ADR-11）
+    sandbox_log_tail: int = 2000
 
     # LLM 熔断（按 user+provider）：连续失败达阈值后短时拒绝，避免雪崩打坏 key/配额
     llm_circuit_enabled: bool = True

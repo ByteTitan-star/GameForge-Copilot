@@ -20,7 +20,7 @@ from app.forge import state as ckpt
 from app.forge.cache import classify_entry_phase_cached
 from app.forge.messages import add_message
 from app.forge.queue import enqueue_resume
-from app.forge.reliability.pause import build_pause_checkpoint
+from app.forge.reliability.pause import merge_pause_checkpoint
 from app.hosting import store as hosting_store
 from app.messaging.outbox import add_task, cancel_run_tasks
 from app.messaging.tasks import (
@@ -48,9 +48,7 @@ def _require_verified(user: User) -> None:
 
 
 async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
-    game = await db.scalar(
-        select(Game).where(Game.id == game_id, Game.owner_id == user.id)
-    )
+    game = await db.scalar(select(Game).where(Game.id == game_id, Game.owner_id == user.id))
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或不可见")
     return game
@@ -137,9 +135,7 @@ async def list_public_games(
     base = select(Game).where(Game.status == GameStatus.PUBLISHED.value)
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     order = Game.play_count.desc() if sort == "play_count" else Game.updated_at.desc()
-    rows = (
-        await db.scalars(base.order_by(order).limit(size).offset((page - 1) * size))
-    ).all()
+    rows = (await db.scalars(base.order_by(order).limit(size).offset((page - 1) * size))).all()
     return list(rows), int(total or 0)
 
 
@@ -267,9 +263,7 @@ async def get_owned_version(
     """Return one version only after verifying ownership to avoid leaking its existence."""
     game = await _get_owned_game(db, user, game_id)
     row = await db.scalar(
-        select(GameVersion).where(
-            GameVersion.game_id == game_id, GameVersion.version == version
-        )
+        select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
     )
     if row is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
@@ -407,9 +401,7 @@ async def create_run(
         await r.delete(lock_key)
 
 
-async def list_runs(
-    db: AsyncSession, user: User, game_id: UUID
-) -> list[GenerationRun]:
+async def list_runs(db: AsyncSession, user: User, game_id: UUID) -> list[GenerationRun]:
     await _get_owned_game(db, user, game_id)
     rows = (
         await db.scalars(
@@ -431,9 +423,7 @@ async def list_user_active_runs(
             .join(Game, Game.id == GenerationRun.game_id)
             .where(
                 GenerationRun.user_id == user.id,
-                GenerationRun.status.in_(
-                    [RunStatus.RUNNING.value, RunStatus.PAUSED.value]
-                ),
+                GenerationRun.status.in_([RunStatus.RUNNING.value, RunStatus.PAUSED.value]),
             )
             .order_by(GenerationRun.started_at.desc())
             .limit(limit)
@@ -444,18 +434,14 @@ async def list_user_active_runs(
 
 async def get_run(db: AsyncSession, user: User, run_id: UUID) -> GenerationRun:
     run = await db.scalar(
-        select(GenerationRun).where(
-            GenerationRun.id == run_id, GenerationRun.user_id == user.id
-        )
+        select(GenerationRun).where(GenerationRun.id == run_id, GenerationRun.user_id == user.id)
     )
     if run is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "run 不存在或不可见")
     return run
 
 
-async def pause_run(
-    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
-) -> GenerationRun:
+async def pause_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
     run = await get_run(db, user, run_id)
     if run.status != RunStatus.RUNNING.value:
         raise AppError(ErrorCode.INVALID_STATE, "仅 running 可暂停")
@@ -465,11 +451,11 @@ async def pause_run(
     await ckpt.save_state(
         r,
         run_id,
-        build_pause_checkpoint(
+        merge_pause_checkpoint(
+            existing,
             phase=str(existing.get("phase") or run.phase or "plan"),
             pause_reason=PauseReason.MANUAL_HOLD,
             design_doc=existing.get("design_doc"),
-            extra={k: v for k, v in existing.items() if k not in {"pause_reason", "recovery"}},
         ),
         db,
     )
@@ -495,9 +481,7 @@ async def resume_run_control(
     return run
 
 
-async def cancel_run(
-    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
-) -> GenerationRun:
+async def cancel_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
     run = await get_run(db, user, run_id)
     if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
         raise AppError(ErrorCode.INVALID_STATE, "仅进行中的 run 可取消")
@@ -543,17 +527,13 @@ _ACTIVATABLE = {
 _RETRY_PHASES = frozenset({"sandbox_failed", "qa_failed"})
 
 
-async def activate_version(
-    db: AsyncSession, user: User, game_id: UUID, version: int
-) -> Game:
+async def activate_version(db: AsyncSession, user: User, game_id: UUID, version: int) -> Game:
     """切换 current_version（Batch A · B-A6）。"""
     game = await _get_owned_game(db, user, game_id)
     if GameStatus(game.status) not in _ACTIVATABLE:
         raise AppError(ErrorCode.INVALID_STATE, "当前状态不可切换版本")
     gv = await db.scalar(
-        select(GameVersion).where(
-            GameVersion.game_id == game_id, GameVersion.version == version
-        )
+        select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
     )
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
@@ -569,18 +549,16 @@ async def activate_version(
     return game
 
 
-async def retry_run(
-    db: AsyncSession, r: redis.Redis, user: User, run_id: UUID
-) -> GenerationRun:
+async def retry_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
     """从失败检查点或可恢复暂停重试（Batch A · B-A5 / P0 ADR-05）。"""
     run = await get_run(db, user, run_id)
     st = await ckpt.load_state(r, run_id, db) or {}
     phase = st.get("phase")
     pause_reason = st.get("pause_reason")
-    recovery = st.get("recovery") if isinstance(st.get("recovery"), dict) else {}
-    recoverable = (
-        pause_reason == PauseReason.RECOVERABLE_ERROR.value
-        and bool(recovery.get("can_retry", True))
+    recovery_raw = st.get("recovery")
+    recovery = recovery_raw if isinstance(recovery_raw, dict) else {}
+    recoverable = pause_reason == PauseReason.RECOVERABLE_ERROR.value and bool(
+        recovery.get("can_retry", True)
     )
     if phase not in _RETRY_PHASES and not recoverable:
         raise AppError(ErrorCode.INVALID_STATE, "当前 run 不可重试")

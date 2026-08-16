@@ -36,6 +36,7 @@ from app.forge.design_doc import (
 )
 from app.forge.events import publish_event
 from app.forge.guard import ContentAttacked, run_streamed_llm
+from app.forge.hitl import HITL_PHASES
 from app.forge.messages import add_message, design_message_content, stable_design_key
 from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
@@ -55,7 +56,12 @@ from app.forge.reliability import (
     is_recoverable,
 )
 from app.forge.reliability.artifact_gate import derive_artifact_gate
-from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
+from app.forge.reliability.idempotency import (
+    commit_side_effect,
+    side_effect_key,
+    side_effect_status,
+    try_begin_side_effect,
+)
 from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
@@ -71,8 +77,8 @@ from app.sandbox.playtest import run_playtest, run_playtest_dist  # noqa: F401
 
 PLAN_MAX_ATTEMPTS = 3
 
-# resume 时需要推进凭据 resume_grant 的 HITL 检查点阶段；与 app.api.runs._HITL_PHASES 对齐。
-_HITL_RESUME_PHASES = frozenset({"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"})
+# resume 时需要推进凭据 resume_grant 的 HITL 检查点阶段（ADR-10 词表）。
+_HITL_RESUME_PHASES = HITL_PHASES
 
 log = logging.getLogger(__name__)
 
@@ -520,6 +526,37 @@ async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> Non
     )
 
 
+def _resume_from_user_pause(
+    st: dict[str, Any],
+) -> Literal[
+    "plan",
+    "revise_plan",
+    "art_options",
+    "revise_art_options",
+    "art_detail",
+    "code_qa_loop",
+]:
+    """按检查点进度续跑，禁止无条件退回 art_options（ADR-10）。"""
+    phase = str(st.get("phase") or "")
+    if (
+        phase in ("sandbox_failed", "qa_failed")
+        or st.get("candidate_version")
+        or int(st.get("attempt") or 0) > 0
+    ):
+        return "code_qa_loop"
+    if phase == "art_confirm" or st.get("art_direction"):
+        return "art_detail"
+    if st.get("art_options"):
+        return "art_options"
+    if phase in ("plan_confirm", "plan", "revise_plan"):
+        return "plan"
+    if phase in ("art", "art_options", "revise_art_options"):
+        return "art_options"
+    if phase in ("code", "qa"):
+        return "code_qa_loop"
+    return "plan"
+
+
 async def _pause_hitl(
     ctx: _Ctx, node: str, design_doc: dict[str, Any], extra: dict | None = None
 ) -> None:
@@ -744,8 +781,11 @@ def _build_graph(ctx: _Ctx) -> Any:
             if node in {"art", "art_options", "art_detail", "revise_art_options"}:
                 return "art_options"
             return "code_qa_loop"
-        if st.get("phase") == "user_pause":
-            return "art_options"
+        if (
+            st.get("phase") == "user_pause"
+            or st.get("pause_reason") == PauseReason.MANUAL_HOLD.value
+        ):
+            return _resume_from_user_pause(st)
         return "art_options"
 
     async def plan_node(state: ForgeState) -> dict:
@@ -1133,11 +1173,17 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "playtest_errors": ["qa_ok 但缺少 candidate_version"],
                 }
             key = side_effect_key(ctx.run.id, "code_qa_loop", f"v{int(version)}", "promote")
-            if await try_begin_side_effect(ctx.r, key):
-                promote_candidate(ctx.game, int(version))
-                await ctx.s.commit()
+            began = await try_begin_side_effect(ctx.r, key, value="pending")
+            status = await side_effect_status(ctx.r, key)
+            await ctx.s.refresh(ctx.game)
+            needs_promote = ctx.game.current_version != int(version)
+            if began or status == "pending" or (status == "done" and needs_promote):
+                if needs_promote:
+                    promote_candidate(ctx.game, int(version))
+                    await ctx.s.commit()
+                await commit_side_effect(ctx.r, key)
             else:
-                # 重放：已 promote 过则保持成功语义，避免重复抬版本
+                # 重放：已 promote 且标记 done
                 await ctx.s.refresh(ctx.game)
             gate = derive_artifact_gate(build_ok=True, qa_ok=True)
             return {
@@ -1475,13 +1521,12 @@ async def _run_body(
     entry_phase = getattr(run, "entry_phase", "plan") or "plan"
     entry_requirement: str | None = None
     code_qa_reset = False
+    grant: dict[str, Any] | None = None
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
-        # 一次性推进凭据：只有 resolve_hitl / resume_run_control / retry_run /
-        # dev_requeue 这些合法入口会写入（见 app.forge.queue.enqueue_resume）。
-        # at-least-once 投递下的陈旧 resume 消息读不到凭据，在 HITL 等待态直接跳过，
-        # 堵住「用户没点确认 art/code 却自己跑起来」。
-        grant = st.pop("resume_grant", None)
+        # 一次性推进凭据：合法入口写入；陈旧 resume 无凭据则跳过。
+        # ADR-10：延迟到图成功推进后再消费，避免「grant 已吃、消息重投被跳过、永 RUNNING」。
+        grant = st.get("resume_grant")
         phase = st.get("phase")
         if phase in _HITL_RESUME_PHASES and not grant:
             log.warning(
@@ -1493,11 +1538,10 @@ async def _run_body(
             decision = grant.get("decision") or decision
             modify_text = grant.get("modify_text")
         # qa_failed / sandbox_failed 恢复：下一轮 CodeQaLoop 从 attempt==1 开始
-        code_qa_reset = bool(st.pop("code_qa_reset", False)) or phase in (
+        code_qa_reset = bool(st.get("code_qa_reset", False)) or phase in (
             "qa_failed",
             "sandbox_failed",
         )
-        await ckpt.save_state(r, run_id, st, s)
         design_doc = st.get("design_doc") or run.requirement
         art_options = st.get("art_options") or {}
         run.status = RunStatus.RUNNING.value
@@ -1528,3 +1572,9 @@ async def _run_body(
         "attempt": 0 if code_qa_reset else 0,
     }
     await graph.ainvoke(initial)
+    if resume and grant:
+        st_after = await ckpt.load_state(r, run_id, s) or {}
+        st_after.pop("resume_grant", None)
+        st_after.pop("code_qa_reset", None)
+        await ckpt.save_state(r, run_id, st_after, s)
+        await s.commit()

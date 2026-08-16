@@ -83,7 +83,11 @@ async def _scheduler_loop() -> None:
     """
     from app.core import db as dbmod
     from app.messaging.handlers import _worker_redis
-    from app.scheduler.services import expire_stale_paused_runs, scan_scheduled
+    from app.scheduler.services import (
+        expire_stale_paused_runs,
+        expire_stale_running_runs,
+        scan_scheduled,
+    )
 
     while True:
         await asyncio.sleep(60)  # 每分钟执行一次
@@ -101,6 +105,13 @@ async def _scheduler_loop() -> None:
                     log.info("hil wait timeout expired count=%s", n)
         except Exception:
             log.exception("hil wait timeout scan failed")
+        try:
+            async with dbmod.SessionLocal() as s:
+                n = await expire_stale_running_runs(s, _worker_redis())
+                if n:
+                    log.info("stale running expired count=%s", n)
+        except Exception:
+            log.exception("stale running scan failed")
 
 
 async def _outbox_loop() -> None:
@@ -344,9 +355,20 @@ def main() -> None:
 
     init_langfuse()
 
+    async def _boot() -> None:
+        from app.sandbox.cleanup import cleanup_orphan_sandbox_resources
+
+        try:
+            stats = await cleanup_orphan_sandbox_resources()
+            if stats["containers"] or stats["dirs"]:
+                log.info("sandbox orphan cleanup %s", stats)
+        except Exception:
+            log.exception("sandbox orphan cleanup failed")
+        await _consume()
+
     # 运行异步主协程，捕获 Ctrl+C 信号
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_consume())
+        asyncio.run(_boot())
 
 
 # 脚本入口：当直接执行 python -m app.messaging.worker 时运行

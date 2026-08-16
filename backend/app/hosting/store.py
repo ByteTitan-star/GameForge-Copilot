@@ -7,9 +7,7 @@ from app.hosting.backend import ArtifactFileMeta
 from app.hosting.factory import get_hosting_backend
 
 
-async def write_artifact(
-    game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
-) -> Path:
+async def write_artifact(game_id: uuid.UUID, version: int, files: dict[str, str | bytes]) -> Path:
     return await get_hosting_backend().write_artifact(game_id, version, files)
 
 
@@ -21,9 +19,7 @@ async def write_version_layers(
     build_snapshot: dict[str, bytes],
     dist: dict[str, bytes],
 ) -> Path:
-    from app.hosting import local as local_store
-
-    return await local_store.write_version_layers(
+    return await get_hosting_backend().write_version_layers(
         game_id,
         version,
         source=source,
@@ -40,16 +36,12 @@ async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None
     return await get_hosting_backend().read_bytes(game_id, version, rel)
 
 
-async def write_bytes(
-    game_id: uuid.UUID, version: int, rel: str, data: bytes
-) -> None:
+async def write_bytes(game_id: uuid.UUID, version: int, rel: str, data: bytes) -> None:
     """写入单个旁路产物文件（如 thumb.png），不强制 index.html。"""
     await get_hosting_backend().write_bytes(game_id, version, rel, data)
 
 
-async def list_files(
-    game_id: uuid.UUID, version: int
-) -> list[ArtifactFileMeta]:
+async def list_files(game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]:
     """列出某版本产物下所有文件（扁平路径/大小/mime），目录不存在返回 []。"""
     return await get_hosting_backend().list_files(game_id, version)
 

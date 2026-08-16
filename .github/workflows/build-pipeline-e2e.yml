@@ -47,4 +47,4 @@ jobs:
           RUN_BUILD_PIPELINE: "1"
           BUILDER_BACKEND: docker
         run: |
-          uv run pytest tests/test_build_pipeline_docker.py -q --tb=short
+          uv run pytest tests/build/test_build_pipeline_docker.py -q --tb=short
