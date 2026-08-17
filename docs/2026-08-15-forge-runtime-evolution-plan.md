@@ -1,6 +1,9 @@
-# Forge Runtime 演进计划 v2
+﻿# Forge Runtime 演进计划 v2
 
-* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；ADR-02/03/04 **Accepted** by ByteTitan-star；E2B/Skill LLM/偏好等默认已按 Owner 配置开启）
+> **2026-08-17 勘误：** 云沙箱供应商已切换为 **Daytona**（ADR-03 Accepted；代码删除 E2B）。
+> 下文历史叙述中的「E2B」一律视为过时，以 `docs/adr/ADR-03-sandbox-provider-strategy.md` 为准。
+
+* Status: In Progress（**P0–P5 代码侧 MVP 已闭合**；ADR-02/03/04 **Accepted** by ByteTitan-star；Daytona/Skill LLM/偏好等默认已按 Owner 配置开启）
 * Date: 2026-08-15
 * Owners: TBD
 * Reviewers: TBD
@@ -14,7 +17,7 @@
   * **ADR-01** Degraded Artifact Publishing — **Accepted**（见 `docs/adr/`）
   * **ADR-05** Recoverable Pause Representation — **Accepted**（见 `docs/adr/`）
   * **ADR-02** Preference Retention — **Accepted**（ByteTitan-star；active cap=50）
-  * **ADR-03** Sandbox Provider Strategy — **Accepted**（ByteTitan-star；E2B preferred + fallback）
+  * **ADR-03** Sandbox Provider Strategy — **Accepted**（ByteTitan-star；**Daytona preferred** + docker/local fallback；Daytona removed）
   * **ADR-04** Conversation Storage Migration — **Accepted**（ByteTitan-star；`forge_messages` SoT）
 * Implementation decisions（非 ADR）:
   * Context Builder：**P1 MVP 建立规范路径；P5 Enforcement 拆除遗留拼装**
@@ -22,11 +25,11 @@
   * **P0** ✅ 错误分类 / node timeout / `pause_reason` / 幂等副作用 / ADR-01 产物门禁（PR `#65`）
   * **P1** ✅ ContextBuilder / Preferences（PR `#72`）；session summary 刷新（PR `#74`）；可选 LLM summary（PR `#81`）；可选 Inferred 偏好
   * **P2** ✅ Skills catalog/router（PR `#75`）；Art/QA prompt；可选 LLM Methodology 自选（`skills_llm_selection` 默认关）；**离线 eval 套件**（precision@1 / member hit / body reduction lift）
-  * **P3** ✅ SandboxBackend；Docker 生产基线；E2B **真 SDK 适配**（`--extra e2b`，默认禁用）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关；code_qa 传 `engine_id` hints）；data-flow / benchmark 清单
+  * **P3** ✅ SandboxBackend；Docker 生产基线；**Daytona** SDK 适配（`--extra daytona`）；HITL destroy+restore；**tier telemetry 推荐**（`sandbox_tier_auto` 默认关；code_qa 传 `engine_id` hints）；data-flow / benchmark 清单
   * **P4** ✅ Redis Exact Cache 白名单 MVP；`skill_bundle_hash`；Semantic shadow 骨架（PR `#78`/`#81`）
   * **P5** ✅ ContextBuilder Enforcement + spans + ADR 归档（PR `#79`/`#80`）；**遗留 concat 双路径已拆除**；**Load smoke**（并发 Exact Cache / Skill / tier）
   * **Closeout batch（本 PR）** tier `engine_id` hints / HITL tier restore / ADR Accept+Flag 清单 / diagnose playtest policy / mock quality-lift A/B / ADR-04 SoT 守门 / semantic shadow 并发 / catalog hash 稳定性
-  * **仍 gated（人工/实验）** 真实付费 LLM A/B（`skills_quality_lift_llm`+真实 complete）/ E2B **生产默认**切换（dry-run/live harness 已备）/ ADR-02·03·04 **人工签字** Accept（机器证据 `adr_evidence`）/ 生产级长时 soak（`pytest -m load` 为扩展并发非 soak）
+  * **仍 gated（人工/实验）** 真实付费 LLM A/B（`skills_quality_lift_llm`+真实 complete）/ Daytona 会话 Redis 对账与扩容验证（ADR-11 §7）/ 生产级长时 soak（`pytest -m load` 为扩展并发非 soak）
 
 ---
 
@@ -37,7 +40,7 @@
 1. **可靠性**：单节点的可恢复故障不能销毁整个 Run。
 2. **上下文能力**：建立 Session Memory 与用户偏好，但避免过早引入复杂向量基础设施。
 3. **Agent 能力**：把现有 prompt snippets 升级为标准 Skill，同时明确平台 Policy 永远高于 Agent 自主选择。
-4. **执行隔离**：验证 E2B 是否优于现有 Docker，再决定迁移，而不是先假定 E2B 一定替换 Docker。
+4. **执行隔离**：验证 Daytona 是否优于现有 Docker，再决定迁移，而不是先假定 Daytona 一定替换 Docker。
 
 每个 P 阶段必须具备：
 
@@ -320,7 +323,7 @@ run_id + node_name + node_execution_id + operation
 * 平台级多 provider 动态调度
 * 多级 fallback planner
 * 分布式 cancellation propagation
-* Semantic Cache / Pinecone / E2B 生产切换
+* Semantic Cache / Pinecone / Daytona 生产切换
 * 用静态检测合成 `qa_ok` 或自动 `publishable`（见 ADR-01）
 
 ## P0 Feature Flag / Rollback
@@ -350,7 +353,7 @@ run_id + node_name + node_execution_id + operation
 ✓ 不降低 QA gate
 ```
 
-P0 适合作为第一批 PR；后续 Memory / Skill / E2B / Cache **不得**反过来要求 P0 重写。
+P0 适合作为第一批 PR；后续 Memory / Skill / Daytona / Cache **不得**反过来要求 P0 重写。
 
 ---
 
@@ -437,16 +440,16 @@ P1 若不建 Builder，Memory 会迅速分裂为 plan/art/code/repair 各自拼�
 
 ```text
 Domestic production → DockerSandbox
-E2B → PoC / benchmark only
+Daytona → PoC / benchmark only
 ```
 
 ```text
-E2B integration success ≠ E2B production approval
+Daytona integration success ≠ Daytona production approval
 ```
 
 **不**在文档中默认允许国内源码/prompt/资产出境。Go 条件至少包括：数据流确认、源码/prompt/资产是否出境、供应商保留政策、合同/DPA/合规、国内网络 benchmark。
 
-若最终「不允许 E2B」：SandboxBackend 抽象 + Docker 强化仍为**有效交付**，P3 不算失败。
+若最终「不允许 Daytona」：SandboxBackend 抽象 + Docker 强化仍为**有效交付**，P3 不算失败。
 
 评估维度：成本、可用区、国内网络、数据/源码出境、UGC 合规、SLA、冷启动、延迟、vendor lock-in。允许未来 hybrid，但须另决议。
 
@@ -661,11 +664,11 @@ Art 不得看见 billing / sandbox admin / 内部 security runbook。
 
 ---
 
-# P3：Sandbox Backend 评估与抽象（非「立刻切 E2B」）
+# P3：Sandbox Backend 评估与抽象（非「立刻切 Daytona」）
 
 阶段名称：**Sandbox Backend Evaluation & Abstraction**。
 
-受 **ADR-03 Pending** 约束：国内生产默认 Docker；E2B 仅 PoC/benchmark，**不得**因集成成功而默认生产切换或默认允许源码出境。
+受 **ADR-03 Pending** 约束：国内生产默认 Docker；Daytona 仅 PoC/benchmark，**不得**因集成成功而默认生产切换或默认允许源码出境。
 
 ## P3 MVP
 
@@ -680,9 +683,9 @@ class SandboxBackend(Protocol):
 
 * `LocalSandbox`（开发）
 * `DockerSandbox`（生产基线）
-* `E2BSandbox`（PoC）
+* `DaytonaSandbox`（PoC）
 
-Feature flag：`sandbox_backend=local|docker|e2b`。
+Feature flag：`sandbox_backend=local|docker|daytona`。
 
 **职责边界**：
 
@@ -690,7 +693,7 @@ Feature flag：`sandbox_backend=local|docker|e2b`。
 | --- | --- |
 | 源码 execute / 构建命令 | Sandbox Backend |
 | B 档 Playwright 冒烟 | Worker 侧 Playwright（可与 sandbox 分离） |
-| Vite Builder | 现有 builder；不强行并入 E2B |
+| Vite Builder | 现有 builder；不强行并入 Daytona |
 
 HITL 长等待（可达 `hil_wait_timeout_s`）下：**默认销毁 sandbox，只保留对象存储/托管中的源码与 checkpoint**；用户回来再 create + restore。不默认 48h pause 计费会话。
 
@@ -714,7 +717,7 @@ Prompt、design_doc、源码、素材是否出境 → Data Flow Diagram → 才�
 
 ## P3 Go / No-Go（生产切换）
 
-同时满足才可默认 E2B，否则 **Docker 继续作为生产 Backend 是合法结果**：
+同时满足才可默认 Daytona，否则 **Docker 继续作为生产 Backend 是合法结果**：
 
 * 可靠性 ≥ Docker baseline
 * 成本在预算内
@@ -789,7 +792,7 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 **本仓库 Load smoke**：`tests/test_p5_load_smoke.py`（asyncio gather：Exact Cache 白名单隔离、Skill 路由稳定、tier telemetry 升级）。**全量** Load / 长时 Chaos 实验窗仍 gated。
 * 文档与 ADR 归档
 
-**MVP 进度（本仓库）**：plan/art/art_detail/code|repair/diagnose **唯一**经 `build_node_context`；Load smoke 已补；P4.5 Semantic、E2B 生产切换、真实 LLM A/B、全量 Load 仍 gated。
+**MVP 进度（本仓库）**：plan/art/art_detail/code|repair/diagnose **唯一**经 `build_node_context`；Load smoke 已补；P4.5 Semantic、Daytona 生产切换、真实 LLM A/B、全量 Load 仍 gated。
 
 ---
 
@@ -811,8 +814,8 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 | Playwright playtest | Platform QA Gate | 保留硬门禁 |
 | `playtest.md` / `conventions.md` | Policy + Skill | 拆分演进 |
 | engines/*.md | Methodology Skills | 标准化 SKILL.md |
-| LocalSandbox / DockerSandbox | Sandbox Backend | 开发 / 生产基线；E2B 为对照 |
-| Vite Builder | Build Runtime | 不强行并入 E2B |
+| LocalSandbox / DockerSandbox | Sandbox Backend | 开发 / 生产基线；Daytona 为对照 |
+| Vite Builder | Build Runtime | 不强行并入 Daytona |
 | Langfuse | Observability | 保留并扩展 span |
 
 原则：**能复用的不重写。**
@@ -826,7 +829,7 @@ node, input_hash, model, prompt_version, policy_version, skill_bundle_hash
 | **P0 Reliability** | 错误分类、node timeout、`paused`+`pause_reason`、幂等 | 高级 reconciler、复杂 fallback |
 | **P1 Memory** | forge_messages 演进、summary、PG explicit preference、**Context Builder MVP** | inferred preference、conversation vector retrieval |
 | **P2 Skills** | Policy/Methodology 分层、≈8 Skill、Router | 大规模 catalog |
-| **P3 Sandbox** | Backend 抽象 + E2B PoC + benchmark（ADR-03 Pending） | 按 ADR-03 选 E2B / Docker / hybrid |
+| **P3 Sandbox** | Backend 抽象 + Daytona PoC + benchmark（ADR-03 Pending） | 按 ADR-03 选 Daytona / Docker / hybrid |
 | **P4 Cache** | Redis Exact 白名单 | Semantic shadow → 灰度 |
 | **P5 Hardening** | **Context Builder Enforcement**、测试、清理 | 删除 legacy |
 
@@ -858,7 +861,7 @@ MVP → Feature Flag / Shadow → Metrics → Review → Go/No-Go → 扩大范�
 
 ### Sandbox
 
-E2B 是否进生产以 **ADR-03** 与对照指标/合规为准；在 Pending 期间国内生产保持 Docker。Docker 继续生产是合法结局。
+Daytona 是否进生产以 **ADR-03** 与对照指标/合规为准；在 Pending 期间国内生产保持 Docker。Docker 继续生产是合法结局。
 
 ---
 
@@ -871,7 +874,7 @@ E2B 是否进生产以 **ADR-03** 与对照指标/合规为准；在 Pending 期
 | `completed_degraded` 包揽语义 | **ADR-01 Accepted**：`generation_success` / `previewable` / `publishable` 三分立 |
 | Playwright → 静态 QA fallback | **禁止**；对齐 CodeQaLoop |
 | Pinecone 默认进 Memory | 暂缓；指标触发 |
-| 直接 E2B 迁移 / 默认允许国内出境 | **ADR-03 Pending**；生产 Docker；E2B 仅 PoC |
+| 直接 Daytona 迁移 / 默认允许国内出境 | **ADR-03 Pending**；生产 Docker；Daytona 仅 PoC |
 | Semantic Cache 猜阈值 | Exact 先行；Semantic 仅 shadow |
 | Skill 全量方法论 | Policy 强制 / Methodology 可选；≈8 个验证 |
 | Context Builder 二选一里程碑 | **P1 MVP + P5 Enforcement** |

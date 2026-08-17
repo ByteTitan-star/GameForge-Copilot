@@ -222,7 +222,7 @@
 ### P2-3 错误分类靠中文错误文本嗅探，BuildResult 不携带 failure_kind
 
 - **位置**：`backend/app/forge/reliability/errors.py:105-109`（`if "构建超时" in str(exc)`、`re.search(r"\boom\b")`）；生产者 `local.py:122`、`docker.py:137`、`builder.py:228` 各自硬编码同一句中文；对照 PlaytestResult 有 failure_kind 字段——同一仓库两套结果类型一套说分类语言一套不说
-- **建议**：与 P1-12 合并修复：BuildResult 加 failure_kind，分类只消费类型。换 E2B 后端或改文案即静默退化为 WorkerInterrupted，影响 /retry 与告警路由。
+- **建议**：与 P1-12 合并修复：BuildResult 加 failure_kind，分类只消费类型。换 Daytona/Docker 后端或改文案即静默退化为 WorkerInterrupted，影响 /retry 与告警路由。
 
 ### P2-4 checkpoint 双写 Redis+DB 但 revision 字段无人消费，Redis 残留旧值时从过期检查点恢复
 
@@ -329,10 +329,11 @@
 - **位置**：`docker.py:107-121`（无 User 键；镜像 USER sandbox uid 10001 对宿主 uid 建的 workspace 无写权限）；builder.py:195 的 `_docker_user_spec()` + `_ensure_bind_mount_permissions` 正是解同一问题的，sandbox 后端未复用。另：容器内若以 root 运行（某些镜像），配合 rw bind mount 存在逃逸放大面。
 - **建议**：复用 builder 的 user spec 逻辑。
 
-### P2-22 e2b stub 用模块级 _LIVE 全局持有活会话
+### P2-22 Daytona 用模块级 `_LIVE` 持有活会话（需 Redis 对账）
 
-- **位置**：`sandbox/e2b.py:21-48`（进程崩溃即泄漏远端沙箱持续计费；多 worker 进程各自为政）。当前默认关闭（ADR-03），PoC 阶段风险。
-- **建议**：启用前改 DB 记录会话句柄 + 定时对账回收。
+- **位置**：`sandbox/daytona.py`（进程崩溃即可能泄漏远端沙箱持续计费；多 worker 进程各自为政）。
+- **现状（ADR-03 Accepted）**：首选 Daytona；进程内 `_LIVE` 仍为热缓存，须配合 Redis 句柄登记 + worker 启动 reconcile（见 ADR-11 §7）。
+- **建议**：启用/扩容前确认对账回收路径可测；compose 未就绪时可显式 Docker。
 
 ### P2-23 Backend 层写源文件 `workspace / rel` 无路径校验，纵深防御缺失
 

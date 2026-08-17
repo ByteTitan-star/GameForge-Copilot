@@ -6,6 +6,8 @@
   "ignores": [
     "**/node_modules/**",
     "**/.venv/**",
-    "**/dist/**"
+    "**/dist/**",
+    "docs/2026-08-15-forge-runtime-evolution-plan.md",
+    "docs/2026-08-16-full-project-design-review.md"
   ]
 }

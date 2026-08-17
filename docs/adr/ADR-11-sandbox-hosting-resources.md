@@ -48,10 +48,12 @@ Sandbox / builder / hosting 在故障分类、容器生命周期、日志、进�
 1. Relay task 创建后立即纳入 try/finally；`ready.wait` / replay / disconnect 全覆盖。
 2. 客户端在 replay 期断开必须取消 relay，禁止 exclusive 队列与 memory bus 无界堆积。
 
-### 7. E2B 启用前置（P2-22）
+### 7. Daytona 启用前置（P2-22）
 
-1. 在 ADR-03 首选 E2B 真正启用前：会话句柄须可持久化并对账回收；禁止仅模块级 `_LIVE` 字典。
-2. 未满足前，生产保持可观测的 Docker 路径（与 ADR-03 修订一致）。
+1. 远端 sandbox id 须可跨进程对账回收：除进程内热缓存外，须登记到共享存储（如 Redis），
+   worker 启动时对「已登记但不在本进程热缓存」的句柄执行 delete；禁止仅依赖模块级 `_LIVE`。
+2. `destroy` 在热缓存未命中时仍须按 `session.handle` 走 API 删除，避免泄漏计费。
+3. 未满足对账前，compose 保持可观测的 Docker 路径是可接受的显式选择（与 ADR-03 修订一致）。
 
 ## Consequences
 
@@ -61,5 +63,5 @@ Sandbox / builder / hosting 在故障分类、容器生命周期、日志、进�
 
 ## Non-goals
 
-* 立刻切换全部流量到 E2B（仍由 ADR-03 + 密钥/对账就绪决定）。
+* 立刻切断 Docker/local 回退路径（仍由 ADR-03 + 密钥/对账就绪决定）。
 * 重写整个构建流水线产品形态。
