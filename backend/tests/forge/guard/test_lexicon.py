@@ -241,11 +241,12 @@ def test_builtin_lexicon_zero_false_positive_on_official_and_game_text() -> None
         "射击训练模式，爆炸特效与炸弹道具",
         "headshot bonus in shooter mode with bomb item",
     ]
-    assets = Path(__file__).resolve().parents[1] / "scripts" / "official_assets"
+    backend_root = Path(__file__).resolve().parents[3]
+    assets = backend_root / "scripts" / "official_assets"
     if assets.is_dir():
         for path in assets.glob("*.html"):
             samples.append(path.read_text(encoding="utf-8"))
-    catalog = Path(__file__).resolve().parents[1] / "app" / "forge" / "templates" / "catalog.json"
+    catalog = backend_root / "app" / "forge" / "templates" / "catalog.json"
     if catalog.is_file():
         samples.append(catalog.read_text(encoding="utf-8"))
 

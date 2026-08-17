@@ -33,7 +33,7 @@ def test_forge_messages_is_sole_conversation_sot_among_orm_models() -> None:
 
 
 def test_no_vector_conversation_store_module_in_forge() -> None:
-    forge_root = Path(__file__).resolve().parents[1] / "app" / "forge"
+    forge_root = Path(__file__).resolve().parents[3] / "app" / "forge"
     banned = ("vector_store", "conversation_vector", "msg_embedding")
     hits: list[str] = []
     for path in forge_root.rglob("*.py"):

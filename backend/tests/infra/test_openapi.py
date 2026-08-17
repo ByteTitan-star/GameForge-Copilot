@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.export_openapi import export
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = Path(__file__).resolve().parents[3]
 CONTRACT_OPENAPI = REPO / "contracts" / "openapi.json"
 
 # docs/10 §4 + INTEGRATION 列出的全部 HTTP 端点（WS 不进 OpenAPI，单独由 §5 约束）
