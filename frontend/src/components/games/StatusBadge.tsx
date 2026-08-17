@@ -24,11 +24,11 @@ export function StatusBadge({ status, className }: Props) {
   return (
     <span
       className={cn(
-        'relative inline-flex overflow-hidden rounded-md px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] uppercase',
-        draft && 'status-draft bg-[#3B4252] text-white/80',
-        pending && 'status-pending bg-[#F59E0B]/20 text-[#FBBF24]',
-        published && 'status-published bg-cyan-400/15 text-[#22D3EE]',
-        rejected && 'status-rejected bg-rose-500/20 text-[#F43F5E]',
+        'relative inline-flex overflow-hidden rounded-md px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase backdrop-blur-sm',
+        draft && 'bg-[#4c4458]/90 text-white/85',
+        pending && 'bg-[#F59E0B]/25 text-[#FBBF24]',
+        published && 'bg-emerald-500/20 text-emerald-300',
+        rejected && 'bg-rose-500/20 text-[#F43F5E]',
         className,
       )}
     >
