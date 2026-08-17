@@ -21,3 +21,12 @@ def test_daytona_backend_falls_back_without_api_key(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(settings, "daytona_api_key", "")
     backend = get_sandbox_backend()
     assert backend.backend_id in {"docker", "local"}
+
+
+def test_daytona_backend_falls_back_without_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_backend", "daytona")
+    monkeypatch.setattr(settings, "sandbox_daytona_enabled", True)
+    monkeypatch.setattr(settings, "daytona_api_key", "dtn_test")
+    monkeypatch.setattr("app.sandbox._daytona_sdk_available", lambda: False)
+    backend = get_sandbox_backend()
+    assert backend.backend_id in {"docker", "local"}

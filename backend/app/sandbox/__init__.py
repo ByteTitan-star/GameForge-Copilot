@@ -1,7 +1,10 @@
 """沙箱工厂：`sandbox_backend=local|docker|daytona`。
 
-默认偏好 Daytona；未配置 DAYTONA_API_KEY 或未启用时回退 docker→local，避免本地/CI 硬失败。
+默认偏好 Daytona；无 API key、无 SDK 或未启用时回退 docker→local。
 """
+
+import importlib.util
+import logging
 
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
@@ -19,6 +22,8 @@ from app.sandbox.lifecycle import (
     tier_from_hitl_meta,
 )
 from app.sandbox.local import LocalSandbox
+
+log = logging.getLogger(__name__)
 
 _backend: SandboxBackend | None = None
 _sandbox: Sandbox | None = None
@@ -53,13 +58,25 @@ def reset_sandbox_for_tests() -> None:
     clear_daytona_live_for_tests()
 
 
+def _daytona_sdk_available() -> bool:
+    return importlib.util.find_spec("daytona") is not None
+
+
 def _resolve_backend_name(name: str) -> str:
     key = (name or "local").strip().lower()
     if key != "daytona":
         return key
-    if settings.sandbox_daytona_enabled and (settings.daytona_api_key or "").strip():
-        return "daytona"
-    return "docker"
+    if not settings.sandbox_daytona_enabled:
+        return "docker"
+    if not (settings.daytona_api_key or "").strip():
+        return "docker"
+    if not _daytona_sdk_available():
+        log.warning(
+            "daytona SDK not installed; falling back to docker sandbox "
+            "(install: uv sync --extra daytona)"
+        )
+        return "docker"
+    return "daytona"
 
 
 def _build_backend(name: str) -> SandboxBackend:

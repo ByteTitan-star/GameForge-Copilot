@@ -47,9 +47,7 @@ class PlaytestResult:
         if self.ok and self.failure_kind is not None:
             raise ValueError("PlaytestResult invariant: ok=True requires failure_kind=None")
         if self.ok and self.motion_signal is None:
-            raise ValueError(
-                "PlaytestResult invariant: ok=True requires motion_signal"
-            )
+            raise ValueError("PlaytestResult invariant: ok=True requires motion_signal")
 
 
 def make_playtest_result(
@@ -82,6 +80,18 @@ def _infra_result(code: str, detail: str, logs: list[str] | None = None) -> Play
     )
 
 
+# 环境类 infra：重试 playtest 不会变好，应立即耗尽并走 sandbox_failed / 可恢复暂停
+PERMANENT_INFRA_MARKERS = (
+    "PLAYWRIGHT_UNAVAILABLE",
+    "CHROMIUM_UNAVAILABLE",
+)
+
+
+def is_permanent_infra_error(errors: list[str] | None) -> bool:
+    text = " ".join(str(e) for e in (errors or []))
+    return any(marker in text for marker in PERMANENT_INFRA_MARKERS)
+
+
 def playwright_import_available() -> bool:
     try:
         import playwright  # noqa: F401
@@ -93,7 +103,10 @@ def playwright_import_available() -> bool:
 def _check_playwright_available() -> PlaytestResult | None:
     if not playwright_import_available():
         return _infra_result(
-            "PLAYWRIGHT_UNAVAILABLE", "playwright package is not installed"
+            "PLAYWRIGHT_UNAVAILABLE",
+            "playwright package is not installed "
+            "(worker: uv sync --extra playwright && uv run playwright install chromium). "
+            "Not related to Docker/Daytona sandbox.",
         )
     try:
         from playwright.sync_api import sync_playwright
@@ -103,7 +116,8 @@ def _check_playwright_available() -> PlaytestResult | None:
             browser.close()
     except Exception as exc:  # noqa: BLE001
         return _infra_result(
-            "CHROMIUM_UNAVAILABLE", f"chromium launch failed: {exc}"
+            "CHROMIUM_UNAVAILABLE",
+            f"chromium launch failed: {exc}. Fix: uv run playwright install chromium",
         )
     return None
 
@@ -138,9 +152,7 @@ def _extract_scripts(html: str) -> list[str]:
 def _declares_engine(html: str) -> bool:
     from app.forge.engine_router import SUPPORTED_ENGINES, recommended_cdn_url
 
-    engine_urls = {
-        url for eid in SUPPORTED_ENGINES if (url := recommended_cdn_url(eid))
-    }
+    engine_urls = {url for eid in SUPPORTED_ENGINES if (url := recommended_cdn_url(eid))}
     return any(url in html for url in engine_urls)
 
 
@@ -168,9 +180,7 @@ def static_playtest_diagnostic(html: str) -> PlaytestResult:
         scanner.feed(html)
     except Exception as e:  # noqa: BLE001
         errors.append(f"HTML 解析失败: {e}")
-        return make_playtest_result(
-            errors=errors, console_logs=logs, failure_kind="product"
-        )
+        return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     missing_interactive = not scanner.has_canvas and not scanner.has_interactive
     if missing_interactive and not _declares_engine(html):
@@ -184,12 +194,8 @@ def static_playtest_diagnostic(html: str) -> PlaytestResult:
         if src.count("{") != src.count("}"):
             errors.append(f"script#{i} 花括号可能未闭合")
     if not errors:
-        errors.append(
-            "STATIC_DIAGNOSTIC_ONLY: structural checks passed (not runtime QA)"
-        )
-    return make_playtest_result(
-        errors=errors, console_logs=logs, failure_kind="product"
-    )
+        errors.append("STATIC_DIAGNOSTIC_ONLY: structural checks passed (not runtime QA)")
+    return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
 
 _static_playtest = static_playtest_diagnostic
@@ -203,9 +209,7 @@ async def _inject_inputs(page: Any, logs: list[str], errors: list[str]) -> None:
     except Exception as e:  # noqa: BLE001
         errors.append(f"INPUT_INJECTION_FAILED: {e}")
         return
-    btn = page.locator(
-        "button:visible, input[type=button]:visible, [role=button]:visible"
-    )
+    btn = page.locator("button:visible, input[type=button]:visible, [role=button]:visible")
     try:
         if await btn.count() > 0:
             first = btn.first
@@ -233,9 +237,11 @@ async def _session_playtest(
     page.on("pageerror", _on_page_error)
     page.on(
         "console",
-        lambda msg: logs.append(f"console:{msg.type}:{msg.text}")
-        if msg.type in ("error", "warning", "log")
-        else None,
+        lambda msg: (
+            logs.append(f"console:{msg.type}:{msg.text}")
+            if msg.type in ("error", "warning", "log")
+            else None
+        ),
     )
     await page.add_init_script(RAF_INIT_SCRIPT)
 
@@ -250,28 +256,20 @@ async def _session_playtest(
         )
 
     if errors:
-        return make_playtest_result(
-            errors=errors, console_logs=logs, failure_kind="product"
-        )
+        return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     await _inject_inputs(page, logs, errors)
     await page.wait_for_timeout(200)
     if errors:
-        return make_playtest_result(
-            errors=errors, console_logs=logs, failure_kind="product"
-        )
+        return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     motion = await evaluate_motion_signal(page)
     if motion is None:
         errors.append("NO_RUNTIME_SIGNAL: no raf/canvas_diff/engine_runtime")
-        return make_playtest_result(
-            errors=errors, console_logs=logs, failure_kind="product"
-        )
+        return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     if errors:
-        return make_playtest_result(
-            errors=errors, console_logs=logs, failure_kind="product"
-        )
+        return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     thumbnail: bytes | None = None
     if want_thumb:
@@ -384,9 +382,7 @@ async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> Playtes
 
     server, thread, base = _serve(dist_dir)
     try:
-        return await _with_browser(
-            f"{base}/", want_thumb, "playwright dist mode", 20_000
-        )
+        return await _with_browser(f"{base}/", want_thumb, "playwright dist mode", 20_000)
     finally:
         _stop_server(server, thread)
 

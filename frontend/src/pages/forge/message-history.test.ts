@@ -24,6 +24,18 @@ describe('forge message history', () => {
     })
   })
 
+  it('HITL 消息去重键包含 node，避免多段确认撞车', () => {
+    expect(
+      toChatMessages([
+        row({
+          kind: 'hitl_approve',
+          content: '已确认设计方案',
+          metadata: { node: 'plan_confirm', decision: 'approve' },
+        }),
+      ])[0].persistenceKey,
+    ).toBe('run-1:hitl_approve:plan_confirm')
+  })
+
   it('服务端历史替换同业务键或同内容的临时消息', () => {
     const local: ChatMsg[] = [
       { id: 'local-1', role: 'user', content: '做一个平台跳跃游戏' },

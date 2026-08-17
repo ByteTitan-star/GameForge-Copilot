@@ -1182,9 +1182,8 @@ def _build_graph(ctx: _Ctx) -> Any:
             "playtest_errors": state.get("playtest_errors") or [],
         }
         if state.get("code_qa_reset"):
+            # 重置尝试次数，但保留上次试玩/诊断错误，供下一轮 code/repair 拼接避错
             loop_in["attempt"] = 0
-            loop_in["qa_diagnosis"] = ""
-            loop_in["playtest_errors"] = []
             loop_in["candidate_ready"] = False
             loop_in["failure_kind"] = None
             loop_in["code_qa_reset"] = False
@@ -1244,11 +1243,14 @@ def _build_graph(ctx: _Ctx) -> Any:
             errors = list(result.get("playtest_errors") or [])
             has_candidate = bool(result.get("candidate_version"))
             gate = derive_artifact_gate(build_ok=has_candidate, qa_ok=False)
+            failure_kind = result.get("failure_kind")
+            # 环境类 infra（如缺 playwright）走 sandbox_failed，避免伪装成「游戏质量差」
+            hitl_node = "sandbox_failed" if failure_kind == "infra" else "qa_failed"
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
                 {
-                    "phase": "qa_failed",
+                    "phase": hitl_node,
                     "design_doc": design_doc,
                     "qa": "; ".join(errors),
                     "code_qa_reset": True,
@@ -1257,18 +1259,21 @@ def _build_graph(ctx: _Ctx) -> Any:
                     or {},
                     "artifacts": result.get("artifacts") or state.get("artifacts") or [],
                     "candidate_version": result.get("candidate_version"),
+                    "playtest_errors": errors,
+                    "qa_diagnosis": result.get("qa_diagnosis") or "",
+                    "failure_kind": failure_kind,
                     **gate.as_dict(),
                 },
                 ctx.s,
             )
             await _pause_hitl(
                 ctx,
-                "qa_failed",
+                hitl_node,
                 design_doc,
                 extra={
                     "issues": errors,
                     "attempt": result.get("attempt"),
-                    "failure_kind": result.get("failure_kind"),
+                    "failure_kind": failure_kind,
                     **gate.as_dict(),
                 },
             )
