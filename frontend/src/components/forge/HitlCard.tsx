@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronRight, MessageSquareText, Palette, ShieldCheck, X } from "lucide-react";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { Button } from "@/components/ui/button";
-import { parseDesignDoc, type ParsedDesignDoc } from "@/lib/hitl-design-doc";
+import { MarkdownLite } from "@/components/forge/MarkdownLite";
+import { designDocToMarkdown, parseDesignDoc } from "@/lib/hitl-design-doc";
 import { useT } from "@/i18n/use-t";
 
 type Props = {
@@ -16,17 +17,11 @@ type Props = {
   busy?: boolean;
 };
 
-/** 按内容行数估算 textarea 行高 */
-function textareaRows(text: string, min = 3, max = 4): number {
-  const lines = text.split("\n").length;
-  return Math.min(max, Math.max(min, lines));
-}
-
 const fieldClass =
-  "w-full resize-none border border-black/[0.12] bg-white px-2.5 py-1.5 text-[12px] font-medium leading-5 text-[#1a2028] outline-none";
+  "w-full resize-none border border-black/[0.12] bg-white px-2.5 py-2 text-[14px] font-medium leading-6 text-[#1a2028] outline-none";
 
 const labelClass =
-  "mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-black/70";
+  "mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-black/70";
 
 function ReviewHeader({ art, title }: { art: boolean; title: string }) {
   const t = useT();
@@ -48,23 +43,23 @@ function ReviewHeader({ art, title }: { art: boolean; title: string }) {
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/65">
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-black/65">
               {t("manualReview")}
             </span>
             <span className="text-black/25" aria-hidden="true">
               /
             </span>
-            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-black/65">
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-black/65">
               {art ? "02/03" : "01/03"}
             </span>
           </div>
-          <h3 className="truncate text-[13px] font-bold leading-tight tracking-[-0.01em] text-[#141a21]">
+          <h3 className="truncate text-[15px] font-bold leading-tight tracking-[-0.01em] text-[#141a21]">
             {title}
           </h3>
         </div>
       </div>
       <span
-        className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] ${
+        className={`shrink-0 border px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] ${
           art
             ? "border-[#b9d9d4] bg-[#f3fbf9] text-[#17665f]"
             : "border-[#e5d5b1] bg-[#fffaf0] text-[#8b641c]"
@@ -90,40 +85,22 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
       ),
     [payload.design_doc],
   );
-  const [gameplay, setGameplay] = useState(parsed.gameplay);
-  const [controls, setControls] = useState(parsed.controls);
   const [modifyFeedback, setModifyFeedback] = useState("");
   const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null);
   const isArtReview = payload.node === "art_confirm";
-
-  useEffect(() => {
-    setGameplay(parsed.gameplay);
-    setControls(parsed.controls);
-  }, [parsed.gameplay, parsed.controls]);
+  const planMarkdown = useMemo(
+    () => designDocToMarkdown(payload.design_doc, parsed.title),
+    [payload.design_doc, parsed.title],
+  );
 
   useEffect(() => {
     setModifyFeedback("");
     setSelectedOption(null);
   }, [payload.node, payload.art_options]);
 
-  function buildDoc(): ParsedDesignDoc {
-    return { ...parsed, gameplay, controls };
-  }
-
   function handlePlanResolve() {
-    const doc = buildDoc();
-    const modified =
-      gameplay !== parsed.gameplay ||
-      controls !== parsed.controls ||
-      Boolean(modifyFeedback.trim());
-    const modifyText = modified
-      ? modifyFeedback.trim() || `gameplay: ${gameplay}\ncontrols: ${controls}`
-      : null;
-    onResolve(
-      modified ? "modify" : "approve",
-      modifyText,
-      doc as HitlWaitPayload["design_doc"],
-    );
+    const note = modifyFeedback.trim();
+    onResolve(note ? "modify" : "approve", note || null, payload.design_doc);
   }
 
   function handleArtResolve() {
@@ -149,7 +126,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
 
       {isArtReview ? (
         <div className="space-y-2.5 p-3 sm:px-3.5">
-          <p className="text-[12px] font-medium leading-4 text-black/65">{t("chooseArtDirectionHint")}</p>
+          <p className="text-[14px] font-medium leading-5 text-black/65">{t("chooseArtDirectionHint")}</p>
 
           <div className="grid gap-2 sm:grid-cols-2">
             {artOptions.map((option) => {
@@ -170,7 +147,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                   <span className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span
-                        className={`grid h-5 w-5 shrink-0 place-items-center border font-mono text-[10px] font-semibold ${
+                        className={`grid h-5 w-5 shrink-0 place-items-center border font-mono text-[12px] font-semibold ${
                           active
                             ? "border-[#23877d] bg-[#23877d] text-white"
                             : "border-black/15 text-black/55"
@@ -178,18 +155,18 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                       >
                         {active ? <Check className="h-3 w-3" aria-hidden="true" /> : option.id}
                       </span>
-                      <span className="truncate text-[12px] font-bold text-[#141a21]">{option.name}</span>
+                      <span className="truncate text-[14px] font-bold text-[#141a21]">{option.name}</span>
                     </span>
                     {option.recommended ? (
-                      <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[#17665f]">
+                      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[#17665f]">
                         {t("recommended")}
                       </span>
                     ) : null}
                   </span>
-                  <span className="mt-1.5 line-clamp-3 flex-1 text-[11px] font-medium leading-4 text-black/72">
+                  <span className="mt-1.5 line-clamp-3 flex-1 text-[13px] font-medium leading-5 text-black/72">
                     {option.summary}
                   </span>
-                  <span className="mt-1.5 flex items-center gap-0.5 text-[10px] font-medium text-[#17665f] opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="mt-1.5 flex items-center gap-0.5 text-[12px] font-medium text-[#17665f] opacity-0 transition-opacity group-hover:opacity-100">
                     {active ? t("selected") : t("selectDirection")}
                     <ChevronRight className="h-3 w-3" aria-hidden="true" />
                   </span>
@@ -220,52 +197,9 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
         </div>
       ) : (
         <div className="space-y-2.5 p-3 sm:px-3.5">
-          <p className="text-[11px] font-medium leading-4 text-black/65">{t("continueAfterApproval")}</p>
-          <div className="grid gap-2.5 sm:grid-cols-3">
-            <label className="block min-w-0 sm:col-span-1">
-              <span className={labelClass}>{t("gameplay")}</span>
-              <textarea
-                value={gameplay}
-                onChange={(event) => setGameplay(event.target.value)}
-                rows={textareaRows(gameplay)}
-                name="hitl-gameplay"
-                autoComplete="off"
-                className={`${fieldClass} min-h-[4.75rem] focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
-              />
-            </label>
-            <label className="block min-w-0 sm:col-span-1">
-              <span className={labelClass}>{t("controls")}</span>
-              <textarea
-                value={controls}
-                onChange={(event) => setControls(event.target.value)}
-                rows={textareaRows(controls)}
-                name="hitl-controls"
-                autoComplete="off"
-                className={`${fieldClass} min-h-[4.75rem] focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
-              />
-            </label>
-            <label className="block min-w-0 sm:col-span-1">
-              <span className={labelClass}>{t("levels")}</span>
-              <div
-                className={`${fieldClass} min-h-[4.75rem] overflow-y-auto py-1.5 focus-within:border-[#d09a2d] focus-within:ring-2 focus-within:ring-[#d09a2d]/12`}
-                aria-label={t("levels")}
-              >
-                {parsed.levels.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {parsed.levels.map((level) => (
-                      <span
-                        key={level}
-                        className="border border-black/[0.12] bg-[#faf8f3] px-1.5 py-0.5 text-[10px] font-semibold text-black/75"
-                      >
-                        {level}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-[11px] font-medium text-black/45">—</span>
-                )}
-              </div>
-            </label>
+          <p className="text-[13px] font-medium leading-5 text-black/65">{t("continueAfterApproval")}</p>
+          <div className="max-h-[min(32vh,18rem)] overflow-y-auto rounded-md border border-black/[0.08] bg-white px-3 py-2">
+            <MarkdownLite text={planMarkdown} />
           </div>
           <label className="block">
             <span className={`${labelClass} flex items-center gap-1`}>
@@ -289,7 +223,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-black/[0.08] bg-[#faf8f3] px-3 py-2 sm:px-3.5">
         <Button
           variant="ghost"
-          className="!min-h-8 !rounded-md !px-2 !text-[11px] !text-black/50 hover:!bg-black/[0.04] hover:!text-black/75"
+          className="!min-h-9 !rounded-md !px-2 !text-[13px] !text-black/50 hover:!bg-black/[0.04] hover:!text-black/75"
           disabled={busy}
           onClick={onReject}
         >
@@ -297,7 +231,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
           {t("rejectAndStop")}
         </Button>
         <Button
-          className={`!min-h-8 !rounded-md !px-3 !text-[11px] !font-semibold !text-white ${
+          className={`!min-h-9 !rounded-md !px-3 !text-[13px] !font-semibold !text-white ${
             isArtReview
               ? "!bg-[#17665f] hover:!bg-[#12534e]"
               : "!bg-[#a87516] hover:!bg-[#8d6212]"
