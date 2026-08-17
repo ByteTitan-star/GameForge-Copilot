@@ -4,7 +4,7 @@
 
 **目标：** 落地 ADR-10 + ADR-11 一周内必做项：promote 两段式幂等、暂停检查点合并与恢复路由、resume_grant 延迟消费、RUNNING 超时回收、HITL 词表单点、checkpoint revision 校验、resolve 锁/条件更新；以及 failure_kind 贯通、Docker 生命周期与日志有界、孤儿清扫、本地进程组、路径纵深、Docker uid/tier 表收敛、HostingBackend layers、WS relay finally。
 
-**架构：** HITL/checkpoint 域能力下沉到 `forge/hitl.py` + `reliability/idempotency.py` + `forge/state.py` + `scheduler`；sandbox/hosting 在 `BuildResult` / HostConfig / `HostingBackend` 协议层补齐。本切片**不含**：E2B `_LIVE` 持久化对账、OSS 全量 prune 治理、`resolve_hitl` 整段搬迁 services（仅抽常量 + try/finally + 条件 UPDATE）、ADR-12 前端债。
+**架构：** HITL/checkpoint 域能力下沉到 `forge/hitl.py` + `reliability/idempotency.py` + `forge/state.py` + `scheduler`；sandbox/hosting 在 `BuildResult` / HostConfig / `HostingBackend` 协议层补齐。本切片**不含**：Daytona `_LIVE` 持久化对账、OSS 全量 prune 治理、`resolve_hitl` 整段搬迁 services（仅抽常量 + try/finally + 条件 UPDATE）、ADR-12 前端债。
 
 **技术栈：** FastAPI、SQLAlchemy、Redis、pytest、asyncio、aiodocker、WebSocket。
 
@@ -380,7 +380,7 @@ finally:
 
 | 项 | 原因 |
 | --- | --- |
-| E2B 会话持久化对账（ADR-11 §7） | Non-goal；生产保持 Docker |
+| Daytona 会话持久化对账（ADR-11 §7） | Non-goal；生产保持 Docker |
 | OSS prune 全链路 | 需独立运维设计 |
 | `resolve_hitl` 整段迁 services | 本切片用 finally + 条件 UPDATE 满足 P2-12 |
 | ADR-12 前端 | Batch C |

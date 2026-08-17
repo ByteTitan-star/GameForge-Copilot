@@ -1,4 +1,4 @@
-"""E2B SDK 适配（mock）与 HITL destroy/restore 编排。"""
+"""Daytona SDK 适配（mock）与 HITL destroy/restore 编排。"""
 
 from __future__ import annotations
 
@@ -9,78 +9,92 @@ import pytest
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.sandbox.e2b import E2BSandbox, clear_e2b_live_for_tests
+from app.sandbox.daytona import DaytonaSandbox, clear_daytona_live_for_tests
 from app.sandbox.lifecycle import destroy_for_hitl, restore_after_hitl
 from app.sandbox.local import LocalSandbox
 
 
-class _FakeFiles:
+class _FakeFs:
     def __init__(self) -> None:
-        self.store: dict[str, str] = {}
+        self.store: dict[str, bytes] = {}
 
-    async def write(self, path: str, data: str) -> None:
+    async def create_folder(self, path: str, mode: str = "755") -> None:
+        return None
+
+    async def upload_file(self, data: bytes, path: str) -> None:
         self.store[path] = data
 
-    async def read(self, path: str, format: str = "text") -> Any:
-        text = self.store.get(path, "")
-        return text.encode("utf-8") if format == "bytes" else text
+    async def download_file(self, path: str) -> bytes:
+        return self.store.get(path, b"")
 
 
-class _FakeCommands:
-    def __init__(self, files: _FakeFiles) -> None:
+class _FakeProcess:
+    def __init__(self, files: _FakeFs) -> None:
         self.files = files
 
-    async def run(self, cmd: str, timeout: float = 60) -> SimpleNamespace:
-        if cmd.startswith("mkdir"):
-            return SimpleNamespace(stdout="", stderr="", exit_code=0)
+    async def exec(self, cmd: str, timeout: float = 60) -> SimpleNamespace:
         if cmd.startswith("find "):
             root = cmd.split(" ", 1)[1].split(" ", 1)[0]
             paths = [p for p in self.files.store if p.startswith(root)]
-            return SimpleNamespace(stdout="\n".join(paths), stderr="", exit_code=0)
+            return SimpleNamespace(result="\n".join(paths), exit_code=0)
         if "&&" in cmd and "false" in cmd:
-            return SimpleNamespace(stdout="", stderr="boom", exit_code=1)
-        return SimpleNamespace(stdout="ok", stderr="", exit_code=0)
+            return SimpleNamespace(result="boom", exit_code=1)
+        return SimpleNamespace(result="ok", exit_code=0)
 
 
 class _FakeSandbox:
     def __init__(self) -> None:
-        self.sandbox_id = "sbx_test_1"
-        self.files = _FakeFiles()
-        self.commands = _FakeCommands(self.files)
-        self.killed = False
+        self.id = "sbx_test_1"
+        self.fs = _FakeFs()
+        self.process = _FakeProcess(self.fs)
 
-    async def kill(self) -> None:
-        self.killed = True
+
+class _FakeClient:
+    def __init__(self, fake: _FakeSandbox) -> None:
+        self._fake = fake
+        self.deleted = False
+
+    async def create(self, **_kwargs: Any) -> _FakeSandbox:
+        return self._fake
+
+    async def get(self, _sandbox_id: str) -> _FakeSandbox:
+        return self._fake
+
+    async def delete(self, _sandbox: _FakeSandbox) -> None:
+        self.deleted = True
 
 
 @pytest.fixture(autouse=True)
-def _reset_e2b() -> None:
-    clear_e2b_live_for_tests()
+def _reset_daytona() -> None:
+    clear_daytona_live_for_tests()
     yield
-    clear_e2b_live_for_tests()
+    clear_daytona_live_for_tests()
 
 
 @pytest.mark.asyncio
-async def test_e2b_create_blocked_when_disabled() -> None:
-    settings.sandbox_e2b_enabled = False
+async def test_daytona_create_blocked_when_disabled() -> None:
+    settings.sandbox_daytona_enabled = False
+    settings.daytona_api_key = "dtn_test"
     with pytest.raises(AppError):
-        await E2BSandbox().create()
+        await DaytonaSandbox().create()
+    settings.sandbox_daytona_enabled = True
 
 
 @pytest.mark.asyncio
-async def test_e2b_lifecycle_with_mocked_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
-    settings.sandbox_e2b_enabled = True
+async def test_daytona_lifecycle_with_mocked_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings.sandbox_daytona_enabled = True
+    settings.daytona_api_key = "dtn_test"
     fake = _FakeSandbox()
+    client = _FakeClient(fake)
 
-    class _AS:
-        @staticmethod
-        async def create(**_kwargs: Any) -> _FakeSandbox:
-            return fake
-
-    monkeypatch.setattr("app.sandbox.e2b._import_async_sandbox", lambda: _AS)
-    backend = E2BSandbox()
+    monkeypatch.setattr(
+        DaytonaSandbox,
+        "_new_client",
+        lambda self: client,
+    )
+    backend = DaytonaSandbox()
     session = await backend.create(tier="standard")
-    assert session.backend_id == "e2b"
+    assert session.backend_id == "daytona"
     assert session.handle == "sbx_test_1"
     result = await backend.execute(
         session,
@@ -91,8 +105,7 @@ async def test_e2b_lifecycle_with_mocked_sdk(monkeypatch: pytest.MonkeyPatch) ->
     assert "index.html" in result.files
     await backend.destroy(session)
     assert session.closed
-    assert fake.killed is True
-    settings.sandbox_e2b_enabled = False
+    assert client.deleted is True
 
 
 @pytest.mark.asyncio

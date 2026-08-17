@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.sandbox import get_sandbox, get_sandbox_backend, reset_sandbox_for_tests
 from app.sandbox.base import SandboxBackend, SandboxSession
-from app.sandbox.e2b import E2BSandbox
+from app.sandbox.daytona import DaytonaSandbox
 from app.sandbox.local import LocalSandbox
 
 
@@ -39,12 +39,14 @@ async def test_oneshot_execute_still_works_via_get_sandbox() -> None:
 
 
 @pytest.mark.asyncio
-async def test_e2b_is_poc_only_and_blocked_by_default() -> None:
-    settings.sandbox_e2b_enabled = False
-    backend = E2BSandbox()
+async def test_daytona_blocked_when_disabled() -> None:
+    settings.sandbox_daytona_enabled = False
+    settings.daytona_api_key = "dtn_test"
+    backend = DaytonaSandbox()
     with pytest.raises(AppError) as ei:
         await backend.create()
-    assert "ADR-03" in ei.value.message or "disabled" in ei.value.message.lower()
+    assert "disabled" in ei.value.message.lower() or "ADR-03" in ei.value.message
+    settings.sandbox_daytona_enabled = True
 
 
 def test_factory_rejects_unknown_backend() -> None:
@@ -56,13 +58,14 @@ def test_factory_rejects_unknown_backend() -> None:
     settings.sandbox_backend = "local"
 
 
-def test_factory_e2b_falls_back_when_disabled() -> None:
-    """sandbox_backend=e2b 但未启用时回退 docker→local（ADR-03），不再返回 E2B 实例。"""
+def test_factory_daytona_falls_back_when_disabled() -> None:
+    """sandbox_backend=daytona 但未启用时回退 docker→local（ADR-03）。"""
     reset_sandbox_for_tests()
-    settings.sandbox_backend = "e2b"
-    settings.sandbox_e2b_enabled = False
+    settings.sandbox_backend = "daytona"
+    settings.sandbox_daytona_enabled = False
     backend = get_sandbox_backend()
-    assert not isinstance(backend, E2BSandbox)
+    assert not isinstance(backend, DaytonaSandbox)
     assert backend.backend_id in {"docker", "local"}
     reset_sandbox_for_tests()
     settings.sandbox_backend = "local"
+    settings.sandbox_daytona_enabled = True

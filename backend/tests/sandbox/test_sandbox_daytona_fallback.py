@@ -1,4 +1,4 @@
-"""E2B 无 key 时回退 docker/local。"""
+"""Daytona 无 key 时回退 docker/local。"""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ def _reset():
     reset_sandbox_for_tests()
 
 
-def test_e2b_backend_falls_back_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "sandbox_backend", "e2b")
-    monkeypatch.setattr(settings, "sandbox_e2b_enabled", True)
-    monkeypatch.setattr(settings, "e2b_api_key", "")
+def test_daytona_backend_falls_back_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_backend", "daytona")
+    monkeypatch.setattr(settings, "sandbox_daytona_enabled", True)
+    monkeypatch.setattr(settings, "daytona_api_key", "")
     backend = get_sandbox_backend()
     assert backend.backend_id in {"docker", "local"}

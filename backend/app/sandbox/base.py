@@ -47,7 +47,7 @@ class SandboxSession:
 
 
 class SandboxBackend(Protocol):
-    """可插拔沙箱后端（local / docker / e2b PoC）。"""
+    """可插拔沙箱后端（local / docker / daytona）。"""
 
     async def create(self, *, tier: str | None = None) -> SandboxSession: ...
 

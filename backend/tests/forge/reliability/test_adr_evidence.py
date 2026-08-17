@@ -24,3 +24,4 @@ def test_adr_evidence_module_documents_invariants() -> None:
     text = Path(mod.__file__).read_text(encoding="utf-8")
     assert "ADR-06" in text
     assert "semantic_soft_hard_thresholds" in text
+    assert "daytona" in text

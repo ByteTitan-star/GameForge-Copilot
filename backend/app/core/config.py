@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # 加密与签名
     jwt_secret: str = "dev-secret-change-me-to-a-32-byte-random-string"
-    jwt_access_ttl: int = 900  # access token 有效期（秒），15 分钟
+    jwt_access_ttl: int = 7_200  # access token（秒），2h：覆盖长生成会话，前端仍可 refresh
     refresh_ttl: int = 2_592_000  # refresh token 有效期（秒），30 天
     verify_email_ttl: int = 600  # 邮箱验证码有效期（秒），默认 10 分钟
     password_reset_ttl: int = 3600  # 密码重置 token 有效期（秒），1 小时
@@ -58,18 +58,16 @@ class Settings(BaseSettings):
     s3_connect_timeout: int = 10
     s3_read_timeout: int = 60
 
-    # 沙箱：优先 E2B（需 E2B_API_KEY）；无 key 时工厂回退 docker→local
-    sandbox_backend: str = "e2b"  # local|docker|e2b
+    # 沙箱：优先 Daytona（需 DAYTONA_API_KEY）；无 key 时工厂回退 docker→local
+    sandbox_backend: str = "daytona"  # local|docker|daytona
     sandbox_image: str = "gameforge/sandbox"
     sandbox_default_tier: str = "standard"
     # P3.3：按源码体量 / engine / 近期 OOM·超时自动选 lite|standard|heavy
     sandbox_tier_auto: bool = True
-    # E2B 已启用；真实调用仍需环境变量 E2B_API_KEY（禁止写入仓库）
-    sandbox_e2b_enabled: bool = True
-    e2b_api_key: str = ""
-    e2b_timeout_s: int = 120
-    # 默认不开外网，降低 UGC 出站风险；需要 CDN 拉取时再开
-    e2b_allow_internet: bool = False
+    # Daytona：真实调用需 DAYTONA_API_KEY（禁止写入仓库）
+    sandbox_daytona_enabled: bool = True
+    daytona_api_key: str = ""
+    daytona_timeout_s: int = 300  # 沙箱 create/exec 超时（秒）
 
     # 构建链（docs/build-pipeline.md P1+）
     build_pipeline_enabled: bool = False
@@ -100,7 +98,8 @@ class Settings(BaseSettings):
     # HIL / 用户暂停等待超时：PAUSED 超过此时长自动 FAILED，释放并发额度
     hil_wait_timeout_s: int = 172_800  # 默认 48h
     # RUNNING 且无执行租约、超过此时长无更新 → FAILED（ADR-10）
-    running_stale_timeout_s: int = 3600
+    # 正常生成有租约心跳，不会触发；仅兜底「崩溃后残留 RUNNING」
+    running_stale_timeout_s: int = 7_200  # 2h，对齐长 CodeQaLoop
     # Docker container.log 有界读取行数（ADR-11）
     sandbox_log_tail: int = 2000
 
@@ -195,8 +194,8 @@ class Settings(BaseSettings):
     langfuse_base_url: str = "https://us.cloud.langfuse.com"
 
     # LLM HTTP 调用（complete() 的超时与 max_tokens）
-    # 读超时：推理模型（qwen3-max/deepseek-r1 等）生整段代码可达数分钟，必须给足
-    llm_request_timeout: int = 300
+    # 读超时：推理模型生整段代码可达数分钟；默认 600 覆盖慢模型
+    llm_request_timeout: int = 600
     # 建连/写/连接池超时（秒）；服务端不可达时应快速失败而非长等
     llm_connect_timeout: int = 30
     # 传输层有限重试：瞬时网络抖动 / 429 / 502-504；与业务自修复预算正交

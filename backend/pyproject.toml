@@ -48,8 +48,8 @@ dev = [
 playwright = [
     "playwright>=1.45",
 ]
-e2b = [
-    "e2b>=1.0.0",
+daytona = [
+    "daytona>=0.204.0",
 ]
 
 [tool.ruff]

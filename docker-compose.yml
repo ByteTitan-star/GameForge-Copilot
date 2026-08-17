@@ -44,6 +44,32 @@ services:
       timeout: 5s
       retries: 12
 
+  # 本地免费 Embedding（TEI）：OpenAI 兼容 POST /v1/embeddings
+  # 模型优先用本机目录 data/embedding-models（scripts/download_embedding_model.sh 预拉）；
+  # 若目录不存在则回退到容器内从 HuggingFace 拉取（需能访问 huggingface.co）。
+  embedding:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    ports:
+      - "8080:80"
+    volumes:
+      - embedding_data:/data
+      - ./data/embedding-models:/data/models:ro
+    command:
+      - --model-id
+      - /data/models/BAAI/bge-small-zh-v1.5
+      - --served-model-name
+      - BAAI/bge-small-zh-v1.5
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:80/health >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
   backend:
     build:
       context: .
@@ -133,3 +159,4 @@ volumes:
   redisdata:    # 缓存数据
   hosting:      # 沙盒数据
   pnpm_store:   # shared pnpm store（构建链 §9.1）
+  embedding_data:  # TEI 模型缓存（bge-small-zh-v1.5）
