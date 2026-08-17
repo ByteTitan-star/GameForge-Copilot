@@ -39,7 +39,7 @@ export function StagePipeline({
   if (variant === "bar") {
     return (
       <ol
-        className={cn("flex items-center gap-2", className)}
+        className={cn("flex w-full items-center gap-2 px-8 md:px-12", className)}
         aria-label={t("generationFlow")}
       >
         {PIPELINE_PHASES.map((phase, index) => {
@@ -63,7 +63,10 @@ export function StagePipeline({
             <li
               key={phase}
               aria-current={isActive ? "step" : undefined}
-              className="flex min-w-0 flex-1 items-center gap-1.5"
+              className={cn(
+                "flex items-center gap-1.5",
+                isLast ? "shrink-0" : "min-w-0 flex-1",
+              )}
             >
               <span
                 className={cn(
