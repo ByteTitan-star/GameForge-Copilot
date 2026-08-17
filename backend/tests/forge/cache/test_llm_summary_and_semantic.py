@@ -156,8 +156,13 @@ async def test_semantic_soft_hit_uses_confirm_llm(
     monkeypatch.setattr(settings, "semantic_confirm_base_url", "http://localhost:9")
     monkeypatch.setattr(settings, "semantic_confirm_provider", "openai_compat")
 
+    from app.llm.provider import LLMCompletion, Usage
+
     async def fake_complete(*_a, **_k):
-        return ('{"ok":true,"result":"greenfield"}', None)
+        return LLMCompletion(
+            content='{"ok":true,"result":"greenfield"}',
+            usage=Usage(1, 1),
+        )
 
     monkeypatch.setattr("app.llm.provider.complete", fake_complete)
 

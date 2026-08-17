@@ -109,11 +109,15 @@ async def test_llm_extract_parser_unit(monkeypatch) -> None:
     monkeypatch.setattr(settings, "preference_extract_provider", "openai_compat")
     monkeypatch.setattr(settings, "preference_extract_base_url", "http://localhost:9")
 
+    from app.llm.provider import LLMCompletion, Usage
+
     async def fake_complete(*_a, **_k):
-        return (
-            '{"preferences":[{"category":"visual","key":"style",'
-            '"value_json":{"style":"pixel"},"source":"explicit","confidence":0.9}]}',
-            None,
+        return LLMCompletion(
+            content=(
+                '{"preferences":[{"category":"visual","key":"style",'
+                '"value_json":{"style":"pixel"},"source":"explicit","confidence":0.9}]}'
+            ),
+            usage=Usage(1, 1),
         )
 
     monkeypatch.setattr("app.llm.provider.complete", fake_complete)
