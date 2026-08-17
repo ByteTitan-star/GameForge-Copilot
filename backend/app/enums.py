@@ -42,6 +42,7 @@ class RunPhase(StrEnum):
 class EntryPhase(StrEnum):
     PLAN = "plan"
     CODE = "code"
+    CHAT = "chat"
 
 
 class ReactionType(StrEnum):

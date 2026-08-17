@@ -36,6 +36,8 @@ async def _grant_resume(
     [
         ("把背景改成紫色", EntryPhase.CODE),
         ("调整分数显示文案", EntryPhase.CODE),
+        ("这个游戏是什么意思啊？你给我解释一下", EntryPhase.CHAT),
+        ("怎么玩这个游戏？", EntryPhase.CHAT),
         ("重写核心玩法并增加 Boss 关", EntryPhase.PLAN),
         ("加入加速道具", EntryPhase.PLAN),
     ],
