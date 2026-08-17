@@ -2,7 +2,7 @@ import { Bot, Loader2, UserRound } from "lucide-react";
 import { ForgeComposer } from "@/components/forge/ForgeComposer";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 export type ChatMsg = {
   id: string;
@@ -34,6 +34,8 @@ type Props = {
   onLoadEarlier?: () => void;
 };
 
+const FOLLOW_THRESHOLD_PX = 48;
+
 export function ChatPanel({
   messages,
   input,
@@ -56,10 +58,33 @@ export function ChatPanel({
   const workshop = variant === "workshop" || variant === "forge-hero";
   const hero = variant === "forge-hero";
   const documentScroll = hero && scrollMode === "document";
+  const panelScroll = !documentScroll;
   const composerPlaceholder = placeholder ?? t("describeIteration");
   const lastAssistantId = [...messages]
     .reverse()
     .find((m) => m.role === "assistant")?.id;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const followLatestRef = useRef(true);
+
+  // 用户上翻阅读历史时暂停自动跟底；回到底部附近再恢复
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !panelScroll) return;
+    function onScroll() {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      followLatestRef.current = distance < FOLLOW_THRESHOLD_PX;
+    }
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [panelScroll]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !panelScroll) return;
+    if (!followLatestRef.current && !streaming) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, streaming, conversationFooter, panelScroll]);
 
   return (
     <section
@@ -91,8 +116,9 @@ export function ChatPanel({
       ) : null}
 
       <div
+        ref={panelScroll ? scrollRef : undefined}
         className={cn(
-          "space-y-4 px-4 py-5 md:px-5",
+          "space-y-3 px-4 py-4 md:px-5",
           documentScroll ? "shrink-0" : "min-h-0 flex-1 overflow-y-auto",
         )}
         aria-live="polite"
@@ -116,7 +142,7 @@ export function ChatPanel({
           <div
             key={m.id}
             className={cn(
-              "flex max-w-[94%] items-start gap-2.5 text-sm leading-relaxed",
+              "flex max-w-[94%] items-start gap-2 text-sm leading-relaxed",
               m.role === "user" && "ml-auto flex-row-reverse",
               m.role === "assistant" && "mr-auto",
               m.role === "system" && "mx-auto max-w-full justify-center",
@@ -125,16 +151,16 @@ export function ChatPanel({
             {m.role !== "system" ? (
               <span
                 className={cn(
-                  "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border",
+                  "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
                   m.role === "assistant"
                     ? "border-[rgba(var(--gf-primary-rgb),0.16)] bg-[rgba(var(--gf-primary-rgb),0.08)] gf-text-accent"
                     : "border-black/[0.07] bg-black/[0.035] gf-page-muted",
                 )}
               >
                 {m.role === "assistant" ? (
-                  <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Bot className="h-3 w-3" aria-hidden="true" />
                 ) : (
-                  <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+                  <UserRound className="h-3 w-3" aria-hidden="true" />
                 )}
               </span>
             ) : null}
@@ -143,16 +169,16 @@ export function ChatPanel({
                 "min-w-0 break-words",
                 m.role === "user" &&
                   (workshop
-                    ? "rounded-2xl rounded-tr-md gf-bg-accent-soft px-3.5 py-2.5 gf-page-body gf-ring-accent"
-                    : "rounded-2xl rounded-tr-md bg-[#5271ff]/12 px-3.5 py-2.5 text-[#3046a8] ring-1 ring-[#5271ff]/20"),
+                    ? "rounded-2xl rounded-tr-md gf-bg-accent-soft px-3 py-2 gf-page-body gf-ring-accent"
+                    : "rounded-2xl rounded-tr-md bg-[#5271ff]/12 px-3 py-2 text-[#3046a8] ring-1 ring-[#5271ff]/20"),
                 m.role === "assistant" &&
                   (workshop
-                    ? "rounded-2xl rounded-tl-md bg-black/[0.025] px-3.5 py-2.5 gf-page-body ring-1 ring-[var(--gf-border)]"
-                    : "rounded-2xl rounded-tl-md bg-[#eef1f3] px-3.5 py-2.5 text-[#303940] ring-1 ring-black/[0.05]"),
+                    ? "rounded-2xl rounded-tl-md bg-black/[0.025] px-3 py-2 gf-page-body ring-1 ring-[var(--gf-border)]"
+                    : "rounded-2xl rounded-tl-md bg-[#eef1f3] px-3 py-2 text-[#303940] ring-1 ring-black/[0.05]"),
                 m.role === "system" &&
                   (workshop
-                    ? "rounded-lg bg-amber-50 px-3 py-1.5 text-center text-[12px] text-amber-900 ring-1 ring-amber-200"
-                    : "rounded-lg bg-[#ffcf5a]/15 px-3 py-1.5 text-center text-[12px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
+                    ? "rounded-lg bg-amber-50 px-2.5 py-1 text-center text-[11px] text-amber-900 ring-1 ring-amber-200"
+                    : "rounded-lg bg-[#ffcf5a]/15 px-2.5 py-1 text-center text-[11px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
               )}
             >
               {m.content}
@@ -175,7 +201,7 @@ export function ChatPanel({
           </div>
         ))}
         {conversationFooter ? (
-          <div className="space-y-4 pt-1">{conversationFooter}</div>
+          <div className="space-y-2 pt-0.5">{conversationFooter}</div>
         ) : null}
       </div>
 
