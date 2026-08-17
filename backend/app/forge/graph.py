@@ -326,6 +326,7 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
                     user_msg,
                     game_id=ctx.game.id,
                     run_id=ctx.run.id,
+                    kind="session_summary",
                 )
                 return content
 
@@ -430,7 +431,13 @@ async def _compose_art_detail_input(
 
 
 async def _streamed_llm_or_fallback(
-    ctx: _Ctx, system: str, user_msg: str, phase: str, *, emit_delta: bool = True
+    ctx: _Ctx,
+    system: str,
+    user_msg: str,
+    phase: str,
+    *,
+    emit_delta: bool = True,
+    kind: str | None = None,
 ) -> str:
     """流式开关分流：开 → run_streamed_llm（流式 + 输入/输出审核 + 微批）；
     关 → _llm（非流式，无审核）。关时整体退化为护栏落地前的行为。
@@ -438,13 +445,17 @@ async def _streamed_llm_or_fallback(
     emit_delta=False 时仍做审核但不发 LLM_DELTA（用于 code/art 等 JSON/长 HTML 阶段，
     打字机价值低且避免产生上千事件）。
     """
+    llm_kind = kind or phase
     if settings.stream_enabled:
-        return await run_streamed_llm(ctx, system, user_msg, phase=phase, emit_delta=emit_delta)
-    return await _llm(ctx, system, user_msg)
+        return await run_streamed_llm(
+            ctx, system, user_msg, phase=phase, emit_delta=emit_delta, kind=llm_kind
+        )
+    return await _llm(ctx, system, user_msg, kind=llm_kind)
 
 
-async def _llm(ctx: _Ctx, system: str, user_msg: str) -> str:
+async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None) -> str:
     stage = ctx.run.phase or "llm"
+    llm_kind = kind or stage or "chat"
     started = time.monotonic()
     # 只记长度不记原文：prompt/响应内容属敏感且冗长，按 docs 约定不落盘
     log.info("llm call start", extra={"stage": stage, "prompt_len": len(user_msg)})
@@ -458,6 +469,7 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str) -> str:
             user_msg,
             game_id=ctx.game.id,
             run_id=ctx.run.id,
+            kind=llm_kind,
         )
     except Exception:
         duration = round(time.monotonic() - started, 3)
@@ -943,7 +955,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
                 }
                 system_prompt = await build_art_options_prompt_async(
-                    art_hints, complete=lambda s, u: _llm(ctx, s, u)
+                    art_hints, complete=lambda s, u: _llm(ctx, s, u, kind="skill_select")
                 )
                 art_options = await generate_art_options(system_prompt, user_msg)
             except ContentAttacked:
@@ -988,7 +1000,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
                 }
                 system_prompt = await build_art_options_revise_prompt_async(
-                    art_hints, complete=lambda s, u: _llm(ctx, s, u)
+                    art_hints, complete=lambda s, u: _llm(ctx, s, u, kind="skill_select")
                 )
                 art_options = await generate_art_options(system_prompt, user_msg)
             except ContentAttacked:
@@ -1051,7 +1063,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                             "style": json.dumps(selected_option, ensure_ascii=False),
                             "goal": (design_doc.get("title") or ctx.game.title or ""),
                         },
-                        complete=lambda s, u: _llm(ctx, s, u),
+                        complete=lambda s, u: _llm(ctx, s, u, kind="skill_select"),
                     )
                     raw = await _streamed_llm_or_fallback(
                         ctx,
@@ -1379,7 +1391,11 @@ async def run_generation(
                 log.warning("skip inactive run", extra={"stage": stage, "status": run.status})
                 return
             try:
-                with observe_run(str(run_id)):
+                with observe_run(
+                    str(run_id),
+                    user_id=str(run.user_id),
+                    game_id=str(run.game_id),
+                ):
                     await _run_body(s, r, run, game, run_id, resume, decision, modify_text)
                 duration = round(time.monotonic() - started, 3)
                 log.info(

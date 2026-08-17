@@ -7,6 +7,7 @@ import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import redis.asyncio as redis
 from sqlalchemy import select
@@ -60,9 +61,7 @@ async def _get_config(
     return cfg
 
 
-async def _maybe_quota_alert(
-    db: AsyncSession, r: redis.Redis, user_id: uuid.UUID
-) -> None:
+async def _maybe_quota_alert(db: AsyncSession, r: redis.Redis, user_id: uuid.UUID) -> None:
     daily_default, _, rate = await admin_services.get_effective_limits(db)
     _ = rate
     daily = await quota_mod.get_user_daily_limit(r, user_id, daily_default)
@@ -106,9 +105,7 @@ async def _maybe_system_alert(db: AsyncSession, r: redis.Redis) -> None:
             admin.id,
             kind="system_quota",
             title="系统日 token 用量告警",
-            body=(
-                f"系统今日用量 {used} 已超过阈值 {settings.system_daily_token_alert}。"
-            ),
+            body=(f"系统今日用量 {used} 已超过阈值 {settings.system_daily_token_alert}。"),
             email=admin.email,
         )
 
@@ -121,6 +118,8 @@ async def _invoke_llm(
     user_msg: str,
     base_url: str | None,
     trace_meta: dict[str, str],
+    *,
+    kind: str = "chat",
 ) -> tuple[str, provider.Usage]:
     """执行 provider.complete 并挂 langfuse generation 观测。
 
@@ -131,6 +130,7 @@ async def _invoke_llm(
         provider=prov.value,
         system=system,
         user_msg=user_msg,
+        kind=kind,
         metadata=trace_meta,
     ) as gen:
         try:
@@ -162,6 +162,7 @@ async def call_llm(
     *,
     game_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
+    kind: str = "chat",
 ) -> tuple[str, provider.Usage, LLMProvider]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
@@ -178,7 +179,14 @@ async def call_llm(
         trace_meta["run_id"] = str(run_id)
     try:
         content, usage = await _invoke_llm(
-            prov, apikey, cfg.model, system, user_msg, cfg.base_url, trace_meta
+            prov,
+            apikey,
+            cfg.model,
+            system,
+            user_msg,
+            cfg.base_url,
+            trace_meta,
+            kind=kind,
         )
     except Exception:
         LLM_CALLS.labels(prov.value, "error").inc()
@@ -221,6 +229,7 @@ async def call_llm_stream(
     *,
     game_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
+    kind: str = "chat",
 ) -> AsyncIterator[StreamChunk]:
     """流式版 call_llm：逐 token yield StreamChunk（末帧带 usage）。
 
@@ -247,13 +256,14 @@ async def call_llm_stream(
 
     accumulated: list[str] = []
     usage_acc = provider.Usage()
-    gen: object = None
+    gen: Any = None
     try:
         with observe_generation(
             model=cfg.model,
             provider=prov.value,
             system=system,
             user_msg=user_msg,
+            kind=kind,
             metadata=trace_meta,
         ) as gen:
             async for chunk in provider.complete_stream(
