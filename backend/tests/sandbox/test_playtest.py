@@ -7,10 +7,77 @@ import pytest
 from app.sandbox.motion import png_frames_differ
 from app.sandbox.playtest import (
     PlaytestResult,
+    _click_unobstructed_buttons,
+    classify_click_failures,
+    classify_stacked_screens,
     make_playtest_result,
     run_playtest,
     static_playtest_diagnostic,
 )
+
+
+def test_classify_overlay_click_failures() -> None:
+    intercept = "Timeout 1200ms exceeded. <button id='btn-resume'> intercepts pointer events"
+    msg = classify_click_failures([intercept, intercept], attempted=2)
+    assert msg is not None
+    assert msg.startswith("OVERLAY_BLOCKS_POINTER")
+
+
+def test_classify_generic_click_failure() -> None:
+    msg = classify_click_failures(["button not found"], attempted=1)
+    assert msg is not None
+    assert msg.startswith("INPUT_INJECTION_FAILED")
+
+
+def test_classify_stacked_screens() -> None:
+    msg = classify_stacked_screens(["screen-start", "screen-paused"])
+    assert msg is not None
+    assert msg.startswith("OVERLAY_BLOCKS_POINTER")
+    assert classify_stacked_screens(["screen-start"]) is None
+
+
+class _FakeBtn:
+    def __init__(self, *, click_error: str | None = None) -> None:
+        self.click_error = click_error
+        self.clicked = False
+
+    async def is_enabled(self) -> bool:
+        return True
+
+    async def click(self, timeout: int = 0) -> None:
+        if self.click_error:
+            raise RuntimeError(self.click_error)
+        self.clicked = True
+
+
+class _FakeLocator:
+    def __init__(self, buttons: list[_FakeBtn]) -> None:
+        self._buttons = buttons
+
+    async def count(self) -> int:
+        return len(self._buttons)
+
+    def nth(self, index: int) -> _FakeBtn:
+        return self._buttons[index]
+
+
+class _FakePage:
+    def __init__(self, buttons: list[_FakeBtn]) -> None:
+        self._locator = _FakeLocator(buttons)
+
+    def locator(self, _selector: str) -> _FakeLocator:
+        return self._locator
+
+
+@pytest.mark.asyncio
+async def test_click_fails_when_start_intercepted_even_if_resume_works() -> None:
+    start = _FakeBtn(click_error="Timeout 1200ms exceeded. intercepts pointer events")
+    resume = _FakeBtn()
+    logs: list[str] = []
+    errors: list[str] = []
+    await _click_unobstructed_buttons(_FakePage([start, resume]), logs, errors)
+    assert any(e.startswith("OVERLAY_BLOCKS_POINTER") for e in errors)
+    assert not resume.clicked
 
 
 def test_playtest_result_rejects_ok_with_errors() -> None:
