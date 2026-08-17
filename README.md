@@ -1,7 +1,7 @@
 <h1 align="center">🎮 GameForge</h1>
 
 <p align="center">
-  <a href="https://github.com/ByteTitan-star/GameForge-Copilot/releases/tag/v0.3.0"><img src="https://img.shields.io/badge/GameForge-v0.3.0-6e40c9" alt="GameForge v0.3.0" /></a>
+  <a href="https://github.com/ByteTitan-star/GameForge-Copilot/releases/tag/v0.4.0"><img src="https://img.shields.io/badge/GameForge-v0.4.0-6e40c9" alt="GameForge v0.4.0" /></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/English-0A66C2" alt="English" />
