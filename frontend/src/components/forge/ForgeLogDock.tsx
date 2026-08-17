@@ -50,8 +50,8 @@ function readStoredHeight(): number {
 
 /**
  * 底部横跨的「执行日志带」：标题栏常驻（折叠时仅 44px，显示最新事件与错误数），
- * 展开后顶部可垂直拖拽调整高度（120px ~ 45vh，持久化）。失败恢复条固定可见；
- * 紧凑阶段条（sticky 置顶）与事件流共享同一滚动容器，内容再多也能向下滚动到底。
+ * 展开后顶部可垂直拖拽调整高度（120px ~ 45vh，持久化）。
+ * 失败恢复条与阶段条固定在滚动区外；事件流 newest-first，默认钉住顶部跟随最新。
  */
 export function ForgeLogDock({
   open,
@@ -66,6 +66,8 @@ export function ForgeLogDock({
   const [height, setHeight] = useState(readStoredHeight)
   const draggingRef = useRef(false)
   const dockRef = useRef<HTMLElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const followLatestRef = useRef(true)
 
   const persistHeight = useCallback((next: number) => {
     const maxPx = Math.round(window.innerHeight * MAX_HEIGHT_RATIO)
@@ -105,6 +107,23 @@ export function ForgeLogDock({
     }
   }, [open, failureRecovery, height, persistHeight])
 
+  // newest-first：靠近顶部视为跟随；用户上翻后暂停自动钉顶
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !open) return
+    function onScroll() {
+      followLatestRef.current = el.scrollTop < 24
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !followLatestRef.current) return
+    const el = scrollRef.current
+    if (el) el.scrollTop = 0
+  }, [items, open])
+
   const latest = items[0]
   const errorCount = items.filter((i) => i.tone === 'err').length
 
@@ -118,35 +137,30 @@ export function ForgeLogDock({
           tabIndex={0}
           className="gf-forge-dock-handle"
           onPointerDown={(event) => {
-            event.preventDefault()
             draggingRef.current = true
             document.body.classList.add('gf-forge-dock-resizing')
+            event.currentTarget.setPointerCapture(event.pointerId)
           }}
         />
       ) : null}
+
       <button
         type="button"
         onClick={onToggle}
-        aria-expanded={open}
         className="gf-interactive gf-forge-log-dock-header flex w-full cursor-pointer items-center justify-between gap-2 text-left transition hover:bg-black/[0.02]"
+        aria-expanded={open}
       >
-        <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--gf-text-muted)]">
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          ) : (
-            <ChevronUp className="h-3.5 w-3.5 shrink-0" />
-          )}
-          <span className="shrink-0">{t('eventLog')}</span>
-          <span className="shrink-0 font-mono text-[11px]">· {items.length}</span>
+        <span className="gf-page-body flex min-w-0 items-center gap-2 text-sm font-medium">
+          {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronUp className="h-4 w-4 shrink-0" />}
+          <span className="truncate">{t('eventLog')}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-3">
           {!open && latest ? (
-            <span className="min-w-0 truncate normal-case text-[var(--gf-text)] opacity-80">
-              <span className="opacity-55">{t('forgeLogLatest')}:</span>{' '}
+            <span className="gf-page-muted max-w-[14rem] truncate text-[11px] sm:max-w-[20rem]">
               {latest.label}
             </span>
           ) : null}
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {!open && errorCount > 0 ? (
+          {errorCount > 0 ? (
             <span className="font-mono text-[11px] text-rose-600">
               {t('forgeLogErrors', { n: errorCount })}
             </span>
@@ -167,14 +181,12 @@ export function ForgeLogDock({
               onConfigureLlm={failureRecovery.onConfigureLlm}
             />
           ) : null}
-          {/* 失败恢复条固定可见；进度条与事件流共享同一滚动容器，
-              进度条 sticky 置顶，事件再多也能向下滚动到底。 */}
-          <div className="gf-forge-log-dock-scroll">
-            {showPipeline ? (
-              <div className="gf-forge-log-dock-sticky">
-                <StagePipeline runPhase={runPhase} stages={stages} variant="bar" />
-              </div>
-            ) : null}
+          {showPipeline ? (
+            <div className="gf-forge-log-dock-pipeline">
+              <StagePipeline runPhase={runPhase} stages={stages} variant="bar" />
+            </div>
+          ) : null}
+          <div ref={scrollRef} className="gf-forge-log-dock-scroll">
             <RunTimeline
               phase={runPhase}
               items={items}

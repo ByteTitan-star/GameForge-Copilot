@@ -902,11 +902,11 @@ body.gf-forge-dock-resizing * {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
   padding-top: 0.375rem;
 }
 
@@ -920,13 +920,10 @@ body.gf-forge-dock-resizing * {
   }
 }
 
-/* 进度条粘性置顶：事件流向下滚动时它始终可见；底色避免事件穿透 */
-.gf-forge-log-dock-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(6px);
+/* 阶段条固定在滚动区外：不透底、不随事件滚动 */
+.gf-forge-log-dock-pipeline {
+  flex-shrink: 0;
+  background: #ffffff;
   padding: 0.375rem 0.25rem 0.5rem;
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
