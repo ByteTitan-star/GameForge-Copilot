@@ -95,9 +95,7 @@ async def semantic_cache_store(
     vector = await embed_one(query_text)
     if vector is None:
         return False
-    vid = make_vector_id(
-        node=node, skill_bundle_hash=skill_bundle_hash, query_text=query_text
-    )
+    vid = make_vector_id(node=node, skill_bundle_hash=skill_bundle_hash, query_text=query_text)
     meta = {
         "node": node,
         "skill_bundle_hash": skill_bundle_hash or "",
@@ -133,8 +131,8 @@ async def semantic_shadow_record(
     }
     key = f"forge:semantic:shadow:{node}"
     with observe_subsystem("cache", "semantic_shadow", metadata={"node": node}):
-        await r.lpush(key, json.dumps(payload, ensure_ascii=False))
-        await r.ltrim(key, 0, 999)
+        await r.lpush(key, json.dumps(payload, ensure_ascii=False))  # type: ignore[misc]
+        await r.ltrim(key, 0, 999)  # type: ignore[misc]
         await r.expire(key, settings.semantic_cache_shadow_ttl_s)
     return True
 
@@ -164,7 +162,7 @@ async def _confirm_soft_hit(
         log.info("semantic soft-hit skipped: confirm LLM not configured")
         return None
     from app.enums import LLMProvider
-    from app.llm.provider import complete
+    from app.llm.platform_complete import platform_complete
 
     system = (
         "你是缓存确认器。根据当前 query 与候选缓存结果，输出该节点应返回的最终 JSON。"
@@ -181,14 +179,17 @@ async def _confirm_soft_hit(
         default=str,
     )
     try:
-        content, _usage = await complete(
+        content, _usage = await platform_complete(
             LLMProvider(provider),
             apikey,
             model,
             system,
             user_msg,
-            base_url or None,
+            kind="semantic_confirm",
+            base_url=base_url or None,
             max_tokens=512,
+            metadata={"node": node},
+            tags=["forge", "cache"],
         )
     except Exception as exc:  # noqa: BLE001 — 软命中失败则 miss
         log.warning("semantic confirm LLM failed: %s", type(exc).__name__)
@@ -201,8 +202,7 @@ def _confirm_llm_cfg() -> tuple[str, str, str, str]:
         return (
             settings.semantic_confirm_provider,
             settings.semantic_confirm_model.strip(),
-            settings.semantic_confirm_apikey.strip()
-            or settings.preference_extract_apikey.strip(),
+            settings.semantic_confirm_apikey.strip() or settings.preference_extract_apikey.strip(),
             settings.semantic_confirm_base_url.strip()
             or settings.preference_extract_base_url.strip(),
         )
@@ -212,6 +212,7 @@ def _confirm_llm_cfg() -> tuple[str, str, str, str]:
         settings.preference_extract_apikey.strip(),
         settings.preference_extract_base_url.strip(),
     )
+
 
 def _parse_confirm_content(content: str) -> Any | None:
     text = content.strip()

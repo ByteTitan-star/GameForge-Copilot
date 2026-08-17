@@ -226,7 +226,7 @@ class _LlmAuditStatus(enum.Enum):
 
 
 class Guard:
-    """一次 LLM 调用的审核上下文，生命周期 = 单次 LLM 流。平台预设审核模型。"""
+    """平台预设审核模型 + 可选快筛。"""
 
     def __init__(
         self,
@@ -235,32 +235,54 @@ class Guard:
         model: str,
         apikey: str,
         base_url: str | None,
+        user_id: str | None = None,
+        game_id: str | None = None,
+        run_id: str | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
         self._apikey = apikey
         self._base_url = base_url or None
+        self._user_id = user_id
+        self._game_id = game_id
+        self._run_id = run_id
 
     async def _audit_with_llm(self, text: str) -> _LlmAuditStatus:
         """调平台预设审核模型审一次（0/1 判定），输出异常时带软提示重试。
 
         trace 经 observe_generation 上报 langfuse（同构 client._invoke_llm）。
         """
-        from app.core.langfuse import observe_generation
+        from app.core.langfuse import observe_generation, propagate_trace_attrs
 
         user_msg = f"【待审文本】\n{text}"
         last_raw = ""
         for attempt in range(_AUDIT_MAX_RETRIES + 1):
             text_preview = user_msg[:500]
             gen = None
+            meta: dict[str, Any] = {"attempt": attempt + 1}
+            if self._user_id:
+                meta["user_id"] = self._user_id
+            if self._game_id:
+                meta["game_id"] = self._game_id
+            if self._run_id:
+                meta["run_id"] = self._run_id
             try:
-                with observe_generation(
-                    model=self._model,
-                    provider=self._provider.value,
-                    system=_AUDIT_SYSTEM,
-                    user_msg=text_preview,
-                    metadata={"kind": "guardrail", "attempt": attempt + 1},
-                ) as gen:
+                with (
+                    propagate_trace_attrs(
+                        user_id=self._user_id,
+                        session_id=self._game_id,
+                        tags=["forge", "guardrail"],
+                    ),
+                    observe_generation(
+                        model=self._model,
+                        provider=self._provider.value,
+                        system=_AUDIT_SYSTEM,
+                        user_msg=text_preview,
+                        kind="guardrail",
+                        metadata=meta,
+                        tags=["forge", "guardrail"],
+                    ) as gen,
+                ):
                     content, usage = await llm_provider.complete(
                         self._provider,
                         self._apikey,
@@ -368,6 +390,9 @@ async def build_guard(ctx: Any) -> Guard | NoopGuard:
         model=model,
         apikey=cfg["apikey"],
         base_url=cfg["base_url"],
+        user_id=str(ctx.run.user_id) if getattr(ctx, "run", None) is not None else None,
+        game_id=str(ctx.game.id) if getattr(ctx, "game", None) is not None else None,
+        run_id=str(ctx.run.id) if getattr(ctx, "run", None) is not None else None,
     )
 
 
@@ -418,6 +443,7 @@ async def run_streamed_llm(
     *,
     phase: str,
     emit_delta: bool = True,
+    kind: str | None = None,
 ) -> str:
     """用户可见节点的 LLM 调用：流式 + 输入/输出审核 + 微批 LLM_DELTA。
 
@@ -478,6 +504,7 @@ async def run_streamed_llm(
         user_msg,
         game_id=ctx.game.id,
         run_id=ctx.run.id,
+        kind=kind or phase or "chat",
     )
     try:
         async for chunk in gen:

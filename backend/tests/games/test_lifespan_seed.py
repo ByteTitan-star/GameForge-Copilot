@@ -43,6 +43,12 @@ async def test_lifespan_skips_seed_outside_development(
 
     monkeypatch.setattr("app.main.seed_official_games", _spy)
     monkeypatch.setattr(settings, "env", "production")
+    # production 启动会校验 JWT；测 seed 跳过分支时需给合法 secret
+    monkeypatch.setattr(
+        settings,
+        "jwt_secret",
+        "ci-test-jwt-secret-at-least-32-chars!!",
+    )
 
     async with lifespan(None):  # type: ignore[arg-type]
         pass

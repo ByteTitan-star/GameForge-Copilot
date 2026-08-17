@@ -127,9 +127,8 @@ async def execute_code_or_repair(
         )
         base_user_msg = built.user_message
         if art_direction:
-            base_user_msg += (
-                "\n\n【已确认美术实现设计稿 JSON】\n"
-                + json.dumps(art_direction, ensure_ascii=False, indent=2)
+            base_user_msg += "\n\n【已确认美术实现设计稿 JSON】\n" + json.dumps(
+                art_direction, ensure_ascii=False, indent=2
             )
         generation_user_msg = base_user_msg
         if assets_block:
@@ -157,9 +156,7 @@ async def execute_code_or_repair(
         last_error = "; ".join(qa_errors)
         design_routing = routing_from_design_doc(design_doc)
         engine_id = design_doc["engine"]["id"]
-        use_vite = should_use_vite_pipeline(
-            design_routing, enabled=settings.build_pipeline_enabled
-        )
+        use_vite = should_use_vite_pipeline(design_routing, enabled=settings.build_pipeline_enabled)
 
         ctrl = await check_ctrl(ctx, design_doc)
         if ctrl != "ok":
@@ -202,9 +199,7 @@ async def execute_code_or_repair(
                 )
                 repair_raw = await streamed_llm(
                     ctx,
-                    build_project_repair_prompt(
-                        engine_id, list(design_routing.dependencies)
-                    ),
+                    build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                     repair_user,
                     "code",
                     emit_delta=False,
@@ -233,12 +228,10 @@ async def execute_code_or_repair(
             system_prompt = await build_repair_prompt_async(
                 design_doc["engine"]["id"],
                 complete=lambda s, u: streamed_llm(
-                    ctx, s, u, "code", emit_delta=False
+                    ctx, s, u, "code", emit_delta=False, kind="skill_select"
                 ),
             )
-            raw_output = await streamed_llm(
-                ctx, system_prompt, user_msg, "code", emit_delta=False
-            )
+            raw_output = await streamed_llm(ctx, system_prompt, user_msg, "code", emit_delta=False)
         else:
             user_msg = generation_user_msg
             if last_error:
@@ -252,12 +245,10 @@ async def execute_code_or_repair(
                 system_prompt = await build_code_prompt_async(
                     engine_id,
                     complete=lambda s, u: streamed_llm(
-                        ctx, s, u, "code", emit_delta=False
+                        ctx, s, u, "code", emit_delta=False, kind="skill_select"
                     ),
                 )
-            raw_output = await streamed_llm(
-                ctx, system_prompt, user_msg, "code", emit_delta=False
-            )
+            raw_output = await streamed_llm(ctx, system_prompt, user_msg, "code", emit_delta=False)
 
         for token, data_uri in data_uris.items():
             raw_output = raw_output.replace(token, data_uri)
@@ -272,14 +263,10 @@ async def execute_code_or_repair(
                 async def _repair_project(
                     current: ParsedCodeOutput, build_error: str
                 ) -> ParsedCodeOutput:
-                    repair_user = format_project_repair_input(
-                        base_user_msg, current, build_error
-                    )
+                    repair_user = format_project_repair_input(base_user_msg, current, build_error)
                     repair_raw = await streamed_llm(
                         ctx,
-                        build_project_repair_prompt(
-                            engine_id, list(design_routing.dependencies)
-                        ),
+                        build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                         repair_user,
                         "code",
                         emit_delta=False,
@@ -289,9 +276,7 @@ async def execute_code_or_repair(
                         design_routing,
                     )
 
-                loop_result = await run_project_build_loop(
-                    parsed, repair_fn=_repair_project
-                )
+                loop_result = await run_project_build_loop(parsed, repair_fn=_repair_project)
                 if loop_result.ok and loop_result.pipeline_result:
                     committed = await commit_project_build(
                         ctx,
@@ -311,9 +296,7 @@ async def execute_code_or_repair(
                 fail_logs = ""
                 if loop_result.pipeline_result:
                     fail_logs = (
-                        loop_result.pipeline_result.error
-                        or loop_result.pipeline_result.logs
-                        or ""
+                        loop_result.pipeline_result.error or loop_result.pipeline_result.logs or ""
                     )
                 await publish_event(
                     ctx.run.id,
@@ -335,9 +318,7 @@ async def execute_code_or_repair(
                     "code_ok": False,
                     "qa_ok": False,
                     "failure_kind": "build",
-                    "playtest_errors": [
-                        fail_logs or last_error or "Vite 构建失败"
-                    ],
+                    "playtest_errors": [fail_logs or last_error or "Vite 构建失败"],
                     "qa_diagnosis": qa_diagnosis,
                     "design_doc": design_doc,
                     "artifacts": artifacts,
@@ -358,8 +339,7 @@ async def execute_code_or_repair(
                         },
                         "status": "warn",
                         "summary": (
-                            "build=vite 但 LLM 未返回 project JSON，"
-                            "本 attempt 按 build 失败处理"
+                            "build=vite 但 LLM 未返回 project JSON，本 attempt 按 build 失败处理"
                         ),
                     },
                 )
@@ -369,8 +349,7 @@ async def execute_code_or_repair(
                     "code_ok": False,
                     "qa_ok": False,
                     "failure_kind": "build",
-                    "playtest_errors": list(parsed.errors)
-                    or ["LLM 未返回 project JSON"],
+                    "playtest_errors": list(parsed.errors) or ["LLM 未返回 project JSON"],
                     "qa_diagnosis": qa_diagnosis,
                     "design_doc": design_doc,
                     "artifacts": artifacts,
@@ -387,10 +366,7 @@ async def execute_code_or_repair(
         )
         if result.ok:
             await ctx.s.refresh(ctx.run)
-            if (
-                ctx.run.status != RunStatus.RUNNING.value
-                or ctx.run.ended_at is not None
-            ):
+            if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
                 raise run_finalized_exc
 
             version, _is_new = await claim_candidate_version(
@@ -401,7 +377,7 @@ async def execute_code_or_repair(
                 attempt=int(attempt),
             )
             artifact = f"{ctx.game.id}/{version}/index.html"
-            await store.write_artifact(ctx.game.id, version, result.files)
+            await store.write_artifact(ctx.game.id, version, dict[str, str | bytes](result.files))
             existing_gv = await ctx.s.scalar(
                 select(GameVersion).where(
                     GameVersion.game_id == ctx.game.id,
@@ -532,9 +508,7 @@ async def execute_playtest(
             motion_signal = None
         elif serve.is_project_artifact(ctx.game.id, version):
             artifact_dir = store.artifact_dir(ctx.game.id, version)
-            pt = await run_playtest_dist(
-                artifact_dir, want_thumb=settings.thumbnail_enabled
-            )
+            pt = await run_playtest_dist(artifact_dir, want_thumb=settings.thumbnail_enabled)
             result_ok = pt.ok
             errors = pt.errors
             console_logs = pt.console_logs

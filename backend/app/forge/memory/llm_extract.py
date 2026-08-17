@@ -33,17 +33,19 @@ async def extract_preferences_via_llm(text: str) -> list[dict[str, Any]]:
     if not raw or not preference_extract_configured():
         return []
     from app.enums import LLMProvider
-    from app.llm.provider import complete
+    from app.llm.platform_complete import platform_complete
 
     try:
-        content, _usage = await complete(
+        content, _usage = await platform_complete(
             LLMProvider(settings.preference_extract_provider),
             settings.preference_extract_apikey.strip(),
             settings.preference_extract_model.strip(),
             _SYSTEM,
             raw,
-            settings.preference_extract_base_url.strip() or None,
+            kind="preference_extract",
+            base_url=settings.preference_extract_base_url.strip() or None,
             max_tokens=512,
+            tags=["forge", "memory"],
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("preference extract LLM failed: %s", type(exc).__name__)

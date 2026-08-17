@@ -54,12 +54,42 @@ class _FakeGen:
 class _FakeClient:
     def __init__(self) -> None:
         self.gen = _FakeGen()
+        self.last_name: str | None = None
+        self.last_kwargs: dict[str, Any] = {}
 
     @contextmanager
     def start_as_current_observation(
-        self, *, as_type: str, name: str, **_: Any
+        self, *, as_type: str, name: str, **kwargs: Any
     ) -> Iterator[_FakeGen]:
+        self.last_name = name
+        self.last_kwargs = {"as_type": as_type, **kwargs}
         yield self.gen
+
+
+def test_observe_generation_name_uses_kind(monkeypatch) -> None:
+    """generation name 为 llm:{kind}，metadata 含 kind。"""
+    fake = _FakeClient()
+    monkeypatch.setattr(lf, "_client", lambda: fake)
+    with lf.observe_generation(
+        model="m",
+        provider="openai_compat",
+        system="s",
+        user_msg="u",
+        kind="preference_extract",
+        metadata={"user_id": "u1"},
+    ) as gen:
+        assert gen is fake.gen
+    assert fake.last_name == "llm:preference_extract"
+    meta = fake.last_kwargs.get("metadata") or {}
+    assert meta.get("kind") == "preference_extract"
+    assert meta.get("provider") == "openai_compat"
+    assert meta.get("user_id") == "u1"
+
+
+def test_propagate_trace_attrs_noop_when_unconfigured() -> None:
+    """无 key 时 propagate_trace_attrs 空操作，不抛。"""
+    with lf.propagate_trace_attrs(user_id="u", session_id="g", tags=["forge"]):
+        pass
 
 
 async def test_invoke_llm_writes_generation_when_enabled(monkeypatch) -> None:
@@ -75,13 +105,21 @@ async def test_invoke_llm_writes_generation_when_enabled(monkeypatch) -> None:
     monkeypatch.setattr(lf, "_client", lambda: fake)
 
     content, usage = await llm_client._invoke_llm(
-        LLMProvider.OPENAI_COMPAT, "k", "gpt-x", "sys", "hi", "https://x/v1", {}
+        LLMProvider.OPENAI_COMPAT,
+        "k",
+        "gpt-x",
+        "sys",
+        "hi",
+        "https://x/v1",
+        {},
+        kind="plan",
     )
     assert content == "<html></html>"
     assert usage == Usage(13, 9)
     # 关键：usage_details 必须是 int 字典（v4 SDK 入参），output 为 LLM 文本
     assert fake.gen.updated["output"] == "<html></html>"
     assert fake.gen.updated["usage_details"] == {"input": 13, "output": 9}
+    assert fake.last_name == "llm:plan"
 
 
 async def test_invoke_llm_marks_error_on_failure(monkeypatch) -> None:
