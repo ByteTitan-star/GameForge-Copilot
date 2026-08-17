@@ -93,6 +93,26 @@ def test_coerce_build_routing_from_plan() -> None:
     assert doc["build_routing"]["dependencies"] == ["matter-js"]
 
 
+def test_validate_design_doc_rejects_non_bilingual_title() -> None:
+    """title 必须为「English Name: 中文名」；纯中文/纯英文/无冒号均拒绝。"""
+    from tests.conftest import _valid_design_doc_json
+
+    doc = parse_design_doc(_valid_design_doc_json(), "T")
+    for bad in ("孤岛生存", "Isle Manager", "Isle Manager 孤岛生存"):
+        doc["title"] = bad
+        errors = validate_design_doc(doc)
+        assert any("title" in e for e in errors), bad
+
+
+def test_validate_design_doc_accepts_bilingual_title() -> None:
+    from tests.conftest import _valid_design_doc_json
+
+    doc = parse_design_doc(_valid_design_doc_json(), "T")
+    for ok in ("Isle Manager: 孤岛经营", "Neon Snake：霓虹蛇", "Block Rush:方块冲刺"):
+        doc["title"] = ok
+        assert validate_design_doc(doc) == [], ok
+
+
 def test_validate_requires_engine_rationale() -> None:
     from tests.conftest import _valid_design_doc_json
 

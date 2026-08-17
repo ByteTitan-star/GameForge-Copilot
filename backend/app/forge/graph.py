@@ -575,6 +575,12 @@ async def _pause_hitl(
     await ctx.s.refresh(ctx.run)
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
+    # 策划确认暂停：始终用 design_doc.title 覆盖 Game.title（双语正式名）
+    if node == "plan_confirm":
+        new_title = str(design_doc.get("title") or "").strip()[:255]
+        if new_title and new_title != ctx.game.title:
+            ctx.game.title = new_title
+            ctx.s.add(ctx.game)
     apply_paused_metadata(ctx.run)
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
     extra_data = dict(extra or {})

@@ -80,7 +80,7 @@ def _valid_design_doc_json() -> str:
     """构造能通过 validate_design_doc 的 v2 设计稿，供 plan/revise 节点测试使用。"""
     return json.dumps(
         {
-            "title": "测试游戏",
+            "title": "Test Blocks: 测试游戏",
             "gameplay": "玩家操控方块在网格中收集金币并躲避障碍，达到目标分数通关。",
             "controls": ["方向键或 WASD 移动；触屏滑动改变方向"],
             "levels": ["第一关", "第二关"],

@@ -29,6 +29,7 @@ _ENGINE_ENUM_TEXT = "、".join(sorted(SUPPORTED_ENGINES))
 # CDN 白名单中文展示：注入代码生成提示词，与 CSP / 试玩校验同源（单一改点）
 _CDN_ALLOWLIST = "、".join(sorted(ALLOWED_CDN_HOSTS))
 
+
 # 引擎 CDN 段：phaser3/pixijs 有钉死 URL；canvas 为空段。LLM 必须照搬，禁止改版本。
 def _engine_cdn_clause(engine_id: str) -> str:
     url = recommended_cdn_url(engine_id)
@@ -87,7 +88,7 @@ _CODE_COMMON = f"""
 DESIGN_DOC_SCHEMA = r"""
 {
   "schema_version": "2.0",
-  "title": "游戏名称",
+  "title": "English Name: 中文名（例 Isle Manager: 孤岛经营；禁止纯需求截断或单语）",
   "gameplay": "用一段话说明核心玩法、玩家目标与完整游戏循环",
   "controls": ["面向玩家的操作说明，例如：A/D 或方向键左右移动"],
   "levels": [
@@ -210,14 +211,17 @@ HTML5 游戏工程师实现的结构化设计稿。你的目标不是复述创�
    设计 3 个短关卡或 3 个清晰递进阶段；每一关引入或强化一个变化，不能只修改名称。
 6. controls 必须是玩家看得懂的操作说明；game_states、entities、level_specs 和
    acceptance_criteria 必须具体到工程师无需再次猜测。
-7. acceptance_criteria 至少 8 条，且必须覆盖以下 8 个维度各至少一条：启动/主菜单、
+7. title 必须为「English Name: 中文名」双语格式（英文在前、中文在后，用半角 :
+   或全角 ：分隔），例如 ``Isle Manager: 孤岛经营``、``Neon Snake：霓虹蛇``；
+   禁止只用中文、只用英文、或把用户需求原文截断当标题。
+8. acceptance_criteria 至少 8 条，且必须覆盖以下 8 个维度各至少一条：启动/主菜单、
    核心操作、关卡推进、胜利、失败、重新开始、键盘操作、触控操作；如需额外覆盖
    “控制台无致命错误”等，可在 8 条之外继续追加。每一条都必须可观察、可复现。
-8. 根据《引擎选型指南》为游戏选择一个渲染引擎写入 engine.id（受控枚举：
+9. 根据《引擎选型指南》为游戏选择一个渲染引擎写入 engine.id（受控枚举：
    {_ENGINE_ENUM_TEXT}），并在 engine.rationale 写清选择理由、在 engine.version
    填写精确版本号。默认倾向 canvas；只有玩法明确需要碰撞/物理/多场景/精灵动画时
    才上 phaser3，渲染是主要瓶颈且不需完整框架时才用 pixijs。一份游戏只选一个引擎。
-9. build_routing 决定代码交付形态：默认 build="none"（单 HTML，平台 sandbox 直跑）；
+10. build_routing 决定代码交付形态：默认 build="none"（单 HTML，平台 sandbox 直跑）；
    当 engine 为 phaser3/pixijs 且玩法需要 catalog 内 npm 依赖（如 matter-js 物理、
    howler 音频、gsap 动画）时设 build="vite"，renderer 与 engine.id 一致，ui 默认 none。
    dependencies 只能从 catalog 选额外包，不得自造包名；简单 canvas 游戏保持 build="none"。
@@ -246,7 +250,8 @@ PLAN_REVISE_PROMPT = f"""
 3. 仍须保证主菜单—游玩—暂停—失败/通关—重开的完整闭环，并保持单个离线
    index.html 可实现。
 4. 保留 title/gameplay/controls/levels 四个兼容字段，并保证它们与详细字段一致；
-   其中 levels[i] 必须与 level_specs[i].name 逐字相等，acceptance_criteria 至少 8 条。
+   其中 levels[i] 必须与 level_specs[i].name 逐字相等，acceptance_criteria 至少 8 条；
+   title 须保持「English Name: 中文名」双语格式。
 5. 新增的非关键假设写入 overview.assumptions，不得把用户明确要求降级为假设。
 6. 若修改影响引擎或依赖（如新增物理/音频库），同步更新 build_routing：需要 catalog
    npm 依赖时用 build="vite"，否则保持 build="none"。
@@ -338,9 +343,7 @@ async def _art_skill_appendix_async(
         return ""
     from app.forge.skills import resolve_skills_for_node_async
 
-    resolved = await resolve_skills_for_node_async(
-        "art", hints=hints or {}, complete=complete
-    )
+    resolved = await resolve_skills_for_node_async("art", hints=hints or {}, complete=complete)
     parts = [resolved.policy_text(), resolved.methodology_text()]
     return "\n\n".join(p for p in parts if p)
 
@@ -400,25 +403,19 @@ async def build_art_detail_prompt_async(
     return f"{ART_DETAIL_PROMPT}\n\n{appendix}"
 
 
-def build_qa_prompt(
-    *, failure_kind: str = "product", hints: dict[str, Any] | None = None
-) -> str:
+def build_qa_prompt(*, failure_kind: str = "product", hints: dict[str, Any] | None = None) -> str:
     """Diagnose system prompt；可选注入 repair/playtest Methodology。"""
     if not settings.skills_router_enabled:
         return QA_PROMPT
     merged = {"failure_kind": failure_kind, **(hints or {})}
     resolved = resolve_skills_for_node("diagnose", hints=merged)
-    appendix = "\n\n".join(
-        p for p in (resolved.policy_text(), resolved.methodology_text()) if p
-    )
+    appendix = "\n\n".join(p for p in (resolved.policy_text(), resolved.methodology_text()) if p)
     if not appendix:
         return QA_PROMPT
     return f"{QA_PROMPT}\n\n{appendix}"
 
 
-def build_code_prompt(
-    engine_id: str, hints: dict[str, Any] | None = None
-) -> str:
+def build_code_prompt(engine_id: str, hints: dict[str, Any] | None = None) -> str:
     """按选定引擎拼装代码生成 system prompt：通用骨架 + 引擎方法论 + 钉死 CDN。
 
     不同引擎的专属写法（Scene 结构 / Ticker / 裸 RAF）从独立方法论 md 注入，
@@ -458,9 +455,7 @@ async def build_code_prompt_async(
     ):
         from app.forge.skills import resolve_skills_for_node_async
 
-        resolved = await resolve_skills_for_node_async(
-            "code", hints=merged, complete=complete
-        )
+        resolved = await resolve_skills_for_node_async("code", hints=merged, complete=complete)
         merged["methodology_ids"] = [s.id for s in resolved.methodology]
     return build_code_prompt(engine_id, hints=merged)
 
@@ -481,16 +476,12 @@ async def build_repair_prompt_async(
     ):
         from app.forge.skills import resolve_skills_for_node_async
 
-        resolved = await resolve_skills_for_node_async(
-            "repair", hints=merged, complete=complete
-        )
+        resolved = await resolve_skills_for_node_async("repair", hints=merged, complete=complete)
         merged["methodology_ids"] = [s.id for s in resolved.methodology]
     return build_repair_prompt(engine_id, hints=merged)
 
 
-def _build_code_prompt_routed(
-    engine_id: str, hints: dict[str, Any] | None = None
-) -> str:
+def _build_code_prompt_routed(engine_id: str, hints: dict[str, Any] | None = None) -> str:
     """P2：Policy 强制注入 + 仅加载所选引擎 Methodology（不全量 skill 正文）。"""
     eid = normalize_engine_id(engine_id)
     merged = {"engine_id": eid, **(hints or {})}
@@ -502,11 +493,7 @@ def _build_code_prompt_routed(
         for part in (
             _CODE_COMMON,
             policy,
-            (
-                f"【所选引擎：{eid} 的实现方法论】\n{methodology}"
-                if methodology
-                else ""
-            ),
+            (f"【所选引擎：{eid} 的实现方法论】\n{methodology}" if methodology else ""),
             _engine_cdn_clause(eid),
             (
                 "输出要求：只输出完整 HTML 源码，第一个非空字符必须属于 <!DOCTYPE html>，"
@@ -517,9 +504,7 @@ def _build_code_prompt_routed(
     )
 
 
-def build_repair_prompt(
-    engine_id: str, hints: dict[str, Any] | None = None
-) -> str:
+def build_repair_prompt(engine_id: str, hints: dict[str, Any] | None = None) -> str:
     """修复工程师 prompt：在当前实现基础上修根因，保持原引擎选型不变。
 
     与 build_code_prompt 共享通用骨架与引擎方法论，额外约束「不切换引擎」防回归。
@@ -563,9 +548,7 @@ def build_repair_prompt(
     )
 
 
-def _build_repair_prompt_routed(
-    engine_id: str, hints: dict[str, Any] | None = None
-) -> str:
+def _build_repair_prompt_routed(engine_id: str, hints: dict[str, Any] | None = None) -> str:
     eid = normalize_engine_id(engine_id)
     merged = {"engine_id": eid, "failure_kind": "product", **(hints or {})}
     resolved = resolve_skills_for_node("repair", hints=merged)
@@ -653,6 +636,7 @@ def build_project_prompt(engine_id: str, extra_dependencies: list[str] | None = 
         )
         if part
     )
+
 
 def build_project_repair_prompt(engine_id: str, extra_dependencies: list[str] | None = None) -> str:
     """Vite 构建失败后的 Repair Agent prompt（§15-16：仅改 source / dependencies）。"""
