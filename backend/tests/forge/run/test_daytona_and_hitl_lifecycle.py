@@ -109,6 +109,60 @@ async def test_daytona_lifecycle_with_mocked_sdk(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+async def test_daytona_destroy_by_handle_when_live_missed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """热缓存丢失时仍按 session.handle 调 API delete（ADR-11 §7）。"""
+    settings.sandbox_daytona_enabled = True
+    settings.daytona_api_key = "dtn_test"
+    fake = _FakeSandbox()
+    client = _FakeClient(fake)
+    monkeypatch.setattr(DaytonaSandbox, "_new_client", lambda self: client)
+
+    async def _noop(*_a: Any, **_k: Any) -> None:
+        return None
+
+    monkeypatch.setattr("app.sandbox.daytona._register_remote_handle", _noop)
+    monkeypatch.setattr("app.sandbox.daytona._unregister_remote_handle", _noop)
+
+    backend = DaytonaSandbox()
+    session = await backend.create(tier="standard")
+    clear_daytona_live_for_tests()  # 模拟进程崩溃丢热缓存
+    await backend.destroy(session)
+    assert session.closed
+    assert client.deleted is True
+
+
+@pytest.mark.asyncio
+async def test_reconcile_daytona_orphans_deletes_redis_handles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.sandbox_daytona_enabled = True
+    settings.daytona_api_key = "dtn_test"
+    fake = _FakeSandbox()
+    client = _FakeClient(fake)
+    monkeypatch.setattr(DaytonaSandbox, "_new_client", lambda self: client)
+
+    async def _listed() -> set[str]:
+        return {"sbx_orphan_1"}
+
+    unregistered: list[str] = []
+
+    async def _track_unreg(handle: str) -> None:
+        unregistered.append(handle)
+
+    monkeypatch.setattr("app.sandbox.daytona._listed_remote_handles", _listed)
+    monkeypatch.setattr("app.sandbox.daytona._unregister_remote_handle", _track_unreg)
+
+    from app.sandbox.daytona import reconcile_daytona_orphans
+
+    n = await reconcile_daytona_orphans()
+    assert n == 1
+    assert client.deleted is True
+    assert unregistered == ["sbx_orphan_1"]
+
+
+@pytest.mark.asyncio
 async def test_hitl_destroy_and_restore_local() -> None:
     backend = LocalSandbox()
     session = await backend.create(tier="heavy")

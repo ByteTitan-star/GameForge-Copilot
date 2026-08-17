@@ -1,6 +1,9 @@
 """Daytona Sandbox 适配（ADR-03：首选云沙箱）。
 
 依赖可选 extra ``daytona``（``uv sync --extra daytona``）。未安装 SDK 或未开 flag 时拒绝 create。
+
+进程内 ``_LIVE`` 仅作热缓存；远端 sandbox id 同时登记到 Redis，供 worker 启动对账回收
+（ADR-11 §7），避免进程崩溃后远端沙箱泄漏计费。
 """
 
 from __future__ import annotations
@@ -8,6 +11,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from typing import Any
+
+import redis.asyncio as redis
 
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
@@ -19,6 +24,7 @@ log = logging.getLogger(__name__)
 _WORKDIR = "/tmp/gameforge"  # nosec B108 — Daytona sandbox workdir
 # 进程内持有活会话；HITL destroy 必须 delete 并弹出
 _LIVE: dict[str, dict[str, Any]] = {}
+_REDIS_HANDLES_KEY = "gf:daytona:live_handles"
 
 
 class DaytonaSandbox:
@@ -40,6 +46,7 @@ class DaytonaSandbox:
             handle=sandbox_id,
         )
         _LIVE[session.id] = {"client": daytona, "sandbox": sbx}
+        await _register_remote_handle(sandbox_id)
         return session
 
     async def execute(
@@ -87,14 +94,13 @@ class DaytonaSandbox:
         if session.closed:
             return
         entry = _LIVE.pop(session.id, None)
-        if entry is not None:
-            client = entry.get("client")
-            sbx = entry.get("sandbox")
-            try:
-                if client is not None and sbx is not None:
-                    await client.delete(sbx)
-            except Exception:  # noqa: BLE001 destroy 路径不得抛崩
-                log.exception("daytona delete failed session=%s", session.id)
+        handle = str(session.handle or "").strip()
+        try:
+            await _delete_remote(entry=entry, handle=handle)
+        except Exception:  # noqa: BLE001 destroy 路径不得抛崩
+            log.exception("daytona delete failed session=%s handle=%s", session.id, handle)
+        if handle:
+            await _unregister_remote_handle(handle)
         session.closed = True
         session.handle = None
 
@@ -110,6 +116,7 @@ class DaytonaSandbox:
         except Exception as exc:  # noqa: BLE001
             raise AppError(ErrorCode.SANDBOX_FAILED, f"Daytona reconnect failed: {exc}") from exc
         _LIVE[session.id] = {"client": daytona, "sandbox": sbx}
+        await _register_remote_handle(str(session.handle))
         return sbx
 
     async def _collect(self, sbx: Any, *, collect_root: str) -> dict[str, bytes]:
@@ -163,3 +170,83 @@ def _import_daytona() -> tuple[Any, Any]:
 
 def clear_daytona_live_for_tests() -> None:
     _LIVE.clear()
+
+
+async def reconcile_daytona_orphans() -> int:
+    """删除 Redis 登记但本进程 ``_LIVE`` 已不持有的远端 sandbox（worker 启动对账）。"""
+    if not settings.sandbox_daytona_enabled or not (settings.daytona_api_key or "").strip():
+        return 0
+    handles = await _listed_remote_handles()
+    if not handles:
+        return 0
+    live_remote_ids = {
+        str(getattr(entry.get("sandbox"), "id", "") or "")
+        for entry in _LIVE.values()
+        if entry.get("sandbox") is not None
+    }
+    removed = 0
+    for handle in handles:
+        if not handle or handle in live_remote_ids:
+            continue
+        try:
+            await _delete_remote(entry=None, handle=handle)
+            await _unregister_remote_handle(handle)
+            removed += 1
+        except Exception:  # noqa: BLE001 best-effort
+            log.warning("daytona orphan reconcile skip handle=%s", handle, exc_info=True)
+            await _unregister_remote_handle(handle)
+    return removed
+
+
+async def _delete_remote(*, entry: dict[str, Any] | None, handle: str) -> None:
+    client = entry.get("client") if entry else None
+    sbx = entry.get("sandbox") if entry else None
+    if client is not None and sbx is not None:
+        await client.delete(sbx)
+        return
+    if not handle:
+        return
+    client = DaytonaSandbox()._new_client()
+    sbx = await client.get(handle)
+    await client.delete(sbx)
+
+
+async def _register_remote_handle(handle: str) -> None:
+    handle = (handle or "").strip()
+    if not handle:
+        return
+    try:
+        r = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await r.sadd(_REDIS_HANDLES_KEY, handle)
+        finally:
+            await r.aclose()
+    except Exception:  # noqa: BLE001 Redis 不可用不阻断沙箱主路径
+        log.debug("daytona register handle failed handle=%s", handle, exc_info=True)
+
+
+async def _unregister_remote_handle(handle: str) -> None:
+    handle = (handle or "").strip()
+    if not handle:
+        return
+    try:
+        r = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await r.srem(_REDIS_HANDLES_KEY, handle)
+        finally:
+            await r.aclose()
+    except Exception:  # noqa: BLE001
+        log.debug("daytona unregister handle failed handle=%s", handle, exc_info=True)
+
+
+async def _listed_remote_handles() -> set[str]:
+    try:
+        r = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            members = await r.smembers(_REDIS_HANDLES_KEY)
+        finally:
+            await r.aclose()
+    except Exception:  # noqa: BLE001
+        log.debug("daytona list handles failed", exc_info=True)
+        return set()
+    return {str(m).strip() for m in (members or set()) if str(m).strip()}

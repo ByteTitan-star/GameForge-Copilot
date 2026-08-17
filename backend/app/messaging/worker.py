@@ -360,7 +360,7 @@ def main() -> None:
 
         try:
             stats = await cleanup_orphan_sandbox_resources()
-            if stats["containers"] or stats["dirs"]:
+            if stats.get("containers") or stats.get("dirs") or stats.get("daytona"):
                 log.info("sandbox orphan cleanup %s", stats)
         except Exception:
             log.exception("sandbox orphan cleanup failed")

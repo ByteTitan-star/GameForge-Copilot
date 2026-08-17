@@ -15,10 +15,21 @@ _TEMP_PREFIXES = ("gf-docker-sandbox-", "gf-local-sandbox-", "gf-builder-")
 
 
 async def cleanup_orphan_sandbox_resources() -> dict[str, int]:
-    """Best-effort：删命名前缀孤儿容器 + tempfile 下匹配前缀目录。"""
+    """Best-effort：删命名前缀孤儿容器 + tempfile 下匹配前缀目录 + Daytona Redis 对账。"""
     containers = await _cleanup_orphan_containers()
     dirs = _cleanup_temp_dirs()
-    return {"containers": containers, "dirs": dirs}
+    daytona = await _cleanup_daytona_orphans()
+    return {"containers": containers, "dirs": dirs, "daytona": daytona}
+
+
+async def _cleanup_daytona_orphans() -> int:
+    try:
+        from app.sandbox.daytona import reconcile_daytona_orphans
+
+        return await reconcile_daytona_orphans()
+    except Exception:  # noqa: BLE001
+        log.warning("daytona orphan reconcile failed", exc_info=True)
+        return 0
 
 
 async def _cleanup_orphan_containers() -> int:
