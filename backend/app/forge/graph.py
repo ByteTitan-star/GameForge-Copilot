@@ -797,8 +797,11 @@ def _build_graph(ctx: _Ctx) -> Any:
         "revise_art_options",
         "art_detail",
         "code_qa_loop",
+        "chat_reply",
     ]:
         if not state.get("resume"):
+            if state.get("entry_phase") == "chat":
+                return "chat_reply"
             if state.get("entry_phase") == "code":
                 return "code_qa_loop"
             return "plan"
@@ -833,6 +836,54 @@ def _build_graph(ctx: _Ctx) -> Any:
         ):
             return _resume_from_user_pause(st)
         return "art_options"
+
+    async def chat_reply_node(state: ForgeState) -> dict:
+        """已有版本时的纯问答：不跑策划/美术/开发/测试全流程。"""
+        with observe_phase("plan"):
+            await _set_phase(ctx, RunPhase.PLAN)
+            design_doc = state.get("design_doc") or {}
+            doc_text = design_doc if isinstance(design_doc, str) else design_doc_to_text(design_doc)
+            question = state.get("entry_requirement") or ctx.run.requirement
+            system = (
+                "你是 GameForge 游戏助手。根据已生成的策划稿回答用户问题，"
+                "说明玩法与操作；不要重新设计游戏，不要输出 JSON。"
+            )
+            user_msg = f"【策划稿】\n{doc_text}\n\n【用户问题】\n{question}"
+            answer = await _streamed_llm_or_fallback(ctx, system, user_msg, "plan", emit_delta=True)
+            content = (answer or "").strip() or "暂时无法回答，请稍后再试。"
+            await add_message(
+                ctx.s,
+                game_id=ctx.game.id,
+                run_id=ctx.run.id,
+                user_id=ctx.run.user_id,
+                role="assistant",
+                kind="chat_reply",
+                content=content,
+                metadata={"entry_phase": "chat"},
+                dedupe_key=f"{ctx.run.id}:chat_reply",
+            )
+            await ctx.s.refresh(ctx.run)
+            if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+                raise RunFinalized
+            ctx.run.status = RunStatus.DONE.value
+            ctx.run.phase = RunPhase.DONE.value
+            ctx.run.ended_at = datetime.now(UTC)
+            await ctx.s.commit()
+            ver = ctx.game.current_version
+            gate = derive_artifact_gate(build_ok=True, qa_ok=True)
+            preview = f"/draft/{ctx.game.id}/{ver}" if ver > 0 else None
+            await publish_event(
+                ctx.run.id,
+                WSEventType.DONE,
+                {
+                    "run_id": str(ctx.run.id),
+                    "game_id": str(ctx.game.id),
+                    "version": ver,
+                    "preview_url": preview,
+                    **gate.as_dict(),
+                },
+            )
+            return {}
 
     async def plan_node(state: ForgeState) -> dict:
         with observe_phase("plan"):
@@ -1359,6 +1410,7 @@ def _build_graph(ctx: _Ctx) -> Any:
         }
 
     g = StateGraph(ForgeState)
+    g.add_node("chat_reply", chat_reply_node, **_node_kwargs("plan"))
     g.add_node("plan", plan_node, **_node_kwargs("plan"))
     g.add_node("revise_plan", revise_plan_node, **_node_kwargs("plan"))
     g.add_node("art_options", art_options_node, **_node_kwargs("art"))
@@ -1376,8 +1428,10 @@ def _build_graph(ctx: _Ctx) -> Any:
             "revise_art_options": "revise_art_options",
             "art_detail": "art_detail",
             "code_qa_loop": "code_qa_loop",
+            "chat_reply": "chat_reply",
         },
     )
+    g.add_edge("chat_reply", END)
     g.add_conditional_edges("plan", after_plan, {END: END})
     g.add_conditional_edges("revise_plan", after_plan, {END: END})
     g.add_conditional_edges("art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END})
@@ -1601,7 +1655,7 @@ async def _run_body(
         art_options = st.get("art_options") or {}
         run.status = RunStatus.RUNNING.value
         await s.commit()
-    elif entry_phase == "code" and game.current_version > 0:
+    elif entry_phase in ("code", "chat") and game.current_version > 0:
         gv = await s.scalar(
             select(GameVersion).where(
                 GameVersion.game_id == game.id,

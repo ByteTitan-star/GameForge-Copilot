@@ -7604,7 +7604,8 @@
         "type": "string",
         "enum": [
           "plan",
-          "code"
+          "code",
+          "chat"
         ],
         "title": "EntryPhase"
       },

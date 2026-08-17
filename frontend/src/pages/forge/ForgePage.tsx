@@ -141,7 +141,7 @@ export function ForgePage() {
   // 用户是否手动操作过试玩区可见性。一旦手动开关，done 事件就不再自动覆盖，
   // 避免生成过程中关掉又被「轮询兜底/done」强行打开。
   const userToggledStageRef = useRef(false);
-  const [logDockOpen, setLogDockOpen] = useState(true);
+  const [logDockOpen, setLogDockOpen] = useState(false);
   const [stagePipeline, setStagePipeline] =
     useState<StagePipelineState>(emptyStagePipeline);
   const [retryBusy, setRetryBusy] = useState(false);
@@ -207,7 +207,9 @@ export function ForgePage() {
     [trial, hasLlmConfig, runStatus, busy, hitl, previewUrl, runId, runErrors],
   );
 
-  const showFailureRecovery = Boolean(!trial && runId && runStatus === RunStatus.failed);
+  const showFailureRecovery = Boolean(
+    !trial && runId && runStatus === RunStatus.failed && !hitl,
+  );
   const failureSummary = runId ? runErrors[runId] : undefined;
 
   useEffect(() => {
@@ -540,12 +542,18 @@ export function ForgePage() {
 
   async function startGeneration(requirement: string) {
     if (!token || !user) return;
-    // 新一轮生成：重置手动操作标记并默认收起试玩区，四阶段全跑完（done）后再自动展开一次。
-    userToggledStageRef.current = false;
-    setStageOpen(false);
+    const hasPlayable =
+      Boolean(previewUrl) || (detail.data?.current_version ?? 0) >= 1;
+    // 迭代：保持左右分栏与旧版试玩；首跑才收起试玩区。
+    if (!hasPlayable) {
+      userToggledStageRef.current = false;
+      setStageOpen(false);
+      setPreviewUrl(null);
+    } else {
+      setStageOpen(true);
+    }
     setBusy(true);
     setHitl(null);
-    setPreviewUrl(null);
     setSideTab("log");
     setStagePipeline(applyPhaseStart(emptyStagePipeline(), RunPhase.plan));
     closeHandle();
@@ -790,7 +798,24 @@ export function ForgePage() {
       setRunStatus(resp.status as RunStatus);
       setPhase("paused");
       setBusy(false);
-      pushItem({ label: t("runPaused"), detail: runId, tone: "info" });
+      const logPhase =
+        phase === RunPhase.plan ||
+        phase === RunPhase.art ||
+        phase === RunPhase.code ||
+        phase === RunPhase.qa
+          ? phase
+          : RunPhase.plan;
+      pushItem({
+        label: t("runPausedByUser"),
+        detail: runId,
+        tone: "info",
+        phase: logPhase,
+      });
+      setRunErrors((prev) => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
     } catch (e) {
       toast.error(formatApiError(e, t("pauseFailed")));
     }
@@ -937,7 +962,7 @@ export function ForgePage() {
     >
       <div className="gf-forge-grid-bg" aria-hidden />
 
-      <header className="gf-forge-toolbar relative z-[2] flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.07] bg-white/90 px-3 py-3 backdrop-blur-xl md:px-4">
+      <header className="gf-forge-toolbar relative z-[2] flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.07] bg-white/90 px-4 py-3 backdrop-blur-xl md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/games"
@@ -1097,7 +1122,7 @@ export function ForgePage() {
       </header>
 
       {phase !== "idle" || busy || items.length > 0 ? (
-        <div className="relative z-[2] flex shrink-0 items-center border-b border-black/[0.06] bg-white px-4 py-2">
+        <div className="relative z-[2] flex shrink-0 items-center border-b border-black/[0.06] bg-white px-4 py-2 md:px-6">
           <StagePipeline
             variant="bar"
             runPhase={phase}

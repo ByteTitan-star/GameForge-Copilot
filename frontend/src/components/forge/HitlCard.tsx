@@ -16,8 +16,8 @@ type Props = {
   busy?: boolean;
 };
 
-/** 按内容行数估算 textarea 行高，避免固定 rows=4 留白过多 */
-function textareaRows(text: string, min = 2, max = 3): number {
+/** 按内容行数估算 textarea 行高 */
+function textareaRows(text: string, min = 3, max = 4): number {
   const lines = text.split("\n").length;
   return Math.min(max, Math.max(min, lines));
 }
@@ -219,10 +219,10 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
           </label>
         </div>
       ) : (
-        <div className="space-y-2 p-3 sm:px-3.5">
+        <div className="space-y-2.5 p-3 sm:px-3.5">
           <p className="text-[11px] font-medium leading-4 text-black/65">{t("continueAfterApproval")}</p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block min-w-0">
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            <label className="block min-w-0 sm:col-span-1">
               <span className={labelClass}>{t("gameplay")}</span>
               <textarea
                 value={gameplay}
@@ -230,10 +230,10 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                 rows={textareaRows(gameplay)}
                 name="hitl-gameplay"
                 autoComplete="off"
-                className={`${fieldClass} focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
+                className={`${fieldClass} min-h-[4.75rem] focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
               />
             </label>
-            <label className="block min-w-0">
+            <label className="block min-w-0 sm:col-span-1">
               <span className={labelClass}>{t("controls")}</span>
               <textarea
                 value={controls}
@@ -241,13 +241,13 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                 rows={textareaRows(controls)}
                 name="hitl-controls"
                 autoComplete="off"
-                className={`${fieldClass} focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
+                className={`${fieldClass} min-h-[4.75rem] focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
               />
             </label>
-            <label className="block min-w-0">
+            <label className="block min-w-0 sm:col-span-1">
               <span className={labelClass}>{t("levels")}</span>
               <div
-                className={`${fieldClass} min-h-[calc(2rem+1.25rem+2px)] overflow-y-auto py-1.5 focus-within:border-[#d09a2d] focus-within:ring-2 focus-within:ring-[#d09a2d]/12`}
+                className={`${fieldClass} min-h-[4.75rem] overflow-y-auto py-1.5 focus-within:border-[#d09a2d] focus-within:ring-2 focus-within:ring-[#d09a2d]/12`}
                 aria-label={t("levels")}
               >
                 {parsed.levels.length > 0 ? (
@@ -266,23 +266,23 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                 )}
               </div>
             </label>
-            <label className="block min-w-0">
-              <span className={`${labelClass} flex items-center gap-1`}>
-                <MessageSquareText className="h-3 w-3" aria-hidden="true" />
-                {t("hitlModifyFeedback")}
-              </span>
-              <textarea
-                aria-label={t("hitlModifyFeedback")}
-                value={modifyFeedback}
-                onChange={(event) => setModifyFeedback(event.target.value)}
-                rows={2}
-                placeholder={t("describeIteration")}
-                name="hitl-feedback"
-                autoComplete="off"
-                className={`${fieldClass} placeholder:font-medium placeholder:text-black/40 focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
-              />
-            </label>
           </div>
+          <label className="block">
+            <span className={`${labelClass} flex items-center gap-1`}>
+              <MessageSquareText className="h-3 w-3" aria-hidden="true" />
+              {t("hitlModifyFeedback")}
+            </span>
+            <textarea
+              aria-label={t("hitlModifyFeedback")}
+              value={modifyFeedback}
+              onChange={(event) => setModifyFeedback(event.target.value)}
+              rows={2}
+              placeholder={t("describeIteration")}
+              name="hitl-feedback"
+              autoComplete="off"
+              className={`${fieldClass} placeholder:font-medium placeholder:text-black/40 focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
+            />
+          </label>
         </div>
       )}
 

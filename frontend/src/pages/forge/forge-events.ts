@@ -85,6 +85,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         detail: etaSeconds ? `~${Math.round(etaSeconds / 60)}min` : undefined,
         tone: 'info',
         at: ev.ts,
+        phase,
       })
       // art 节点不调 LLM（只选素材）执行极快，仅靠进度条一闪而过会让用户误以为
       // 「美术没完成就跳到开发」。把各阶段进入消息也推进对话流，确保阶段切换在主区域可见。
@@ -108,6 +109,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         detail: `${String(p.model)} · ${String(p.input_tokens)}→${String(p.output_tokens)}`,
         tone: 'muted',
         at: ev.ts,
+        phase: (p.phase as RunPhase | undefined) ?? undefined,
       })
       return
     case WSEventType.llm_delta: {
@@ -124,6 +126,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         detail: String(p.summary ?? ''),
         tone: p.status === 'ok' ? 'ok' : 'err',
         at: ev.ts,
+        phase: (p.phase as RunPhase | undefined) ?? undefined,
       })
       return
     case WSEventType.hitl_wait: {
@@ -142,6 +145,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         detail: isArtReview ? artNames || payload.node : doc.title || payload.node,
         tone: 'warn',
         at: ev.ts,
+        phase: isArtReview ? RunPhase.art : RunPhase.plan,
       })
       h.appendMessages(
         [
@@ -165,6 +169,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         label: `${h.t('buildComplete')} · v${String(p.version)}`,
         tone: 'ok',
         at: ev.ts,
+        phase: RunPhase.code,
       })
       return
     }
@@ -177,6 +182,7 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
         detail: Array.isArray(p.issues) ? (p.issues as string[]).join(' · ') : String(p.log_excerpt ?? ''),
         tone: p.passed ? 'ok' : 'err',
         at: ev.ts,
+        phase: RunPhase.qa,
       })
       return
     case WSEventType.usage: {
@@ -250,7 +256,7 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   h.setPreviewVersion?.(ver)
   // 四阶段全部跑完，触发「自动打开试玩区」；是否真正打开由调用方按用户手动操作记录决定。
   h.onStageAutoOpen?.()
-  h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts })
+  h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts, phase: RunPhase.qa })
   h.appendMessages(
     [
       {
