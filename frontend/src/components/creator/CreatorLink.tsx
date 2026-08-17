@@ -29,7 +29,7 @@ export function CreatorLink({
 
   if (official) {
     return (
-      <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/50', className)}>
+      <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/60', className)}>
         {t('officialCreator')}
       </span>
     )
@@ -39,7 +39,7 @@ export function CreatorLink({
   if (!handle) {
     if (authorDisplay) {
       return (
-        <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/50', className)}>
+        <span className={cn('text-xs', theme ? 'gf-page-muted' : 'text-white/60', className)}>
           {authorDisplay}
         </span>
       )

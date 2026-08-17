@@ -33,12 +33,25 @@ def _mask(apikey: str) -> str:
     return f"{apikey[:3]}***{apikey[-3:]}" if len(apikey) > 6 else "***"
 
 
+_INVALID_APIKEY_MASK = "*** (密钥失效，请删除后重新添加)"
+_RESAVE_APIKEY_HINT = (
+    "apikey 解密失败，可能因 LLM_APIKEY_ENCRYPTION_KEY 或 JWT_SECRET 已变更，请删除该配置后重新添加"
+)
+
+
+def _masked_apikey(cfg: UserLLMConfig) -> str:
+    plain = crypto.try_decrypt_apikey(cfg.apikey_enc)
+    if plain is None:
+        return _INVALID_APIKEY_MASK
+    return _mask(plain)
+
+
 def _to_resp(cfg: UserLLMConfig) -> LLMConfigResp:
     return LLMConfigResp(
         config_id=cfg.id,
         provider=LLMProvider(cfg.provider),
         model=cfg.model,
-        apikey_masked=_mask(crypto.decrypt_apikey(cfg.apikey_enc)),
+        apikey_masked=_masked_apikey(cfg),
         base_url=cfg.base_url,
         is_default=cfg.is_default,
     )
@@ -70,7 +83,10 @@ async def list_models_for_user(
             UserLLMConfig.provider == llm_provider.value,
         )
     )
-    apikey = crypto.decrypt_apikey(cfg.apikey_enc) if cfg else ""
+    apikey = ""
+    if cfg:
+        plain = crypto.try_decrypt_apikey(cfg.apikey_enc)
+        apikey = plain or ""
     base_url = cfg.base_url if cfg else None
     models = await provider.list_models(llm_provider, apikey, base_url)
     await r.set(cache_key, json.dumps(models), ex=settings.models_cache_ttl_s)
@@ -154,9 +170,12 @@ async def test_draft_config(req: LLMConfigTestReq) -> LLMConfigDryTestResp:
 
 async def test_config(db: AsyncSession, user: User, config_id: UUID) -> LLMConfigTestResp:
     cfg = await _get_owned(db, user, config_id)
+    plain = crypto.try_decrypt_apikey(cfg.apikey_enc)
+    if plain is None:
+        return LLMConfigTestResp(config_id=cfg.id, tested_ok=False, error=_RESAVE_APIKEY_HINT)
     ok, err = await provider.test_connectivity(
         LLMProvider(cfg.provider),
-        crypto.decrypt_apikey(cfg.apikey_enc),
+        plain,
         cfg.model,
         cfg.base_url,
     )

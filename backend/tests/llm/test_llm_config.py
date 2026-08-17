@@ -218,3 +218,49 @@ async def test_not_found_404(
     r = await auth_client.patch(f"{BASE}/{fake_id}", json={"model": "x"})
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "LLM_CONFIG_NOT_FOUND"
+
+
+def test_masked_apikey_shows_invalid_when_decrypt_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from uuid import uuid4
+
+    from app.llm import crypto, services
+    from app.models.llm_config import UserLLMConfig
+
+    monkeypatch.setattr(crypto, "try_decrypt_apikey", lambda _ciphertext: None)
+    cfg = UserLLMConfig(
+        id=uuid4(),
+        user_id=uuid4(),
+        provider="openai",
+        model="gpt-4o",
+        apikey_enc="invalid",
+        is_default=True,
+    )
+    resp = services._to_resp(cfg)
+    assert "密钥失效" in resp.apikey_masked
+
+
+async def test_saved_test_returns_error_when_apikey_undecryptable(
+    auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from uuid import UUID
+
+    from app.core.db import SessionLocal
+    from app.models.llm_config import UserLLMConfig
+
+    monkeypatch.setattr(provider, "test_connectivity", _ok)
+    r = await auth_client.post(BASE, json={**_BODY, "is_default": True})
+    assert r.status_code == 201, r.text
+    cfg_id = r.json()["data"]["config_id"]
+
+    async with SessionLocal() as db:
+        cfg = await db.get(UserLLMConfig, UUID(cfg_id))
+        assert cfg is not None
+        cfg.apikey_enc = "gAAAAABinvalid_ciphertext_for_test"
+        await db.commit()
+
+    r = await auth_client.post(f"{BASE}/{cfg_id}/test")
+    assert r.status_code == 200
+    assert r.json()["data"]["tested_ok"] is False
+    assert "解密失败" in (r.json()["data"]["error"] or "")
