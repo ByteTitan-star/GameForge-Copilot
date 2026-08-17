@@ -23,7 +23,10 @@ function textareaRows(text: string, min = 2, max = 3): number {
 }
 
 const fieldClass =
-  "w-full resize-none border border-black/[0.1] bg-white px-2.5 py-1.5 text-[12px] leading-5 text-[#20262d] outline-none";
+  "w-full resize-none border border-black/[0.12] bg-white px-2.5 py-1.5 text-[12px] font-medium leading-5 text-[#1a2028] outline-none";
+
+const labelClass =
+  "mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-black/70";
 
 function ReviewHeader({ art, title }: { art: boolean; title: string }) {
   const t = useT();
@@ -45,17 +48,17 @@ function ReviewHeader({ art, title }: { art: boolean; title: string }) {
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span className="font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-black/45">
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-black/65">
               {t("manualReview")}
             </span>
-            <span className="text-black/20" aria-hidden="true">
+            <span className="text-black/25" aria-hidden="true">
               /
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-black/65">
               {art ? "02/03" : "01/03"}
             </span>
           </div>
-          <h3 className="truncate text-[13px] font-semibold leading-tight tracking-[-0.01em] text-[#20262d]">
+          <h3 className="truncate text-[13px] font-bold leading-tight tracking-[-0.01em] text-[#141a21]">
             {title}
           </h3>
         </div>
@@ -146,7 +149,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
 
       {isArtReview ? (
         <div className="space-y-2.5 p-3 sm:px-3.5">
-          <p className="text-[12px] leading-4 text-black/55">{t("chooseArtDirectionHint")}</p>
+          <p className="text-[12px] font-medium leading-4 text-black/65">{t("chooseArtDirectionHint")}</p>
 
           <div className="grid gap-2 sm:grid-cols-2">
             {artOptions.map((option) => {
@@ -175,7 +178,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                       >
                         {active ? <Check className="h-3 w-3" aria-hidden="true" /> : option.id}
                       </span>
-                      <span className="truncate text-[12px] font-semibold text-[#20262d]">{option.name}</span>
+                      <span className="truncate text-[12px] font-bold text-[#141a21]">{option.name}</span>
                     </span>
                     {option.recommended ? (
                       <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[#17665f]">
@@ -183,7 +186,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                       </span>
                     ) : null}
                   </span>
-                  <span className="mt-1.5 line-clamp-3 flex-1 text-[11px] leading-4 text-black/58">
+                  <span className="mt-1.5 line-clamp-3 flex-1 text-[11px] font-medium leading-4 text-black/72">
                     {option.summary}
                   </span>
                   <span className="mt-1.5 flex items-center gap-0.5 text-[10px] font-medium text-[#17665f] opacity-0 transition-opacity group-hover:opacity-100">
@@ -196,7 +199,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
           </div>
 
           <label className="block">
-            <span className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
+            <span className={`${labelClass} flex items-center gap-1`}>
               <MessageSquareText className="h-3 w-3" aria-hidden="true" />
               {t("artFeedback")}
             </span>
@@ -217,12 +220,10 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
         </div>
       ) : (
         <div className="space-y-2 p-3 sm:px-3.5">
-          <p className="text-[11px] leading-4 text-black/50">{t("continueAfterApproval")}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
-                {t("gameplay")}
-              </span>
+          <p className="text-[11px] font-medium leading-4 text-black/65">{t("continueAfterApproval")}</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block min-w-0">
+              <span className={labelClass}>{t("gameplay")}</span>
               <textarea
                 value={gameplay}
                 onChange={(event) => setGameplay(event.target.value)}
@@ -232,10 +233,8 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                 className={`${fieldClass} focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
               />
             </label>
-            <label className="block">
-              <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
-                {t("controls")}
-              </span>
+            <label className="block min-w-0">
+              <span className={labelClass}>{t("controls")}</span>
               <textarea
                 value={controls}
                 onChange={(event) => setControls(event.target.value)}
@@ -245,40 +244,45 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
                 className={`${fieldClass} focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
               />
             </label>
-          </div>
-          {parsed.levels.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-black/[0.06] pt-2">
-              <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
-                {t("levels")}
-              </span>
-              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
-                {parsed.levels.map((level) => (
-                  <span
-                    key={level}
-                    className="border border-black/[0.09] bg-white px-1.5 py-0.5 text-[10px] text-black/60"
-                  >
-                    {level}
-                  </span>
-                ))}
+            <label className="block min-w-0">
+              <span className={labelClass}>{t("levels")}</span>
+              <div
+                className={`${fieldClass} min-h-[calc(2rem+1.25rem+2px)] overflow-y-auto py-1.5 focus-within:border-[#d09a2d] focus-within:ring-2 focus-within:ring-[#d09a2d]/12`}
+                aria-label={t("levels")}
+              >
+                {parsed.levels.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {parsed.levels.map((level) => (
+                      <span
+                        key={level}
+                        className="border border-black/[0.12] bg-[#faf8f3] px-1.5 py-0.5 text-[10px] font-semibold text-black/75"
+                      >
+                        {level}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[11px] font-medium text-black/45">—</span>
+                )}
               </div>
-            </div>
-          ) : null}
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.1em] text-black/45">
-              <MessageSquareText className="h-3 w-3" aria-hidden="true" />
-              {t("hitlModifyFeedback")}
-            </span>
-            <textarea
-              aria-label={t("hitlModifyFeedback")}
-              value={modifyFeedback}
-              onChange={(event) => setModifyFeedback(event.target.value)}
-              rows={2}
-              placeholder={t("describeIteration")}
-              name="hitl-feedback"
-              autoComplete="off"
-              className={`${fieldClass} focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
-            />
-          </label>
+            </label>
+            <label className="block min-w-0">
+              <span className={`${labelClass} flex items-center gap-1`}>
+                <MessageSquareText className="h-3 w-3" aria-hidden="true" />
+                {t("hitlModifyFeedback")}
+              </span>
+              <textarea
+                aria-label={t("hitlModifyFeedback")}
+                value={modifyFeedback}
+                onChange={(event) => setModifyFeedback(event.target.value)}
+                rows={2}
+                placeholder={t("describeIteration")}
+                name="hitl-feedback"
+                autoComplete="off"
+                className={`${fieldClass} placeholder:font-medium placeholder:text-black/40 focus:border-[#d09a2d] focus:ring-2 focus:ring-[#d09a2d]/12`}
+              />
+            </label>
+          </div>
         </div>
       )}
 
