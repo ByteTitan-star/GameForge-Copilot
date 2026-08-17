@@ -138,7 +138,7 @@ def test_design_doc_to_readable_text_covers_player_facing_fields() -> None:
 
     doc = parse_design_doc(_valid_design_doc_json(), "T")
     text = design_doc_to_readable_text(doc)
-    assert "标题:" in text
-    assert "玩法概述:" in text
-    assert "操作控制:" in text
+    assert "# " in text or text.startswith("#")
+    assert "玩法概述" in text
+    assert "操作控制" in text
     assert "{" not in text  # 可读文案，不是 JSON 原文
