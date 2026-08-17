@@ -34,9 +34,12 @@ def docker_user_spec() -> str:
 
 
 def docker_log_host_config() -> dict[str, Any]:
-    """AutoRemove + json-file 轮转（ADR-11）。"""
+    """json-file 轮转（ADR-11）。
+
+    不用 AutoRemove：容器退出后仍须读 log，AutoRemove 会竞态 404。
+    """
     return {
-        "AutoRemove": True,
+        "AutoRemove": False,
         "LogConfig": {
             "Type": "json-file",
             "Config": {"max-size": "2m", "max-file": "2"},
