@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[1] / "app" / "forge"
+_ROOT = Path(__file__).resolve().parents[3] / "app" / "forge"
 _TARGETS = (
     _ROOT / "graph.py",
     _ROOT / "code_qa_exec.py",
