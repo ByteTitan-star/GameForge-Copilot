@@ -379,11 +379,20 @@ async def resolve_hitl(
             raise AppError(ErrorCode.INVALID_STATE, "run 已结束或不在 paused")
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
-        selected_label = {"select_a": "已选择美术方案 A", "select_b": "已选择美术方案 B"}
+        selected_label = {
+            "select_a": "已选择美术方案 A",
+            "select_b": "已选择美术方案 B",
+            "approve": {
+                "plan_confirm": "已确认设计方案",
+                "art_confirm": "已确认美术方案",
+                "sandbox_failed": "环境问题已处理，继续重试",
+                "qa_failed": "已确认继续修复试玩问题",
+            }.get(phase, "已确认，继续"),
+        }
         decision_text = (
             req.modify_text.strip()
             if req.modify_text
-            else selected_label.get(req.decision, "已确认设计方案")
+            else selected_label.get(req.decision, "已确认，继续")
         )
         await add_message(
             db,
