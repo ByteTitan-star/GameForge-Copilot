@@ -73,9 +73,12 @@ _CODE_COMMON = f"""
 7. 不得留下 TODO、伪代码、未实现按钮、仅在注释中描述的功能或依赖刷新页面的重开。
 8. 不得通过删除关卡、敌人、碰撞、胜负或反馈等功能来规避实现难点。
 9. 正常游玩路径不得产生未捕获异常、无限循环或持续刷新的控制台错误。
-10. 状态机名称与 DOM 标识必须严格一致；例如 setScreen('playing') 动态查找
+10. 脚本加载顺序：运行时使用的类、函数、全局变量（如 Game、MainScene）必须先定义再调用；
+    禁止 ReferenceError（如 PAGE_ERROR: X is not defined）。使用 Phaser/Pixi 时须在
+    new Game / 场景注册前完成类与配置定义。
+11. 状态机名称与 DOM 标识必须严格一致；例如 setScreen('playing') 动态查找
     #screen-playing 时，HTML 中必须存在该元素。不得使用 #screen-game 等不同别名。
-11. 输入若包含“已确认美术实现设计稿 JSON”，必须逐项落实其中的布局、配色、绘制、
+12. 输入若包含“已确认美术实现设计稿 JSON”，必须逐项落实其中的布局、配色、绘制、
     状态视觉、动效、响应式、可访问性与性能约束，不得退回通用模板风格。
 
 实现优先级：先确保完整状态闭环和核心玩法正确，再完成关卡递进、反馈和视觉润色。
@@ -522,7 +525,9 @@ def build_repair_prompt(engine_id: str, hints: dict[str, Any] | None = None) -> 
         "不得只返回 diff、代码片段、说明或修复步骤。\n"
         "6. 保持原 engine 选型不变，不得在修复中切换引擎或改用其他 CDN 版本。\n"
         "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
-        "保留这些占位符；运行时会在构建前还原真实 data URI。"
+        "保留这些占位符；运行时会在构建前还原真实 data URI。\n"
+        "8. 若自动试玩报 PAGE_ERROR 且含 is not defined，说明引用了未定义符号或脚本顺序错误；"
+        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。"
     )
     return "\n\n".join(
         part
@@ -562,7 +567,9 @@ def _build_repair_prompt_routed(engine_id: str, hints: dict[str, Any] | None = N
         "不得只返回 diff、代码片段、说明或修复步骤。\n"
         "6. 保持原 engine 选型不变，不得在修复中切换引擎或改用其他 CDN 版本。\n"
         "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
-        "保留这些占位符；运行时会在构建前还原真实 data URI。"
+        "保留这些占位符；运行时会在构建前还原真实 data URI。\n"
+        "8. 若自动试玩报 PAGE_ERROR 且含 is not defined，说明引用了未定义符号或脚本顺序错误；"
+        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。"
     )
     return "\n\n".join(
         part
