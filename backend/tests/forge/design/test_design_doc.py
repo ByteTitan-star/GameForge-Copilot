@@ -130,3 +130,15 @@ def test_validate_requires_engine_version_for_cdn_engines() -> None:
     doc["engine"] = {"id": "phaser3", "rationale": "需要物理碰撞", "version": ""}
     errors = validate_design_doc(doc)
     assert any("engine.version" in e for e in errors)
+
+
+def test_design_doc_to_readable_text_covers_player_facing_fields() -> None:
+    from app.forge.design_doc import design_doc_to_readable_text
+    from tests.conftest import _valid_design_doc_json
+
+    doc = parse_design_doc(_valid_design_doc_json(), "T")
+    text = design_doc_to_readable_text(doc)
+    assert "标题:" in text
+    assert "玩法概述:" in text
+    assert "操作控制:" in text
+    assert "{" not in text  # 可读文案，不是 JSON 原文

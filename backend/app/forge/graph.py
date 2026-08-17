@@ -6,6 +6,7 @@ CodeQaLoop 有界 code/playtest/diagnose，以及 skills 约定注入。
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -30,6 +31,7 @@ from app.forge.assets.picker import asset_pick
 from app.forge.code_candidate import claim_candidate_version, promote_candidate
 from app.forge.design_doc import (
     coerce_design_doc,
+    design_doc_to_readable_text,
     design_doc_to_text,
     parse_design_doc,
     validate_design_doc,
@@ -453,6 +455,26 @@ async def _streamed_llm_or_fallback(
     return await _llm(ctx, system, user_msg, kind=llm_kind)
 
 
+async def _emit_readable_plan_deltas(ctx: _Ctx, design_doc: dict[str, Any]) -> None:
+    """校验通过后，把可读方案按微批推成 LLM_DELTA（打字机），避免 JSON 原文刷屏。"""
+    if not settings.stream_enabled:
+        return
+    text = design_doc_to_readable_text(design_doc)
+    if not text:
+        return
+    size = max(1, settings.stream_batch_chars)
+    delay = max(0, settings.stream_batch_ms) / 1000.0
+    for start in range(0, len(text), size):
+        chunk = text[start : start + size]
+        await publish_event(
+            ctx.run.id,
+            WSEventType.LLM_DELTA,
+            {"phase": "plan", "delta": chunk},
+        )
+        if delay and start + size < len(text):
+            await asyncio.sleep(delay)
+
+
 async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None) -> str:
     stage = ctx.run.phase or "llm"
     llm_kind = kind or stage or "chat"
@@ -742,10 +764,14 @@ def _build_graph(ctx: _Ctx) -> Any:
                     + "\n返回完整修复后的 JSON 对象；"
                     "不要只返回修改片段，不要省略字段，不要改用同义字段。"
                 )
-            raw = await _streamed_llm_or_fallback(ctx, system_prompt, attempt_msg, "plan")
+            # plan JSON 不对用户打字机；校验通过后再流式推可读方案
+            raw = await _streamed_llm_or_fallback(
+                ctx, system_prompt, attempt_msg, "plan", emit_delta=False
+            )
             design_doc = parse_design_doc(raw, ctx.game.title)
             issues = validate_design_doc(design_doc)
             if not issues:
+                await _emit_readable_plan_deltas(ctx, design_doc)
                 return design_doc
             await publish_event(
                 ctx.run.id,

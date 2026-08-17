@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ChevronUp, Home, LogOut, Settings, Shield, User } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { Role } from '@/api/enums'
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const t = useT()
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [open, setOpen] = useState(false)
@@ -34,6 +35,13 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   }, [open])
 
   if (!user) return null
+
+  function handleLogout() {
+    setOpen(false)
+    // 先离开受保护路由，避免 RequireAuth 带上 state.from 导致再登录回到深链
+    navigate('/login', { replace: true })
+    void logout()
+  }
 
   // 下拉菜单本体：展开态用 absolute（贴按钮上方、w-full），
   // 折叠态用 Portal + fixed（贴窄侧栏右侧、固定宽 16rem）。
@@ -86,10 +94,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
       <button
         type="button"
         role="menuitem"
-        onClick={() => {
-          setOpen(false)
-          void logout()
-        }}
+        onClick={handleLogout}
         className="gf-border-subtle flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2.5 text-sm text-rose-600 transition hover:bg-rose-50"
       >
         <LogOut className="h-4 w-4" />

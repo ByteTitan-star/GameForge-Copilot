@@ -8,6 +8,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.forge.design_doc import design_doc_to_readable_text
 from app.models.forge_message import ForgeMessage
 
 
@@ -60,16 +61,8 @@ async def add_message(
 def design_message_content(design_doc: dict | str) -> str:
     if not isinstance(design_doc, dict):
         return f"设计方案已生成：{design_doc}"
-    title = str(design_doc.get("title") or "本次游戏")
-    gameplay = str(design_doc.get("gameplay") or "").strip()
-    controls = str(design_doc.get("controls") or "").strip()
-    parts = [f"设计方案《{title}》已生成。"]
-    if gameplay:
-        parts.append(f"玩法：{gameplay}")
-    if controls:
-        parts.append(f"操作：{controls}")
-    parts.append("请确认方案，或填写修改意见。")
-    return "\n".join(parts)
+    body = design_doc_to_readable_text(design_doc)
+    return f"{body}\n\n请确认方案，或填写修改意见。"
 
 
 def stable_design_key(run_id: uuid.UUID, node: str, design_doc: dict | str) -> str:
@@ -92,9 +85,7 @@ async def list_messages(
     query = select(ForgeMessage).where(ForgeMessage.game_id == game_id)
     if before is not None:
         cursor = await db.scalar(
-            select(ForgeMessage).where(
-                ForgeMessage.id == before, ForgeMessage.game_id == game_id
-            )
+            select(ForgeMessage).where(ForgeMessage.id == before, ForgeMessage.game_id == game_id)
         )
         if cursor is None:
             return []

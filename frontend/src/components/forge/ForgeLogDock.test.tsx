@@ -5,7 +5,7 @@ import { emptyStagePipeline } from '@/lib/stage-pipeline-state'
 import { ForgeLogDock } from './ForgeLogDock'
 
 describe('ForgeLogDock', () => {
-  it('展开时使用单一滚动容器，并以紧凑阶段条展示事件', () => {
+  it('展开时阶段条在滚动区外，事件流单独滚动', () => {
     const items = Array.from({ length: 12 }, (_, index) => ({
       id: `event-${index}`,
       label: `事件 ${index}`,
@@ -23,8 +23,10 @@ describe('ForgeLogDock', () => {
     )
 
     const scroll = container.querySelector('.gf-forge-log-dock-scroll')
+    const pipeline = container.querySelector('.gf-forge-log-dock-pipeline')
     expect(scroll).toBeInTheDocument()
-    expect(scroll?.querySelectorAll('.gf-forge-log-dock-scroll')).toHaveLength(0)
+    expect(pipeline).toBeInTheDocument()
+    expect(scroll?.contains(pipeline)).toBe(false)
     expect(screen.getByRole('list', { name: '生成流程' })).toBeInTheDocument()
     expect(screen.getByText('事件 11')).toBeInTheDocument()
     fireEvent.wheel(scroll!, { deltaY: 200 })

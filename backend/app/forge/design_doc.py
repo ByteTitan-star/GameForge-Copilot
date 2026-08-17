@@ -463,10 +463,59 @@ def validate_design_doc(value: Any) -> list[str]:
     return list(dict.fromkeys(errors))
 
 
+def design_doc_to_readable_text(value: Any) -> str:
+    """把 DesignDoc JSON 转成面向用户的可读方案文案（聊天打字机用）。"""
+    doc = coerce_design_doc(value)
+    lines: list[str] = [f"标题: {doc['title'] or '未命名游戏'}", ""]
+
+    gameplay = doc.get("gameplay") or ""
+    if gameplay:
+        lines.extend(["玩法概述:", str(gameplay), ""])
+
+    overview = _as_dict(doc.get("overview"))
+    if overview.get("genre"):
+        lines.append(f"类型: {overview['genre']}")
+    if overview.get("target_experience"):
+        lines.append(f"目标体验: {overview['target_experience']}")
+    if overview.get("session_length"):
+        lines.append(f"单局时长: {overview['session_length']}")
+    if overview.get("scope"):
+        lines.append(f"范围: {overview['scope']}")
+    if overview.get("assumptions"):
+        lines.append("")
+        lines.append("设计假设:")
+        for item in overview["assumptions"]:
+            lines.append(f"- {item}")
+
+    controls = doc.get("controls") or []
+    if controls:
+        lines.append("")
+        lines.append("操作控制:")
+        for item in controls:
+            lines.append(f"- {item}")
+
+    levels = doc.get("levels") or []
+    if levels:
+        lines.append("")
+        lines.append("关卡:")
+        for item in levels:
+            lines.append(f"- {item}")
+
+    core_loop = doc.get("core_loop") or []
+    if core_loop:
+        lines.append("")
+        lines.append("核心循环:")
+        for idx, item in enumerate(core_loop, start=1):
+            lines.append(f"{idx}. {item}")
+
+    return "\n".join(lines).strip()
+
+
 __all__ = [
     "SCHEMA_VERSION",
     "bilingual_title_errors",
     "coerce_design_doc",
+    "design_doc_to_readable_text",
     "design_doc_to_text",
     "parse_design_doc",
     "validate_design_doc",

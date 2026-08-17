@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, ChevronRight, LogOut, MessageSquareText, Bot, Gamepad2, ShieldCheck } from 'lucide-react'
 import { publicGamesApi } from '@/api/public-games'
@@ -21,6 +21,7 @@ const HERO_VIDEO =
 
 export function LandingPage() {
   const t = useT()
+  const navigate = useNavigate()
   const locale = useLocaleStore((s) => s.locale)
   const token = useAuthStore((s) => s.access_token)
   const user = useAuthStore((s) => s.user)
@@ -135,7 +136,10 @@ export function LandingPage() {
                     type="button"
                     variant="secondary"
                     className="inline-flex items-center gap-1.5 rounded-md transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]"
-                    onClick={() => void logout()}
+                    onClick={() => {
+                      navigate('/login', { replace: true })
+                      void logout()
+                    }}
                   >
                     <LogOut className="h-3.5 w-3.5" />
                     {t('logout')}
