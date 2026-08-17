@@ -133,7 +133,7 @@ def build_csp(allowed: frozenset[str] = ALLOWED_CDN_HOSTS) -> str:
         f"script-src 'self' 'unsafe-inline' {hosts}; "
         f"style-src 'self' 'unsafe-inline' {hosts}; "
         f"font-src 'self' data: {hosts}; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: blob:; "
         f"connect-src 'self' {hosts}; "
         "worker-src 'self' blob:"
     )

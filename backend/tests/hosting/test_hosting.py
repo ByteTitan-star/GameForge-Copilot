@@ -65,6 +65,25 @@ async def test_write_bytes_roundtrip() -> None:
     assert await store.read_bytes(gid, 1, "thumb.png") == png
 
 
+def test_media_type_png_is_image_png() -> None:
+    from app.hosting.serve import _media_type
+
+    assert _media_type("thumb.png") == "image/png"
+    assert _media_type("assets/hero.PNG") == "image/png"
+
+
+async def test_draft_thumb_png_served_as_image(verified_client: httpx.AsyncClient) -> None:
+    """草稿封面按 image/png 返回，避免 iframe/img 把 PNG 当文本显示成乱码。"""
+    gid = await _make_game(verified_client)
+    await _make_version(gid, 1)
+    png = b"\x89PNG\r\n\x1a\n fake thumbnail bytes"
+    await store.write_bytes(gid, 1, "thumb.png", png)
+    r = await verified_client.get(f"/draft/{gid}/1/thumb.png")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("image/png")
+    assert r.content == png
+
+
 async def test_write_bytes_rejects_traversal() -> None:
     """write_bytes 复用 _check_path，禁止 .. 路径穿越。"""
     gid = uuid.uuid4()

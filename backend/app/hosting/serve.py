@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
+from pathlib import Path
 
 from fastapi.responses import FileResponse, Response
 
@@ -38,16 +39,29 @@ def normalize_public_rel(path: str | None) -> str:
     return rel
 
 
+_SUFFIX_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".css": "text/css",
+    ".html": "text/html; charset=utf-8",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+}
+
+
 def _media_type(rel: str) -> str:
+    suffix = Path(rel).suffix.lower()
+    if suffix in _SUFFIX_MEDIA_TYPES:
+        return _SUFFIX_MEDIA_TYPES[suffix]
     mime, _ = mimetypes.guess_type(rel)
     if mime:
         return mime
-    if rel.endswith(".js"):
-        return "application/javascript"
-    if rel.endswith(".css"):
-        return "text/css"
-    if rel.endswith(".html"):
-        return "text/html; charset=utf-8"
     return "application/octet-stream"
 
 
@@ -65,9 +79,7 @@ async def artifact_file_response(
     if base not in target.parents and target != base:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
     if target.is_file():
-        if rel in ("index.html", "index.en.html"):
-            return FileResponse(target, media_type=_media_type(rel), headers=headers)
-        return FileResponse(target, headers=headers)
+        return FileResponse(target, media_type=_media_type(rel), headers=headers)
     data = await store.read_bytes(game_id, version, rel)
     if data is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "产物不存在")
