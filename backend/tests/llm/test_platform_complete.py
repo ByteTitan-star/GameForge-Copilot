@@ -9,7 +9,7 @@ import pytest
 from app.core import langfuse as lf
 from app.enums import LLMProvider
 from app.llm import provider as llm_provider
-from app.llm.provider import Usage
+from app.llm.provider import LLMCompletion, Usage
 
 
 @pytest.mark.asyncio
@@ -25,9 +25,9 @@ async def test_platform_complete_writes_generation(monkeypatch) -> None:
         base_url: Any = None,
         *,
         max_tokens: int | None = None,
-    ) -> tuple[str, Usage]:
+    ) -> LLMCompletion:
         _ = (prov, apikey, model, system, user_msg, base_url, max_tokens)
-        return '{"ok":true}', Usage(3, 5)
+        return LLMCompletion(content='{"ok":true}', usage=Usage(3, 5))
 
     class _FakeGen:
         def __init__(self) -> None:

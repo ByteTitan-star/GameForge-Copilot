@@ -1,0 +1,173 @@
+"""Code 阶段 LLM 输出截断检测与续写。"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from app.core.config import settings
+from app.llm.provider import LLMCompletion
+
+_CONTINUATION_NOTICE = (
+    "【输出截断续写】\n"
+    "上一段生成因 token 上限被截断。请从下列已生成内容的末尾无缝继续，"
+    "补全至完整可运行产物。\n"
+    "要求：\n"
+    "1. 不要重复已生成部分\n"
+    "2. 只输出需要追加的剩余内容（从截断处继续）\n"
+    "3. 若为 HTML，必须补全至 </html> 并确保 init() 等入口可执行\n"
+    "4. 若为 project JSON，必须补全闭合括号并包含完整 files"
+)
+
+OUTPUT_TRUNCATED_ERROR = "OUTPUT_TRUNCATED: LLM output hit token limit after continuation rounds"
+
+
+def is_likely_truncated(
+    content: str,
+    *,
+    output_tokens: int,
+    max_tokens: int,
+    finish_reason: str | None,
+) -> bool:
+    """判断是否疑似因 max_tokens 截断。"""
+    if finish_reason == "length":
+        return True
+    if max_tokens > 0 and output_tokens >= int(max_tokens * 0.98):
+        return True
+    return has_incomplete_structure(content)
+
+
+def has_incomplete_structure(content: str) -> bool:
+    text = content.strip()
+    if not text:
+        return False
+    lower = text.lower()
+    if text.startswith("{") or '"format"' in text[:300]:
+        try:
+            json.loads(text)
+        except json.JSONDecodeError:
+            if text.count("{") > text.count("}"):
+                return True
+            if text.count("[") > text.count("]"):
+                return True
+            if not text.rstrip().endswith("}"):
+                return True
+    if "<html" in lower or "<!doctype" in lower:
+        if "</html>" not in lower:
+            return True
+        if lower.count("<script") > lower.count("</script"):
+            return True
+    return False
+
+
+def merge_continuation(prefix: str, suffix: str, *, max_overlap: int = 500) -> str:
+    """拼接续写内容，去除 prefix 尾部与 suffix 头部的重复重叠。"""
+    if not suffix:
+        return prefix
+    if not prefix:
+        return suffix
+    head = prefix.strip()[: min(120, len(prefix))]
+    if suffix.strip().startswith(head):
+        return suffix
+    max_check = min(max_overlap, len(prefix), len(suffix))
+    for overlap in range(max_check, 0, -1):
+        if prefix[-overlap:] == suffix[:overlap]:
+            return prefix + suffix[overlap:]
+    return prefix + suffix
+
+
+def build_continuation_user_msg(
+    original_user_msg: str,
+    partial_content: str,
+    *,
+    tail_chars: int | None = None,
+) -> str:
+    tail_limit = tail_chars or settings.llm_continuation_tail_chars
+    tail = partial_content[-tail_limit:] if len(partial_content) > tail_limit else partial_content
+    return (
+        f"{original_user_msg}\n\n{_CONTINUATION_NOTICE}\n\n【已生成内容末尾（从此处继续）】\n{tail}"
+    )
+
+
+async def generate_with_continuation(
+    llm_call: Callable[[str, str], Awaitable[LLMCompletion]],
+    *,
+    system: str,
+    user_msg: str,
+    max_tokens: int | None = None,
+    max_rounds: int | None = None,
+) -> tuple[str, bool]:
+    """带截断续写的 LLM 生成。返回 (content, truncated_exhausted)。"""
+    limit = max_tokens if max_tokens is not None else settings.llm_code_max_tokens
+    rounds = max_rounds if max_rounds is not None else settings.llm_continuation_max_rounds
+    accumulated = ""
+    current_user = user_msg
+    last_result: LLMCompletion | None = None
+
+    for round_idx in range(rounds + 1):
+        last_result = await llm_call(system, current_user)
+        piece = last_result.content
+        accumulated = piece if round_idx == 0 else merge_continuation(accumulated, piece)
+        if not is_likely_truncated(
+            accumulated,
+            output_tokens=last_result.usage.output_tokens,
+            max_tokens=limit,
+            finish_reason=last_result.finish_reason,
+        ):
+            return accumulated, False
+        if round_idx >= rounds:
+            return accumulated, True
+        current_user = build_continuation_user_msg(user_msg, accumulated)
+
+    assert last_result is not None
+    return accumulated, True
+
+
+async def generate_code_output(
+    ctx: Any,
+    system: str,
+    user_msg: str,
+    *,
+    emit_delta: bool = False,
+    kind: str | None = None,
+) -> tuple[str, bool]:
+    """Code 阶段专用：高 max_tokens + 截断续写。返回 (content, truncated_exhausted)。"""
+    from app.forge.guard import run_streamed_llm_result
+    from app.llm import client as llm_client
+
+    max_tokens = settings.llm_code_max_tokens
+    phase = "code"
+    llm_kind = kind or phase
+
+    async def llm_once(sys: str, usr: str) -> LLMCompletion:
+        if settings.stream_enabled:
+            return await run_streamed_llm_result(
+                ctx,
+                sys,
+                usr,
+                phase=phase,
+                emit_delta=emit_delta,
+                kind=llm_kind,
+                max_tokens=max_tokens,
+            )
+        content, usage, _prov = await llm_client.call_llm(
+            ctx.s,
+            ctx.r,
+            ctx.run.user_id,
+            ctx.run.llm_config_id,
+            sys,
+            usr,
+            game_id=ctx.game.id,
+            run_id=ctx.run.id,
+            kind=llm_kind,
+            max_tokens=max_tokens,
+        )
+        return LLMCompletion(content=content, usage=usage)
+
+    return await generate_with_continuation(
+        llm_once,
+        system=system,
+        user_msg=user_msg,
+        max_tokens=max_tokens,
+    )

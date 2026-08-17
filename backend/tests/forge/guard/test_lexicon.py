@@ -169,7 +169,7 @@ async def test_guard_suspect_llm_zero_allows(
     reset_lexicon_cache()
 
     async def _zero(*_a, **_k):
-        return "0", provider.Usage(1, 1)
+        return provider.LLMCompletion(content="0", usage=provider.Usage(1, 1))
 
     monkeypatch.setattr(provider, "complete", _zero)
     g = guard.Guard(provider=LLMProvider.OPENAI, model="gpt-4o-mini", apikey="k", base_url=None)
@@ -187,7 +187,7 @@ async def test_guard_suspect_llm_one_blocks_with_category(
     reset_lexicon_cache()
 
     async def _one(*_a, **_k):
-        return "1", provider.Usage(1, 1)
+        return provider.LLMCompletion(content="1", usage=provider.Usage(1, 1))
 
     monkeypatch.setattr(provider, "complete", _one)
     g = guard.Guard(provider=LLMProvider.OPENAI, model="gpt-4o-mini", apikey="k", base_url=None)

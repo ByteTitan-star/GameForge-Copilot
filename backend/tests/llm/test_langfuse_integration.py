@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.enums import LLMProvider
 from app.llm import client as llm_client
 from app.llm import provider as llm_provider
-from app.llm.provider import Usage
+from app.llm.provider import LLMCompletion, Usage
 
 
 def test_client_none_when_unconfigured() -> None:
@@ -31,16 +31,24 @@ async def test_invoke_llm_transparent_when_unconfigured(monkeypatch) -> None:
     """langfuse 禁用时 _invoke_llm 仅透传 provider.complete 的 content 与 usage。"""
 
     async def _fake_complete(
-        prov: Any, apikey: Any, model: Any, system: Any, user_msg: Any, *, base_url: Any
-    ) -> tuple[str, Usage]:
-        return "hello", Usage(7, 11)
+        prov: Any,
+        apikey: Any,
+        model: Any,
+        system: Any,
+        user_msg: Any,
+        *,
+        base_url: Any,
+        max_tokens: Any = None,
+    ) -> LLMCompletion:
+        _ = (prov, apikey, model, system, user_msg, base_url, max_tokens)
+        return LLMCompletion(content="hello", usage=Usage(7, 11))
 
     monkeypatch.setattr(llm_provider, "complete", _fake_complete)
-    content, usage = await llm_client._invoke_llm(
+    result = await llm_client._invoke_llm(
         LLMProvider.ANTHROPIC, "k", "model-x", "sys", "hi", None, {"user_id": "u"}
     )
-    assert content == "hello"
-    assert usage == Usage(7, 11)
+    assert result.content == "hello"
+    assert result.usage == Usage(7, 11)
 
 
 class _FakeGen:
@@ -96,15 +104,23 @@ async def test_invoke_llm_writes_generation_when_enabled(monkeypatch) -> None:
     """注入 fake client：_invoke_llm 成功后写 output 与 usage_details（int 字典）。"""
 
     async def _fake_complete(
-        prov: Any, apikey: Any, model: Any, system: Any, user_msg: Any, *, base_url: Any
-    ) -> tuple[str, Usage]:
-        return "<html></html>", Usage(13, 9)
+        prov: Any,
+        apikey: Any,
+        model: Any,
+        system: Any,
+        user_msg: Any,
+        *,
+        base_url: Any,
+        max_tokens: Any = None,
+    ) -> LLMCompletion:
+        _ = (prov, apikey, model, system, user_msg, base_url, max_tokens)
+        return LLMCompletion(content="<html></html>", usage=Usage(13, 9))
 
     monkeypatch.setattr(llm_provider, "complete", _fake_complete)
     fake = _FakeClient()
     monkeypatch.setattr(lf, "_client", lambda: fake)
 
-    content, usage = await llm_client._invoke_llm(
+    result = await llm_client._invoke_llm(
         LLMProvider.OPENAI_COMPAT,
         "k",
         "gpt-x",
@@ -114,8 +130,8 @@ async def test_invoke_llm_writes_generation_when_enabled(monkeypatch) -> None:
         {},
         kind="plan",
     )
-    assert content == "<html></html>"
-    assert usage == Usage(13, 9)
+    assert result.content == "<html></html>"
+    assert result.usage == Usage(13, 9)
     # 关键：usage_details 必须是 int 字典（v4 SDK 入参），output 为 LLM 文本
     assert fake.gen.updated["output"] == "<html></html>"
     assert fake.gen.updated["usage_details"] == {"input": 13, "output": 9}

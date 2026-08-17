@@ -139,7 +139,7 @@ def _audit_llm_stub(content: str):
     """构造一个返回固定 content 的 provider.complete 替身。"""
 
     async def _fake(*_args, **_kwargs):
-        return content, provider.Usage(1, 1)
+        return provider.LLMCompletion(content=content, usage=provider.Usage(1, 1))
 
     return _fake
 
@@ -151,7 +151,7 @@ async def test_guard_audit_quick_filter_hit_short_circuits_llm(monkeypatch) -> N
 
     async def _should_not_call(*_a, **_k):
         called["n"] += 1
-        return "x", provider.Usage()
+        return provider.LLMCompletion(content="x", usage=provider.Usage())
 
     monkeypatch.setattr(provider, "complete", _should_not_call)
     g = guard.Guard(provider=LLMProvider.OPENAI, model="gpt-4o-mini", apikey="k", base_url=None)
@@ -218,7 +218,7 @@ async def test_guard_audit_invalid_verdict_retries_then_allows(monkeypatch) -> N
 
     async def _bad_then_clean(*args, **_kwargs):
         calls.append(args[4] if len(args) > 4 else "")
-        return "maybe harmful", provider.Usage(1, 1)
+        return provider.LLMCompletion(content="maybe harmful", usage=provider.Usage(1, 1))
 
     monkeypatch.setattr(provider, "complete", _bad_then_clean)
     g = guard.Guard(provider=LLMProvider.OPENAI, model="gpt-4o-mini", apikey="k", base_url=None)
@@ -233,7 +233,7 @@ async def test_guard_audit_invalid_verdict_recovers_on_retry(monkeypatch) -> Non
     responses = iter(["invalid", "0"])
 
     async def _flaky(*_a, **_k):
-        return next(responses), provider.Usage(1, 1)
+        return provider.LLMCompletion(content=next(responses), usage=provider.Usage(1, 1))
 
     monkeypatch.setattr(provider, "complete", _flaky)
     g = guard.Guard(provider=LLMProvider.OPENAI, model="gpt-4o-mini", apikey="k", base_url=None)

@@ -39,7 +39,7 @@ async def test_complete_retries_on_429_then_succeeds(monkeypatch) -> None:
             transport=httpx.MockTransport(handler), timeout=timeout
         ),
     )
-    content, usage = await provider.complete(
+    result = await provider.complete(
         LLMProvider.OPENAI_COMPAT,
         "k",
         "m",
@@ -47,8 +47,8 @@ async def test_complete_retries_on_429_then_succeeds(monkeypatch) -> None:
         "hi",
         base_url="https://x.example.com/v1",
     )
-    assert content == "ok"
-    assert usage.input_tokens == 1
+    assert result.content == "ok"
+    assert result.usage.input_tokens == 1
     assert calls["n"] == 3
 
 
@@ -71,7 +71,7 @@ async def test_complete_retries_transport_error(monkeypatch) -> None:
             transport=httpx.MockTransport(handler), timeout=timeout
         ),
     )
-    content, _ = await provider.complete(
+    result = await provider.complete(
         LLMProvider.OPENAI_COMPAT,
         "k",
         "m",
@@ -79,7 +79,7 @@ async def test_complete_retries_transport_error(monkeypatch) -> None:
         "hi",
         base_url="https://x.example.com/v1",
     )
-    assert content == "ok"
+    assert result.content == "ok"
     assert calls["n"] == 2
 
 

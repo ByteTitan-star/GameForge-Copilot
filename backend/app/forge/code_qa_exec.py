@@ -66,6 +66,44 @@ def _mask_data_uris(source: str) -> tuple[str, dict[str, str]]:
     return masked, replacements
 
 
+async def _code_llm(
+    ctx: Any,
+    system: str,
+    user_msg: str,
+    *,
+    emit_delta: bool = False,
+    kind: str | None = None,
+) -> tuple[str, bool]:
+    from app.forge.llm_continuation import generate_code_output
+
+    return await generate_code_output(ctx, system, user_msg, emit_delta=emit_delta, kind=kind)
+
+
+def _truncation_failure(
+    *,
+    attempt: int,
+    design_doc: dict[str, Any],
+    artifacts: list[Any],
+    art_direction: dict[str, Any] | None,
+    qa_diagnosis: str,
+) -> dict[str, Any]:
+    from app.forge.llm_continuation import OUTPUT_TRUNCATED_ERROR
+
+    return {
+        "attempt": attempt,
+        "candidate_ready": False,
+        "code_ok": False,
+        "qa_ok": False,
+        "failure_kind": "build",
+        "playtest_errors": [OUTPUT_TRUNCATED_ERROR],
+        "qa_diagnosis": qa_diagnosis,
+        "design_doc": design_doc,
+        "artifacts": artifacts,
+        "art_direction": art_direction,
+        "exhausted": False,
+    }
+
+
 def _omit_data_uris(html: str) -> str:
     return re.sub(
         r"data:[^;\"'\s]+;base64,[A-Za-z0-9+/=]+",
@@ -203,13 +241,19 @@ async def execute_code_or_repair(
                     parsed_retry,
                     last_error or qa_diagnosis,
                 )
-                repair_raw = await streamed_llm(
+                repair_raw, truncated = await _code_llm(
                     ctx,
                     build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                     repair_user,
-                    "code",
-                    emit_delta=False,
                 )
+                if truncated:
+                    return _truncation_failure(
+                        attempt=attempt,
+                        design_doc=design_doc,
+                        artifacts=artifacts,
+                        art_direction=art_direction,
+                        qa_diagnosis=qa_diagnosis,
+                    )
                 parsed_retry = with_design_routing(
                     parse_llm_code_output(repair_raw, engine_id=engine_id),
                     design_routing,
@@ -237,7 +281,15 @@ async def execute_code_or_repair(
                     ctx, s, u, "code", emit_delta=False, kind="skill_select"
                 ),
             )
-            raw_output = await streamed_llm(ctx, system_prompt, user_msg, "code", emit_delta=False)
+            raw_output, truncated = await _code_llm(ctx, system_prompt, user_msg)
+            if truncated:
+                return _truncation_failure(
+                    attempt=attempt,
+                    design_doc=design_doc,
+                    artifacts=artifacts,
+                    art_direction=art_direction,
+                    qa_diagnosis=qa_diagnosis,
+                )
         else:
             user_msg = generation_user_msg
             if last_error:
@@ -254,7 +306,15 @@ async def execute_code_or_repair(
                         ctx, s, u, "code", emit_delta=False, kind="skill_select"
                     ),
                 )
-            raw_output = await streamed_llm(ctx, system_prompt, user_msg, "code", emit_delta=False)
+            raw_output, truncated = await _code_llm(ctx, system_prompt, user_msg)
+            if truncated:
+                return _truncation_failure(
+                    attempt=attempt,
+                    design_doc=design_doc,
+                    artifacts=artifacts,
+                    art_direction=art_direction,
+                    qa_diagnosis=qa_diagnosis,
+                )
 
         for token, data_uri in data_uris.items():
             raw_output = raw_output.replace(token, data_uri)
@@ -270,13 +330,15 @@ async def execute_code_or_repair(
                     current: ParsedCodeOutput, build_error: str
                 ) -> ParsedCodeOutput:
                     repair_user = format_project_repair_input(base_user_msg, current, build_error)
-                    repair_raw = await streamed_llm(
+                    repair_raw, truncated = await _code_llm(
                         ctx,
                         build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                         repair_user,
-                        "code",
-                        emit_delta=False,
                     )
+                    if truncated:
+                        from app.forge.llm_continuation import OUTPUT_TRUNCATED_ERROR
+
+                        raise RuntimeError(OUTPUT_TRUNCATED_ERROR)
                     return with_design_routing(
                         parse_llm_code_output(repair_raw, engine_id=engine_id),
                         design_routing,
