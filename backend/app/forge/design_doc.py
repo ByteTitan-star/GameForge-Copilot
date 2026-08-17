@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Any
 
 from app.forge.build.routing import coerce_build_routing, validate_routing
@@ -23,6 +24,28 @@ REQUIRED_STATE_IDS = {
     "victory",
 }
 
+_LATIN_RE = re.compile(r"[A-Za-z]")
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_TITLE_SEP_RE = re.compile(r"[:：]")
+
+
+def bilingual_title_errors(title: str) -> list[str]:
+    """要求 ``English Name: 中文名``；空列表表示格式合格。"""
+    text = title.strip()
+    if not text:
+        return ["title 不能为空"]
+    errors: list[str] = []
+    parts = _TITLE_SEP_RE.split(text, maxsplit=1)
+    if len(parts) != 2:
+        errors.append("title 须为「English Name: 中文名」格式（用 : 或 ：分隔）")
+        return errors
+    en, zh = parts[0].strip(), parts[1].strip()
+    if not en or not _LATIN_RE.search(en):
+        errors.append("title 冒号前须为英文名（含 Latin 字母）")
+    if not zh or not _CJK_RE.search(zh):
+        errors.append("title 冒号后须为中文名")
+    return errors
+
 
 def _text(value: Any, default: str = "") -> str:
     if value is None:
@@ -32,6 +55,10 @@ def _text(value: Any, default: str = "") -> str:
     if isinstance(value, (int, float, bool)):
         return str(value)
     return default
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _text_list(value: Any) -> list[str]:
@@ -182,9 +209,7 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
     gameplay = doc.get("gameplay")
     if isinstance(gameplay, dict):
         gameplay = (
-            gameplay.get("summary")
-            or gameplay.get("description")
-            or gameplay.get("core_loop")
+            gameplay.get("summary") or gameplay.get("description") or gameplay.get("core_loop")
         )
         if isinstance(gameplay, list):
             gameplay = "；".join(_text_list(gameplay))
@@ -192,19 +217,17 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
     doc["controls"] = _legacy_controls(doc.get("controls"))
     doc["levels"] = _legacy_levels(doc.get("levels"))
 
-    overview = doc.get("overview") if isinstance(doc.get("overview"), dict) else {}
+    overview = _as_dict(doc.get("overview"))
     doc["overview"] = {
         "genre": _text(overview.get("genre")),
         "target_experience": _text(overview.get("target_experience")),
         "session_length": _text(overview.get("session_length")),
-        "scope": _text(
-            overview.get("scope"), "单个离线 index.html 可实现的完整游戏原型"
-        ),
+        "scope": _text(overview.get("scope"), "单个离线 index.html 可实现的完整游戏原型"),
         "assumptions": _text_list(overview.get("assumptions")),
     }
     doc["core_loop"] = _text_list(doc.get("core_loop"))
 
-    rules = doc.get("rules") if isinstance(doc.get("rules"), dict) else {}
+    rules = _as_dict(doc.get("rules"))
     doc["rules"] = {
         key: _text_list(rules.get(key))
         for key in (
@@ -270,11 +293,7 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
                 "mechanics": [],
                 "difficulty": [],
                 "completion": "",
-                "next": (
-                    f"level_{index + 1}"
-                    if index < len(doc["levels"])
-                    else "victory"
-                ),
+                "next": (f"level_{index + 1}" if index < len(doc["levels"]) else "victory"),
             }
             for index, name in enumerate(doc["levels"], start=1)
         ]
@@ -282,7 +301,7 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
         doc["levels"] = [level["name"] for level in level_specs]
     doc["level_specs"] = level_specs
 
-    ui = doc.get("ui") if isinstance(doc.get("ui"), dict) else {}
+    ui = _as_dict(doc.get("ui"))
     doc["ui"] = {
         "screens": _text_list(ui.get("screens")),
         "hud": _text_list(ui.get("hud")),
@@ -290,11 +309,7 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
         "instructions": _text_list(ui.get("instructions")),
     }
 
-    presentation = (
-        doc.get("presentation")
-        if isinstance(doc.get("presentation"), dict)
-        else {}
-    )
+    presentation = _as_dict(doc.get("presentation"))
     asset_needs: list[dict[str, str]] = []
     for asset in _dict_list(presentation.get("asset_needs")):
         asset_needs.append(
@@ -312,14 +327,10 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
         "effects": _text_list(presentation.get("effects")),
     }
     constraints = _text_list(doc.get("technical_constraints"))
-    doc["technical_constraints"] = constraints or _empty_doc("")[
-        "technical_constraints"
-    ]
+    doc["technical_constraints"] = constraints or _empty_doc("")["technical_constraints"]
 
     criteria: list[dict[str, str]] = []
-    for index, criterion in enumerate(
-        _dict_list(doc.get("acceptance_criteria")), start=1
-    ):
+    for index, criterion in enumerate(_dict_list(doc.get("acceptance_criteria")), start=1):
         criteria.append(
             {
                 "id": _text(criterion.get("id"), f"AC-{index:02d}"),
@@ -329,7 +340,7 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
         )
     doc["acceptance_criteria"] = criteria
 
-    engine = doc.get("engine") if isinstance(doc.get("engine"), dict) else {}
+    engine = _as_dict(doc.get("engine"))
     engine_id = normalize_engine_id(engine.get("id"))
     doc["engine"] = {
         "id": engine_id,
@@ -364,6 +375,8 @@ def validate_design_doc(value: Any) -> list[str]:
 
     if not doc["title"]:
         errors.append("title 不能为空")
+    else:
+        errors.extend(bilingual_title_errors(doc["title"]))
     if not doc["gameplay"]:
         errors.append("gameplay 必须概括核心玩法与完整循环")
     if not doc["controls"]:
@@ -426,9 +439,7 @@ def validate_design_doc(value: Any) -> list[str]:
 
     engine = doc["engine"]
     if engine["id"] not in SUPPORTED_ENGINES:
-        errors.append(
-            f"engine.id 必须是受控枚举之一：{', '.join(sorted(SUPPORTED_ENGINES))}"
-        )
+        errors.append(f"engine.id 必须是受控枚举之一：{', '.join(sorted(SUPPORTED_ENGINES))}")
     if not engine["rationale"]:
         errors.append("engine.rationale 必须说明引擎选择理由")
     # canvas 无外部 CDN，不要求 version；phaser3/pixijs 必须钉死版本号防 CDN 404。
@@ -446,9 +457,7 @@ def validate_design_doc(value: Any) -> list[str]:
         errors.append("acceptance_criteria.id 必须唯一")
     for criterion in criteria:
         if not criterion["requirement"] or not criterion["verification"]:
-            errors.append(
-                f"acceptance_criteria.{criterion['id']} 缺少 requirement 或 verification"
-            )
+            errors.append(f"acceptance_criteria.{criterion['id']} 缺少 requirement 或 verification")
 
     # 去重并保留稳定顺序，避免把重复错误反馈给模型。
     return list(dict.fromkeys(errors))
@@ -456,6 +465,7 @@ def validate_design_doc(value: Any) -> list[str]:
 
 __all__ = [
     "SCHEMA_VERSION",
+    "bilingual_title_errors",
     "coerce_design_doc",
     "design_doc_to_text",
     "parse_design_doc",

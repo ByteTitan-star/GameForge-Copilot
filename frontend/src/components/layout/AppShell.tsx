@@ -44,6 +44,7 @@ export function AppShell() {
   const location = useLocation()
   const isForge = location.pathname.startsWith('/forge')
   const isDiscover = location.pathname.startsWith('/discover')
+  const isGames = location.pathname === '/games'
   const locale = useLocaleStore((s) => s.locale)
   const setLocale = useLocaleStore((s) => s.setLocale)
   const collapsed = useSidebarStore((s) => s.collapsed)
@@ -238,7 +239,9 @@ export function AppShell() {
               ? 'gf-main-canvas--forge flex flex-col p-3 md:p-4 lg:p-5'
               : isDiscover
                 ? 'overflow-y-auto'
-                : 'mx-auto w-full max-w-[1400px] overflow-y-auto px-4 py-6 md:px-8 md:py-8',
+                : isGames
+                  ? 'mx-auto w-[calc(100%-1.5rem)] max-w-[1440px] overflow-y-auto px-3 py-5 sm:w-[calc(100%-3rem)] sm:px-6 md:py-6 lg:px-8'
+                  : 'mx-auto w-full max-w-[1400px] overflow-y-auto px-4 py-6 md:px-8 md:py-8',
           )}
         >
           <Outlet />

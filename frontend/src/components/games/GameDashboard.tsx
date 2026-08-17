@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, Search, Sparkles, Trash2 } from 'lucide-react'
+import { Gamepad2, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react'
 import { gamesApi } from '@/api/games'
 import { reactionsApi } from '@/api/reactions'
 import { GameStatus } from '@/api/enums'
@@ -126,7 +126,20 @@ export function GameDashboard() {
         ? 'publishedEmpty'
         : filter === 'pipeline'
           ? 'pipelineEmpty'
-          : 'noGames'
+          : filter === 'draft'
+            ? 'draftEmpty'
+            : 'noGames'
+
+  const emptyHintKey: MessageKey =
+    filter === 'favorites'
+      ? 'favoritesEmptyHint'
+      : filter === 'published'
+        ? 'publishedEmptyHint'
+        : filter === 'pipeline'
+          ? 'pipelineEmptyHint'
+          : filter === 'draft'
+            ? 'draftEmptyHint'
+            : 'noGamesHint'
 
   const removeMu = useMutation({
     mutationFn: (gameId: string) => gamesApi.remove(gameId, token!),
@@ -264,15 +277,17 @@ export function GameDashboard() {
   })()
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="gf-page-title">{t('games')}</h1>
-          <p className="gf-page-subtitle mt-1">{t('gamesSubtitle')}</p>
+    <div className="gf-games-dashboard space-y-5 md:space-y-6">
+      <header className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-bold tracking-tight text-[var(--gf-text)] md:text-[28px]">
+            {t('games')}
+          </h1>
+          <p className="gf-page-subtitle mt-1.5 text-sm leading-relaxed">{t('gamesSubtitle')}</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="relative block sm:w-72">
-            <Search className="gf-page-muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <label className="relative block w-full sm:w-[300px]">
+            <Search className="gf-page-muted pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" />
             <input
               value={q}
               onChange={(e) => {
@@ -280,11 +295,14 @@ export function GameDashboard() {
                 clearSelection()
               }}
               placeholder={t('searchGamesPlaceholder')}
-              className="gf-input h-11 w-full rounded-xl pl-9 pr-3 text-sm"
+              className="gf-input h-11 w-full rounded-[12px] pl-10 pr-3 text-sm"
             />
           </label>
           {trial ? null : (
-            <Link to="/forge" className="gf-btn-primary inline-flex h-11 items-center justify-center gap-2 px-5 text-sm">
+            <Link
+              to="/forge"
+              className="gf-btn-primary inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-5 text-sm font-semibold shadow-[0_6px_16px_rgba(var(--gf-primary-rgb),0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(var(--gf-primary-rgb),0.28)]"
+            >
               <Plus className="h-4 w-4" />
               {t('createGame')}
             </Link>
@@ -298,29 +316,48 @@ export function GameDashboard() {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {filterIds.map((id) => {
-          const count = counts[id]
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setFilter(id)
-                clearSelection()
-              }}
-              className={cn(
-                'cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition',
-                filter === id
-                  ? 'gf-filter-active'
-                  : 'gf-chip gf-interactive hover:bg-black/[0.03]',
-              )}
-            >
-              {t(filterLabelKey[id])}
-              <span className="ml-1.5 font-mono text-[10px] opacity-70">{count}</span>
-            </button>
-          )
-        })}
+      <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+        <div
+          role="tablist"
+          aria-label={t('games')}
+          className="inline-flex min-w-full gap-1.5 rounded-xl border border-[var(--gf-border)] bg-[var(--gf-surface)] p-1 sm:min-w-0"
+        >
+          {filterIds.map((id) => {
+            const count = counts[id]
+            const active = filter === id
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setFilter(id)
+                  clearSelection()
+                }}
+                className={cn(
+                  'gf-interactive inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-[8px] px-3.5 text-sm font-medium transition',
+                  active
+                    ? 'bg-[rgba(var(--gf-primary-rgb),0.12)] text-[var(--gf-primary)] shadow-[inset_0_0_0_1px_rgba(var(--gf-primary-rgb),0.22)]'
+                    : 'gf-page-muted hover:bg-black/[0.03] hover:text-[var(--gf-text)]',
+                )}
+              >
+                {id === 'favorites' ? <Star className="h-3.5 w-3.5 opacity-80" aria-hidden /> : null}
+                <span>{t(filterLabelKey[id])}</span>
+                <span
+                  className={cn(
+                    'inline-flex min-w-[1.25rem] items-center justify-center rounded-md px-1.5 py-0.5 font-mono text-[11px] leading-none',
+                    active
+                      ? 'bg-[rgba(var(--gf-primary-rgb),0.16)] text-[var(--gf-primary)]'
+                      : 'bg-black/[0.04] text-[var(--gf-text-muted)]',
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {selectable && selectedIds.size > 0 ? (
@@ -365,29 +402,34 @@ export function GameDashboard() {
       {!query.isLoading &&
       !(showingFavorites && favoritesQ.isLoading) &&
       (showingFavorites ? favoriteList.length === 0 : list.length === 0) ? (
-        <div className="gf-glass flex flex-col items-center rounded-2xl px-6 py-20 text-center">
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-[var(--gf-border)] bg-[var(--gf-surface)] px-6 py-16 text-center md:py-20">
           <div className="relative">
             <div className="gf-empty-glow absolute inset-0 scale-150 rounded-full blur-3xl" aria-hidden />
             <div className="gf-empty-icon-wrap relative grid h-20 w-20 place-items-center rounded-2xl border">
-              <Sparkles className="gf-text-accent h-9 w-9" />
+              {filter === 'favorites' ? (
+                <Star className="gf-text-accent h-9 w-9" />
+              ) : filter === 'pipeline' ? (
+                <Gamepad2 className="gf-text-accent h-9 w-9" />
+              ) : (
+                <Sparkles className="gf-text-accent h-9 w-9" />
+              )}
             </div>
           </div>
-          <h2 className="gf-page-body mt-8 text-xl font-medium">{t(emptyTitleKey)}</h2>
-          {filter === 'favorites' ? null : (
-            <>
-              <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t('noGamesHint')}</p>
-              {trial ? null : (
-                <Link to="/forge" className="gf-btn-primary mt-8 inline-flex items-center gap-2 px-6 py-3 text-sm">
-                  <Plus className="h-4 w-4" />
-                  {t('createFirstGame')}
-                </Link>
-              )}
-            </>
+          <h2 className="gf-page-body mt-8 text-xl font-semibold tracking-tight">{t(emptyTitleKey)}</h2>
+          <p className="gf-page-muted mt-2 max-w-sm text-sm leading-relaxed">{t(emptyHintKey)}</p>
+          {filter === 'favorites' || trial ? null : (
+            <Link
+              to="/forge"
+              className="gf-btn-primary mt-8 inline-flex items-center gap-2 rounded-[10px] px-6 py-3 text-sm font-semibold"
+            >
+              <Plus className="h-4 w-4" />
+              {filter === 'all' ? t('createFirstGame') : t('createGame')}
+            </Link>
           )}
         </div>
       ) : showingFavorites ? (
         <motion.div
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          className="grid grid-cols-1 gap-5 sm:grid-cols-2 min-[1500px]:grid-cols-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
@@ -397,7 +439,7 @@ export function GameDashboard() {
         </motion.div>
       ) : (
         <motion.div
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          className="grid grid-cols-1 gap-5 sm:grid-cols-2 min-[1500px]:grid-cols-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
