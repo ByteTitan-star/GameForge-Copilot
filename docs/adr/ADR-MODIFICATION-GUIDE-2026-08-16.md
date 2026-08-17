@@ -59,7 +59,7 @@
 | ID | 审查原文 | 核实后 |
 | --- | --- | --- |
 | P2-6 | 「heavy 档不可达」 | **部分属实**。`resolve_create_tier` / `recommend_tier` **可以**返回 `heavy`（引擎/体量/近期压力）。真问题是 **docker/local/builder 三处超时与资源表分裂**，以及 create 未传 explicit tier 时依赖 auto 启发式 |
-| ADR-03 vs compose | 「生产首选 E2B」 | **配置分裂**。`config` 默认 `sandbox_backend=e2b`，但 **compose 强制 `SANDBOX_BACKEND=docker`**。部署路径上 Docker 加固不可因「ADR 写了 E2B」而跳过 |
+| ADR-03 vs compose | 「生产首选 Daytona」 | **配置分裂可能仍存在**。`config` 默认 `sandbox_backend=daytona`，但 **compose 可强制 `SANDBOX_BACKEND=docker`**。部署路径上 Docker 加固不可因「ADR 写了 Daytona」而跳过 |
 | P0-2 RCE | 「Windows 本地 builder RCE」 | **属实但范围收窄**：local+Windows 为命令注入；全后端均受 manifest 覆盖影响 |
 
 ### 3.4 P2 — 抽样属实，批量纳入 ADR-12 / 专项 ADR
@@ -153,11 +153,11 @@ Hosting 穿透 local（P2-1）、HITL 词表多处复制（P2-2）、中文错�
 
 **跨 ADR 共享根因（实施时合并 PR 亦可）：**
 
-1. 超时体系 → ADR-09  
-2. `failure_kind` 贯通 → ADR-11  
-3. Checkpoint 单一真相源 → ADR-10  
-4. HITL 域层收口 → ADR-10 + ADR-05  
-5. HostingBackend 协议补全 → ADR-11  
+1. 超时体系 → ADR-09
+2. `failure_kind` 贯通 → ADR-11
+3. Checkpoint 单一真相源 → ADR-10
+4. HITL 域层收口 → ADR-10 + ADR-05
+5. HostingBackend 协议补全 → ADR-11
 
 ---
 
@@ -165,11 +165,11 @@ Hosting 穿透 local（P2-1）、HITL 词表多处复制（P2-2）、中文错�
 
 签字前至少确认：
 
-- [ ] 每份 ADR 的 Decision 可映射到可测验收（测试或运维检查项）
-- [ ] ADR-07 与 CLAUDE.md「禁硬编码密钥」一致  
-- [ ] ADR-03 修订后，compose 的 `SANDBOX_BACKEND=docker` 不再与文档矛盾  
-- [ ] ADR-05/10 对 `user_pause` / `resume_grant` / RUNNING 回收无互相打架的表述  
-- [ ] ADR-12 标明哪些条款可延后，避免「一纸 Accept 绑死全部 P2」
+* [ ] 每份 ADR 的 Decision 可映射到可测验收（测试或运维检查项）
+* [ ] ADR-07 与 CLAUDE.md「禁硬编码密钥」一致
+* [ ] ADR-03 修订后，compose 的 `SANDBOX_BACKEND=docker` 不再与文档矛盾
+* [ ] ADR-05/10 对 `user_pause` / `resume_grant` / RUNNING 回收无互相打架的表述
+* [ ] ADR-12 标明哪些条款可延后，避免「一纸 Accept 绑死全部 P2」
 
 机器证据：可后续扩展 `tests/test_adr_evidence.py`（现有文件仅覆盖 ADR-02/03/04 类不变量）。
 
@@ -177,9 +177,12 @@ Hosting 穿透 local（P2-1）、HITL 词表多处复制（P2-2）、中文错�
 
 ## 9. 明确不在本次指南范围
 
-- 实现代码与具体 PR 拆分（用 writing-plans / 实现会话）
-- ADR-06 / Pinecone / 偏好抽取路径变更
-- 敏感词检测文档、官方小游戏资源是否迁出等产品决策（审查 CLAUDE 违反表仅记录，不升格为 ADR-07 强制项，除非 Owner 另批）
+* 替代 ADR-01～05 / ADR-06～12 正文的完整重写（本指南只改冲突点）
+* 前端 P1-19～26 的逐条实现（归 ADR-12；本指南只定验收口径）
+* 新开「第 13 份」ADR（除非后续复验证明 ADR-12 无法承载）
+* 实现代码与具体 PR 拆分（用 writing-plans / 实现会话）
+* ADR-06 / Pinecone / 偏好抽取路径变更
+* 敏感词检测文档、官方小游戏资源是否迁出等产品决策（审查 CLAUDE 违反表仅记录，不升格为 ADR-07 强制项，除非 Owner 另批）
 
 ---
 
