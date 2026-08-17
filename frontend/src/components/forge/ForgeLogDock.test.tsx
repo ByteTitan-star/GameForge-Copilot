@@ -23,11 +23,8 @@ describe('ForgeLogDock', () => {
     )
 
     const scroll = container.querySelector('.gf-forge-log-dock-scroll')
-    const pipeline = container.querySelector('.gf-forge-log-dock-pipeline')
     expect(scroll).toBeInTheDocument()
-    expect(pipeline).toBeInTheDocument()
-    expect(scroll?.contains(pipeline)).toBe(false)
-    expect(screen.getByRole('list', { name: '生成流程' })).toBeInTheDocument()
+    expect(screen.getByLabelText('生成流程')).toBeInTheDocument()
     expect(screen.getByText('事件 11')).toBeInTheDocument()
     fireEvent.wheel(scroll!, { deltaY: 200 })
   })

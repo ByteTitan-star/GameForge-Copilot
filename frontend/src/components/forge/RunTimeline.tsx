@@ -9,6 +9,8 @@ export type TimelineItem = {
   detail?: string;
   tone: "info" | "ok" | "warn" | "err" | "muted";
   at: string;
+  /** 挂载阶段：策划 / 美术 / 开发 / 测试 */
+  phase?: RunPhase;
 };
 
 const PHASES: RunPhase[] = [

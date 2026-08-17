@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { RunPhase } from '@/api/enums'
 import { FailureRecoveryBar } from '@/components/forge/FailureRecoveryBar'
-import { RunTimeline, type TimelineItem } from '@/components/forge/RunTimeline'
-import { StagePipeline } from '@/components/forge/StagePipeline'
+import { StageLogGrid } from '@/components/forge/StageLogGrid'
+import type { TimelineItem } from '@/components/forge/RunTimeline'
 import type { StagePipelineState } from '@/lib/stage-pipeline-state'
 import { useT } from '@/i18n/use-t'
 
@@ -29,29 +29,36 @@ type Props = {
 }
 
 const HEIGHT_KEY = 'gf-forge-log-height'
-const DEFAULT_HEIGHT = 240
-const MIN_HEIGHT = 120
-/** 占视口高度的上限，避免日志长期挤占主工作区 */
-const MAX_HEIGHT_RATIO = 0.45
-/** 阻塞错误时自动撑开的高度 */
-const BLOCKED_HEIGHT = 240
+const DEFAULT_HEIGHT_RATIO = 0.25
+const MIN_HEIGHT_RATIO = 0.12
+const MAX_HEIGHT_RATIO = 0.5
 
-function readStoredHeight(): number {
+function readStoredHeight(): number | null {
   try {
     const raw = localStorage.getItem(HEIGHT_KEY)
-    if (!raw) return DEFAULT_HEIGHT
+    if (!raw) return null
     const n = Number(raw)
-    if (!Number.isFinite(n)) return DEFAULT_HEIGHT
-    return Math.max(MIN_HEIGHT, n)
+    if (!Number.isFinite(n)) return null
+    return n
   } catch {
-    return DEFAULT_HEIGHT
+    return null
   }
 }
 
+function defaultHeightPx(): number {
+  return Math.round(window.innerHeight * DEFAULT_HEIGHT_RATIO)
+}
+
+function minHeightPx(): number {
+  return Math.round(window.innerHeight * MIN_HEIGHT_RATIO)
+}
+
+function maxHeightPx(): number {
+  return Math.round(window.innerHeight * MAX_HEIGHT_RATIO)
+}
+
 /**
- * 底部横跨的「执行日志带」：标题栏常驻（折叠时仅 44px，显示最新事件与错误数），
- * 展开后顶部可垂直拖拽调整高度（120px ~ 45vh，持久化）。
- * 失败恢复条与阶段条固定在滚动区外；事件流 newest-first，默认钉住顶部跟随最新。
+ * 底部横跨的「执行日志带」：默认折叠；展开后约 25vh，可拖拽至 50vh。
  */
 export function ForgeLogDock({
   open,
@@ -62,16 +69,13 @@ export function ForgeLogDock({
   failureRecovery,
 }: Props) {
   const t = useT()
-  const showPipeline = runPhase !== 'idle' || items.length > 0
-  const [height, setHeight] = useState(readStoredHeight)
+  const showGrid = runPhase !== 'idle' || items.length > 0
+  const [height, setHeight] = useState(() => readStoredHeight() ?? defaultHeightPx())
   const draggingRef = useRef(false)
   const dockRef = useRef<HTMLElement | null>(null)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const followLatestRef = useRef(true)
 
   const persistHeight = useCallback((next: number) => {
-    const maxPx = Math.round(window.innerHeight * MAX_HEIGHT_RATIO)
-    const clamped = Math.min(maxPx, Math.max(MIN_HEIGHT, next))
+    const clamped = Math.min(maxHeightPx(), Math.max(minHeightPx(), next))
     setHeight(clamped)
     try {
       localStorage.setItem(HEIGHT_KEY, String(clamped))
@@ -83,7 +87,6 @@ export function ForgeLogDock({
   useEffect(() => {
     function onMove(event: PointerEvent) {
       if (!draggingRef.current || !dockRef.current) return
-      // 向上拖增大高度：新高度 = 抽屉底部 y - 指针 y
       const bottom = dockRef.current.getBoundingClientRect().bottom
       persistHeight(bottom - event.clientY)
     }
@@ -100,29 +103,11 @@ export function ForgeLogDock({
     }
   }, [persistHeight])
 
-  // 阻塞性错误时自动撑开到可阅读高度（不永久占用，仅提升到 BLOCKED_HEIGHT）
   useEffect(() => {
-    if (open && failureRecovery && height < BLOCKED_HEIGHT) {
-      persistHeight(BLOCKED_HEIGHT)
+    if (open && failureRecovery && height < defaultHeightPx()) {
+      persistHeight(defaultHeightPx())
     }
   }, [open, failureRecovery, height, persistHeight])
-
-  // newest-first：靠近顶部视为跟随；用户上翻后暂停自动钉顶
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el || !open) return
-    function onScroll() {
-      followLatestRef.current = el.scrollTop < 24
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [open])
-
-  useEffect(() => {
-    if (!open || !followLatestRef.current) return
-    const el = scrollRef.current
-    if (el) el.scrollTop = 0
-  }, [items, open])
 
   const latest = items[0]
   const errorCount = items.filter((i) => i.tone === 'err').length
@@ -181,19 +166,11 @@ export function ForgeLogDock({
               onConfigureLlm={failureRecovery.onConfigureLlm}
             />
           ) : null}
-          {showPipeline ? (
-            <div className="gf-forge-log-dock-pipeline">
-              <StagePipeline runPhase={runPhase} stages={stages} variant="bar" />
+          {showGrid ? (
+            <div className="gf-forge-log-dock-scroll">
+              <StageLogGrid runPhase={runPhase} stages={stages} items={items} />
             </div>
           ) : null}
-          <div ref={scrollRef} className="gf-forge-log-dock-scroll">
-            <RunTimeline
-              phase={runPhase}
-              items={items}
-              showHeader={false}
-              scrollable={false}
-            />
-          </div>
         </div>
       ) : null}
     </section>
