@@ -39,6 +39,9 @@ htmlcov/
 .hosting/
 .pnpm-store/
 
+# 本机 TEI embedding 模型权重（scripts/download_embedding_model.sh）
+/data/embedding-models/
+
 # 本地备份 / 工作副本（勿入库）
 backups/
 /db_backup_*.sql
