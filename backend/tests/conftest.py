@@ -247,32 +247,36 @@ def _fake_llm(monkeypatch: pytest.MonkeyPatch):
     call_llm_stream 是流式门面，把 _fake 的完整内容切成 10 字一块 yield，末帧带 usage。
     """
     from app.enums import LLMProvider
-    from app.llm.provider import StreamChunk, Usage
+    from app.llm.provider import LLMCompletion, StreamChunk, Usage
 
     def _decide(system: str):
         """按 system prompt 决定返回内容 + usage。流式/非流式共用。"""
         if "Skill 路由器" in system or "skill_ids" in system:
-            return '{"skill_ids":[]}', Usage(5, 2)
+            return LLMCompletion(content='{"skill_ids":[]}', usage=Usage(5, 2))
         if "方向提案" in system or "上一轮两个视觉方向" in system:
-            return _valid_art_options_json(), Usage(10, 5)
+            return LLMCompletion(content=_valid_art_options_json(), usage=Usage(10, 5))
         if "前端动效负责人" in system:
-            return _valid_art_detail_json(), Usage(20, 10)
+            return LLMCompletion(content=_valid_art_detail_json(), usage=Usage(20, 10))
         if "只生成一个自包含的 index.html" in system or "故障修复工程师" in system:
-            return (
-                "<html><body><canvas id='c'></canvas>"
-                "<button>play</button><script></script></body></html>",
-                Usage(20, 10),
+            return LLMCompletion(
+                content=(
+                    "<html><body><canvas id='c'></canvas>"
+                    "<button>play</button><script></script></body></html>"
+                ),
+                usage=Usage(20, 10),
             )
         if "JSON" in system or "策划" in system:
-            return _valid_design_doc_json(), Usage(10, 5)
-        return "stub design doc", Usage(10, 5)
+            return LLMCompletion(content=_valid_design_doc_json(), usage=Usage(10, 5))
+        return LLMCompletion(content="stub design doc", usage=Usage(10, 5))
 
     async def _fake(db, r, user_id, config_id, system, user_msg, **kwargs):
-        content, usage = _decide(system)
-        return content, usage, LLMProvider.ANTHROPIC
+        result = _decide(system)
+        return result, LLMProvider.ANTHROPIC
 
     async def _fake_stream(db, r, user_id, config_id, system, user_msg, **kwargs):
-        content, usage = _decide(system)
+        result = _decide(system)
+        content = result.content
+        usage = result.usage
         # 切成 10 字一块逐块 yield，末帧带 usage（对齐 provider.complete_stream 协议）
         for i in range(0, max(len(content), 1), 10):
             yield StreamChunk(delta=content[i : i + 10], usage=None)

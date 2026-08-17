@@ -319,7 +319,7 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
             turns: list[ContextTurn], previous: SessionSummary | None
         ) -> SessionSummary:
             async def complete(system: str, user_msg: str) -> str:
-                content, _usage, _prov = await llm_client.call_llm(
+                result, _prov = await llm_client.call_llm(
                     ctx.s,
                     ctx.r,
                     ctx.run.user_id,
@@ -330,7 +330,7 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
                     run_id=ctx.run.id,
                     kind="session_summary",
                 )
-                return content
+                return result.content
 
             return await synthesize_summary_via_llm(turns, previous, complete=complete)
 
@@ -482,7 +482,7 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None
     # 只记长度不记原文：prompt/响应内容属敏感且冗长，按 docs 约定不落盘
     log.info("llm call start", extra={"stage": stage, "prompt_len": len(user_msg)})
     try:
-        content, usage, prov = await llm_client.call_llm(
+        result, prov = await llm_client.call_llm(
             ctx.s,
             ctx.r,
             ctx.run.user_id,
@@ -493,6 +493,8 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None
             run_id=ctx.run.id,
             kind=llm_kind,
         )
+        content = result.content
+        usage = result.usage
     except Exception:
         duration = round(time.monotonic() - started, 3)
         log.exception("llm call failed", extra={"stage": stage, "duration": duration})

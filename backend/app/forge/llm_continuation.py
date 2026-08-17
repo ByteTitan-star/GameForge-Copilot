@@ -9,6 +9,8 @@ from typing import Any
 from app.core.config import settings
 from app.llm.provider import LLMCompletion
 
+_LENGTH_FINISH_REASONS = frozenset({"length", "max_tokens"})
+
 _CONTINUATION_NOTICE = (
     "【输出截断续写】\n"
     "上一段生成因 token 上限被截断。请从下列已生成内容的末尾无缝继续，"
@@ -23,6 +25,20 @@ _CONTINUATION_NOTICE = (
 OUTPUT_TRUNCATED_ERROR = "OUTPUT_TRUNCATED: LLM output hit token limit after continuation rounds"
 
 
+class OutputTruncatedError(Exception):
+    """Code/Vite 生成在续写轮次耗尽后仍被截断。"""
+
+    def __init__(self, message: str = OUTPUT_TRUNCATED_ERROR) -> None:
+        super().__init__(message)
+
+
+def is_output_truncated_error(errors: list[str] | None) -> bool:
+    if not errors:
+        return False
+    prefix = "OUTPUT_TRUNCATED:"
+    return any(str(e).startswith(prefix) for e in errors)
+
+
 def is_likely_truncated(
     content: str,
     *,
@@ -31,7 +47,7 @@ def is_likely_truncated(
     finish_reason: str | None,
 ) -> bool:
     """判断是否疑似因 max_tokens 截断。"""
-    if finish_reason == "length":
+    if finish_reason in _LENGTH_FINISH_REASONS:
         return True
     if max_tokens > 0 and output_tokens >= int(max_tokens * 0.98):
         return True
@@ -61,11 +77,25 @@ def has_incomplete_structure(content: str) -> bool:
     return False
 
 
+def _looks_like_full_rewrite(suffix: str) -> bool:
+    stripped = suffix.lstrip()
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    return (
+        lower.startswith("<!doctype")
+        or lower.startswith("<html")
+        or (stripped.startswith("{") and '"format"' in stripped[:300])
+    )
+
+
 def merge_continuation(prefix: str, suffix: str, *, max_overlap: int = 500) -> str:
     """拼接续写内容，去除 prefix 尾部与 suffix 头部的重复重叠。"""
     if not suffix:
         return prefix
     if not prefix:
+        return suffix
+    if _looks_like_full_rewrite(suffix):
         return suffix
     head = prefix.strip()[: min(120, len(prefix))]
     if suffix.strip().startswith(head):
@@ -78,16 +108,19 @@ def merge_continuation(prefix: str, suffix: str, *, max_overlap: int = 500) -> s
 
 
 def build_continuation_user_msg(
-    original_user_msg: str,
     partial_content: str,
     *,
+    context_summary: str | None = None,
     tail_chars: int | None = None,
 ) -> str:
+    """续写轮 user message：仅续写指令 + 可选任务摘要 + 已生成尾部（不含首轮完整 prompt）。"""
     tail_limit = tail_chars or settings.llm_continuation_tail_chars
     tail = partial_content[-tail_limit:] if len(partial_content) > tail_limit else partial_content
-    return (
-        f"{original_user_msg}\n\n{_CONTINUATION_NOTICE}\n\n【已生成内容末尾（从此处继续）】\n{tail}"
-    )
+    parts = [_CONTINUATION_NOTICE]
+    if context_summary:
+        parts.append(f"【任务摘要】\n{context_summary.strip()}")
+    parts.append(f"【已生成内容末尾（从此处继续）】\n{tail}")
+    return "\n\n".join(parts)
 
 
 async def generate_with_continuation(
@@ -97,6 +130,7 @@ async def generate_with_continuation(
     user_msg: str,
     max_tokens: int | None = None,
     max_rounds: int | None = None,
+    context_summary: str | None = None,
 ) -> tuple[str, bool]:
     """带截断续写的 LLM 生成。返回 (content, truncated_exhausted)。"""
     limit = max_tokens if max_tokens is not None else settings.llm_code_max_tokens
@@ -118,7 +152,10 @@ async def generate_with_continuation(
             return accumulated, False
         if round_idx >= rounds:
             return accumulated, True
-        current_user = build_continuation_user_msg(user_msg, accumulated)
+        current_user = build_continuation_user_msg(
+            accumulated,
+            context_summary=context_summary,
+        )
 
     assert last_result is not None
     return accumulated, True
@@ -129,6 +166,7 @@ async def generate_code_output(
     system: str,
     user_msg: str,
     *,
+    context_summary: str | None = None,
     emit_delta: bool = False,
     kind: str | None = None,
 ) -> tuple[str, bool]:
@@ -151,7 +189,7 @@ async def generate_code_output(
                 kind=llm_kind,
                 max_tokens=max_tokens,
             )
-        content, usage, _prov = await llm_client.call_llm(
+        result, _prov = await llm_client.call_llm(
             ctx.s,
             ctx.r,
             ctx.run.user_id,
@@ -163,11 +201,12 @@ async def generate_code_output(
             kind=llm_kind,
             max_tokens=max_tokens,
         )
-        return LLMCompletion(content=content, usage=usage)
+        return result
 
     return await generate_with_continuation(
         llm_once,
         system=system,
         user_msg=user_msg,
         max_tokens=max_tokens,
+        context_summary=context_summary,
     )

@@ -275,9 +275,9 @@ async def test_art_options_retry_exhaustion_falls_back_and_finishes(
         if "方向提案" in system:
             calls["art"] += 1
             from app.enums import LLMProvider
-            from app.llm.provider import Usage
+            from app.llm.provider import LLMCompletion, Usage
 
-            return "not-json", Usage(1, 1), LLMProvider.ANTHROPIC
+            return LLMCompletion(content="not-json", usage=Usage(1, 1)), LLMProvider.ANTHROPIC
         return await _fake_llm(*args, **kwargs)
 
     async def fail_art_options_stream(*args, **kwargs):
@@ -291,9 +291,10 @@ async def test_art_options_retry_exhaustion_falls_back_and_finishes(
             yield StreamChunk(delta="", usage=Usage(1, 1))
             return
         # 非 art 方向提案节点：用原非流式 mock 拿内容，切块 yield，保证 run 正常完成
-        content, _usage, _prov = await _fake_llm(*args, **kwargs)
+        result, _prov = await _fake_llm(*args, **kwargs)
         from app.llm.provider import StreamChunk, Usage
 
+        content = result.content
         for i in range(0, len(content), 10):
             yield StreamChunk(delta=content[i : i + 10], usage=None)
         yield StreamChunk(delta="", usage=Usage(10, 5))

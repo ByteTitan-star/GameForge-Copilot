@@ -71,12 +71,26 @@ async def _code_llm(
     system: str,
     user_msg: str,
     *,
+    context_summary: str | None = None,
     emit_delta: bool = False,
     kind: str | None = None,
 ) -> tuple[str, bool]:
     from app.forge.llm_continuation import generate_code_output
 
-    return await generate_code_output(ctx, system, user_msg, emit_delta=emit_delta, kind=kind)
+    return await generate_code_output(
+        ctx,
+        system,
+        user_msg,
+        context_summary=context_summary,
+        emit_delta=emit_delta,
+        kind=kind,
+    )
+
+
+def _continuation_context_summary(design_doc: dict[str, Any], game_title: str) -> str:
+    engine = (design_doc.get("engine") or {}).get("id", "canvas")
+    title = design_doc.get("title") or game_title
+    return f"游戏：{title}；引擎：{engine}"
 
 
 def _truncation_failure(
@@ -94,7 +108,7 @@ def _truncation_failure(
         "candidate_ready": False,
         "code_ok": False,
         "qa_ok": False,
-        "failure_kind": "build",
+        "failure_kind": "truncated",
         "playtest_errors": [OUTPUT_TRUNCATED_ERROR],
         "qa_diagnosis": qa_diagnosis,
         "design_doc": design_doc,
@@ -148,10 +162,17 @@ async def execute_code_or_repair(
             assets_block = "\n\n" + format_assets_for_prompt(picked)
 
         qa_errors_raw = list(state.get("playtest_errors") or [])
+        from app.forge.llm_continuation import is_output_truncated_error
+
         # 环境类 infra（缺 Playwright 等）不应喂给 LLM「改游戏代码」
-        qa_errors = [e for e in qa_errors_raw if not is_permanent_infra_error([str(e)])]
+        qa_errors = [
+            e
+            for e in qa_errors_raw
+            if not is_permanent_infra_error([str(e)]) and not is_output_truncated_error([str(e)])
+        ]
         qa_diagnosis = state.get("qa_diagnosis") or ""
         attempt = int(state.get("attempt") or 0) + 1
+        ctx_summary = _continuation_context_summary(design_doc, ctx.game.title)
 
         # P5：Memory/设计稿唯一经 ContextBuilder；assets/scaffold/repair 为任务载荷追加
         from app.forge.memory.loader import build_node_context
@@ -245,6 +266,7 @@ async def execute_code_or_repair(
                     ctx,
                     build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                     repair_user,
+                    context_summary=ctx_summary,
                 )
                 if truncated:
                     return _truncation_failure(
@@ -281,7 +303,9 @@ async def execute_code_or_repair(
                     ctx, s, u, "code", emit_delta=False, kind="skill_select"
                 ),
             )
-            raw_output, truncated = await _code_llm(ctx, system_prompt, user_msg)
+            raw_output, truncated = await _code_llm(
+                ctx, system_prompt, user_msg, context_summary=ctx_summary
+            )
             if truncated:
                 return _truncation_failure(
                     attempt=attempt,
@@ -306,7 +330,9 @@ async def execute_code_or_repair(
                         ctx, s, u, "code", emit_delta=False, kind="skill_select"
                     ),
                 )
-            raw_output, truncated = await _code_llm(ctx, system_prompt, user_msg)
+            raw_output, truncated = await _code_llm(
+                ctx, system_prompt, user_msg, context_summary=ctx_summary
+            )
             if truncated:
                 return _truncation_failure(
                     attempt=attempt,
@@ -334,17 +360,26 @@ async def execute_code_or_repair(
                         ctx,
                         build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
                         repair_user,
+                        context_summary=ctx_summary,
                     )
                     if truncated:
-                        from app.forge.llm_continuation import OUTPUT_TRUNCATED_ERROR
+                        from app.forge.llm_continuation import OutputTruncatedError
 
-                        raise RuntimeError(OUTPUT_TRUNCATED_ERROR)
+                        raise OutputTruncatedError()
                     return with_design_routing(
                         parse_llm_code_output(repair_raw, engine_id=engine_id),
                         design_routing,
                     )
 
                 loop_result = await run_project_build_loop(parsed, repair_fn=_repair_project)
+                if loop_result.output_truncated:
+                    return _truncation_failure(
+                        attempt=attempt,
+                        design_doc=design_doc,
+                        artifacts=artifacts,
+                        art_direction=art_direction,
+                        qa_diagnosis=qa_diagnosis,
+                    )
                 if loop_result.ok and loop_result.pipeline_result:
                     committed = await commit_project_build(
                         ctx,

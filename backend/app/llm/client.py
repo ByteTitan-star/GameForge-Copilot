@@ -165,7 +165,7 @@ async def call_llm(
     run_id: uuid.UUID | None = None,
     kind: str = "chat",
     max_tokens: int | None = None,
-) -> tuple[str, provider.Usage, LLMProvider]:
+) -> tuple[provider.LLMCompletion, LLMProvider]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
 
@@ -218,8 +218,8 @@ async def call_llm(
     )
     await _maybe_quota_alert(db, r, user_id)
     await _maybe_system_alert(db, r)
-    # 返回 provider，供调用方在事件/日志里如实记录用户配置的 provider，而非硬编码。
-    return result.content, result.usage, prov
+    # 返回 LLMCompletion（含 finish_reason）与 provider，供事件/日志使用。
+    return result, prov
 
 
 async def call_llm_stream(

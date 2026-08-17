@@ -8,6 +8,7 @@ from typing import Any, Literal, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
+from app.forge.llm_continuation import is_output_truncated_error
 from app.sandbox.playtest import is_permanent_infra_error
 
 NodeFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -42,7 +43,7 @@ def _max_attempts() -> int:
 
 def after_code_or_repair(
     state: CodeQaLoopState,
-) -> Literal["playtest", "diagnose", "exhausted", "__end__"]:
+) -> Literal["playtest", "diagnose", "retry", "exhausted", "__end__"]:
     if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
         return "__end__"
     if state.get("candidate_ready"):
@@ -50,6 +51,8 @@ def after_code_or_repair(
     attempt = int(state.get("attempt") or 0)
     if attempt >= _max_attempts():
         return "exhausted"
+    if is_output_truncated_error(list(state.get("playtest_errors") or [])):
+        return "retry"
     # build fail → diagnose（infra 不会从 code_or_repair 产生）
     return "diagnose"
 
@@ -121,6 +124,7 @@ def build_code_qa_loop(
         {
             "playtest": "playtest",
             "diagnose": "diagnose",
+            "retry": "code_or_repair",
             "exhausted": "mark_exhausted",
             END: END,
         },
