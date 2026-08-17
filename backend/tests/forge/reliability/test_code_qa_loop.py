@@ -40,7 +40,7 @@ async def test_infra_failure_retries_same_candidate_without_repair(
         return {
             "qa_ok": False,
             "failure_kind": "infra",
-            "playtest_errors": ["PLAYWRIGHT_UNAVAILABLE"],
+            "playtest_errors": ["TRANSIENT_INFRA: flaky"],
             "attempt": state.get("attempt"),
             "candidate_version": state.get("candidate_version"),
             "candidate_ready": True,
@@ -61,6 +61,46 @@ async def test_infra_failure_retries_same_candidate_without_repair(
     assert repair_calls["n"] == 1
     assert playtest_calls["n"] == 3
     assert candidate_versions == [10, 10, 10]
+
+
+@pytest.mark.asyncio
+async def test_permanent_infra_exhausts_without_empty_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PLAYWRIGHT_UNAVAILABLE 等环境故障：立即 exhausted，不空转重试 playtest。"""
+    monkeypatch.setattr(settings, "code_qa_max_attempts", 5)
+    playtest_calls = {"n": 0}
+
+    async def code_or_repair(state: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "attempt": 1,
+            "candidate_ready": True,
+            "candidate_version": 10,
+            "qa_ok": False,
+        }
+
+    async def playtest(state: dict[str, Any]) -> dict[str, Any]:
+        playtest_calls["n"] += 1
+        return {
+            "qa_ok": False,
+            "failure_kind": "infra",
+            "playtest_errors": ["PLAYWRIGHT_UNAVAILABLE: playwright package is not installed"],
+            "attempt": 1,
+            "candidate_version": 10,
+            "candidate_ready": True,
+        }
+
+    async def diagnose(state: dict[str, Any]) -> dict[str, Any]:
+        raise AssertionError("permanent infra must not diagnose")
+
+    graph = build_code_qa_loop(
+        code_or_repair=code_or_repair,
+        playtest=playtest,
+        diagnose=diagnose,
+    )
+    result = await graph.ainvoke({"attempt": 0, "design_doc": {}})
+    assert result.get("exhausted") is True
+    assert playtest_calls["n"] == 1
 
 
 @pytest.mark.asyncio
@@ -169,6 +209,17 @@ def test_after_playtest_routing_helpers() -> None:
     assert after_playtest({"qa_ok": True}) == "ok"
     assert after_playtest({"qa_ok": False, "attempt": 3}) == "exhausted"
     assert after_playtest({"qa_ok": False, "attempt": 1, "failure_kind": "infra"}) == "replay"
+    assert (
+        after_playtest(
+            {
+                "qa_ok": False,
+                "attempt": 1,
+                "failure_kind": "infra",
+                "playtest_errors": ["PLAYWRIGHT_UNAVAILABLE: missing"],
+            }
+        )
+        == "exhausted"
+    )
     assert after_playtest({"qa_ok": False, "attempt": 1, "failure_kind": "product"}) == "diagnose"
     assert after_code_or_repair({"candidate_ready": True}) == "playtest"
     assert after_code_or_repair({"candidate_ready": False, "attempt": 1}) == "diagnose"

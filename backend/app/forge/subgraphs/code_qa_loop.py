@@ -8,6 +8,7 @@ from typing import Any, Literal, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
+from app.sandbox.playtest import is_permanent_infra_error
 
 NodeFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -43,7 +44,7 @@ def after_code_or_repair(
     state: CodeQaLoopState,
 ) -> Literal["playtest", "diagnose", "exhausted", "__end__"]:
     if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
-        return END
+        return "__end__"
     if state.get("candidate_ready"):
         return "playtest"
     attempt = int(state.get("attempt") or 0)
@@ -57,13 +58,16 @@ def after_playtest(
     state: CodeQaLoopState,
 ) -> Literal["ok", "exhausted", "replay", "diagnose", "__end__"]:
     if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
-        return END
+        return "__end__"
     if state.get("qa_ok"):
         return "ok"
     attempt = int(state.get("attempt") or 0)
     if attempt >= _max_attempts():
         return "exhausted"
     if state.get("failure_kind") == "infra":
+        # Playwright/Chromium 缺失等环境问题：空转重试无意义，立即耗尽
+        if is_permanent_infra_error(list(state.get("playtest_errors") or [])):
+            return "exhausted"
         return "replay"
     return "diagnose"
 
@@ -72,7 +76,7 @@ def after_diagnose(
     state: CodeQaLoopState,
 ) -> Literal["code_or_repair", "__end__"]:
     if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
-        return END
+        return "__end__"
     return "code_or_repair"
 
 
@@ -103,9 +107,9 @@ def build_code_qa_loop(
         }
 
     g = StateGraph(CodeQaLoopState)
-    g.add_node("code_or_repair", code_or_repair)
-    g.add_node("playtest", playtest)
-    g.add_node("diagnose", diagnose)
+    g.add_node("code_or_repair", code_or_repair)  # type: ignore[call-overload]
+    g.add_node("playtest", playtest)  # type: ignore[call-overload]
+    g.add_node("diagnose", diagnose)  # type: ignore[call-overload]
     g.add_node("infra_replay", infra_replay)
     g.add_node("mark_ok", mark_ok)
     g.add_node("mark_exhausted", mark_exhausted)

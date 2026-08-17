@@ -35,7 +35,11 @@ from app.forge.reliability.artifact_gate import derive_artifact_gate
 from app.hosting import serve, store
 from app.models.game_version import GameVersion
 from app.sandbox import get_sandbox
-from app.sandbox.playtest import run_playtest, run_playtest_dist
+from app.sandbox.playtest import (
+    is_permanent_infra_error,
+    run_playtest,
+    run_playtest_dist,
+)
 
 
 def _read_html(path: Any) -> str:
@@ -105,7 +109,9 @@ async def execute_code_or_repair(
             ]
             assets_block = "\n\n" + format_assets_for_prompt(picked)
 
-        qa_errors = state.get("playtest_errors") or []
+        qa_errors_raw = list(state.get("playtest_errors") or [])
+        # 环境类 infra（缺 Playwright 等）不应喂给 LLM「改游戏代码」
+        qa_errors = [e for e in qa_errors_raw if not is_permanent_infra_error([str(e)])]
         qa_diagnosis = state.get("qa_diagnosis") or ""
         attempt = int(state.get("attempt") or 0) + 1
 
