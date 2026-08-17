@@ -37,15 +37,17 @@ function StatCell({
   loading: boolean
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <Icon className="gf-text-accent h-4 w-4 shrink-0" />
-      <div className="min-w-[2.5rem]">
+    <div className="flex items-center gap-3">
+      <Icon className="gf-text-accent h-5 w-5 shrink-0" />
+      <div className="min-w-[3rem]">
         {loading ? (
-          <div className="h-6 w-12 animate-pulse rounded" style={skeletonStyle} />
+          <div className="h-7 w-14 animate-pulse rounded" style={skeletonStyle} />
         ) : (
-          <p className="font-mono text-xl leading-none text-[var(--gf-text)] tabular-nums">{value}</p>
+          <p className="font-mono text-2xl leading-none font-semibold text-[var(--gf-text)] tabular-nums">
+            {value}
+          </p>
         )}
-        <p className="gf-page-muted mt-1 text-[11px] font-medium uppercase tracking-wider">{label}</p>
+        <p className="gf-page-muted mt-1 text-xs font-medium tracking-wide">{label}</p>
       </div>
     </div>
   )
@@ -54,11 +56,11 @@ function StatCell({
 function SkeletonCard() {
   return (
     <div className="gf-glass overflow-hidden rounded-2xl">
-      <div className="aspect-[16/10] w-full min-h-[160px] animate-pulse" style={skeletonStyle} />
+      <div className="aspect-[16/9] w-full animate-pulse" style={skeletonStyle} />
       <div className="space-y-3 p-4">
         <div className="h-5 w-3/4 animate-pulse rounded" style={skeletonStyle} />
-        <div className="h-3 w-1/2 animate-pulse rounded" style={skeletonStyle} />
-        <div className="h-8 w-24 animate-pulse rounded-lg" style={skeletonStyle} />
+        <div className="h-3.5 w-1/2 animate-pulse rounded" style={skeletonStyle} />
+        <div className="h-9 w-28 animate-pulse rounded-lg" style={skeletonStyle} />
       </div>
     </div>
   )
@@ -116,20 +118,20 @@ export function DiscoverPage() {
         <div className="gf-theme-orb gf-theme-orb-c" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:px-8 md:py-12">
+      <div className="relative z-10 mx-auto max-w-7xl px-5 py-8 sm:px-8 md:py-12">
         <header className="mb-10 border-b border-[var(--gf-border)] pb-6">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
-              <p className="gf-text-accent flex items-center gap-2 text-[11px] font-medium tracking-[0.14em] uppercase">
-                <Compass className="h-3.5 w-3.5" />
+              <p className="gf-text-accent flex items-center gap-2 text-xs font-semibold tracking-[0.14em] uppercase">
+                <Compass className="h-4 w-4" />
                 {t('discoverBadge')}
               </p>
               <h1 className="gf-font-display mt-2 bg-[linear-gradient(var(--gf-gradient-angle),var(--gf-secondary),var(--gf-primary))] bg-clip-text text-4xl font-semibold tracking-tight text-transparent sm:text-5xl">
                 {t('discoverTitle')}
               </h1>
-              <p className="gf-page-subtitle mt-3 max-w-xl">{t('discoverSubtitle')}</p>
+              <p className="gf-page-subtitle mt-3 max-w-xl text-base">{t('discoverSubtitle')}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
               <StatCell
                 icon={Gamepad2}
                 value={formatStat(stats.count)}
@@ -154,24 +156,24 @@ export function DiscoverPage() {
 
         <FeaturedGamesStrip variant="light" className="mb-10" />
 
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <label className="relative block w-full sm:w-72">
-            <Search className="gf-page-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+        <div className="gf-glass mb-6 flex flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:items-center sm:gap-4">
+          <label className="relative block w-full flex-1 sm:max-w-md">
+            <Search className="gf-page-muted pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2" />
             <input
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('discoverSearchPh')}
               aria-label={t('discoverSearchPh')}
-              className="gf-input h-11 w-full rounded-xl pr-3 pl-9 text-sm"
+              className="gf-input h-11 w-full rounded-xl pr-3 pl-10 text-sm"
             />
           </label>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <div
               role="radiogroup"
               aria-label={t('discoverSortPopular')}
-              className="flex items-center gap-1 rounded-xl border border-[var(--gf-border)] bg-[var(--gf-surface)] p-1"
+              className="flex items-center gap-1 rounded-xl border border-[var(--gf-border)] bg-[var(--gf-bg)] p-1"
             >
               {(['latest', 'popular'] as const).map((s) => (
                 <button
@@ -181,7 +183,7 @@ export function DiscoverPage() {
                   aria-checked={sort === s}
                   onClick={() => setSort(s)}
                   className={cn(
-                    'gf-interactive cursor-pointer rounded-lg px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition',
+                    'gf-interactive cursor-pointer rounded-lg px-3.5 py-1.5 text-xs font-semibold tracking-wide uppercase transition',
                     sort === s ? 'gf-filter-active' : 'gf-page-muted hover:text-[var(--gf-text)]',
                   )}
                 >
@@ -195,7 +197,7 @@ export function DiscoverPage() {
               aria-pressed={featuredOnly}
               onClick={() => setFeaturedOnly((v) => !v)}
               className={cn(
-                'gf-interactive inline-flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-2 font-mono text-[11px] uppercase tracking-wider transition',
+                'gf-interactive inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border px-3.5 text-xs font-semibold tracking-wide uppercase transition',
                 featuredOnly
                   ? 'gf-border-accent gf-bg-accent-soft gf-text-accent'
                   : 'gf-chip hover:text-[var(--gf-text)]',
@@ -211,15 +213,15 @@ export function DiscoverPage() {
           <p
             role="status"
             aria-live="polite"
-            className="gf-page-muted mb-4 text-[11px] font-medium uppercase tracking-wider"
+            className="gf-page-muted mb-4 text-xs font-medium tracking-wide uppercase"
           >
             {t('discoverResultCount').replace('{n}', String(filtered.length))}
           </p>
         ) : null}
 
         {query.isLoading ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
@@ -269,7 +271,7 @@ export function DiscoverPage() {
             ) : null}
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((g) => (
               <PublicGameCard key={g.game_id} game={g} variant="theme" />
             ))}

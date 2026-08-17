@@ -29,17 +29,22 @@ export function FeaturedGamesStrip({ className, variant = 'dark' }: Props) {
       <div>
         <p
           className={cn(
-            'flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] uppercase',
-            dark ? 'text-white/45' : 'gf-page-muted',
+            'flex items-center gap-2 font-mono text-xs font-semibold tracking-[0.14em] uppercase',
+            dark ? 'text-white/70' : 'gf-text-accent',
           )}
         >
           <Sparkles className="h-3.5 w-3.5" />
           {t('featuredBadge')}
         </p>
-        <h2 className={cn('mt-1 text-xl font-medium', dark ? 'text-white' : 'gf-page-body')}>
+        <h2
+          className={cn(
+            'mt-1.5 text-2xl font-semibold tracking-tight sm:text-[26px]',
+            dark ? 'text-white' : 'gf-page-body',
+          )}
+        >
           {t('featuredTitle')}
         </h2>
-        <p className={cn('mt-1 text-sm', dark ? 'text-white/55' : 'gf-page-muted')}>
+        <p className={cn('mt-1.5 text-sm', dark ? 'text-white/65' : 'gf-page-muted')}>
           {t('featuredSubtitle')}
         </p>
       </div>
@@ -50,7 +55,7 @@ export function FeaturedGamesStrip({ className, variant = 'dark' }: Props) {
           {t('loading')}
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {games.map((g) => (
             <PublicGameCard
               key={g.game_id}

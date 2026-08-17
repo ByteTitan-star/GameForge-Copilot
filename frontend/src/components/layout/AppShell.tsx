@@ -98,7 +98,7 @@ export function AppShell() {
         {collapsed ? null : (
           <span>
             <span className="gf-page-body block text-sm font-semibold tracking-tight">GameForge</span>
-            <span className="gf-page-muted block text-[10px]">{t('home')}</span>
+            <span className="gf-page-muted block text-xs">{t('home')}</span>
           </span>
         )}
       </Link>

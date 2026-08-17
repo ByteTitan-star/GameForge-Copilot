@@ -71,7 +71,8 @@ export function LandingPage() {
           playsInline
           poster={heroArt}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/75" />
+        {/* 压暗仅用于保证白字可读：底部渐深衔接下方内容区，中段保持通透 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/65" />
       </div>
 
       <div className="relative z-10">
@@ -170,10 +171,10 @@ export function LandingPage() {
           <div className="flex flex-1 flex-col justify-between pt-24 sm:pt-28">
             <div className="flex flex-col justify-between gap-10 lg:flex-row lg:items-start">
               <div className="flex flex-col justify-between gap-8 sm:flex-row sm:flex-1">
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {services.map((s, i) => (
                     <FadeIn key={s} delayMs={150 + i * 120}>
-                      <li className="font-mono text-xs uppercase tracking-[0.15em] text-white/90 drop-shadow-md transition-colors duration-200 hover:text-white">
+                      <li className="font-mono text-[13px] tracking-[0.15em] text-white/95 uppercase drop-shadow-md transition-colors duration-200 hover:text-white">
                         {s}
                       </li>
                     </FadeIn>
@@ -195,7 +196,7 @@ export function LandingPage() {
             <div className="mt-16 flex flex-col items-end justify-between gap-8 md:mt-0 md:flex-row md:items-end">
               <div>
                 <FadeIn delayMs={150}>
-                  <div className="mb-5 border-l-2 border-white bg-white/15 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] backdrop-blur-md transition-colors duration-200 hover:bg-white/25">
+                  <div className="mb-5 border-l-2 border-white bg-white/15 px-3.5 py-2 font-mono text-xs font-semibold tracking-[0.15em] uppercase backdrop-blur-sm transition-colors duration-200 hover:bg-white/25">
                     {t('landingBadge')}
                   </div>
                 </FadeIn>
@@ -239,9 +240,9 @@ export function LandingPage() {
 
         <section
           id="quick-start"
-          className="border-t border-white/15 bg-black/40 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12"
+          className="border-t border-white/15 bg-[#111315] px-5 py-16 sm:px-8 md:px-12"
         >
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-7xl">
             <FadeIn>
               <OfficialGameCards
                 accessToken={token}
@@ -251,8 +252,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="border-t border-white/15 bg-black/38 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12">
-          <div className="mx-auto max-w-6xl">
+        <section className="border-t border-white/15 bg-[#0f1113] px-5 py-16 sm:px-8 md:px-12">
+          <div className="mx-auto max-w-7xl">
             <FadeIn>
               <FeaturedGamesStrip variant="dark" />
             </FadeIn>
@@ -261,11 +262,13 @@ export function LandingPage() {
 
         <section
           id="features"
-          className="border-t border-white/15 bg-black/35 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12"
+          className="border-t border-white/15 bg-[#111315] px-5 py-16 sm:px-8 md:px-12"
         >
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-7xl">
             <FadeIn>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">{t('whatYouGet')}</p>
+              <p className="font-mono text-xs font-semibold tracking-[0.15em] text-white/65 uppercase">
+                {t('whatYouGet')}
+              </p>
               <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
                 {t('featuresTitle')}
               </h2>
@@ -275,13 +278,13 @@ export function LandingPage() {
                 <FadeIn key={f.title} delayMs={80 + i * 80}>
                   <article
                     className={cn(
-                      'group rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md',
+                      'group h-full rounded-2xl border border-white/10 bg-[#1a1d21] p-6',
                       'transition-all duration-300 ease-out',
-                      'hover:-translate-y-1 hover:border-white/30 hover:bg-white/15',
+                      'hover:-translate-y-1 hover:border-white/25 hover:bg-[#20242a]',
                     )}
                   >
-                    <f.icon className="mb-3 h-5 w-5 text-white/80 transition-transform duration-300 group-hover:scale-110" />
-                    <h3 className="text-lg font-medium">{f.title}</h3>
+                    <f.icon className="mb-4 h-6 w-6 text-white/85 transition-transform duration-300 group-hover:scale-110" />
+                    <h3 className="text-lg font-medium text-white">{f.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-white/70">{f.body}</p>
                   </article>
                 </FadeIn>
@@ -290,12 +293,14 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="cases" className="border-t border-white/15 bg-black/45 px-5 py-16 backdrop-blur-md sm:px-8 md:px-12">
-          <div className="mx-auto max-w-6xl">
+        <section id="cases" className="border-t border-white/15 bg-[#0f1113] px-5 py-16 sm:px-8 md:px-12">
+          <div className="mx-auto max-w-7xl">
             <FadeIn>
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">Cases</p>
+                  <p className="font-mono text-xs font-semibold tracking-[0.15em] text-white/65 uppercase">
+                    Cases
+                  </p>
                   <h2 className="mt-2 text-3xl font-normal tracking-tight drop-shadow-md sm:text-4xl">
                     {t('casesTitle')}
                   </h2>
@@ -317,13 +322,15 @@ export function LandingPage() {
                   ))
                 : staticCases.map((c, i) => (
                     <FadeIn key={c.title} delayMs={60 + i * 90}>
-                      <article className="flex h-full flex-col rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.16]">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{c.tag}</p>
-                        <h3 className="mt-3 text-xl font-medium">{c.title}</h3>
+                      <article className="flex h-full flex-col rounded-2xl border border-white/10 bg-[#1a1d21] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-[#20242a]">
+                        <p className="font-mono text-[11px] font-semibold tracking-[0.14em] text-white/60 uppercase">
+                          {c.tag}
+                        </p>
+                        <h3 className="mt-3 text-xl font-medium text-white">{c.title}</h3>
                         <p className="mt-2 flex-1 text-sm leading-relaxed text-white/70">{c.blurb}</p>
                         <Link
                           to={token ? '/games' : '/register'}
-                          className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm text-white transition-all duration-200 hover:gap-2"
+                          className="mt-4 inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-white transition-all duration-200 hover:gap-2"
                         >
                           {t('trySimilar')} <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
@@ -334,11 +341,11 @@ export function LandingPage() {
           </div>
         </section>
 
-        <footer className="border-t border-white/15 bg-black/50 px-5 py-12 backdrop-blur-md sm:px-8 md:px-12">
-          <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+        <footer className="border-t border-white/15 bg-[#111315] px-5 py-12 sm:px-8 md:px-12">
+          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-normal tracking-tight drop-shadow-md">{t('footerTitle')}</h2>
-              <p className="mt-2 text-sm text-white/65">{t('footerSubtitle')}</p>
+              <p className="mt-2 text-sm text-white/70">{t('footerSubtitle')}</p>
             </div>
             <Link to={ctaTo}>
               <MagneticButton className="!rounded-full">

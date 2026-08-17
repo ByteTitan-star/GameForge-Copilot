@@ -56,11 +56,11 @@ export function PublicGameCard({
       whileHover={{ y: reduce ? 0 : -6, borderColor: 'rgba(217, 70, 239, 0.4)' }}
       transition={{ type: 'spring', stiffness: 320, damping: 24 }}
       className={cn(
-        'group relative overflow-hidden rounded-2xl border backdrop-blur-xl',
+        'group relative overflow-hidden rounded-2xl border',
         theme
           ? 'gf-glass gf-glass-hover'
-          : 'border-white/10 bg-white/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.3)] hover:shadow-[0_0_28px_rgba(217,70,239,0.18)]',
-        compact ? 'flex flex-row' : 'flex flex-col',
+          : 'border-white/10 bg-[#191c22] shadow-[0_1px_2px_rgba(0,0,0,0.3)] hover:shadow-[0_0_28px_rgba(217,70,239,0.18)]',
+        compact ? 'flex h-[148px] flex-row' : 'flex flex-col',
       )}
     >
       {/* 整卡可点：absolute 拉伸链接覆盖全卡。封面/标题等非交互内容默认在它下方，
@@ -78,7 +78,7 @@ export function PublicGameCard({
       <div
         className={cn(
           'relative z-0 shrink-0 overflow-hidden',
-          compact ? 'h-full w-28 min-h-[88px]' : 'aspect-[16/10] w-full min-h-[160px]',
+          compact ? 'h-full w-28 sm:w-32' : 'aspect-[16/9] w-full',
         )}
       >
         {showShot ? (
@@ -106,10 +106,10 @@ export function PublicGameCard({
         {showFeatured ? (
           <span
             className={cn(
-              'pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider backdrop-blur-sm',
+              'pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-sm',
               theme
                 ? 'gf-border-accent gf-bg-accent-soft gf-text-accent'
-                : 'border-fuchsia-400/40 bg-[#161229]/70 text-fuchsia-300',
+                : 'border-fuchsia-400/40 bg-[#161229]/85 text-fuchsia-300',
             )}
           >
             <Star className="h-3 w-3 fill-current" />
@@ -118,13 +118,13 @@ export function PublicGameCard({
         ) : null}
       </div>
 
-      <div className={cn('relative z-0 flex flex-1 flex-col justify-between', compact ? 'p-3' : 'space-y-3 p-4')}>
-        <div>
+      <div className={cn('relative z-0 flex flex-1 flex-col justify-between', compact ? 'gap-1.5 p-3' : 'space-y-3 p-4')}>
+        <div className="min-w-0">
           <h2
             className={cn(
-              'leading-snug',
+              'line-clamp-2 leading-snug font-medium',
               theme ? 'text-[var(--gf-text)]' : 'text-white',
-              compact ? 'text-base' : 'text-lg',
+              compact ? 'text-[15px]' : 'text-lg',
             )}
           >
             {game.title}
@@ -138,11 +138,11 @@ export function PublicGameCard({
           />
           <div
             className={cn(
-              'mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-wider',
-              theme ? 'text-[var(--gf-text-muted)]' : 'text-white/55',
+              'mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-xs tracking-wide',
+              theme ? 'text-[var(--gf-text-muted)]' : 'text-white/65',
             )}
           >
-            <span>{t('playCount').replace('{n}', String(game.play_count))}</span>
+            <span className="uppercase">{t('playCount').replace('{n}', String(game.play_count))}</span>
             {game.published_at ? (
               <>
                 <span className={theme ? 'opacity-30' : 'text-white/30'} aria-hidden>
@@ -160,13 +160,13 @@ export function PublicGameCard({
           to={`/play/${game.slug}`}
           aria-label={`${t('playNow')} ${game.title}`}
           className={cn(
-            'relative z-[2] inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition',
+            'relative z-[2] mt-auto inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition',
             theme
               ? 'gf-btn-primary'
               : 'bg-white/90 text-black hover:bg-white hover:shadow-[0_0_18px_rgba(34,211,238,0.35)]',
           )}
         >
-          <Play className="h-3.5 w-3.5" />
+          <Play className="h-4 w-4" />
           {t('playNow')}
           <ArrowUpRight className="h-3.5 w-3.5 opacity-60" />
         </Link>

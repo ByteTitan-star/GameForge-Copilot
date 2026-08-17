@@ -30,7 +30,10 @@ export function applyTheme(settings: ThemeSettings): void {
     '--gf-text',
     lightCanvas ? '#0F172A' : 'rgba(255, 255, 255, 0.92)',
   )
-  el.style.setProperty('--gf-text-muted', lightCanvas ? '#64748B' : 'rgba(255, 255, 255, 0.45)')
+  el.style.setProperty(
+    '--gf-text-muted',
+    lightCanvas ? '#475569' : 'rgba(255, 255, 255, 0.62)',
+  )
   el.style.setProperty('--gf-surface', lightCanvas ? '#FFFFFF' : 'rgba(255, 255, 255, 0.06)')
   el.style.setProperty(
     '--gf-border',
