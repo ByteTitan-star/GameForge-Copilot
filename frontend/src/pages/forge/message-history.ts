@@ -2,12 +2,23 @@ import type { ChatMsg } from '@/components/forge/ChatPanel'
 import type { ForgeMessage } from '@/api/types'
 
 export function toChatMessages(rows: ForgeMessage[]): ChatMsg[] {
-  return rows.map((row) => ({
-    id: row.message_id,
-    role: row.role,
-    content: row.content,
-    persistenceKey: row.run_id ? `${row.run_id}:${row.kind}` : undefined,
-  }))
+  return rows.map((row) => {
+    const node =
+      row.metadata && typeof row.metadata === 'object' && 'node' in row.metadata
+        ? String((row.metadata as { node?: unknown }).node || '')
+        : ''
+    const persistenceKey = row.run_id
+      ? node
+        ? `${row.run_id}:${row.kind}:${node}`
+        : `${row.run_id}:${row.kind}`
+      : undefined
+    return {
+      id: row.message_id,
+      role: row.role,
+      content: row.content,
+      persistenceKey,
+    }
+  })
 }
 
 export function mergeChatMessages(current: ChatMsg[], incoming: ChatMsg[]): ChatMsg[] {

@@ -701,7 +701,13 @@ export function ForgePage() {
       (selectedOption
         ? `已选择美术方案 ${selectedOption.id}：${selectedOption.name}`
         : actualDecision === "approve"
-          ? "已确认设计方案"
+          ? hitl.node === "plan_confirm"
+            ? "已确认设计方案"
+            : hitl.node === "sandbox_failed"
+              ? "环境问题已处理，继续重试"
+              : hitl.node === "qa_failed"
+                ? "已确认继续修复试玩问题"
+                : "已确认，继续"
           : `gameplay: ${parsedGameplay}\ncontrols: ${parsedControls}`);
     try {
       await gamesApi.resolveHitl(
@@ -717,13 +723,16 @@ export function ForgePage() {
       setHitl(null);
       setPhase(RunPhase.art);
       setRunStatus(RunStatus.running);
+      const hitlKind =
+        actualDecision === "modify" ? "hitl_modify" : "hitl_approve";
       setMessages((m) => [
         ...m,
         {
           id: mid("m"),
           role: "user",
           content: decisionText,
-          persistenceKey: `${runId}:hitl:${hitl.node}:${actualDecision}`,
+          // 与 toChatMessages 对齐：run_id:kind，并带上 node 避免多段 HITL 同 kind 撞车
+          persistenceKey: `${runId}:${hitlKind}:${hitl.node}`,
         },
       ]);
       pushItem({
