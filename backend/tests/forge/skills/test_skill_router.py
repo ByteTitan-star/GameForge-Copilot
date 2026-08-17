@@ -19,6 +19,19 @@ def test_catalog_lists_policy_and_methodology() -> None:
     assert kinds["art/pixel-art"] == "methodology"
 
 
+def test_art_style_skill_picked_from_requirement() -> None:
+    resolved = resolve_skills_for_node("art", hints={"requirement": "水墨山水躲避"})
+    ids = {s.id for s in resolved.methodology}
+    assert "art/ink-wash" in ids
+
+
+def test_catalog_includes_new_art_style_skills() -> None:
+    ids = {m.id for m in list_skill_metas()}
+    assert "art/paper-craft" in ids
+    assert "art/candy-arcade" in ids
+    assert "art/crt-analog" in ids
+
+
 def test_art_node_never_sees_admin_or_billing_skills() -> None:
     resolved = resolve_skills_for_node("art", hints={})
     ids = {s.id for s in resolved.methodology}

@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-from app.forge.prompts import build_code_prompt, build_repair_prompt
+from app.forge.prompts import ART_OPTIONS_PROMPT, build_code_prompt, build_repair_prompt
 from app.forge.skills.catalog import list_skill_metas
+
+
+def test_art_options_prompt_forbids_default_cyber_pair() -> None:
+    assert "赛博霓虹" in ART_OPTIONS_PROMPT
+    assert "极简矢量" in ART_OPTIONS_PROMPT
+    assert "缺省组合" in ART_OPTIONS_PROMPT
 
 
 def test_build_code_prompt_loads_selected_engine_only(monkeypatch) -> None:
     monkeypatch.setattr("app.forge.prompts.settings.skills_router_enabled", True)
     prompt = build_code_prompt("phaser3")
     assert "phaser" in prompt.lower() or "Phaser" in prompt
-    # 不应把全部 methodology 正文塞进同一 prompt
     assert prompt.count("【Skill:") <= 2
     assert "policy/playtest" in prompt or "Playwright" in prompt
     assert len(list_skill_metas()) > 5
