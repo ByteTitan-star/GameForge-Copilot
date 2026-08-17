@@ -5,6 +5,7 @@ import type { ChatMsg } from '@/components/forge/ChatPanel'
 import type { MessageKey } from '@/i18n/messages'
 import { resolveHostingUrl } from '@/lib/hosting'
 import { parseDesignDoc } from '@/lib/hitl-design-doc'
+import { PIPELINE_PHASES } from '@/lib/phase-labels'
 
 import type { StagePipelineState } from '@/lib/stage-pipeline-state'
 import {
@@ -18,11 +19,11 @@ export type ForgeEventHandlers = {
   pushItem: (partial: Omit<TimelineItem, 'id' | 'at'> & { at?: string }) => void
   setHitl: (p: HitlWaitPayload | null) => void
   setBusy: (v: boolean) => void
-  setRunStatus?: (status: RunStatus) => void
+  setRunStatus?: (status: RunStatus | 'idle') => void
   setPreviewUrl: (url: string | null) => void
   setPreviewVersion?: (version: number | null) => void
   setSideTab: (t: 'log' | 'play') => void
-  appendMessages: (msgs: ChatMsg[], kind?: 'design' | 'completed') => void
+  appendMessages: (msgs: ChatMsg[], kind?: 'design' | 'completed' | 'thinking') => void
   /** LLM 流式微批增量：把 delta 追加到正在生成的 assistant 消息（打字机效果）。 */
   appendLlmDelta?: (phase: RunPhase, text: string) => void
   /** 把「正在生成」的流式消息落定为正式消息（阶段切换/done/attacked 时调用）。 */
@@ -38,11 +39,47 @@ export type ForgeEventHandlers = {
   onStageAutoOpen?: () => void
   gameId: string | undefined
   runId?: string | null
+  /** 用户已主动取消该 run：后续失败事件不再记为报错。 */
+  isUserCancelled?: (runId: string) => boolean
   t: (key: MessageKey) => string
 }
 
 function mid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function toolCallPhase(raw: unknown): RunPhase | undefined {
+  const value = String(raw ?? '')
+  if (value === 'repair' || value === 'diagnose') return RunPhase.code
+  if (value === 'art_options' || value === 'art_detail' || value === 'revise_art_options') {
+    return RunPhase.art
+  }
+  return PIPELINE_PHASES.includes(value as RunPhase) ? (value as RunPhase) : undefined
+}
+
+function skillDetail(p: Record<string, unknown>): string {
+  const args = p.args
+  if (args && typeof args === 'object') {
+    const rec = args as { skill_names?: unknown; skill_ids?: unknown }
+    if (Array.isArray(rec.skill_names) && rec.skill_names.length) {
+      return rec.skill_names.map(String).join(', ')
+    }
+    if (Array.isArray(rec.skill_ids) && rec.skill_ids.length) {
+      return rec.skill_ids.map(String).join(', ')
+    }
+  }
+  return String(p.summary ?? '')
+}
+
+function isUserCancelPayload(p: Record<string, unknown>, h: ForgeEventHandlers): boolean {
+  if (h.runId && h.isUserCancelled?.(h.runId)) return true
+  const code = String(p.code ?? '')
+  const message = String(p.message ?? '')
+  return (
+    code === 'CANCELLED' ||
+    /用户取消/.test(message) ||
+    /cancelled by user|canceled by user/i.test(message)
+  )
 }
 
 function previewFromPayload(
@@ -90,13 +127,17 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       // art 节点不调 LLM（只选素材）执行极快，仅靠进度条一闪而过会让用户误以为
       // 「美术没完成就跳到开发」。把各阶段进入消息也推进对话流，确保阶段切换在主区域可见。
       const phaseStartedKey: Partial<Record<RunPhase, MessageKey>> = {
+        [RunPhase.plan]: 'phasePlanStarted',
         [RunPhase.art]: 'phaseArtStarted',
         [RunPhase.code]: 'phaseCodeStarted',
         [RunPhase.qa]: 'phaseQaStarted',
       }
       const startedKey = phaseStartedKey[phase]
       if (startedKey) {
-        h.appendMessages([{ id: mid('m'), role: 'assistant', content: h.t(startedKey) }])
+        h.appendMessages(
+          [{ id: mid('m'), role: 'assistant', content: h.t(startedKey), kind: 'thinking' }],
+          'thinking',
+        )
       }
       return
     }
@@ -121,12 +162,13 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       return
     }
     case WSEventType.tool_call:
+      if (p.status !== 'ok' && isUserCancelPayload(p, h)) return
       h.pushItem({
-        label: h.t('toolCall'),
-        detail: String(p.summary ?? ''),
+        label: p.tool === 'skill' ? h.t('skillCall') : h.t('toolCall'),
+        detail: p.tool === 'skill' ? skillDetail(p) : String(p.summary ?? ''),
         tone: p.status === 'ok' ? 'ok' : 'err',
         at: ev.ts,
-        phase: (p.phase as RunPhase | undefined) ?? undefined,
+        phase: toolCallPhase(p.phase),
       })
       return
     case WSEventType.hitl_wait: {
@@ -152,12 +194,13 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
           {
             id: mid('m'),
             role: 'assistant',
+            kind: 'thinking',
             content: isArtReview
               ? `${h.t('chooseArtDirection')}：${artNames || payload.node}`
               : `${h.t('confirmDesign')}：${doc.title || payload.node}。${h.t('continueAfterApproval')}。`,
           },
         ],
-        'design',
+        'thinking',
       )
       return
     }
@@ -220,6 +263,10 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       return
     }
     case WSEventType.error:
+      if (isUserCancelPayload(p, h)) {
+        applyUserCancelled(ev, h)
+        return
+      }
       h.setHitl(null)
       h.setBusy(false)
       h.setRunStatus?.(RunStatus.failed)
@@ -237,6 +284,22 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
     default:
       h.pushItem({ label: String(ev.type), tone: 'muted', at: ev.ts })
   }
+}
+
+function applyUserCancelled(ev: WsEnvelope, h: ForgeEventHandlers) {
+  const p = ev.payload
+  h.flushStreamingMessage?.()
+  h.setHitl(null)
+  h.setBusy(false)
+  h.setRunStatus?.('idle')
+  h.setPhase('idle')
+  h.onRunFinished?.()
+  h.pushItem({
+    label: h.t('runCancelled'),
+    detail: String(p.message ?? ''),
+    tone: 'warn',
+    at: ev.ts,
+  })
 }
 
 function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
@@ -257,12 +320,17 @@ function applyDone(ev: WsEnvelope, h: ForgeEventHandlers) {
   // 四阶段全部跑完，触发「自动打开试玩区」；是否真正打开由调用方按用户手动操作记录决定。
   h.onStageAutoOpen?.()
   h.pushItem({ label: h.t('generationComplete'), detail: url ?? undefined, tone: 'ok', at: ev.ts, phase: RunPhase.qa })
+  const doneText =
+    typeof p.message === 'string' && p.message.trim()
+      ? p.message
+      : `${h.t('playReady')}（v${ver}）。${h.t('describeIteration')}`
   h.appendMessages(
     [
       {
         id: mid('m'),
         role: 'assistant',
-        content: `${h.t('playReady')}（v${ver}）。${h.t('describeIteration')}`,
+        kind: 'completed',
+        content: doneText,
       },
     ],
     'completed',

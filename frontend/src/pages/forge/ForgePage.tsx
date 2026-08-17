@@ -151,6 +151,7 @@ export function ForgePage() {
   const prevPreviewRef = useRef<string | null>(null);
   const eventSeqRef = useRef<Record<string, number>>({});
   const persistedMessageKindsRef = useRef<Set<string>>(new Set());
+  const cancelledRunsRef = useRef<Set<string>>(new Set());
 
   const detail = useQuery({
     queryKey: ["game", gameId],
@@ -459,10 +460,11 @@ export function ForgePage() {
       setPreviewUrl,
       setPreviewVersion,
       setSideTab,
-      appendMessages: (msgs: ChatMsg[], kind?: "design" | "completed") => {
+      appendMessages: (msgs: ChatMsg[], kind?: "design" | "completed" | "thinking") => {
         if (
           activeRunId &&
           kind &&
+          kind !== "thinking" &&
           persistedMessageKindsRef.current.has(`${activeRunId}:${kind}`)
         ) {
           return;
@@ -471,8 +473,11 @@ export function ForgePage() {
           ...m,
           ...msgs.map((message) => ({
             ...message,
+            kind: message.kind ?? kind,
             persistenceKey:
-              activeRunId && kind ? `${activeRunId}:${kind}` : undefined,
+              activeRunId && kind && kind !== "thinking"
+                ? `${activeRunId}:${kind}`
+                : undefined,
           })),
         ]);
       },
@@ -486,7 +491,7 @@ export function ForgePage() {
           if (last && last.id === sid) {
             return [...m.slice(0, -1), { ...last, content: last.content + text }];
           }
-          return [...m, { id: sid, role: "assistant", content: text }];
+          return [...m, { id: sid, role: "assistant", kind: "design", content: text, persistenceKey: activeRunId ? `${activeRunId}:design` : undefined }];
         });
       },
       // 阶段切换/done/attacked：把流式消息落定为正式消息（换正式 id）。
@@ -499,7 +504,12 @@ export function ForgePage() {
           }
           return [
             ...m.slice(0, -1),
-            { ...last, id: `ai-${Date.now()}` },
+            {
+              ...last,
+              id: `ai-${Date.now()}`,
+              kind: last.kind ?? "design",
+              persistenceKey: activeRunId ? `${activeRunId}:design` : last.persistenceKey,
+            },
           ];
         });
       },
@@ -513,6 +523,7 @@ export function ForgePage() {
       setQuotaHint,
       setCurrentModel,
       setRunError: (rid: string, message: string) => {
+        if (cancelledRunsRef.current.has(rid)) return;
         setRunErrors((prev) => ({ ...prev, [rid]: message }));
         setRunStatus(RunStatus.failed);
         clearActiveRun(rid);
@@ -531,6 +542,7 @@ export function ForgePage() {
       setStagePipeline,
       gameId: activeGameId,
       runId: activeRunId,
+      isUserCancelled: (rid: string) => cancelledRunsRef.current.has(rid),
       t,
     };
   }
@@ -613,7 +625,7 @@ export function ForgePage() {
 
   function onSend() {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || hitl) return;
     if (trial) {
       toast.error(t("trialForgeLocked"));
       return;
@@ -770,22 +782,18 @@ export function ForgePage() {
 
   async function onRejectHitl() {
     if (!runId || !token || trial) return;
+    cancelledRunsRef.current.add(runId);
     setBusy(true);
     try {
-      const resp = await gamesApi.cancelRun(runId, token);
-      setHitl(null);
-      setBusy(false);
-      setRunStatus(resp.status as RunStatus);
-      setPhase("idle");
-      closeHandle();
-      clearActiveRun(runId);
-      void qc.invalidateQueries({ queryKey: ["active-runs"] });
-      pushItem({ label: t("hitlRejected"), tone: "err" });
+      await gamesApi.cancelRun(runId, token);
+      applyLocalCancel(runId);
+      pushItem({ label: t("hitlRejected"), tone: "warn" });
       setMessages((m) => [
         ...m,
         { id: mid("m"), role: "assistant", content: t("runStopped") },
       ]);
     } catch (e) {
+      cancelledRunsRef.current.delete(runId);
       setBusy(false);
       toast.error(formatApiError(e, t("cancelFailed")));
     }
@@ -837,19 +845,31 @@ export function ForgePage() {
     }
   }
 
+  function applyLocalCancel(activeRunId: string) {
+    cancelledRunsRef.current.add(activeRunId);
+    setRunStatus("idle");
+    setBusy(false);
+    setPhase("idle");
+    setHitl(null);
+    closeHandle();
+    clearActiveRun(activeRunId);
+    void qc.invalidateQueries({ queryKey: ["active-runs"] });
+    setRunErrors((prev) => {
+      const next = { ...prev };
+      delete next[activeRunId];
+      return next;
+    });
+  }
+
   async function cancelRun() {
     if (!runId || !token || trial) return;
+    cancelledRunsRef.current.add(runId);
     try {
-      const resp = await gamesApi.cancelRun(runId, token);
-      setRunStatus(resp.status as RunStatus);
-      setBusy(false);
-      setPhase("idle");
-      setHitl(null);
-      closeHandle();
-      clearActiveRun(runId); // 清本地 active-run，避免刷新后被 resume 兜底重新拉起已取消的 run
-      void qc.invalidateQueries({ queryKey: ["active-runs"] }); // 立即刷新全局 ActiveRunBanner
-      pushItem({ label: t("runCancelled"), detail: runId, tone: "err" });
+      await gamesApi.cancelRun(runId, token);
+      applyLocalCancel(runId);
+      pushItem({ label: t("runCancelled"), detail: runId, tone: "warn" });
     } catch (e) {
+      cancelledRunsRef.current.delete(runId);
       toast.error(formatApiError(e, t("cancelFailed")));
       // 取消失败：同步后端真实状态，避免 UI 误显示为「已取消」而 run 实际仍在跑
       try {
@@ -1181,29 +1201,31 @@ export function ForgePage() {
                 input={input}
                 onInputChange={setInput}
                 onSend={onSend}
-                disabled={busy || trial}
-                sendDisabled={busy || trial || status.blocked || !input.trim()}
+                disabled={busy || trial || Boolean(hitl)}
+                sendDisabled={
+                  busy || trial || Boolean(hitl) || status.blocked || !input.trim()
+                }
                 streaming={busy && !hitl}
                 showComposer={!trial}
                 placeholder={
                   previewUrl ? t("describeIteration") : t("describeNewGame")
                 }
+                composerCover={
+                  hitl ? (
+                    <HitlCard
+                      payload={hitl}
+                      onResolve={onResolveHitl}
+                      onReject={onRejectHitl}
+                      busy={busy || trial}
+                    />
+                  ) : null
+                }
                 conversationFooter={
-                  <>
-                    {hitl ? (
-                      <HitlCard
-                        payload={hitl}
-                        onResolve={onResolveHitl}
-                        onReject={onRejectHitl}
-                        busy={busy || trial}
-                      />
-                    ) : null}
-                    {trial ? (
-                      <p className="gf-banner-warn rounded-xl p-3 text-xs">
-                        {t("trialForgeLocked")}
-                      </p>
-                    ) : null}
-                  </>
+                  trial ? (
+                    <p className="gf-banner-warn rounded-xl p-3 text-xs">
+                      {t("trialForgeLocked")}
+                    </p>
+                  ) : null
                 }
               />
             </section>
