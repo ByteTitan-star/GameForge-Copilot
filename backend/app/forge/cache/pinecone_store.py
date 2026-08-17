@@ -126,7 +126,7 @@ class HttpPineconeStore:
         for m in matches:
             if not isinstance(m, dict):
                 continue
-            meta = m.get("metadata") if isinstance(m.get("metadata"), dict) else {}
+            meta: dict[str, Any] = m["metadata"] if isinstance(m.get("metadata"), dict) else {}
             out.append(
                 VectorMatch(
                     id=str(m.get("id") or ""),
@@ -152,7 +152,8 @@ class HttpPineconeStore:
             return {}
 
 
-_override: PineconeStore | None | object = object()
+_UNSET = object()
+_override: PineconeStore | None | object = _UNSET
 
 
 def set_pinecone_store_override(store: PineconeStore | None) -> None:
@@ -163,7 +164,7 @@ def set_pinecone_store_override(store: PineconeStore | None) -> None:
 
 def reset_pinecone_store_override() -> None:
     global _override
-    _override = object()
+    _override = _UNSET
 
 
 def pinecone_configured() -> bool:
@@ -175,7 +176,7 @@ def pinecone_configured() -> bool:
 
 
 def get_pinecone_store() -> PineconeStore | None:
-    if _override is not object():
+    if _override is not _UNSET:
         return _override  # type: ignore[return-value]
     if not pinecone_configured():
         return None
