@@ -25,4 +25,4 @@ def test_entry_router_fixed_short_timeout() -> None:
 
 
 def test_playtest_timeout_independent_of_llm() -> None:
-    assert resolve_node_run_timeout("playtest") == 90.0
+    assert resolve_node_run_timeout("playtest") == 180.0

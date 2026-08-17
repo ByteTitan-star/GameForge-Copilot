@@ -19,12 +19,9 @@ def test_adr_machine_evidence_all_pass() -> None:
 
 
 def test_adr_evidence_module_documents_invariants() -> None:
-    text = (
-        Path(__file__)
-        .resolve()
-        .parents[1]
-        .joinpath("app", "forge", "adr_evidence.py")
-        .read_text(encoding="utf-8")
-    )
+    import app.forge.adr_evidence as mod
+
+    text = Path(mod.__file__).read_text(encoding="utf-8")
     assert "ADR-06" in text
     assert "semantic_soft_hard_thresholds" in text
+    assert "daytona" in text

@@ -32,15 +32,15 @@ def collect_adr_evidence() -> list[EvidenceCheck]:
         ),
         EvidenceCheck(
             "ADR-03",
-            "e2b_enabled_by_default",
-            settings.sandbox_e2b_enabled is True,
-            f"sandbox_e2b_enabled={settings.sandbox_e2b_enabled!r}",
+            "daytona_enabled_by_default",
+            settings.sandbox_daytona_enabled is True,
+            f"sandbox_daytona_enabled={settings.sandbox_daytona_enabled!r}",
         ),
         EvidenceCheck(
             "ADR-03",
-            "config_default_backend_is_e2b",
-            _settings_field_default("sandbox_backend") == "e2b",
-            "Settings.sandbox_backend field default must be e2b "
+            "config_default_backend_is_daytona",
+            _settings_field_default("sandbox_backend") == "daytona",
+            "Settings.sandbox_backend field default must be daytona "
             "(runtime .env may still override for local)",
         ),
         EvidenceCheck(

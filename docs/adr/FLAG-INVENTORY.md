@@ -5,8 +5,8 @@
 
 | Flag | Default | Notes |
 | --- | --- | --- |
-| `sandbox_backend` | `e2b` | 无 `E2B_API_KEY` 时工厂回退 docker→local |
-| `sandbox_e2b_enabled` | `true` | Key 仍只来自环境变量 |
+| `sandbox_backend` | `daytona` | 无 `DAYTONA_API_KEY` 时工厂回退 docker→local |
+| `sandbox_daytona_enabled` | `true` | Key 仍只来自环境变量 |
 | `sandbox_tier_auto` | `true` | 启发式/telemetry 选档，非 Agent 随意指定 |
 | `sandbox_default_tier` | `standard` | auto 关闭或无强信号时的基线 |
 | `memory_preferences` | `true` | |
@@ -30,6 +30,6 @@
 ## 明确禁止
 
 * 规则引擎作为偏好抽取**正式路径**（`explicit.py` / `inferred.py` 仅保留单元测试/遗留，生产走 LLM）
-* 硬编码 `E2B_API_KEY` / `PINECONE_API_KEY` / Embedding key 进仓库
+* 硬编码 `DAYTONA_API_KEY` / `PINECONE_API_KEY` / Embedding key 进仓库
 * 高熵节点（plan/art/code/…）语义 direct hit
 * 会话 transcript / 偏好表写入 Pinecone（v1）

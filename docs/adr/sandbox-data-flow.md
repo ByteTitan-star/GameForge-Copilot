@@ -19,19 +19,19 @@ Browser/API
 **Egress:** game source / prompts / UGC stay on self-hosted Worker + Docker host.
 No third-party sandbox cloud.
 
-## E2B PoC path (disabled by default)
+## Daytona path (preferred when `DAYTONA_API_KEY` present)
 
 ```text
 Worker
-  → E2BSandbox.create  (requires sandbox_e2b_enabled=true + uv sync --extra e2b)
-    → E2B cloud VM (AsyncSandbox)
+  → DaytonaSandbox.create  (requires sandbox_daytona_enabled=true + uv sync --extra daytona)
+    → Daytona cloud sandbox (AsyncDaytona)
       ← source files / build commands uploaded
       → artifact bytes downloaded
-    → E2BSandbox.destroy / HITL destroy_for_hitl (kill remote)
+    → DaytonaSandbox.destroy / HITL destroy_for_hitl (delete remote)
 ```
 
 **Egress risk:** source, prompts-adjacent build inputs, and logs may leave the domestic
-perimeter. Do **not** enable for production until ADR-03 Go criteria are Accepted.
+perimeter. Owner accepts Daytona egress for this project; keep Docker/local as fallback.
 
 ## HITL long wait
 

@@ -27,5 +27,5 @@ cd backend && uv run pytest tests/test_adr_evidence.py -q
 ```
 
 `app/forge/adr_evidence.py` checks runtime invariants aligned with Accepted decisions
-(E2B preferred, inferred+cap=50, forge_messages SoT, semantic direct-hit still forbidden).
+(Daytona preferred, inferred+cap=50, forge_messages SoT, semantic direct-hit still forbidden).
 ADR-07～12 evidence hooks may be added as implementation lands.

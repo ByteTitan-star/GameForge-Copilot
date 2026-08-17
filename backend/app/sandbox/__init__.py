@@ -1,6 +1,6 @@
-"""沙箱工厂：`sandbox_backend=local|docker|e2b`。
+"""沙箱工厂：`sandbox_backend=local|docker|daytona`。
 
-默认偏好 E2B；未配置 E2B_API_KEY 或未启用时回退 docker→local，避免本地/CI 硬失败。
+默认偏好 Daytona；未配置 DAYTONA_API_KEY 或未启用时回退 docker→local，避免本地/CI 硬失败。
 """
 
 from app.core.config import settings
@@ -30,9 +30,7 @@ def get_sandbox_backend() -> SandboxBackend:
         from app.forge.tracing import observe_subsystem
 
         chosen = _resolve_backend_name(settings.sandbox_backend)
-        with observe_subsystem(
-            "sandbox", "select_backend", metadata={"backend": chosen}
-        ):
+        with observe_subsystem("sandbox", "select_backend", metadata={"backend": chosen}):
             _backend = _build_backend(chosen)
     return _backend
 
@@ -50,17 +48,17 @@ def reset_sandbox_for_tests() -> None:
     global _backend, _sandbox
     _backend = None
     _sandbox = None
-    from app.sandbox.e2b import clear_e2b_live_for_tests
+    from app.sandbox.daytona import clear_daytona_live_for_tests
 
-    clear_e2b_live_for_tests()
+    clear_daytona_live_for_tests()
 
 
 def _resolve_backend_name(name: str) -> str:
     key = (name or "local").strip().lower()
-    if key != "e2b":
+    if key != "daytona":
         return key
-    if settings.sandbox_e2b_enabled and (settings.e2b_api_key or "").strip():
-        return "e2b"
+    if settings.sandbox_daytona_enabled and (settings.daytona_api_key or "").strip():
+        return "daytona"
     return "docker"
 
 
@@ -75,13 +73,13 @@ def _build_backend(name: str) -> SandboxBackend:
             return DockerSandbox()
         except Exception:  # noqa: BLE001 — docker 客户端不可用时回退 local
             return LocalSandbox()
-    if key == "e2b":
-        from app.sandbox.e2b import E2BSandbox
+    if key == "daytona":
+        from app.sandbox.daytona import DaytonaSandbox
 
-        return E2BSandbox()
+        return DaytonaSandbox()
     raise AppError(
         ErrorCode.VALIDATION_ERROR,
-        f"Unknown sandbox_backend={name!r}; expected local|docker|e2b",
+        f"Unknown sandbox_backend={name!r}; expected local|docker|daytona",
     )
 
 

@@ -29,7 +29,7 @@ NODE_EXECUTION_POLICIES: dict[str, NodeExecutionPolicy] = {
     "plan": NodeExecutionPolicy(run_timeout_margin_s=60.0, max_attempts=2),
     "art": NodeExecutionPolicy(run_timeout_margin_s=60.0, max_attempts=2),
     "code_or_repair": NodeExecutionPolicy(run_timeout_margin_s=120.0, max_attempts=2),
-    "playtest": NodeExecutionPolicy(fixed_run_timeout_s=90.0, max_attempts=2),
+    "playtest": NodeExecutionPolicy(fixed_run_timeout_s=180.0, max_attempts=2),
     "diagnose": NodeExecutionPolicy(run_timeout_margin_s=30.0, max_attempts=2),
     "done": NodeExecutionPolicy(fixed_run_timeout_s=30.0, max_attempts=1),
     "code_qa_loop": NodeExecutionPolicy(
