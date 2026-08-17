@@ -19,9 +19,9 @@ def test_tier_limits_single_source() -> None:
     assert tier_limits("unknown")["timeout_s"] == tier_limits("standard")["timeout_s"]
 
 
-def test_docker_log_host_config_has_autoremove() -> None:
+def test_docker_log_host_config_log_rotation() -> None:
     cfg = docker_log_host_config()
-    assert cfg["AutoRemove"] is True
+    assert cfg["AutoRemove"] is False
     assert cfg["LogConfig"]["Type"] == "json-file"
 
 

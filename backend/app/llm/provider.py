@@ -51,10 +51,19 @@ class Usage:
 class StreamChunk:
     """complete_stream 的单帧：delta 为增量文本（可能为 ""，如纯 usage 帧），
     usage 仅在流末尾/usage 帧非 None。调用方累加 usage 即得最终用量。
+    finish_reason 仅在流末帧非 None（如 length / stop）。
     """
 
     delta: str
     usage: Usage | None = None
+    finish_reason: str | None = None
+
+
+@dataclass
+class LLMCompletion:
+    content: str
+    usage: Usage
+    finish_reason: str | None = None
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
@@ -196,9 +205,7 @@ async def test_connectivity(
         return False, str(e)[:200]
 
 
-async def list_models(
-    provider: LLMProvider, apikey: str, base_url: str | None = None
-) -> list[str]:
+async def list_models(provider: LLMProvider, apikey: str, base_url: str | None = None) -> list[str]:
     """按 provider 拉 /models；失败回退白名单（docs/05 §模型列表来源）。"""
     try:
         if provider == LLMProvider.OPENAI_COMPAT and not base_url:
@@ -208,14 +215,14 @@ async def list_models(
         async with _build_llm_client(url, httpx.Timeout(10)) as client:
             resp = await client.get(url, headers=headers)
         if resp.status_code == 200:
-            ids = [
-                m.get("id")
+            ids: list[str] = [
+                str(m["id"])
                 for m in resp.json().get("data", [])
                 if isinstance(m, dict) and m.get("id")
             ]
             if ids:
                 return ids
-    except Exception:  # noqa: BLE001 拉取失败走白名单
+    except Exception:  # noqa: BLE001  # nosec B110 拉取失败走白名单
         pass
     return list(_MODEL_WHITELIST[provider])
 
@@ -281,7 +288,7 @@ def _llm_timeout() -> httpx.Timeout:
 def _retry_delay_s(attempt: int) -> float:
     """指数退避 + 少量 jitter：attempt 从 0 起（第 1 次失败后的等待）。"""
     base = settings.llm_http_retry_base_delay_s
-    return base * (2**attempt) + random.uniform(0, base)
+    return base * (2**attempt) + random.uniform(0, base)  # nosec B311
 
 
 def _http_error_hint(url: str, status_code: int) -> str:
@@ -294,9 +301,7 @@ def _http_error_hint(url: str, status_code: int) -> str:
     )
 
 
-async def _sleep_before_retry(
-    *, attempt: int, model: str, reason: str
-) -> None:
+async def _sleep_before_retry(*, attempt: int, model: str, reason: str) -> None:
     delay = _retry_delay_s(attempt)
     log.warning(
         "llm http retry",
@@ -320,7 +325,7 @@ async def complete(
     base_url: str | None = None,
     *,
     max_tokens: int | None = None,
-) -> tuple[str, Usage]:
+) -> LLMCompletion:
     """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
 
     传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
@@ -352,15 +357,10 @@ async def complete(
                     extra={"stage": "http", "model": model, "duration": duration},
                 )
                 raise
-            await _sleep_before_retry(
-                attempt=attempt, model=model, reason=type(exc).__name__
-            )
+            await _sleep_before_retry(attempt=attempt, model=model, reason=type(exc).__name__)
             continue
 
-        if (
-            resp.status_code in _RETRYABLE_HTTP_STATUS
-            and attempt < max_retries
-        ):
+        if resp.status_code in _RETRYABLE_HTTP_STATUS and attempt < max_retries:
             await _sleep_before_retry(
                 attempt=attempt,
                 model=model,
@@ -390,20 +390,24 @@ async def complete(
             f"{resp.text[:120]}{_http_error_hint(url, resp.status_code)}",
         )
     data = resp.json()
+    finish_reason: str | None = None
     if _uses_anthropic_native_api(provider, base_url):
         content = "".join(b.get("text", "") for b in data.get("content", []))
         usage = Usage(
             input_tokens=data.get("usage", {}).get("input_tokens", 0),
             output_tokens=data.get("usage", {}).get("output_tokens", 0),
         )
+        finish_reason = data.get("stop_reason")
     else:
-        raw = data["choices"][0]["message"].get("content")
+        choice = data["choices"][0]
+        raw = choice.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else (raw or "")
         usage = Usage(
             input_tokens=data.get("usage", {}).get("prompt_tokens", 0),
             output_tokens=data.get("usage", {}).get("completion_tokens", 0),
         )
-    return content or "", usage
+        finish_reason = choice.get("finish_reason")
+    return LLMCompletion(content=content or "", usage=usage, finish_reason=finish_reason)
 
 
 async def _iter_sse(resp: httpx.Response) -> AsyncIterator[tuple[str | None, str]]:
@@ -479,7 +483,11 @@ async def _parse_anthropic_stream(
             if "output_tokens" in usage:
                 output_tokens = usage["output_tokens"]
         elif etype == "message_stop":
-            yield StreamChunk(delta="", usage=Usage(input_tokens, output_tokens))
+            yield StreamChunk(
+                delta="",
+                usage=Usage(input_tokens, output_tokens),
+                finish_reason=obj.get("stop_reason"),
+            )
             return
 
 
@@ -496,6 +504,7 @@ async def _parse_openai_stream(
     """
     char_count = 0
     final_usage: Usage | None = None
+    finish_reason: str | None = None
     async for _event_name, data in _iter_sse(resp):
         if data == "[DONE]":
             break
@@ -513,20 +522,23 @@ async def _parse_openai_stream(
         choices = obj.get("choices") or []
         if not choices:
             continue
-        delta = choices[0].get("delta") or {}
+        choice = choices[0]
+        if choice.get("finish_reason"):
+            finish_reason = choice.get("finish_reason")
+        delta = choice.get("delta") or {}
         # content 才是正文；reasoning_content（思考链）丢弃
         text = delta.get("content")
         if text:
             char_count += len(text)
             yield StreamChunk(delta=text)
     if final_usage is not None:
-        yield StreamChunk(delta="", usage=final_usage)
+        yield StreamChunk(delta="", usage=final_usage, finish_reason=finish_reason)
     elif char_count:
         # 兜底：provider 没给 usage，按字符数估 output（中英混合代码 ~4 chars/token），
         # input 记 0（解析器拿不到 prompt）。与 docs「不估算」原则的已知例外
         # （compat 流式 usage 缺失），比此前按 chunk 计数更接近真实值。
         est = Usage(input_tokens=0, output_tokens=max(1, char_count // 4))
-        yield StreamChunk(delta="", usage=est)
+        yield StreamChunk(delta="", usage=est, finish_reason=finish_reason)
         log.warning(
             "llm stream usage missing, estimated by char count",
             extra={"stage": "http", "chars": char_count},
@@ -601,9 +613,7 @@ async def complete_stream(
                     extra={"stage": "http", "model": model, "duration": duration},
                 )
                 raise
-            await _sleep_before_retry(
-                attempt=attempt, model=model, reason="HTTPError"
-            )
+            await _sleep_before_retry(attempt=attempt, model=model, reason="HTTPError")
     duration = round(time.monotonic() - started, 3)
     log.info(
         "llm stream response done",

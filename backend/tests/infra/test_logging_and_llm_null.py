@@ -66,15 +66,15 @@ async def test_complete_coerces_null_openai_content(monkeypatch: pytest.MonkeyPa
             return _Resp()
 
     monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: _Client())
-    content, usage = await complete(
+    result = await complete(
         LLMProvider.OPENAI,
         "key",
         "gpt-4o",
         "sys",
         "user",
     )
-    assert content == ""
-    assert usage == Usage(input_tokens=1, output_tokens=0)
+    assert result.content == ""
+    assert result.usage == Usage(input_tokens=1, output_tokens=0)
 
 
 class _OkResp:

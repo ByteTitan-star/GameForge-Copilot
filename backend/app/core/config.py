@@ -203,6 +203,12 @@ class Settings(BaseSettings):
     llm_http_retry_base_delay_s: float = 0.5
     # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
     llm_max_tokens: int = 8192
+    # Code 阶段单独上限（整段 HTML / project JSON 体量大）
+    llm_code_max_tokens: int = 32768
+    # 输出截断后最多续写轮数（每轮独立 LLM 调用）
+    llm_continuation_max_rounds: int = 3
+    # 续写 prompt 携带的已生成内容尾部字符数
+    llm_continuation_tail_chars: int = 8000
     # 默认「直连（绕过桌面/系统代理）」的国内 LLM host，逗号分隔。
     # httpx 0.28 在 Windows 上会读注册表代理（即便无 *_PROXY 环境变量），
     # 国内 provider 走该代理常因代理无对应出口而超时；命中此处则强制直连。

@@ -149,15 +149,14 @@ class DockerSandbox:
             )
             await container.start()
             try:
-                await asyncio.wait_for(container.wait(), timeout=limits["timeout_s"])
+                wait_result = await asyncio.wait_for(container.wait(), timeout=limits["timeout_s"])
             except TimeoutError:
                 with contextlib.suppress(DockerError):
                     await container.kill()
                 return BuildResult(ok=False, error="构建超时", failure_kind="timeout")
             logs = await container.log(stdout=True, stderr=True, tail=settings.sandbox_log_tail)
             log_text = "".join(logs) if isinstance(logs, list) else str(logs)
-            info = await container.show()
-            code = (info.get("State") or {}).get("ExitCode", 1)
+            code = wait_result.get("StatusCode", 1) if isinstance(wait_result, dict) else 1
             if code != 0:
                 kind: Literal["oom", "build"] = "oom" if _looks_like_oom(log_text) else "build"
                 return BuildResult(

@@ -42,7 +42,7 @@ async def platform_complete(
         ) as gen,
     ):
         try:
-            content, usage = await provider.complete(
+            result = await provider.complete(
                 prov,
                 apikey,
                 model,
@@ -57,10 +57,10 @@ async def platform_complete(
             raise
         if gen is not None:
             gen.update(
-                output=content,
+                output=result.content,
                 usage_details={
-                    "input": usage.input_tokens,
-                    "output": usage.output_tokens,
+                    "input": result.usage.input_tokens,
+                    "output": result.usage.output_tokens,
                 },
             )
-    return content, usage
+    return result.content, result.usage

@@ -17,9 +17,7 @@ def parse_llm_code_output(raw: str, *, engine_id: str) -> ParsedCodeOutput:
     return parse_code_output(raw, default_engine=engine_id)
 
 
-async def load_stored_project_source(
-    game_id: uuid.UUID, version: int
-) -> dict[str, str]:
+async def load_stored_project_source(game_id: uuid.UUID, version: int) -> dict[str, str]:
     """从已落盘的 source/ 层加载工程源码（QA 重试 vite 修复基线）。"""
     from app.hosting import store
 
@@ -54,6 +52,7 @@ class ProjectBuildLoopResult:
     final_parsed: ParsedCodeOutput | None = None
     build_attempts: int = 0
     fallback_required: bool = False
+    output_truncated: bool = False
 
 
 def format_project_repair_input(
@@ -113,7 +112,21 @@ async def run_project_build_loop(
         if attempt >= limit or repair_fn is None:
             break
 
-        current = await repair_fn(current, build_error.strip())
+        try:
+            current = await repair_fn(current, build_error.strip())
+        except Exception as exc:
+            from app.forge.llm_continuation import OutputTruncatedError
+
+            if isinstance(exc, OutputTruncatedError):
+                return ProjectBuildLoopResult(
+                    ok=False,
+                    pipeline_result=last_result,
+                    final_parsed=current,
+                    build_attempts=attempt,
+                    fallback_required=True,
+                    output_truncated=True,
+                )
+            raise
 
     return ProjectBuildLoopResult(
         ok=False,
@@ -124,9 +137,7 @@ async def run_project_build_loop(
     )
 
 
-def merge_routing(
-    design_routing: BuildRouting, parsed: ParsedCodeOutput
-) -> BuildRouting:
+def merge_routing(design_routing: BuildRouting, parsed: ParsedCodeOutput) -> BuildRouting:
     """design_doc routing 为基线，LLM project JSON 可覆盖 dependencies 等。"""
     if parsed.routing is None:
         return design_routing
@@ -138,9 +149,7 @@ def merge_routing(
     )
 
 
-def with_design_routing(
-    parsed: ParsedCodeOutput, design_routing: BuildRouting
-) -> ParsedCodeOutput:
+def with_design_routing(parsed: ParsedCodeOutput, design_routing: BuildRouting) -> ParsedCodeOutput:
     if parsed.routing is None:
         return parsed
     return ParsedCodeOutput(

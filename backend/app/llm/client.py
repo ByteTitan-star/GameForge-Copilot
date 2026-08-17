@@ -120,7 +120,8 @@ async def _invoke_llm(
     trace_meta: dict[str, str],
     *,
     kind: str = "chat",
-) -> tuple[str, provider.Usage]:
+    max_tokens: int | None = None,
+) -> provider.LLMCompletion:
     """执行 provider.complete 并挂 langfuse generation 观测。
 
     失败时把 generation 标 level=ERROR 后 re-raise（错误计数交回 call_llm 统一处理）。
@@ -134,8 +135,8 @@ async def _invoke_llm(
         metadata=trace_meta,
     ) as gen:
         try:
-            content, usage = await provider.complete(
-                prov, apikey, model, system, user_msg, base_url=base_url
+            result = await provider.complete(
+                prov, apikey, model, system, user_msg, base_url=base_url, max_tokens=max_tokens
             )
         except Exception:
             if gen is not None:
@@ -143,13 +144,13 @@ async def _invoke_llm(
             raise
         if gen is not None:
             gen.update(
-                output=content,
+                output=result.content,
                 usage_details={
-                    "input": usage.input_tokens,
-                    "output": usage.output_tokens,
+                    "input": result.usage.input_tokens,
+                    "output": result.usage.output_tokens,
                 },
             )
-    return content, usage
+    return result
 
 
 async def call_llm(
@@ -163,7 +164,8 @@ async def call_llm(
     game_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
     kind: str = "chat",
-) -> tuple[str, provider.Usage, LLMProvider]:
+    max_tokens: int | None = None,
+) -> tuple[provider.LLMCompletion, LLMProvider]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
 
@@ -178,7 +180,7 @@ async def call_llm(
     if run_id is not None:
         trace_meta["run_id"] = str(run_id)
     try:
-        content, usage = await _invoke_llm(
+        result = await _invoke_llm(
             prov,
             apikey,
             cfg.model,
@@ -187,6 +189,7 @@ async def call_llm(
             cfg.base_url,
             trace_meta,
             kind=kind,
+            max_tokens=max_tokens,
         )
     except Exception:
         LLM_CALLS.labels(prov.value, "error").inc()
@@ -194,13 +197,13 @@ async def call_llm(
         raise
     await circuit.record_success(r, cb_key)
     LLM_CALLS.labels(prov.value, "ok").inc()
-    LLM_TOKENS.labels(prov.value, "input").inc(usage.input_tokens)
-    LLM_TOKENS.labels(prov.value, "output").inc(usage.output_tokens)
+    LLM_TOKENS.labels(prov.value, "input").inc(result.usage.input_tokens)
+    LLM_TOKENS.labels(prov.value, "output").inc(result.usage.output_tokens)
     await record_usage(
         r,
         user_id,
-        input_tokens=usage.input_tokens,
-        output_tokens=usage.output_tokens,
+        input_tokens=result.usage.input_tokens,
+        output_tokens=result.usage.output_tokens,
         game_id=game_id,
         run_id=run_id,
         idempotency_key=_usage_idem_key(
@@ -208,15 +211,15 @@ async def call_llm(
             run_id=run_id,
             system=system,
             user_msg=user_msg,
-            content=content,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
+            content=result.content,
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
         ),
     )
     await _maybe_quota_alert(db, r, user_id)
     await _maybe_system_alert(db, r)
-    # 返回 provider，供调用方在事件/日志里如实记录用户配置的 provider，而非硬编码。
-    return content, usage, prov
+    # 返回 LLMCompletion（含 finish_reason）与 provider，供事件/日志使用。
+    return result, prov
 
 
 async def call_llm_stream(
@@ -230,6 +233,7 @@ async def call_llm_stream(
     game_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
     kind: str = "chat",
+    max_tokens: int | None = None,
 ) -> AsyncIterator[StreamChunk]:
     """流式版 call_llm：逐 token yield StreamChunk（末帧带 usage）。
 
@@ -267,7 +271,13 @@ async def call_llm_stream(
             metadata=trace_meta,
         ) as gen:
             async for chunk in provider.complete_stream(
-                prov, apikey, cfg.model, system, user_msg, cfg.base_url
+                prov,
+                apikey,
+                cfg.model,
+                system,
+                user_msg,
+                cfg.base_url,
+                max_tokens=max_tokens,
             ):
                 if chunk.delta:
                     accumulated.append(chunk.delta)

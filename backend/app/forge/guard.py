@@ -283,7 +283,7 @@ class Guard:
                         tags=["forge", "guardrail"],
                     ) as gen,
                 ):
-                    content, usage = await llm_provider.complete(
+                    result = await llm_provider.complete(
                         self._provider,
                         self._apikey,
                         self._model,
@@ -292,6 +292,8 @@ class Guard:
                         base_url=self._base_url,
                         max_tokens=2,
                     )
+                    content = result.content
+                    usage = result.usage
                     if gen is not None:
                         gen.update(
                             output=content.strip() or "(empty)",
@@ -444,18 +446,35 @@ async def run_streamed_llm(
     phase: str,
     emit_delta: bool = True,
     kind: str | None = None,
+    max_tokens: int | None = None,
 ) -> str:
     """用户可见节点的 LLM 调用：流式 + 输入/输出审核 + 微批 LLM_DELTA。
 
-    1. 输入审核（阻塞）：命中 → 发 ATTACKED + raise ContentAttacked。
-    2. 消费 call_llm_stream：攒全文；emit_delta 时按微批窗（字符数/时间）发 LLM_DELTA；
-       审核窗到期把窗口丢给后台 asyncio.Task（不阻塞 token 流），每帧非阻塞检查结果，
-       命中立刻中断。流读完等末窗结果（限时 audit_request_timeout，最后一段不漏审）。
-    3. 输出审核命中 → 发 ATTACKED + raise ContentAttacked。
-    4. 流正常结束 → 发 LLM_CALL（usage），返回完整 content。
-
-    stream_enabled=False 时调用方应走 _llm 而非本函数。
+    返回完整 content 字符串。需 usage/finish_reason 时用 run_streamed_llm_result。
     """
+    result = await run_streamed_llm_result(
+        ctx,
+        system,
+        user_msg,
+        phase=phase,
+        emit_delta=emit_delta,
+        kind=kind,
+        max_tokens=max_tokens,
+    )
+    return result.content
+
+
+async def run_streamed_llm_result(
+    ctx: Any,
+    system: str,
+    user_msg: str,
+    *,
+    phase: str,
+    emit_delta: bool = True,
+    kind: str | None = None,
+    max_tokens: int | None = None,
+) -> llm_provider.LLMCompletion:
+    """同 run_streamed_llm，但返回 LLMCompletion（含 usage / finish_reason）。"""
     guard = await build_guard(ctx)
 
     # 1) 输入侧审核（受 audit_request_timeout 约束，超时视为未命中）
@@ -482,6 +501,7 @@ async def run_streamed_llm(
     pending: list[str] = []  # 自上次输出审核以来的增量
     last_audit_at = started
     usage = llm_provider.Usage()
+    finish_reason: str | None = None
     audit_task: asyncio.Task | None = None  # 后台审核 task：不阻塞 token 流
 
     async def _raise_if_hit(res: AuditResult | None, side: str) -> None:
@@ -505,6 +525,7 @@ async def run_streamed_llm(
         game_id=ctx.game.id,
         run_id=ctx.run.id,
         kind=kind or phase or "chat",
+        max_tokens=max_tokens,
     )
     try:
         async for chunk in gen:
@@ -519,6 +540,8 @@ async def run_streamed_llm(
                     last_flush = await _maybe_flush(ctx, phase, batch_buf, last_flush, force=False)
             if chunk.usage is not None:
                 usage = chunk.usage
+            if chunk.finish_reason:
+                finish_reason = chunk.finish_reason
             # 已启动的后台审核完成 → 立刻检查结果（不阻塞 token 流）
             if audit_task is not None and audit_task.done():
                 done_res = audit_task.result()
@@ -553,6 +576,7 @@ async def run_streamed_llm(
     # 流结束：emit_delta 时 flush 残留微批；再发 LLM_CALL（usage，对齐现有 _llm 事件字段）
     if emit_delta and batch_buf:
         await _maybe_flush(ctx, phase, batch_buf, last_flush, force=True)
+    content = "".join(content_parts)
     await publish_event(
         ctx.run.id,
         WSEventType.LLM_CALL,
@@ -564,7 +588,11 @@ async def run_streamed_llm(
             "output_tokens": usage.output_tokens,
         },
     )
-    return "".join(content_parts)
+    return llm_provider.LLMCompletion(
+        content=content,
+        usage=usage,
+        finish_reason=finish_reason,
+    )
 
 
 async def _maybe_flush(
