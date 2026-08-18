@@ -228,8 +228,9 @@ HTML5 游戏工程师实现的结构化设计稿。你的目标不是复述创�
    填写精确版本号。默认倾向 canvas；只有玩法明确需要碰撞/物理/多场景/精灵动画时
    才上 phaser3，渲染是主要瓶颈且不需完整框架时才用 pixijs。一份游戏只选一个引擎。
 10. build_routing 决定代码交付形态：默认 build="none"（单 HTML，平台 sandbox 直跑）；
-   当 engine 为 phaser3/pixijs 且玩法需要 catalog 内 npm 依赖（如 matter-js 物理、
-   howler 音频、gsap 动画）时设 build="vite"，renderer 与 engine.id 一致，ui 默认 none。
+   当 engine 为 phaser3/pixijs 且玩法需要 catalog 内 npm 依赖（如 howler 音频、
+   gsap 动画）时设 build="vite"，renderer 与 engine.id 一致，ui 默认 none。
+   Phaser 刚体物理用内置 Matter（build="none"），不要为 matter-js 单独切 vite。
    dependencies 只能从 catalog 选额外包，不得自造包名；简单 canvas 游戏保持 build="none"。
 
 输出要求：
@@ -547,7 +548,11 @@ def build_repair_prompt(engine_id: str, hints: dict[str, Any] | None = None) -> 
         "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
         "保留这些占位符；运行时会在构建前还原真实 data URI。\n"
         "8. 若自动试玩报 PAGE_ERROR 且含 is not defined，说明引用了未定义符号或脚本顺序错误；"
-        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。"
+        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。\n"
+        "9. 若 PAGE_ERROR 含 matter.add.group / is not a function，或 reading 'x'："
+        "Phaser Matter 没有 add.group；显示分组用 this.add.group()；"
+        "物理体只用 matter.add.rectangle/circle/image/sprite + matter.add.constraint；"
+        "读坐标前确认 body 已创建（chassis.position.x 或 sprite.x）。"
     )
     return "\n\n".join(
         part
@@ -589,7 +594,11 @@ def _build_repair_prompt_routed(engine_id: str, hints: dict[str, Any] | None = N
         "7. 当前 HTML 中形如 __FORGE_DATA_URI_0000__ 的字符串代表已存在素材，必须按原样"
         "保留这些占位符；运行时会在构建前还原真实 data URI。\n"
         "8. 若自动试玩报 PAGE_ERROR 且含 is not defined，说明引用了未定义符号或脚本顺序错误；"
-        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。"
+        "须补齐定义或调整 <script> 顺序，不得用空 catch 吞掉异常。\n"
+        "9. 若 PAGE_ERROR 含 matter.add.group / is not a function，或 reading 'x'："
+        "Phaser Matter 没有 add.group；显示分组用 this.add.group()；"
+        "物理体只用 matter.add.rectangle/circle/image/sprite + matter.add.constraint；"
+        "读坐标前确认 body 已创建（chassis.position.x 或 sprite.x）。"
     )
     return "\n\n".join(
         part

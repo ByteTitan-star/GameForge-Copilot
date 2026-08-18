@@ -43,8 +43,21 @@ const game = new Phaser.Game({
 
 ## 物理与碰撞
 
-- 用 Arcade Physics：`this.physics.add.collider` / `overlap`，回调里改状态/加分。
+默认用 **Arcade Physics**（平台跳跃、弹道、简单碰撞）：
+
+- `this.physics.add.collider` / `overlap`，回调里改状态/加分。
 - 禁止在物理回调里做耗时操作或销毁正在迭代的对象，用事件队列延迟处理。
+
+仅当玩法需要刚体约束、悬挂、重心（如越野车、铰链）时，改用 **Phaser 内置 Matter**，不要另引 npm `matter-js`：
+
+```js
+physics: { default: 'matter', matter: { gravity: { y: 1 }, debug: false } }
+```
+
+合法 API（3.80）：`this.matter.add.image`、`this.matter.add.sprite`、`this.matter.add.rectangle`、`this.matter.add.circle`、`this.matter.add.constraint`、`this.matter.world.setBounds`。
+车辆用 chassis rectangle + 两轮 circle + 两个 constraint；读坐标前确认 body 已创建（`body.position.x` 或 sprite.x）。
+
+禁止：`this.matter.add.group()`（不存在）；显示分组用 `this.add.group()`。禁止把 Arcade 的 `this.physics.add.collider` 用在 Matter 场景。
 
 ## 纪律
 

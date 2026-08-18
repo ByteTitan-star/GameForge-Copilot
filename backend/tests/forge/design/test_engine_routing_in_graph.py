@@ -55,3 +55,8 @@ def test_repair_prompt_keeps_engine_choice() -> None:
     prompt = build_repair_prompt("phaser3")
     assert "保持原 engine 选型不变" in prompt
     assert recommended_cdn_url("phaser3") in prompt
+
+
+def test_repair_prompt_mentions_matter_illegal_api() -> None:
+    prompt = build_repair_prompt("phaser3")
+    assert "matter.add.group" in prompt

@@ -92,6 +92,28 @@ def is_permanent_infra_error(errors: list[str] | None) -> bool:
     return any(marker in text for marker in PERMANENT_INFRA_MARKERS)
 
 
+def is_browser_launch_failure(exc: BaseException) -> bool:
+    """启动失败才算 infra。Browser.close 失败不得盖过已有试玩结果。"""
+    msg = str(exc).lower()
+    if "browser.close" in msg:
+        return False
+    return any(k in msg for k in ("executable", "chromium", "browser", "playwright"))
+
+
+_MATTER_ADD_GROUP_RE = re.compile(r"matter\.add\.group\s*\(")
+
+
+def illegal_engine_api_errors(html: str) -> list[str]:
+    """已知会立刻 pageerror 的引擎 API 幻觉；产品错误，不必再开浏览器。"""
+    if not _MATTER_ADD_GROUP_RE.search(html):
+        return []
+    return [
+        "PAGE_ERROR: this.matter.add.group is not a function"
+        "（Phaser Matter 无 group API；显示分组用 this.add.group()；"
+        "物理体用 matter.add.rectangle/circle/image + constraint）"
+    ]
+
+
 def playwright_import_available() -> bool:
     try:
         import playwright  # noqa: F401
@@ -187,6 +209,7 @@ def static_playtest_diagnostic(html: str) -> PlaytestResult:
         errors.append("缺少 canvas 或可交互元素（button/input/onclick）")
     scripts = _extract_scripts(html)
     errors.extend(_screen_target_errors(html, scripts))
+    errors.extend(illegal_engine_api_errors(html))
     for i, block in enumerate(scripts, start=1):
         src = block.strip()
         if not src:
@@ -360,28 +383,39 @@ async def _session_playtest(
     )
 
 
+async def _close_browser_quietly(browser: Any) -> None:
+    try:
+        await browser.close()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("playtest browser.close failed", extra={"error": str(exc)})
+
+
 async def _with_browser(
     url: str, want_thumb: bool, mode_label: str, timeout: int
 ) -> PlaytestResult:
     from playwright.async_api import async_playwright
 
+    session_result: PlaytestResult | None = None
     try:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True)
             try:
                 page = await browser.new_page()
-                return await _session_playtest(
+                session_result = await _session_playtest(
                     page,
                     url=url,
                     want_thumb=want_thumb,
                     mode_label=mode_label,
                     goto_timeout_ms=timeout,
                 )
+                return session_result
             finally:
-                await browser.close()
+                await _close_browser_quietly(browser)
     except Exception as e:  # noqa: BLE001
-        msg = str(e).lower()
-        if any(k in msg for k in ("executable", "chromium", "browser", "playwright")):
+        if session_result is not None:
+            log.warning("playtest cleanup failed", extra={"error": str(e)})
+            return session_result
+        if is_browser_launch_failure(e):
             return _infra_result("BROWSER_LAUNCH_FAILED", str(e))
         return make_playtest_result(
             errors=[f"PAGE_LOAD_FAILED: {e}"],
@@ -459,6 +493,17 @@ async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> Playtes
 
 
 async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
+    api_errors = illegal_engine_api_errors(html)
+    if api_errors:
+        return _with_cdn_check(
+            html,
+            make_playtest_result(
+                errors=api_errors,
+                console_logs=["playtest: engine api lint"],
+                failure_kind="product",
+            ),
+        )
+
     unavailable = await asyncio.to_thread(_check_playwright_available)
     if unavailable is not None:
         return _with_cdn_check(html, unavailable)

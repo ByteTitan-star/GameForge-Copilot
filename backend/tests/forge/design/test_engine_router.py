@@ -50,7 +50,15 @@ def test_engine_scaffold_only_for_cdn_engines() -> None:
     assert engine_scaffold("canvas") == ""
 
 
+def test_phaser3_methodology_documents_matter_whitelist() -> None:
+    text = engine_methodology("phaser3")
+    assert "matter.add.group" in text
+    assert "matter.add.rectangle" in text
+    assert "matter.add.constraint" in text
+
+
 def test_engine_routing_guide_nonempty() -> None:
     guide = engine_routing_guide()
     assert guide
     assert "canvas" in guide and "phaser3" in guide
+    assert "内置 Matter" in guide or "matter.add.group" in guide

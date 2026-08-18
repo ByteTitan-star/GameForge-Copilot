@@ -12,6 +12,7 @@
 
 适用：2D 动作/街机/平台/物理碰撞。塔防、横版跳跃、射击、弹幕、休闲动作。
 判断信号：需要碰撞检测、精灵动画、多场景、音效、物理弹道——这些手写极易出错，Phaser 内建。
+物理默认 Arcade；仅刚体约束/悬挂/重心才启用内置 Matter（`physics.default: 'matter'`），不要另引 npm matter-js，禁止 `this.matter.add.group()`。
 
 ## pixijs —— PixiJS（CDN UMD）
 
