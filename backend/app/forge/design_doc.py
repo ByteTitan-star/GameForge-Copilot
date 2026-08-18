@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 from app.forge.build.routing import coerce_build_routing, validate_routing
+from app.forge.capability import coerce_required_capabilities
 from app.forge.engine_router import DEFAULT_ENGINE, SUPPORTED_ENGINES, normalize_engine_id
 
 SCHEMA_VERSION = "2.0"
@@ -130,6 +131,13 @@ def _empty_doc(title: str) -> dict[str, Any]:
             "dependencies": [],
         },
         "acceptance_criteria": [],
+        "required_capabilities": {
+            "renderer": "canvas2d",
+            "physics_2d": False,
+            "realtime_multiplayer": False,
+            "backend_server": False,
+            "webgl_3d": False,
+        },
     }
 
 
@@ -351,6 +359,9 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
     raw_routing = doc.get("build_routing")
     routing = coerce_build_routing(raw_routing, engine_id=engine_id)
     doc["build_routing"] = routing.to_dict()
+    doc["required_capabilities"] = coerce_required_capabilities(
+        doc.get("required_capabilities"), engine_id=engine_id
+    )
     return doc
 
 
