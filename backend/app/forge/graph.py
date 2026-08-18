@@ -23,12 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.enums import PauseReason, RunPhase, RunStatus, WSEventType
+from app.enums import PauseReason, RunCommandType, RunPhase, RunStatus, WSEventType
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.assets.picker import asset_pick
+from app.forge.capability import developability_precheck
 from app.forge.code_candidate import claim_candidate_version, promote_candidate
+from app.forge.commands import mark_command_succeeded
 from app.forge.design_doc import (
     coerce_design_doc,
     design_doc_to_readable_text,
@@ -37,8 +39,16 @@ from app.forge.design_doc import (
     validate_design_doc,
 )
 from app.forge.events import publish_event
+from app.forge.failure import persist_failure_report
 from app.forge.guard import ContentAttacked, run_streamed_llm
-from app.forge.hitl import HITL_PHASES
+from app.forge.hitl import HITL_PHASES, allowed_commands_for
+from app.forge.lineage import (
+    assert_candidate_promotable,
+    ensure_art_revision,
+    ensure_plan_revision,
+    parse_revision_id,
+    persist_candidate_revision,
+)
 from app.forge.messages import (
     add_message,
     append_hitl_trace,
@@ -76,6 +86,7 @@ from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
 from app.hosting import store
 from app.llm import client as llm_client
+from app.models.failure_report import FailureReport
 from app.models.game import Game
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
@@ -180,6 +191,8 @@ async def _commit_project_build(
         existing_gv.design_doc = design_doc
     await ctx.s.commit()
     await game_services.prune_old_versions(ctx.s, ctx.game)
+    await persist_candidate_revision(ctx.s, ctx.r, ctx.run.id, version)
+    await ctx.s.commit()
     token = await preview_token_svc.mint_preview_token(
         ctx.r,
         game_id=ctx.game.id,
@@ -258,6 +271,7 @@ class ForgeState(TypedDict, total=False):
     entry_phase: str
     entry_requirement: str | None
     decision: str | None
+    command_type: str | None
     modify_text: str | None
     design_doc: dict[str, Any] | str
     art_options: dict[str, Any]
@@ -297,6 +311,7 @@ class _Ctx:
         self.run = run
         self.game = game
         self.hitl_trace = ""
+        self.resume_command_id: uuid.UUID | None = None
 
 
 def _wrap_user_input(text: str) -> str:
@@ -600,8 +615,78 @@ def _resume_from_user_pause(
     return "plan"
 
 
+async def _failure_snapshot(ctx: _Ctx, existing: dict[str, Any]) -> dict[str, Any] | None:
+    raw_id = existing.get("failure_report_id")
+    if not raw_id:
+        return None
+    try:
+        report_id = uuid.UUID(str(raw_id))
+    except ValueError:
+        return None
+    row = await ctx.s.get(FailureReport, report_id)
+    if row is None:
+        return None
+    diagnosis = row.diagnosis if isinstance(row.diagnosis, dict) else {}
+    return {
+        "failure_class": row.failure_class,
+        "summary": diagnosis.get("summary") or row.failure_class,
+        "suggested_recovery": diagnosis.get("suggested_recovery"),
+        "failure_report_id": str(row.id),
+    }
+
+
+def _failure_prompt_block(snapshot: dict[str, Any] | None) -> str:
+    if not snapshot:
+        return ""
+    return (
+        "【失败报告】\n"
+        f"failure_class: {snapshot.get('failure_class')}\n"
+        f"summary: {snapshot.get('summary')}\n"
+        f"suggested_recovery: {snapshot.get('suggested_recovery') or ''}\n\n"
+    )
+
+
+async def _attach_plan_revision(
+    ctx: _Ctx,
+    node: str,
+    design_doc: dict[str, Any],
+    extra_data: dict[str, Any],
+    *,
+    force_new_plan: bool = False,
+) -> None:
+    if node != "plan_confirm":
+        return
+    row, changed, art_reused = await ensure_plan_revision(
+        ctx.s, ctx.run.id, design_doc, force_new=force_new_plan
+    )
+    extra_data["active_plan_revision_id"] = str(row.id)
+    if changed:
+        extra_data["active_candidate_revision_id"] = None
+        if not art_reused:
+            extra_data["active_art_revision_id"] = None
+
+
+async def _persist_art_revision(ctx: _Ctx, art_direction: dict[str, Any]) -> None:
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    design_doc = existing.get("design_doc") if isinstance(existing.get("design_doc"), dict) else {}
+    row = await ensure_art_revision(
+        ctx.s,
+        ctx.run.id,
+        art_direction,
+        plan_revision_id=parse_revision_id(existing.get("active_plan_revision_id")),
+        design_doc=design_doc,
+    )
+    existing["active_art_revision_id"] = str(row.id)
+    await ckpt.save_state(ctx.r, ctx.run.id, existing, ctx.s)
+
+
 async def _pause_hitl(
-    ctx: _Ctx, node: str, design_doc: dict[str, Any], extra: dict | None = None
+    ctx: _Ctx,
+    node: str,
+    design_doc: dict[str, Any],
+    extra: dict | None = None,
+    *,
+    force_new_plan: bool = False,
 ) -> None:
     await ctx.s.refresh(ctx.run)
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
@@ -616,6 +701,13 @@ async def _pause_hitl(
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
     extra_data = dict(extra or {})
     extra_data.setdefault("hitl_trace", ctx.hitl_trace or "")
+    if ctx.resume_command_id is not None:
+        await mark_command_succeeded(ctx.resume_command_id, db=ctx.s)
+    await _attach_plan_revision(ctx, node, design_doc, extra_data, force_new_plan=force_new_plan)
+    if not isinstance(extra_data.get("failure"), dict):
+        snapshot = await _failure_snapshot(ctx, {**existing, **extra_data})
+        if snapshot:
+            extra_data["failure"] = snapshot
     # HITL 长等待：若携带活沙箱会话则显式 destroy，不保留计费会话
     live_session = extra_data.pop("sandbox_session", None)
     if live_session is not None:
@@ -636,7 +728,11 @@ async def _pause_hitl(
         pause_reason=PauseReason.WAITING_USER,
         design_doc=design_doc,
         extra={
-            **{k: v for k, v in existing.items() if k not in {"recovery", "pause_reason"}},
+            **{
+                k: v
+                for k, v in existing.items()
+                if k not in {"recovery", "pause_reason", "resume_grant"}
+            },
             "phase": str(existing.get("phase") or node),
             "design_doc": design_doc,
             **extra_data,
@@ -657,14 +753,22 @@ async def _pause_hitl(
         dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
     )
     await ctx.s.commit()
+    failure = extra_data.get("failure") if isinstance(extra_data.get("failure"), dict) else None
     payload = {
         "node": node,
         "design_doc": design_doc,
         "pause_reason": PauseReason.WAITING_USER.value,
         "action_url": f"/api/v1/games/{ctx.game.id}/runs/{ctx.run.id}/hitl/resolve",
+        "allowed_commands": list(allowed_commands_for(node)),
+        "control_revision": int(ctx.run.control_revision or 0),
     }
     if extra:
         payload.update(extra)
+        payload.pop("sandbox_session", None)
+    if failure:
+        payload["failure"] = failure
+    failure_class = str(failure.get("failure_class") or "") if failure else None
+    payload["allowed_commands"] = list(allowed_commands_for(node, failure_class))
     await publish_event(ctx.run.id, WSEventType.HITL_WAIT, payload)
 
 
@@ -682,6 +786,14 @@ async def _pause_recoverable(
         raise RunFinalized
     apply_paused_metadata(ctx.run)
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    report = await persist_failure_report(
+        ctx.s,
+        run_id=ctx.run.id,
+        errors=[message],
+        error_code=error_code,
+        attempt_count=attempts,
+        failure_stage=phase.upper() or "RUNTIME",
+    )
     recovery = RecoveryInfo(
         node=phase,
         error_code=error_code,
@@ -693,7 +805,10 @@ async def _pause_recoverable(
         pause_reason=PauseReason.RECOVERABLE_ERROR,
         design_doc=existing.get("design_doc"),
         recovery=recovery,
-        extra={k: v for k, v in existing.items() if k not in {"pause_reason", "recovery", "phase"}},
+        extra={
+            **{k: v for k, v in existing.items() if k not in {"pause_reason", "recovery", "phase"}},
+            "failure_report_id": str(report.id),
+        },
     )
     await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
     await add_message(
@@ -780,6 +895,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             )
             design_doc = parse_design_doc(raw, ctx.game.title)
             issues = validate_design_doc(design_doc)
+            issues.extend(developability_precheck(design_doc))
             if not issues:
                 await _emit_readable_plan_deltas(ctx, design_doc)
                 return design_doc
@@ -815,6 +931,8 @@ def _build_graph(ctx: _Ctx) -> Any:
             return "plan"
 
         st = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+        if str(state.get("command_type") or "") == RunCommandType.REVISE_PLAN.value:
+            return "revise_plan"
         phase = st.get("phase")
         if phase == "plan_confirm":
             if state.get("decision") == "modify" and state.get("modify_text"):
@@ -934,6 +1052,8 @@ def _build_graph(ctx: _Ctx) -> Any:
                 current_input=state.get("modify_text") or "",
                 design_doc=current_doc,
             )
+            existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+            user_msg = _failure_prompt_block(await _failure_snapshot(ctx, existing)) + user_msg
             design_doc = await generate_design_doc(PLAN_REVISE_PROMPT, user_msg)
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
@@ -956,11 +1076,15 @@ def _build_graph(ctx: _Ctx) -> Any:
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
-                {"phase": "plan_confirm", "design_doc": design_doc},
+                {
+                    **existing,
+                    "phase": "plan_confirm",
+                    "design_doc": design_doc,
+                },
                 ctx.s,
             )
             # 用户要求只确认策划案；修改后的策划案仍属于策划确认范围。
-            await _pause_hitl(ctx, "plan_confirm", design_doc)
+            await _pause_hitl(ctx, "plan_confirm", design_doc, force_new_plan=True)
             return {
                 "design_doc": design_doc,
                 "decision": None,
@@ -1020,13 +1144,15 @@ def _build_graph(ctx: _Ctx) -> Any:
                 "artifacts": artifacts,
             },
         )
+        art_direction = {
+            "fallback": True,
+            "reason": reason,
+            "visual_concept": "使用内置素材与程序化图形完成稳定的基础视觉表现",
+        }
+        await _persist_art_revision(ctx, art_direction)
         return {
             "design_doc": design_doc,
-            "art_direction": {
-                "fallback": True,
-                "reason": reason,
-                "visual_concept": "使用内置素材与程序化图形完成稳定的基础视觉表现",
-            },
+            "art_direction": art_direction,
             "artifacts": artifacts,
         }
 
@@ -1180,6 +1306,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                             "summary": f"已生成美术方案 {selected} 的详细代码实现设计稿",
                         },
                     )
+                    await _persist_art_revision(ctx, art_direction)
                     return {
                         "design_doc": design_doc,
                         "art_options": options,
@@ -1286,6 +1413,8 @@ def _build_graph(ctx: _Ctx) -> Any:
             needs_promote = ctx.game.current_version != int(version)
             if began or status == "pending" or (status == "done" and needs_promote):
                 if needs_promote:
+                    checkpoint = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+                    await assert_candidate_promotable(ctx.s, ctx.run.id, int(version), checkpoint)
                     promote_candidate(ctx.game, int(version))
                     await ctx.s.commit()
                 await commit_side_effect(ctx.r, key)
@@ -1310,10 +1439,28 @@ def _build_graph(ctx: _Ctx) -> Any:
             failure_kind = result.get("failure_kind")
             # 环境类 infra（如缺 playwright）走 sandbox_failed，避免伪装成「游戏质量差」
             hitl_node = "sandbox_failed" if failure_kind == "infra" else "qa_failed"
+            report = await persist_failure_report(
+                ctx.s,
+                run_id=ctx.run.id,
+                errors=errors,
+                failure_kind=str(failure_kind) if failure_kind else None,
+                attempt_count=int(result.get("attempt") or 1),
+                qa_diagnosis=str(result.get("qa_diagnosis") or ""),
+                candidate_revision_id=(
+                    str(result.get("candidate_version"))
+                    if result.get("candidate_version") is not None
+                    else None
+                ),
+                design_doc=design_doc if isinstance(design_doc, dict) else None,
+                hitl_phase=hitl_node,
+            )
+            report_id = str(report.id)
+            existing_ckpt = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
                 {
+                    **existing_ckpt,
                     "phase": hitl_node,
                     "design_doc": design_doc,
                     "qa": "; ".join(errors),
@@ -1326,6 +1473,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "playtest_errors": errors,
                     "qa_diagnosis": result.get("qa_diagnosis") or "",
                     "failure_kind": failure_kind,
+                    "failure_report_id": report_id,
                     **gate.as_dict(),
                 },
                 ctx.s,
@@ -1338,6 +1486,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "issues": errors,
                     "attempt": result.get("attempt"),
                     "failure_kind": failure_kind,
+                    "failure_report_id": report_id,
                     **gate.as_dict(),
                 },
             )
@@ -1656,6 +1805,7 @@ async def _run_body(
     code_qa_reset = False
     grant: dict[str, Any] | None = None
     hitl_trace = ""
+    command_type: str | None = None
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
         # 一次性推进凭据：合法入口写入；陈旧 resume 无凭据则跳过。
@@ -1671,15 +1821,21 @@ async def _run_body(
         if grant:
             decision = grant.get("decision") or decision
             modify_text = grant.get("modify_text")
+            command_type = grant.get("command_type")
         hitl_trace = append_hitl_trace(
             str(st.get("hitl_trace") or ""),
             decision=str(decision or ""),
             note=str(modify_text or ""),
         )
+        is_replan = command_type == RunCommandType.REVISE_PLAN.value
         # qa_failed / sandbox_failed 恢复：下一轮 CodeQaLoop 从 attempt==1 开始
-        code_qa_reset = bool(st.get("code_qa_reset", False)) or phase in (
-            "qa_failed",
-            "sandbox_failed",
+        code_qa_reset = (not is_replan) and (
+            bool(st.get("code_qa_reset", False))
+            or phase
+            in (
+                "qa_failed",
+                "sandbox_failed",
+            )
         )
         design_doc = st.get("design_doc") or run.requirement
         art_options = st.get("art_options") or {}
@@ -1698,11 +1854,18 @@ async def _run_body(
 
     forge_ctx = _Ctx(s, r, run, game)
     forge_ctx.hitl_trace = hitl_trace
+    if grant:
+        raw_command_id = str(grant.get("command_id") or "").strip()
+        try:
+            forge_ctx.resume_command_id = uuid.UUID(raw_command_id) if raw_command_id else None
+        except ValueError:
+            forge_ctx.resume_command_id = None
     graph = _build_graph(forge_ctx)
     initial: ForgeState = {
         "run_id": str(run_id),
         "resume": resume,
         "decision": decision,
+        "command_type": command_type,
         "modify_text": modify_text,
         "design_doc": design_doc,
         "art_options": art_options,

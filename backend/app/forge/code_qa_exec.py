@@ -503,6 +503,10 @@ async def execute_code_or_repair(
                 existing_gv.design_doc = design_doc
             await ctx.s.commit()
             await game_services.prune_old_versions(ctx.s, ctx.game)
+            from app.forge.lineage import persist_candidate_revision
+
+            await persist_candidate_revision(ctx.s, ctx.r, ctx.run.id, version)
+            await ctx.s.commit()
             await publish_event(
                 ctx.run.id,
                 WSEventType.BUILD_DONE,

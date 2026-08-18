@@ -188,7 +188,14 @@ DESIGN_DOC_SCHEMA = r"""
       "requirement": "一个可从玩家视角观察的完整功能要求",
       "verification": "自动试玩或人工试玩可执行的验证步骤"
     }
-  ]
+  ],
+  "required_capabilities": {
+    "renderer": "canvas2d 或 phaser2d 或 pixijs 或 dom；禁止 webgl3d",
+    "physics_2d": false,
+    "realtime_multiplayer": false,
+    "backend_server": false,
+    "webgl_3d": false
+  }
 }
 """.strip()
 
@@ -738,6 +745,7 @@ QA_PROMPT = f"""
 只输出一个合法 JSON 对象，不要输出 Markdown 或解释，结构如下：
 {{
   "summary": "失败现象与最可能根因的简要结论",
+  "candidate_class": "implementation_defect|acceptance_mismatch|capability_mismatch|unknown",
   "root_causes": ["按优先级排列的根因"],
   "required_fixes": [
     {{
