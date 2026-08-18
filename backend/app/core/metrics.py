@@ -41,6 +41,31 @@ SANDBOX_TIER_RUNS = Counter(
     "Sandbox executions by resource tier",
     ["backend", "tier", "status"],
 )
+FAILURE_CLASS_TOTAL = Counter(
+    "forge_failure_class_total",
+    "FailureReport classifications",
+    ["failure_class", "source"],
+)
+FAILURE_CLASS_UNKNOWN = Counter(
+    "forge_failure_class_unknown_total",
+    "FailureReports classified as unknown",
+)
+FAILURE_CLASS_OVERRIDE = Counter(
+    "forge_failure_class_override_total",
+    "LLM diagnosis ignored because a hard rule already classified the failure",
+)
+FAILURE_RECOVERY_MISMATCH = Counter(
+    "forge_failure_recovery_mismatch_total",
+    "suggested_recovery not in HITL allowed_commands",
+)
+ART_REUSE = Counter(
+    "forge_art_reuse_total",
+    "Art revisions reused after replan because dependency fingerprint matched",
+)
+ART_REGENERATE = Counter(
+    "forge_art_regenerate_total",
+    "Art revisions regenerated because dependency fingerprint changed or version differed",
+)
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
