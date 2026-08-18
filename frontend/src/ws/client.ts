@@ -83,7 +83,7 @@ export function connectRunWs(options: ConnectOptions): RunWsHandle {
     close: () => {
       closed = true
       if (retryTimer != null) window.clearTimeout(retryTimer)
-      socket?.close()
+      socket?.close(1000)
       socket = null
     },
   }

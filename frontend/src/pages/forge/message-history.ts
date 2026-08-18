@@ -8,15 +8,20 @@ export function toChatMessages(rows: ForgeMessage[]): ChatMsg[] {
         ? String((row.metadata as { node?: unknown }).node || '')
         : ''
     const persistenceKey = row.run_id
-      ? node
-        ? `${row.run_id}:${row.kind}:${node}`
-        : `${row.run_id}:${row.kind}`
+      ? row.kind === 'design'
+        ? `${row.run_id}:design`
+        : node
+          ? `${row.run_id}:${row.kind}:${node}`
+          : `${row.run_id}:${row.kind}`
       : undefined
+    const kind =
+      row.kind === 'design' || row.kind === 'completed' ? row.kind : 'chat'
     return {
       id: row.message_id,
       role: row.role,
       content: row.content,
       persistenceKey,
+      kind,
     }
   })
 }

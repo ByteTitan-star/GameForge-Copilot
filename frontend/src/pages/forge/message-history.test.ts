@@ -36,6 +36,36 @@ describe('forge message history', () => {
     ).toBe('run-1:hitl_approve:plan_confirm')
   })
 
+  it('同一 run 的策划稿共用去重键，冲掉打字机临时稿', () => {
+    const streamed: ChatMsg[] = [
+      {
+        id: 'streaming-run-1',
+        role: 'assistant',
+        kind: 'design',
+        content: '# 霓虹躲避',
+        persistenceKey: 'run-1:design',
+      },
+    ]
+    const incoming = toChatMessages([
+      row({
+        message_id: 'server-design',
+        role: 'assistant',
+        kind: 'design',
+        content: '# 霓虹躲避\n\n请确认方案，或填写修改意见。',
+        metadata: { node: 'plan_confirm' },
+      }),
+    ])
+    expect(incoming[0].persistenceKey).toBe('run-1:design')
+    expect(mergeChatMessages(streamed, incoming)).toEqual(incoming)
+  })
+
+  it('design/completed 映射到对话 kind', () => {
+    expect(toChatMessages([row({ role: 'assistant', kind: 'design' })])[0].kind).toBe('design')
+    expect(toChatMessages([row({ role: 'assistant', kind: 'completed' })])[0].kind).toBe(
+      'completed',
+    )
+  })
+
   it('服务端历史替换同业务键或同内容的临时消息', () => {
     const local: ChatMsg[] = [
       { id: 'local-1', role: 'user', content: '做一个平台跳跃游戏' },

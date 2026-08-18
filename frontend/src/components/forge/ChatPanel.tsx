@@ -1,15 +1,13 @@
 import { Bot, Loader2, UserRound } from "lucide-react";
 import { ForgeComposer } from "@/components/forge/ForgeComposer";
+import { ChatThinking } from "@/components/forge/ChatThinking";
+import { MarkdownLite } from "@/components/forge/MarkdownLite";
+import { groupChatMessages, type ChatMsg } from "@/components/forge/chat-blocks";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
 import { useEffect, useRef, type ReactNode } from "react";
 
-export type ChatMsg = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  persistenceKey?: string;
-};
+export type { ChatMsg, ChatKind } from "@/components/forge/chat-blocks";
 
 type Props = {
   messages: ChatMsg[];
@@ -27,8 +25,10 @@ type Props = {
   variant?: "light" | "workshop" | "forge-hero";
   /** document = 由外层容器滚动；panel = 消息区内部滚动 */
   scrollMode?: "panel" | "document";
-  /** 对话消息之后、输入框之前的业务内容，例如 HITL、试用提示 */
+  /** 对话消息之后、输入框之前的业务内容，例如试用提示 */
   conversationFooter?: ReactNode;
+  /** 覆盖底栏输入框（HITL 确认卡等）；有值时不渲染 Composer */
+  composerCover?: ReactNode;
   canLoadEarlier?: boolean;
   loadingEarlier?: boolean;
   onLoadEarlier?: () => void;
@@ -50,6 +50,7 @@ export function ChatPanel({
   variant = "light",
   scrollMode = "panel",
   conversationFooter,
+  composerCover,
   canLoadEarlier,
   loadingEarlier,
   onLoadEarlier,
@@ -62,7 +63,12 @@ export function ChatPanel({
   const composerPlaceholder = placeholder ?? t("describeIteration");
   const lastAssistantId = [...messages]
     .reverse()
-    .find((m) => m.role === "assistant")?.id;
+    .find((m) => m.role === "assistant" && m.kind !== "thinking")?.id;
+  const blocks = groupChatMessages(messages);
+  const lastBlock = blocks[blocks.length - 1];
+  const thinkingLive = Boolean(
+    streaming && lastBlock?.type === "thinking",
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
@@ -138,7 +144,23 @@ export function ChatPanel({
             </button>
           </div>
         ) : null}
-        {messages.map((m) => (
+        {blocks.map((block) => {
+          if (block.type === "thinking") {
+            return (
+              <ChatThinking
+                key={block.id}
+                items={block.items}
+                live={
+                  thinkingLive &&
+                  lastBlock?.type === "thinking" &&
+                  block.id === lastBlock.id
+                }
+              />
+            );
+          }
+          const m = block.msg;
+          const rich = m.kind === "design" || m.kind === "completed";
+          return (
           <div
             key={m.id}
             className={cn(
@@ -181,7 +203,7 @@ export function ChatPanel({
                     : "rounded-lg bg-[#ffcf5a]/15 px-2.5 py-1 text-center text-[11px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
               )}
             >
-              {m.content}
+              {rich ? <MarkdownLite text={m.content} /> : m.content}
               {streaming && m.id === lastAssistantId ? (
                 <span
                   className="ml-1 inline-flex items-center gap-1 align-middle"
@@ -199,13 +221,25 @@ export function ChatPanel({
               ) : null}
             </div>
           </div>
-        ))}
+          );
+        })}
         {conversationFooter ? (
           <div className="space-y-2 pt-0.5">{conversationFooter}</div>
         ) : null}
       </div>
 
-      {showComposer ? (
+      {composerCover ? (
+        <div
+          className={cn(
+            "min-h-0 max-h-[min(58vh,32rem)] shrink-0 overflow-y-auto",
+            hero
+              ? "border-t border-[var(--gf-border)] bg-[var(--gf-surface)] p-3 md:p-3.5"
+              : "gf-border-subtle border-t p-3",
+          )}
+        >
+          {composerCover}
+        </div>
+      ) : showComposer ? (
         <div
           className={cn(
             hero

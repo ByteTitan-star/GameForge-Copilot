@@ -200,24 +200,95 @@ def static_playtest_diagnostic(html: str) -> PlaytestResult:
 
 _static_playtest = static_playtest_diagnostic
 
+OVERLAY_POINTER_MARK = "intercepts pointer events"
+
+_BTN_SELECTOR = "button:visible, input[type=button]:visible, [role=button]:visible"
+
+_STACKED_SCREEN_JS = """() => {
+  const els = Array.from(document.querySelectorAll('.screen, [id^="screen-"]'));
+  const ids = [];
+  for (const el of els) {
+    const s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden') continue;
+    if ((s.pointerEvents || '') === 'none') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width >= window.innerWidth * 0.8 && r.height >= window.innerHeight * 0.8) {
+      ids.push(el.id || el.tagName.toLowerCase());
+    }
+  }
+  return ids;
+}"""
+
+
+def classify_stacked_screens(ids: list[str] | None) -> str | None:
+    names = [str(item) for item in (ids or []) if item]
+    if len(names) < 2:
+        return None
+    return (
+        "OVERLAY_BLOCKS_POINTER: multiple fullscreen screens receive pointer-events "
+        f"({', '.join(names)}). Only one screen may be interactive."
+    )
+
+
+def classify_click_failures(click_errors: list[str], attempted: int) -> str | None:
+    """把「全部被遮罩拦住」收成明确的产品失败，避免误当成瞬时 timeout。"""
+    if attempted <= 0 or not click_errors:
+        return None
+    if any(OVERLAY_POINTER_MARK in err for err in click_errors):
+        return (
+            "OVERLAY_BLOCKS_POINTER: visible buttons are covered by another screen "
+            "(e.g. #screen-paused). Only one screen may receive pointer-events."
+        )
+    return f"INPUT_INJECTION_FAILED: click: {click_errors[-1]}"
+
+
+async def _fail_if_stacked_screens(page: Any, errors: list[str]) -> None:
+    try:
+        ids = await page.evaluate(_STACKED_SCREEN_JS)
+    except Exception:  # noqa: BLE001
+        return
+    msg = classify_stacked_screens(ids if isinstance(ids, list) else [])
+    if msg:
+        errors.append(msg)
+
+
+async def _click_unobstructed_buttons(page: Any, logs: list[str], errors: list[str]) -> None:
+    btn = page.locator(_BTN_SELECTOR)
+    try:
+        count = await btn.count()
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"INPUT_INJECTION_FAILED: click: {e}")
+        return
+    if count <= 0:
+        return
+    for i in range(count):
+        target = btn.nth(i)
+        try:
+            if not await target.is_enabled():
+                continue
+            await target.click(timeout=1_200)
+            logs.append("playtest: button click ok")
+            return
+        except Exception as e:  # noqa: BLE001
+            classified = classify_click_failures([str(e)], attempted=1)
+            errors.append(classified or f"INPUT_INJECTION_FAILED: click: {e}")
+            return
+
 
 async def _inject_inputs(page: Any, logs: list[str], errors: list[str]) -> None:
+    # 先查叠层，再点按钮。暂停层盖住 START 时，Resume 可点也不能当 qa_ok。
+    await _fail_if_stacked_screens(page, errors)
+    if errors:
+        return
+    await _click_unobstructed_buttons(page, logs, errors)
+    if errors:
+        return
     try:
         await page.keyboard.press("ArrowRight")
         await page.keyboard.press("Space")
         logs.append("playtest: keydown ArrowRight + Space ok")
     except Exception as e:  # noqa: BLE001
         errors.append(f"INPUT_INJECTION_FAILED: {e}")
-        return
-    btn = page.locator("button:visible, input[type=button]:visible, [role=button]:visible")
-    try:
-        if await btn.count() > 0:
-            first = btn.first
-            if await first.is_enabled():
-                await first.click(timeout=3_000)
-                logs.append("playtest: button click ok")
-    except Exception as e:  # noqa: BLE001
-        errors.append(f"INPUT_INJECTION_FAILED: click: {e}")
 
 
 async def _session_playtest(

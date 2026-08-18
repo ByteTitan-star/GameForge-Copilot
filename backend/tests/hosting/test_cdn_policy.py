@@ -82,7 +82,7 @@ def test_build_csp_contains_every_allowlisted_host() -> None:
         assert host in csp, f"CSP 缺少白名单域 {host}"
     assert "default-src 'self'" in csp
     assert "script-src" in csp
-    assert "img-src 'self' data:" in csp
+    assert "img-src 'self' data: blob:" in csp
 
 
 def test_build_csp_has_no_wildcard_https() -> None:

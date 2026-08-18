@@ -78,7 +78,10 @@ _CODE_COMMON = f"""
     new Game / 场景注册前完成类与配置定义。
 11. 状态机名称与 DOM 标识必须严格一致；例如 setScreen('playing') 动态查找
     #screen-playing 时，HTML 中必须存在该元素。不得使用 #screen-game 等不同别名。
-12. 输入若包含“已确认美术实现设计稿 JSON”，必须逐项落实其中的布局、配色、绘制、
+12. 同一时刻只能有一个全屏 .screen 接收 pointer-events。暂停/失败/通关层默认
+    visibility:hidden 且 pointer-events:none；开局不得把 #screen-paused 叠在
+    开始按钮上。玩家点得到的必须是当前状态真正响应的按钮。
+13. 输入若包含“已确认美术实现设计稿 JSON”，必须逐项落实其中的布局、配色、绘制、
     状态视觉、动效、响应式、可访问性与性能约束，不得退回通用模板风格。
 
 实现优先级：先确保完整状态闭环和核心玩法正确，再完成关卡递进、反馈和视觉润色。
@@ -277,9 +280,14 @@ ART_OPTIONS_PROMPT = """
 前端代码直接实现的简短美术方向，供用户选择。这里只做方向提案，不生成详细设计稿，
 不输出 HTML/React 代码，也不生成或索取图片。
 
+两个方向必须从这份策划稿长出来：类型、世界观、角色、关卡情绪和反馈，而不是套用
+与题材无关的现成反差对。禁止把「赛博霓虹 / 极简矢量」当作缺省组合；除非策划稿
+本身明确要求该类视觉，否则不要往这两个标签上靠。若下方提供了风格 Skill，只在
+与策划稿匹配时吸收其手法，不要为了用 Skill 而扭曲题材。
+
 可用表现手段仅限 CSS、Canvas、内联 SVG 以及程序化动画、粒子、形状、排版和转场；
-方案必须适配单个自包含 index.html，不能依赖任意外部图片 URL。两个方案须贴合具体
-玩法、角色和反馈需求，不能只是换颜色。恰好一个方案标记为推荐。
+方案必须适配单个自包含 index.html，不能依赖任意外部图片 URL。两个方案须在材料、
+构图或动效语法上可区分，不能只是换颜色。恰好一个方案标记为推荐。
 
 只输出合法 JSON，不输出 Markdown 或解释：
 {
@@ -293,8 +301,9 @@ ART_OPTIONS_PROMPT = """
 ART_OPTIONS_REVISE_PROMPT = """
 你是一名资深游戏视觉设计师。用户对上一轮两个视觉方向提出了反馈。请结合已确认策划稿、
 旧方案和用户反馈，重新生成两个简短且差异明确的代码美术方向。不要仅改方案名称；新方案
-必须实际吸收反馈。只使用 CSS、Canvas、内联 SVG、程序化动画/粒子/形状/排版/转场，
-不依赖外部图片，不输出详细设计稿或实现代码。恰好一个方案标记为推荐。
+必须实际吸收反馈，并继续贴合策划稿题材。禁止无依据地退回「赛博霓虹 / 极简矢量」对打。
+只使用 CSS、Canvas、内联 SVG、程序化动画/粒子/形状/排版/转场，不依赖外部图片，
+不输出详细设计稿或实现代码。恰好一个方案标记为推荐。
 
 只输出与 art options 相同结构的合法 JSON，不输出 Markdown 或解释。
 """.strip()
@@ -347,6 +356,9 @@ async def _art_skill_appendix_async(
     from app.forge.skills import resolve_skills_for_node_async
 
     resolved = await resolve_skills_for_node_async("art", hints=hints or {}, complete=complete)
+    from app.forge.skills.usage import maybe_publish_skill_usage
+
+    await maybe_publish_skill_usage(hints or {}, "art", resolved)
     parts = [resolved.policy_text(), resolved.methodology_text()]
     return "\n\n".join(p for p in parts if p)
 
@@ -453,13 +465,16 @@ async def build_code_prompt_async(
     complete: Any | None = None,
 ) -> str:
     merged = {"engine_id": normalize_engine_id(engine_id), **(hints or {})}
-    if settings.skills_router_enabled and (
-        settings.skills_llm_selection or merged.get("methodology_ids")
-    ):
-        from app.forge.skills import resolve_skills_for_node_async
+    if settings.skills_router_enabled:
+        from app.forge.skills import resolve_skills_for_node, resolve_skills_for_node_async
+        from app.forge.skills.usage import maybe_publish_skill_usage
 
-        resolved = await resolve_skills_for_node_async("code", hints=merged, complete=complete)
+        if settings.skills_llm_selection or merged.get("methodology_ids"):
+            resolved = await resolve_skills_for_node_async("code", hints=merged, complete=complete)
+        else:
+            resolved = resolve_skills_for_node("code", hints=merged)
         merged["methodology_ids"] = [s.id for s in resolved.methodology]
+        await maybe_publish_skill_usage(merged, "code", resolved)
     return build_code_prompt(engine_id, hints=merged)
 
 
@@ -474,13 +489,18 @@ async def build_repair_prompt_async(
         "failure_kind": "product",
         **(hints or {}),
     }
-    if settings.skills_router_enabled and (
-        settings.skills_llm_selection or merged.get("methodology_ids")
-    ):
-        from app.forge.skills import resolve_skills_for_node_async
+    if settings.skills_router_enabled:
+        from app.forge.skills import resolve_skills_for_node, resolve_skills_for_node_async
+        from app.forge.skills.usage import maybe_publish_skill_usage
 
-        resolved = await resolve_skills_for_node_async("repair", hints=merged, complete=complete)
+        if settings.skills_llm_selection or merged.get("methodology_ids"):
+            resolved = await resolve_skills_for_node_async(
+                "repair", hints=merged, complete=complete
+            )
+        else:
+            resolved = resolve_skills_for_node("repair", hints=merged)
         merged["methodology_ids"] = [s.id for s in resolved.methodology]
+        await maybe_publish_skill_usage(merged, "repair", resolved)
     return build_repair_prompt(engine_id, hints=merged)
 
 

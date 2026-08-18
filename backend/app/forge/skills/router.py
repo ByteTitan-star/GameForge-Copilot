@@ -73,12 +73,8 @@ def _resolve(node: str, hints: dict[str, Any]) -> ResolvedSkills:
     metas = list_skill_metas()
     node_key = _normalize_node(node)
 
-    policy_metas = [
-        m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)
-    ]
-    candidates = [
-        m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)
-    ]
+    policy_metas = [m for m in metas if m.kind == "policy" and _node_allowed(m, node_key)]
+    candidates = [m for m in metas if m.kind == "methodology" and _node_allowed(m, node_key)]
     chosen = _choose_methodology(node_key, candidates, hints)
 
     policy = tuple(_load(m) for m in policy_metas)
@@ -127,6 +123,15 @@ def _choose_methodology(
     return []
 
 
+_ART_STYLE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("art/pixel-art", ("像素", "pixel")),
+    ("art/paper-craft", ("纸", "剪纸", "折纸", "paper", "origami", "拼贴")),
+    ("art/ink-wash", ("水墨", "国风", "山水", "ink", "毛笔")),
+    ("art/candy-arcade", ("糖果", "卡通", "可爱", "candy", "cartoon", "休闲")),
+    ("art/crt-analog", ("crt", "磁带", "复古电视", "vhs", "扫描线", "磷光")),
+)
+
+
 def _choose_art(candidates: list[SkillMeta], hints: dict[str, Any]) -> list[SkillMeta]:
     text = " ".join(
         str(hints.get(k, "")) for k in ("style", "modify_text", "requirement", "goal")
@@ -134,9 +139,16 @@ def _choose_art(candidates: list[SkillMeta], hints: dict[str, Any]) -> list[Skil
     picked: list[SkillMeta] = []
     by_id = {m.id: m for m in candidates}
 
-    if any(k in text for k in ("像素", "pixel")) and "art/pixel-art" in by_id:
-        picked.append(by_id["art/pixel-art"])
-    if any(k in text for k in ("hud", "血条", "分数", "ui")) and "art/hud-design" in by_id:
+    for skill_id, keys in _ART_STYLE_KEYWORDS:
+        if skill_id in by_id and any(k in text for k in keys):
+            picked.append(by_id[skill_id])
+        if len(picked) >= 2:
+            break
+    if (
+        any(k in text for k in ("hud", "血条", "分数", "ui"))
+        and "art/hud-design" in by_id
+        and by_id["art/hud-design"] not in picked
+    ):
         picked.append(by_id["art/hud-design"])
     if "art/visual-composition" in by_id and len(picked) < 2:
         picked.append(by_id["art/visual-composition"])

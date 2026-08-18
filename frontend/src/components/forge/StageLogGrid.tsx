@@ -81,7 +81,13 @@ export function StageLogGrid({ runPhase, stages, items, className }: Props) {
         const columnItems = grouped[phase]
 
         return (
-          <section key={phase} className="gf-forge-stage-log-col flex min-w-0 flex-col">
+          <section
+            key={phase}
+            className={cn(
+              'gf-forge-stage-log-col flex min-w-0 flex-col',
+              isActive && 'is-active',
+            )}
+          >
             <header className="gf-forge-stage-log-col-header flex items-center gap-1.5 border-b border-black/[0.06] pb-1.5">
               <span
                 className={cn(
@@ -105,11 +111,18 @@ export function StageLogGrid({ runPhase, stages, items, className }: Props) {
                   aria-hidden="true"
                 />
               </span>
-              <span className="truncate text-[12px] font-semibold gf-page-body">{t(titleKey)}</span>
+              <span
+                className={cn(
+                  'truncate text-[12px] font-semibold',
+                  isActive ? 'gf-page-body' : 'gf-page-muted',
+                )}
+              >
+                {t(titleKey)}
+              </span>
             </header>
-            <ol className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+            <ol className="gf-forge-stage-log-col-list mt-1 min-h-0 flex-1 space-y-0.5">
               {columnItems.length === 0 ? (
-                <li className="px-1 py-3 text-center text-[11px] gf-page-muted">{t('timelineEmpty')}</li>
+                <li className="px-1 py-3 text-center text-[12px] gf-page-muted">{t('timelineEmpty')}</li>
               ) : (
                 columnItems.slice(0, 20).map((it) => {
                   const tone = toneClass[it.tone]
@@ -128,17 +141,19 @@ export function StageLogGrid({ runPhase, stages, items, className }: Props) {
                         <ToneIcon className="h-2 w-2" aria-hidden="true" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="break-words text-[11px] font-medium leading-snug text-[#303940]">
-                          {it.label}
-                        </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 break-words text-[13px] font-medium leading-snug text-[#303940]">
+                            {it.label}
+                          </p>
+                          <time className="shrink-0 pt-px font-mono text-[12px] tabular-nums text-[#9aa3ab]">
+                            {timeFormatter.format(new Date(it.at))}
+                          </time>
+                        </div>
                         {it.detail ? (
-                          <p className="mt-0.5 break-words text-[10px] leading-relaxed text-[#69737c]">
+                          <p className="mt-0.5 break-words text-[12px] leading-relaxed text-[#69737c]">
                             {it.detail}
                           </p>
                         ) : null}
-                        <time className="mt-0.5 block font-mono text-[10px] tabular-nums text-[#9aa3ab]">
-                          {timeFormatter.format(new Date(it.at))}
-                        </time>
                       </div>
                     </li>
                   )

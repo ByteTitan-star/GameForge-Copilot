@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { fetchDraftHtml, isPreviewTokenUrl } from "@/lib/hosting";
+import { isPreviewTokenUrl, mintDraftPreviewUrl } from "@/lib/hosting";
 import { useT } from "@/i18n/use-t";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,32 @@ type Props = {
   title?: string;
   variant?: "light" | "console" | "stage";
   className?: string;
-  /** 草稿托管需 Bearer；iframe 无法带头，内部改为 fetch→blob */
+  /** 草稿托管需 Bearer；iframe 无法带头，内部兑换 preview token 再挂载 */
   accessToken?: string | null;
 };
 
 function isDraftUrl(src: string): boolean {
   return /\/draft\//.test(src) && !isPreviewTokenUrl(src);
+}
+
+function parseDraftRef(src: string): { gameId: string; version: string } | null {
+  const match = src.match(/\/draft\/([^/]+)\/([^/?#]+)/);
+  if (!match) return null;
+  return {
+    gameId: decodeURIComponent(match[1]),
+    version: decodeURIComponent(match[2]),
+  };
+}
+
+async function resolveDraftFrame(
+  src: string,
+  accessToken: string,
+): Promise<{ iframeSrc: string }> {
+  const ref = parseDraftRef(src);
+  if (!ref) throw new Error("草稿地址无效");
+  // preview token 让 iframe 以真实托管 URL 为基址，相对路径图片/音频才能加载。
+  // 兑换失败不回退 srcDoc：about:srcdoc 会让 thumb.png 打到前端源站。
+  return { iframeSrc: await mintDraftPreviewUrl(ref.gameId, ref.version, accessToken) };
 }
 
 /** 试玩容器：sandbox 不含 allow-same-origin（对齐 docs/08） */
@@ -34,7 +54,7 @@ export function GamePlayer({
   );
   const [iframeHtml, setIframeHtml] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // 公开地址可直接挂载；受保护草稿必须等 Bearer fetch 转成 blob 后再挂载。
+  // 公开地址可直接挂载；受保护草稿必须先兑换 preview URL 再挂载。
   const [loading, setLoading] = useState(needsInitialAuthFetch);
   const [retryVersion, setRetryVersion] = useState(0);
   const t = useT();
@@ -56,23 +76,16 @@ export function GamePlayer({
         setLoading(false);
         return;
       }
-      // 不能先把受保护的 draft URL 交给 iframe；iframe 无法附带 Bearer，
-      // 会制造一次必然 401 的请求。先鉴权 fetch，完成后只挂载 blob URL。
+      // 不能先把受保护的 draft URL 交给 iframe；iframe 无法附带 Bearer。
+      // 优先兑换 preview token，让相对资源（png/svg/音频）按托管路径加载。
       setIframeSrc("");
       setIframeHtml("");
       setLoading(true);
       try {
-        const match = src.match(/\/draft\/([^/]+)\/([^/?#]+)/);
-        if (!match) throw new Error("草稿地址无效");
-        const html = await fetchDraftHtml(
-          decodeURIComponent(match[1]),
-          decodeURIComponent(match[2]),
-          accessToken!,
-        );
+        const frame = await resolveDraftFrame(src, accessToken!);
         if (!cancelled) {
-          setIframeHtml(html);
-          // srcDoc 不依赖 Blob URL 生命周期，避免 HMR/effect cleanup 撤销正在
-          // 加载的文档。sandbox 仍不含 allow-same-origin，隔离级别不变。
+          setIframeSrc(frame.iframeSrc);
+          setIframeHtml("");
           setLoading(false);
         }
       } catch (e) {

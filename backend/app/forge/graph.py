@@ -39,7 +39,13 @@ from app.forge.design_doc import (
 from app.forge.events import publish_event
 from app.forge.guard import ContentAttacked, run_streamed_llm
 from app.forge.hitl import HITL_PHASES
-from app.forge.messages import add_message, design_message_content, stable_design_key
+from app.forge.messages import (
+    add_message,
+    append_hitl_trace,
+    completion_message_content,
+    design_message_content,
+    stable_design_key,
+)
 from app.forge.phase_labels import phase_start_payload
 from app.forge.prompts import (
     PLAN_PROMPT,
@@ -290,6 +296,7 @@ class _Ctx:
         self.r = r
         self.run = run
         self.game = game
+        self.hitl_trace = ""
 
 
 def _wrap_user_input(text: str) -> str:
@@ -608,6 +615,7 @@ async def _pause_hitl(
     apply_paused_metadata(ctx.run)
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
     extra_data = dict(extra or {})
+    extra_data.setdefault("hitl_trace", ctx.hitl_trace or "")
     # HITL 长等待：若携带活沙箱会话则显式 destroy，不保留计费会话
     live_session = extra_data.pop("sandbox_session", None)
     if live_session is not None:
@@ -1038,6 +1046,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 art_hints = {
                     "requirement": ctx.game.requirement or "",
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
+                    "run_id": str(ctx.run.id),
                 }
                 system_prompt = await build_art_options_prompt_async(
                     art_hints, complete=lambda s, u: _llm(ctx, s, u, kind="skill_select")
@@ -1083,6 +1092,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "modify_text": state.get("modify_text") or "",
                     "requirement": ctx.game.requirement or "",
                     "goal": (design_doc.get("title") or ctx.game.title or ""),
+                    "run_id": str(ctx.run.id),
                 }
                 system_prompt = await build_art_options_revise_prompt_async(
                     art_hints, complete=lambda s, u: _llm(ctx, s, u, kind="skill_select")
@@ -1147,6 +1157,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                         {
                             "style": json.dumps(selected_option, ensure_ascii=False),
                             "goal": (design_doc.get("title") or ctx.game.title or ""),
+                            "run_id": str(ctx.run.id),
                         },
                         complete=lambda s, u: _llm(ctx, s, u, kind="skill_select"),
                     )
@@ -1354,6 +1365,18 @@ def _build_graph(ctx: _Ctx) -> Any:
             ctx.run.status = RunStatus.DONE.value
             ctx.run.phase = RunPhase.DONE.value
             ctx.run.ended_at = datetime.now(UTC)
+            raw_design = state.get("design_doc")
+            design_doc: dict[str, Any] = raw_design if isinstance(raw_design, dict) else {}
+            raw_art = state.get("art_direction")
+            art: dict[str, Any] = raw_art if isinstance(raw_art, dict) else {}
+            done_content = completion_message_content(
+                title=str(design_doc.get("title") or ctx.game.title or ""),
+                version=int(ctx.game.current_version),
+                design_doc=design_doc or None,
+                requirement=str(ctx.game.requirement or ctx.run.requirement or ""),
+                art_name=str(art.get("name") or ""),
+                user_notes=str(ctx.hitl_trace or state.get("modify_text") or ""),
+            )
             await add_message(
                 ctx.s,
                 game_id=ctx.game.id,
@@ -1361,7 +1384,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                 user_id=ctx.run.user_id,
                 role="assistant",
                 kind="completed",
-                content=f"游戏已生成完成，版本 v{ctx.game.current_version} 可以试玩。",
+                content=done_content,
                 metadata={
                     "version": ctx.game.current_version,
                     "preview_url": f"/draft/{ctx.game.id}/{ctx.game.current_version}",
@@ -1381,6 +1404,7 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "game_id": str(ctx.game.id),
                     "version": ctx.game.current_version,
                     "preview_url": f"/draft/{ctx.game.id}/{ctx.game.current_version}",
+                    "message": done_content,
                     **gate.as_dict(),
                 },
             )
@@ -1631,6 +1655,7 @@ async def _run_body(
     entry_requirement: str | None = None
     code_qa_reset = False
     grant: dict[str, Any] | None = None
+    hitl_trace = ""
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
         # 一次性推进凭据：合法入口写入；陈旧 resume 无凭据则跳过。
@@ -1646,6 +1671,11 @@ async def _run_body(
         if grant:
             decision = grant.get("decision") or decision
             modify_text = grant.get("modify_text")
+        hitl_trace = append_hitl_trace(
+            str(st.get("hitl_trace") or ""),
+            decision=str(decision or ""),
+            note=str(modify_text or ""),
+        )
         # qa_failed / sandbox_failed 恢复：下一轮 CodeQaLoop 从 attempt==1 开始
         code_qa_reset = bool(st.get("code_qa_reset", False)) or phase in (
             "qa_failed",
@@ -1667,6 +1697,7 @@ async def _run_body(
         entry_requirement = run.requirement
 
     forge_ctx = _Ctx(s, r, run, game)
+    forge_ctx.hitl_trace = hitl_trace
     graph = _build_graph(forge_ctx)
     initial: ForgeState = {
         "run_id": str(run_id),

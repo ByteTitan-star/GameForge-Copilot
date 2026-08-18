@@ -299,6 +299,7 @@ async def execute_code_or_repair(
             user_msg = "\n\n".join(repair_parts)
             system_prompt = await build_repair_prompt_async(
                 design_doc["engine"]["id"],
+                hints={"run_id": str(ctx.run.id)},
                 complete=lambda s, u: streamed_llm(
                     ctx, s, u, "code", emit_delta=False, kind="skill_select"
                 ),
@@ -326,6 +327,7 @@ async def execute_code_or_repair(
             else:
                 system_prompt = await build_code_prompt_async(
                     engine_id,
+                    hints={"run_id": str(ctx.run.id)},
                     complete=lambda s, u: streamed_llm(
                         ctx, s, u, "code", emit_delta=False, kind="skill_select"
                     ),
