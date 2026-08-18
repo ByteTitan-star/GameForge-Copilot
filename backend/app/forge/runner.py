@@ -12,6 +12,7 @@ import contextlib
 import logging
 import uuid
 
+from app.forge.commands import command_already_succeeded, mark_command_succeeded
 from app.forge.graph import run_generation
 
 log = logging.getLogger(__name__)
@@ -34,9 +35,7 @@ async def _acquire_exec_lock(redis, run_id: uuid.UUID) -> str | None:
     if redis is None:
         return None
     owner = uuid.uuid4().hex
-    acquired = await redis.set(
-        f"run:executing:{run_id}", owner, nx=True, ex=EXEC_LOCK_TTL
-    )
+    acquired = await redis.set(f"run:executing:{run_id}", owner, nx=True, ex=EXEC_LOCK_TTL)
     if not acquired:
         raise TaskLeaseBusy(f"run {run_id} is already executing")
     return owner
@@ -98,9 +97,7 @@ async def _run_with_lease(redis, run_id: uuid.UUID, operation) -> None:
             return
         heartbeat = asyncio.create_task(_lease_heartbeat(redis, run_id, owner))
         work = asyncio.create_task(operation())
-        done, _ = await asyncio.wait(
-            {heartbeat, work}, return_when=asyncio.FIRST_COMPLETED
-        )
+        done, _ = await asyncio.wait({heartbeat, work}, return_when=asyncio.FIRST_COMPLETED)
         if heartbeat in done:
             work.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -127,16 +124,23 @@ async def execute_run(ctx: dict, run_id: uuid.UUID) -> None:
 
 
 async def resume_run(
-    ctx: dict, run_id: uuid.UUID, decision: str, modify_text: str | None = None
+    ctx: dict,
+    run_id: uuid.UUID,
+    decision: str,
+    modify_text: str | None = None,
+    command_id: uuid.UUID | None = None,
 ) -> None:
     """HITL 解决后续行：art→code→qa→done。"""
     from app.forge.event_log import bind_event_redis
 
+    if command_id is not None and await command_already_succeeded(command_id):
+        return
+
     async def operation() -> None:
         bind_event_redis(ctx.get("redis"))
-        await run_generation(
-            ctx, run_id, resume=True, decision=decision, modify_text=modify_text
-        )
+        await run_generation(ctx, run_id, resume=True, decision=decision, modify_text=modify_text)
+        if command_id is not None:
+            await mark_command_succeeded(command_id)
 
     await _run_with_lease(ctx.get("redis"), run_id, operation)
 

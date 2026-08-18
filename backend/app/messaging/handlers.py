@@ -99,11 +99,14 @@ async def dispatch_task(task: str, payload: dict) -> None:
 
         # 恢复已暂停的游戏生成任务（用户确认策划稿后继续）
         case _ if task == TASK_RESUME_RUN:
+            raw_command_id = payload.get("command_id")
+            command_id = uuid.UUID(str(raw_command_id)) if raw_command_id else None
             await resume_run(
                 ctx,
                 uuid.UUID(payload["run_id"]),
-                payload["decision"],  # 用户决策：approve / modify / reject
-                payload.get("modify_text"),  # 如果是修改，用户输入的修改意见
+                payload["decision"],
+                payload.get("modify_text"),
+                command_id=command_id,
             )
 
         # 扫描定时任务（如游戏定时下架）

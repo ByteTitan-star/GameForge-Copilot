@@ -50,7 +50,7 @@ async def _noop_enqueue(_run_id: uuid.UUID) -> None:
     return None
 
 
-async def _noop_enqueue_resume(_run_id: uuid.UUID, _decision: str, _modify: str | None) -> None:
+async def _noop_enqueue_resume(*_args: object, **_kwargs: object) -> None:
     return None
 
 

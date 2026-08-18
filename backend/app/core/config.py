@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     # CodeQaLoop 总 attempt（含首次 generate）；infra/product/build 共用此预算。
     code_qa_max_attempts: int = 3
+    # 跨阶段 REVISE_PLAN（qa/art 失败后改策划）独立预算，与 PLAN 同阶段 modify 无关。
+    replan_max_revisions: int = 2
     # P0 可靠性：为 LangGraph 节点挂 TimeoutPolicy/RetryPolicy；关则保持旧行为便于回滚
     reliability_node_timeout: bool = True
     # P0 可靠性：副作用幂等（promote / usage 等）；关则跳过 Redis NX 门闩

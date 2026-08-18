@@ -39,6 +39,9 @@ class HitlWaitDetail(BaseModel):
     design_doc: dict | str | None = None
     action_url: str | None = None
     art_options: dict | None = None
+    allowed_commands: list[str] | None = None
+    control_revision: int | None = None
+    failure: dict | None = None
 
 
 class RecoveryDetail(BaseModel):
@@ -73,8 +76,11 @@ class RunStatusResp(BaseModel):
 
 class HitlResolveReq(BaseModel):
     node: str
-    decision: str  # plan: approve/modify; art: select_a/select_b/modify
+    # 兼容旧客户端：decision；P2 起优先使用 command（RunCommandType）。
+    decision: str | None = None
+    command: str | None = None
     modify_text: str | None = Field(default=None, max_length=2000)
+    expected_control_revision: int | None = Field(default=None, ge=0)
 
 
 class HitlResolveResp(BaseModel):

@@ -21,10 +21,12 @@ class ErrorCode(StrEnum):
     LLM_CIRCUIT_OPEN = "LLM_CIRCUIT_OPEN"
     GAME_NOT_FOUND = "GAME_NOT_FOUND"
     INVALID_STATE = "INVALID_STATE"
+    STALE_DECISION = "STALE_DECISION"
     SANDBOX_FAILED = "SANDBOX_FAILED"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     EMAIL_TAKEN = "EMAIL_TAKEN"
     HANDLE_TAKEN = "HANDLE_TAKEN"
+    PROMOTION_REJECTED_STALE_ARTIFACT = "PROMOTION_REJECTED_STALE_ARTIFACT"
 
 
 _CODE_STATUS = {
@@ -38,10 +40,12 @@ _CODE_STATUS = {
     ErrorCode.LLM_CIRCUIT_OPEN: 503,
     ErrorCode.GAME_NOT_FOUND: 404,
     ErrorCode.INVALID_STATE: 409,
+    ErrorCode.STALE_DECISION: 409,
     ErrorCode.SANDBOX_FAILED: 500,
     ErrorCode.VALIDATION_ERROR: 400,
     ErrorCode.EMAIL_TAKEN: 409,
     ErrorCode.HANDLE_TAKEN: 409,
+    ErrorCode.PROMOTION_REJECTED_STALE_ARTIFACT: 409,
 }
 CODE_TO_STATUS = {c.value: s for c, s in _CODE_STATUS.items()}
 
@@ -84,5 +88,5 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(AppError, app_error_handler)
-    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, validation_error_handler)  # type: ignore[arg-type]
