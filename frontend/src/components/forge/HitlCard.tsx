@@ -4,6 +4,7 @@ import type { HitlWaitPayload } from "@/api/ws-types";
 import { Button } from "@/components/ui/button";
 import { MarkdownLite } from "@/components/forge/MarkdownLite";
 import { designDocToMarkdown, parseDesignDoc } from "@/lib/hitl-design-doc";
+import { hitlAllows, isHitlRecoveryNode } from "@/lib/hitl-commands";
 import { useT } from "@/i18n/use-t";
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
     decision: string,
     modifyText?: string | null,
     doc?: HitlWaitPayload["design_doc"],
+    command?: string,
   ) => void;
   onReject: () => void;
   busy?: boolean;
@@ -88,6 +90,17 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
   const [modifyFeedback, setModifyFeedback] = useState("");
   const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null);
   const isArtReview = payload.node === "art_confirm";
+  const isRecovery = isHitlRecoveryNode(payload.node);
+  const canRevisePlan = hitlAllows(payload, "revise_plan");
+  const retryCommand = hitlAllows(payload, "retry_infra")
+    ? "retry_infra"
+    : hitlAllows(payload, "retry_implementation")
+      ? "retry_implementation"
+      : null;
+  const canRetry = Boolean(retryCommand);
+  const failureSummary =
+    payload.failure?.summary ||
+    (payload.issues && payload.issues.length > 0 ? payload.issues.join("；") : "");
   const planMarkdown = useMemo(
     () => designDocToMarkdown(payload.design_doc, parsed.title),
     [payload.design_doc, parsed.title],
@@ -111,6 +124,14 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
     if (modifyFeedback.trim()) onResolve("modify", modifyFeedback.trim());
   }
 
+  function handleRetry() {
+    onResolve("approve", null, undefined, retryCommand ?? "retry_implementation");
+  }
+
+  function handleRevisePlan() {
+    onResolve("modify", modifyFeedback.trim() || null, payload.design_doc, "revise_plan");
+  }
+
   const artOptions = payload.art_options?.options ?? [];
   const artActionReady = Boolean(selectedOption || modifyFeedback.trim());
 
@@ -121,7 +142,13 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
     >
       <ReviewHeader
         art={isArtReview}
-        title={isArtReview ? t("chooseArtDirection") : `${t("confirmDesign")} · ${parsed.title || payload.node}`}
+        title={
+          isArtReview
+            ? t("chooseArtDirection")
+            : isRecovery
+              ? t("hitlFailureTitle")
+              : `${t("confirmDesign")} · ${parsed.title || payload.node}`
+        }
       />
 
       {isArtReview ? (
@@ -197,7 +224,13 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
         </div>
       ) : (
         <div className="space-y-2.5 p-3 sm:px-3.5">
-          <p className="text-[13px] font-medium leading-5 text-black/65">{t("continueAfterApproval")}</p>
+          {isRecovery ? (
+            <p className="text-[13px] font-medium leading-5 text-black/65">
+              {failureSummary || t("hitlFailureTitle")}
+            </p>
+          ) : (
+            <p className="text-[13px] font-medium leading-5 text-black/65">{t("continueAfterApproval")}</p>
+          )}
           <div className="max-h-[min(32vh,18rem)] overflow-y-auto rounded-md border border-black/[0.08] bg-white px-3 py-2">
             <MarkdownLite text={planMarkdown} />
           </div>
@@ -228,24 +261,47 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
           onClick={onReject}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
-          {t("rejectAndStop")}
+          {t("cancelRun")}
         </Button>
-        <Button
-          className={`!min-h-9 !rounded-md !px-3 !text-[13px] !font-semibold !text-white ${
-            isArtReview
-              ? "!bg-[#17665f] hover:!bg-[#12534e]"
-              : "!bg-[#a87516] hover:!bg-[#8d6212]"
-          }`}
-          disabled={busy || (isArtReview ? !artActionReady : false)}
-          onClick={isArtReview ? handleArtResolve : handlePlanResolve}
-        >
-          {isArtReview
-            ? selectedOption
-              ? `${t("selectDirection")} · ${selectedOption}`
-              : t("regenerateArtOptions")
-            : t("approveAndContinue")}
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {canRevisePlan && (isArtReview || isRecovery) ? (
+            <Button
+              variant="ghost"
+              className="!min-h-9 !rounded-md !px-2 !text-[13px] !text-black/70 hover:!bg-black/[0.04]"
+              disabled={busy}
+              onClick={handleRevisePlan}
+            >
+              {t("hitlRevisePlan")}
+            </Button>
+          ) : null}
+          {isRecovery ? (
+            <Button
+              className="!min-h-9 !rounded-md !px-3 !text-[13px] !font-semibold !text-white !bg-[#a87516] hover:!bg-[#8d6212]"
+              disabled={busy || !canRetry}
+              onClick={handleRetry}
+            >
+              {t("hitlRetryFix")}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button
+              className={`!min-h-9 !rounded-md !px-3 !text-[13px] !font-semibold !text-white ${
+                isArtReview
+                  ? "!bg-[#17665f] hover:!bg-[#12534e]"
+                  : "!bg-[#a87516] hover:!bg-[#8d6212]"
+              }`}
+              disabled={busy || (isArtReview ? !artActionReady : false)}
+              onClick={isArtReview ? handleArtResolve : handlePlanResolve}
+            >
+              {isArtReview
+                ? selectedOption
+                  ? `${t("selectDirection")} · ${selectedOption}`
+                  : t("regenerateArtOptions")
+                : t("approveAndContinue")}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
       </div>
     </section>
   );

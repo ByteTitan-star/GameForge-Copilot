@@ -74,6 +74,13 @@ export type ArtOptionsPayload = {
   options: ArtDirectionOption[]
 }
 
+export type HitlFailurePayload = {
+  failure_class?: string
+  summary?: string
+  suggested_recovery?: string
+  failure_report_id?: string
+}
+
 export type HitlWaitPayload = {
   node: string
   design_doc: DesignDocPayload | string
@@ -83,6 +90,9 @@ export type HitlWaitPayload = {
   issues?: string[]
   retries?: number
   art_options?: ArtOptionsPayload
+  allowed_commands?: string[]
+  control_revision?: number
+  failure?: HitlFailurePayload | null
 }
 export type UsageEventPayload = {
   today_used: number

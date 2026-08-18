@@ -129,6 +129,30 @@ describe('forge resume helpers', () => {
     expect(gameplay).toContain('试玩未通过')
   })
 
+  it('刷新后带上 allowed_commands 与 failure', () => {
+    const run = {
+      run_id: 'r-qa2',
+      game_id: 'g1',
+      status: 'paused',
+      phase: 'qa',
+      entry_phase: 'code',
+      ws_url: '/ws/runs/r-qa2',
+      current_hitl: { node: 'qa_failed' },
+      hitl_wait: {
+        node: 'qa_failed',
+        design_doc: { title: '霓虹蛇', gameplay: 'g', controls: 'c', levels: [] },
+        action_url: '/hitl/resolve',
+        allowed_commands: ['retry_implementation', 'revise_plan', 'cancel_run'],
+        control_revision: 4,
+        failure: { failure_class: 'implementation_defect', summary: 'mock' },
+      },
+    } as RunDetail
+    const hitl = buildResumeHitl(run, '霓虹蛇')
+    expect(hitl?.allowed_commands).toContain('revise_plan')
+    expect(hitl?.control_revision).toBe(4)
+    expect(hitl?.failure?.summary).toBe('mock')
+  })
+
   it('从 game detail 推导草稿预览 URL', () => {
     const g = {
       game_id: 'g-1',

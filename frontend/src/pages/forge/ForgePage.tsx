@@ -76,6 +76,7 @@ import { getTemplateById } from "@/constants/templates";
 import { templatesApi, type GameTemplate } from "@/api/templates";
 import type { RunListItem } from "@/api/types";
 import { cn } from "@/lib/cn";
+import { commandForHitlAction, nextPhaseAfterHitl } from "@/lib/hitl-commands";
 import { mergeChatMessages, toChatMessages } from "./message-history";
 
 function mid(prefix: string) {
@@ -685,6 +686,7 @@ export function ForgePage() {
     decision: string,
     modifyText?: string | null,
     doc?: HitlWaitPayload["design_doc"],
+    command?: string,
   ) {
     if (trial || !runId || !gameId || !token || !hitl) return;
     setBusy(true);
@@ -710,9 +712,11 @@ export function ForgePage() {
         ? String(hitl.design_doc.controls)
         : "";
     const planModified =
+      !command &&
       hitl.node === "plan_confirm" &&
       (parsedGameplay !== origGameplay || parsedControls !== origControls);
-    const actualDecision = planModified ? "modify" : decision;
+    const actualDecision = command === "revise_plan" ? "modify" : planModified ? "modify" : decision;
+    const resolvedCommand = commandForHitlAction(hitl.node, actualDecision, command);
     const selectedOption = hitl.art_options?.options.find(
       (option) => `select_${option.id.toLowerCase()}` === actualDecision,
     );
@@ -736,12 +740,14 @@ export function ForgePage() {
         {
           node: hitl.node,
           decision: actualDecision,
+          command: resolvedCommand ?? null,
           modify_text: actualDecision === "modify" ? decisionText : null,
+          expected_control_revision: hitl.control_revision ?? null,
         },
         token,
       );
       setHitl(null);
-      setPhase(RunPhase.art);
+      setPhase(nextPhaseAfterHitl(hitl.node, resolvedCommand));
       setRunStatus(RunStatus.running);
       const hitlKind =
         actualDecision === "modify" ? "hitl_modify" : "hitl_approve";
@@ -764,6 +770,9 @@ export function ForgePage() {
     } catch (e) {
       setBusy(false);
       if (isApiError(e) && e.status === 409) {
+        toast.error(
+          e.code === "STALE_DECISION" ? t("hitlStaleDecision") : formatApiError(e, t("generationFailed")),
+        );
         try {
           const actual = await gamesApi.getRun(runId, token);
           const ui = syncUiFromRun(actual, title);
