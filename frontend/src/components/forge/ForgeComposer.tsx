@@ -1,4 +1,4 @@
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
@@ -9,6 +9,8 @@ type Props = {
   onSend: () => void;
   disabled?: boolean;
   sendDisabled?: boolean;
+  /** 生成中：占位改等待文案，发送键灰底转圈 */
+  busy?: boolean;
   placeholder: string;
   className?: string;
   /** empty = 空态主轴；chat = 对话底栏 */
@@ -26,6 +28,7 @@ export function ForgeComposer({
   onSend,
   disabled,
   sendDisabled,
+  busy = false,
   placeholder,
   className,
   density = "chat",
@@ -34,6 +37,9 @@ export function ForgeComposer({
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
   const maxPx = FONT_PX * LINE_HEIGHT * MAX_LINES;
+  const visiblePlaceholder = busy ? t("generatingWait") : placeholder;
+  const cannotSend = sendDisabled ?? (disabled || !value.trim() || busy);
+  const inactive = busy || cannotSend;
 
   useEffect(() => {
     const el = ref.current;
@@ -41,8 +47,6 @@ export function ForgeComposer({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`;
   }, [value, maxPx]);
-
-  const cannotSend = sendDisabled ?? (disabled || !value.trim());
 
   return (
     <div
@@ -55,7 +59,7 @@ export function ForgeComposer({
       )}
     >
       <label htmlFor={id} className="sr-only">
-        {placeholder}
+        {visiblePlaceholder}
       </label>
       <textarea
         ref={ref}
@@ -64,8 +68,8 @@ export function ForgeComposer({
         autoComplete="off"
         rows={1}
         value={value}
-        disabled={disabled}
-        placeholder={placeholder}
+        disabled={disabled || busy}
+        placeholder={visiblePlaceholder}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -81,16 +85,24 @@ export function ForgeComposer({
       />
       <button
         type="button"
-        aria-label={t("sendRequirement")}
+        aria-label={busy ? t("generatingWait") : t("sendRequirement")}
         disabled={cannotSend}
         onClick={onSend}
         className={cn(
-          "gf-forge-composer-send grid h-9 w-9 shrink-0 place-items-center self-end rounded-full text-white transition-[opacity,transform,filter] disabled:cursor-not-allowed disabled:bg-[#94a3b8] disabled:opacity-35 disabled:shadow-none",
-          "bg-[linear-gradient(135deg,var(--gf-secondary),var(--gf-primary))] shadow-[0_0_14px_rgba(var(--gf-primary-rgb),0.22)]",
-          "hover:enabled:brightness-105 active:enabled:scale-95",
+          "gf-forge-composer-send grid h-11 w-11 shrink-0 place-items-center self-end rounded-full text-white transition-[opacity,transform,filter] disabled:cursor-not-allowed",
+          inactive
+            ? "bg-slate-500 shadow-none"
+            : "bg-[linear-gradient(135deg,var(--gf-secondary),var(--gf-primary))] shadow-[0_0_14px_rgba(var(--gf-primary-rgb),0.22)] hover:enabled:brightness-105 active:enabled:scale-95",
         )}
       >
-        <ArrowUp className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+        {busy ? (
+          <Loader2
+            className="h-4 w-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+        ) : (
+          <ArrowUp className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+        )}
       </button>
     </div>
   );

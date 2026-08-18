@@ -1174,6 +1174,7 @@ export function ForgePage() {
                     sendDisabled={
                       busy || trial || status.blocked || !input.trim()
                     }
+                    busy={busy}
                     placeholder={t("describeNewGame")}
                     density="empty"
                   />

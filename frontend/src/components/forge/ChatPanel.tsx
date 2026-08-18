@@ -2,10 +2,14 @@ import { Bot, Loader2, UserRound } from "lucide-react";
 import { ForgeComposer } from "@/components/forge/ForgeComposer";
 import { ChatThinking } from "@/components/forge/ChatThinking";
 import { MarkdownLite } from "@/components/forge/MarkdownLite";
-import { groupChatMessages, type ChatMsg } from "@/components/forge/chat-blocks";
+import {
+  groupChatMessages,
+  isLongChatMessage,
+  type ChatMsg,
+} from "@/components/forge/chat-blocks";
 import { cn } from "@/lib/cn";
 import { useT } from "@/i18n/use-t";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type { ChatMsg, ChatKind } from "@/components/forge/chat-blocks";
 
@@ -35,6 +39,40 @@ type Props = {
 };
 
 const FOLLOW_THRESHOLD_PX = 48;
+const CHAT_ROW_WIDTH = "flex max-w-[min(42rem,85%)] items-start gap-2.5 text-sm leading-relaxed";
+
+function ChatPlainText({
+  content,
+  collapsible,
+}: {
+  content: string;
+  collapsible: boolean;
+}) {
+  const t = useT();
+  const long = collapsible && isLongChatMessage(content);
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div>
+      <p
+        className={cn(
+          "whitespace-pre-wrap",
+          long && !expanded && "line-clamp-6",
+        )}
+      >
+        {content}
+      </p>
+      {long ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="gf-interactive mt-1.5 cursor-pointer text-xs font-medium gf-text-accent hover:underline"
+        >
+          {expanded ? t("collapseMessage") : t("expandMessage")}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 export function ChatPanel({
   messages,
@@ -69,6 +107,7 @@ export function ChatPanel({
   const thinkingLive = Boolean(
     streaming && lastBlock?.type === "thinking",
   );
+  const hasUserMessage = messages.some((m) => m.role === "user");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatestRef = useRef(true);
@@ -159,12 +198,17 @@ export function ChatPanel({
             );
           }
           const m = block.msg;
+          // 仅隐藏本地开场欢迎语；分页窗口里 user 前的真实助手消息要保留
+          if (hasUserMessage && m.id === "m0") {
+            return null;
+          }
           const rich = m.kind === "design" || m.kind === "completed";
           return (
           <div
             key={m.id}
+            data-chat-row
             className={cn(
-              "flex max-w-[94%] items-start gap-2 text-sm leading-relaxed",
+              CHAT_ROW_WIDTH,
               m.role === "user" && "ml-auto flex-row-reverse",
               m.role === "assistant" && "mr-auto",
               m.role === "system" && "mx-auto max-w-full justify-center",
@@ -173,16 +217,16 @@ export function ChatPanel({
             {m.role !== "system" ? (
               <span
                 className={cn(
-                  "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
+                  "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border",
                   m.role === "assistant"
                     ? "border-[rgba(var(--gf-primary-rgb),0.16)] bg-[rgba(var(--gf-primary-rgb),0.08)] gf-text-accent"
                     : "border-black/[0.07] bg-black/[0.035] gf-page-muted",
                 )}
               >
                 {m.role === "assistant" ? (
-                  <Bot className="h-3 w-3" aria-hidden="true" />
+                  <Bot className="h-3.5 w-3.5" aria-hidden="true" />
                 ) : (
-                  <UserRound className="h-3 w-3" aria-hidden="true" />
+                  <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
                 )}
               </span>
             ) : null}
@@ -191,19 +235,26 @@ export function ChatPanel({
                 "min-w-0 break-words",
                 m.role === "user" &&
                   (workshop
-                    ? "rounded-2xl rounded-tr-md gf-bg-accent-soft px-3 py-2 gf-page-body gf-ring-accent"
-                    : "rounded-2xl rounded-tr-md bg-[#5271ff]/12 px-3 py-2 text-[#3046a8] ring-1 ring-[#5271ff]/20"),
+                    ? "rounded-2xl rounded-tr-md bg-[rgba(var(--gf-primary-rgb),0.14)] px-3 py-2 gf-page-body ring-1 ring-[rgba(var(--gf-primary-rgb),0.28)]"
+                    : "rounded-2xl rounded-tr-md bg-[rgba(37,99,235,0.16)] px-3 py-2 text-[#1e3a8a] ring-1 ring-[rgba(37,99,235,0.28)]"),
                 m.role === "assistant" &&
                   (workshop
-                    ? "rounded-2xl rounded-tl-md bg-black/[0.025] px-3 py-2 gf-page-body ring-1 ring-[var(--gf-border)]"
-                    : "rounded-2xl rounded-tl-md bg-[#eef1f3] px-3 py-2 text-[#303940] ring-1 ring-black/[0.05]"),
+                    ? "rounded-2xl rounded-tl-md bg-black/[0.04] px-3 py-2 gf-page-body ring-1 ring-[var(--gf-border)]"
+                    : "rounded-2xl rounded-tl-md bg-[#e8edf2] px-3 py-2 text-[#1e293b] ring-1 ring-black/[0.06]"),
                 m.role === "system" &&
                   (workshop
                     ? "rounded-lg bg-amber-50 px-2.5 py-1 text-center text-[11px] text-amber-900 ring-1 ring-amber-200"
                     : "rounded-lg bg-[#ffcf5a]/15 px-2.5 py-1 text-center text-[11px] text-[#785d14] ring-1 ring-[#d49d12]/20"),
               )}
             >
-              {rich ? <MarkdownLite text={m.content} /> : m.content}
+              {rich ? (
+                <MarkdownLite text={m.content} />
+              ) : (
+                <ChatPlainText
+                  content={m.content}
+                  collapsible={m.role === "user"}
+                />
+              )}
               {streaming && m.id === lastAssistantId ? (
                 <span
                   className="ml-1 inline-flex items-center gap-1 align-middle"
@@ -253,6 +304,7 @@ export function ChatPanel({
             onSend={onSend}
             disabled={disabled}
             sendDisabled={sendDisabled}
+            busy={streaming}
             placeholder={composerPlaceholder}
             density="chat"
           />

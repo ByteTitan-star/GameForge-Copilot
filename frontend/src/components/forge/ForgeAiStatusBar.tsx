@@ -1,4 +1,4 @@
-import { Bot, Loader2, Sparkles } from "lucide-react";
+import { Bot, Loader2 } from "lucide-react";
 import { useT } from "@/i18n/use-t";
 import { cn } from "@/lib/cn";
 import {
@@ -53,12 +53,6 @@ export function ForgeAiStatusBar({ status, className }: Props) {
           {t(status.labelKey)}
         </p>
       </div>
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-black/[0.03]">
-        <Sparkles
-          className="gf-text-accent h-4 w-4 opacity-80"
-          aria-hidden="true"
-        />
-      </span>
     </div>
   );
 }

@@ -12,6 +12,13 @@ export type ChatBlock =
   | { type: 'message'; msg: ChatMsg }
   | { type: 'thinking'; id: string; items: ChatMsg[] }
 
+/** 超过约 6 行中文时折叠，避免全宽气泡变成墙。 */
+export const LONG_CHAT_MESSAGE_CHARS = 240
+
+export function isLongChatMessage(content: string): boolean {
+  return content.trim().length > LONG_CHAT_MESSAGE_CHARS
+}
+
 export function groupChatMessages(messages: ChatMsg[]): ChatBlock[] {
   const blocks: ChatBlock[] = []
   for (const msg of messages) {
