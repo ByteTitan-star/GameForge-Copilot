@@ -220,9 +220,9 @@ class Settings(BaseSettings):
         "open.bigmodel.cn,api.siliconflow.cn,api.minimaxi.com,"
         "api.baichuan-ai.com,api.lingyiwanwu.com"
     )
-    # 是否对 qwen3 系列模型关掉 thinking（默认关）。
-    # DashScope 约定「非流式调用必须 enable_thinking=false」，而 complete() 为非流式；
-    # 关后既合规又省时省 token，避免思考链拉长触发读超时。需深度推理置 false（且需切到流式）。
+    # OpenAI 兼容路径默认关 thinking（含用户模型与审核模型）。
+    # 避免思考链占满 max_tokens、流式又丢弃 reasoning_content 导致空正文。
+    # 纯推理模型（如 qwq）由 provider 侧跳过注入。需深度推理置 false。
     llm_disable_thinking: bool = True
 
     # 流式输出（打字机）：complete_stream 微批 LLM_DELTA 事件给前端。关闭则 run_streamed_llm

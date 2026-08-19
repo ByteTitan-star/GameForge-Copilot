@@ -164,14 +164,23 @@ def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=timeout)
 
 
-def _is_qwen_thinking_model(model: str) -> bool:
-    """qwen3 系列（DashScope 默认开 thinking 的混合思考模型）。
+def _requires_thinking_enabled(model: str) -> bool:
+    """纯推理模型：只允许 enable_thinking=true，注入 false 会 400。"""
+    name = (model or "").lower()
+    return any(tok in name for tok in ("qwq",))
 
-    仅匹配 qwen3：qwq 等纯推理模型只允许 enable_thinking=true，注入 false 反而触发 400。
-    DashScope 约定「非流式调用必须 enable_thinking=false」，而本模块 complete() 为非流式，
-    故对 qwen3 关闭 thinking 既是性能优化（避免思考链拉长/触发读超时），也是调用合规。
+
+def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model: str) -> bool:
+    """OpenAI 兼容路径默认关 thinking；Anthropic 原生与纯推理模型跳过。
+
+    plan JSON / 审核 0|1 都不需要思考链：思考 token 会占满 max_tokens，
+    且流式解析只收 content、丢弃 reasoning_content，易得到空正文。
     """
-    return "qwen3" in (model or "").lower()
+    if not settings.llm_disable_thinking:
+        return False
+    if _uses_anthropic_native_api(provider, base_url):
+        return False
+    return not _requires_thinking_enabled(model)
 
 
 async def test_connectivity(
@@ -240,7 +249,7 @@ def _build_body(
     """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
 
     Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
-    qwen3 关 thinking 仅对 OpenAI 兼容路径生效（见 _is_qwen_thinking_model 注释）。
+    thinking 默认关闭（见 _should_disable_thinking）。
     """
     if _uses_anthropic_native_api(provider, base_url):
         body = {
@@ -262,13 +271,7 @@ def _build_body(
         # 缺失时由 complete_stream 兜底估算。
         if stream:
             body["stream_options"] = {"include_usage": True}
-    # qwen3 默认开 thinking 会拉长代码生成、易触发读超时；DashScope 非流式调用也要求
-    # enable_thinking=false。命中 qwen3 则按配置关闭（仅 OpenAI 兼容路径）。
-    if (
-        not _uses_anthropic_native_api(provider, base_url)
-        and settings.llm_disable_thinking
-        and _is_qwen_thinking_model(model)
-    ):
+    if _should_disable_thinking(provider, base_url, model):
         body["enable_thinking"] = False
     if stream:
         body["stream"] = True
