@@ -45,6 +45,12 @@ async def test_pause_plan_confirm_syncs_game_title(monkeypatch: pytest.MonkeyPat
     )
     monkeypatch.setattr("app.forge.graph.design_message_content", lambda _doc: "msg")
     monkeypatch.setattr("app.forge.graph.stable_design_key", lambda *_a, **_k: "k")
+    plan_row = MagicMock()
+    plan_row.id = uuid4()
+    monkeypatch.setattr(
+        "app.forge.graph.ensure_plan_revision",
+        AsyncMock(return_value=(plan_row, True, False)),
+    )
 
     await _pause_hitl(ctx, "plan_confirm", design_doc)
 
