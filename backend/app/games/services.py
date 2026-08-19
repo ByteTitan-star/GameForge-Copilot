@@ -18,6 +18,7 @@ from app.enums import EntryPhase, GameStatus, PauseReason, RunPhase, RunStatus
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.cache import classify_entry_phase_cached
+from app.forge.commands import CURRENT_WORKFLOW_VERSION, record_cancel_command
 from app.forge.messages import add_message
 from app.forge.queue import enqueue_resume
 from app.forge.reliability.pause import merge_pause_checkpoint
@@ -378,6 +379,7 @@ async def create_run(
             entry_phase=entry.value,
             status=RunStatus.RUNNING.value,
             phase=initial_phase.value,
+            workflow_version=CURRENT_WORKFLOW_VERSION,
             started_at=datetime.now(UTC),
         )
         db.add(run)
@@ -475,7 +477,7 @@ async def resume_run_control(
     await run_ctrl.clear_control(r, run_id)
     run.status = RunStatus.RUNNING.value
     run.ended_at = None
-    await enqueue_resume(db, r, run_id, "approve", None)
+    await enqueue_resume(db, r, run_id, "approve", None, source="resume_control")
     await db.commit()
     await db.refresh(run)
     return run
@@ -486,6 +488,7 @@ async def cancel_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID)
     if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
         raise AppError(ErrorCode.INVALID_STATE, "仅进行中的 run 可取消")
     await run_ctrl.request_cancel(r, run_id)
+    await record_cancel_command(db, run_id)
     run.status = RunStatus.FAILED.value
     run.ended_at = datetime.now(UTC)
     await add_message(
@@ -590,7 +593,7 @@ async def retry_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) 
         content="正在从失败阶段重试本轮生成。",
         dedupe_key=f"{run.id}:retry:{phase or 'recoverable'}",
     )
-    await enqueue_resume(db, r, run_id, "approve", None)
+    await enqueue_resume(db, r, run_id, "approve", None, source="retry")
     await db.commit()
     await db.refresh(run)
     return run

@@ -45,9 +45,8 @@ describe('HitlCard plan review', () => {
     design_doc: {
       title: '霓虹躲避',
       gameplay: '玩家控制发光核心躲避几何体',
-      controls: ['WASD 移动', 'P 暂停'],
+      controls: 'WASD 移动',
       levels: ['觉醒'],
-      core_loop: ['躲避敌人'],
     },
     action_url: '/hitl/resolve',
   }
@@ -72,5 +71,68 @@ describe('HitlCard plan review', () => {
     })
     fireEvent.click(screen.getByText('批准继续'))
     expect(onResolve).toHaveBeenLastCalledWith('modify', '暂停要更明显', planPayload.design_doc)
+  })
+
+  it('策划确认提供取消生成', () => {
+    render(<HitlCard payload={planPayload} onResolve={vi.fn()} onReject={vi.fn()} />)
+    expect(screen.getByText('取消生成')).toBeInTheDocument()
+  })
+})
+
+describe('HitlCard QA recovery', () => {
+  const qaPayload = {
+    node: 'qa_failed',
+    design_doc: { title: '霓虹蛇', gameplay: 'g', controls: 'c', levels: [] },
+    action_url: '/hitl/resolve',
+    allowed_commands: ['retry_implementation', 'revise_plan', 'cancel_run'],
+    control_revision: 3,
+    failure: {
+      failure_class: 'implementation_defect',
+      summary: 'PAGE_ERROR: Foo is not defined',
+      suggested_recovery: 'retry_implementation',
+    },
+    issues: ['PAGE_ERROR: Foo is not defined'],
+  }
+
+  it('展示失败摘要，并支持重试与修改策划', () => {
+    const onResolve = vi.fn()
+    render(<HitlCard payload={qaPayload} onResolve={onResolve} onReject={vi.fn()} />)
+    expect(screen.getByText(/Foo is not defined/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('重试修复'))
+    expect(onResolve).toHaveBeenCalledWith('approve', null, undefined, 'retry_implementation')
+    fireEvent.change(screen.getByRole('textbox', { name: '修改意见（可选）' }), {
+      target: { value: '改成更简单的 2D' },
+    })
+    fireEvent.click(screen.getByText('修改策划'))
+    expect(onResolve).toHaveBeenLastCalledWith(
+      'modify',
+      '改成更简单的 2D',
+      qaPayload.design_doc,
+      'revise_plan',
+    )
+  })
+})
+
+describe('HitlCard art can revise plan', () => {
+  it('美术确认可选择回到策划', () => {
+    const onResolve = vi.fn()
+    render(
+      <HitlCard
+        payload={{
+          ...payload,
+          allowed_commands: [
+            'select_art_a',
+            'select_art_b',
+            'revise_art',
+            'revise_plan',
+            'cancel_run',
+          ],
+        }}
+        onResolve={onResolve}
+        onReject={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText('修改策划'))
+    expect(onResolve).toHaveBeenCalledWith('modify', null, payload.design_doc, 'revise_plan')
   })
 })

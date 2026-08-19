@@ -889,6 +889,25 @@ export interface paths {
         patch: operations["patch_profile_api_v1_me_profile_patch"];
         trace?: never;
     };
+    "/api/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Preferences */
+        get: operations["list_preferences_api_v1_me_preferences_get"];
+        /** Upsert Preference */
+        put: operations["upsert_preference_api_v1_me_preferences_put"];
+        post?: never;
+        /** Clear Preferences */
+        delete: operations["clear_preferences_api_v1_me_preferences_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/u/{handle}": {
         parameters: {
             query?: never;
@@ -2015,6 +2034,14 @@ export interface components {
         ApiResponse_PasswordResetResp_: {
             data: components["schemas"]["PasswordResetResp"];
         };
+        /** ApiResponse[PreferenceItem] */
+        ApiResponse_PreferenceItem_: {
+            data: components["schemas"]["PreferenceItem"];
+        };
+        /** ApiResponse[PreferenceList] */
+        ApiResponse_PreferenceList_: {
+            data: components["schemas"]["PreferenceList"];
+        };
         /** ApiResponse[PreviewTokenResp] */
         ApiResponse_PreviewTokenResp_: {
             data: components["schemas"]["PreviewTokenResp"];
@@ -2110,6 +2137,13 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ApiResponse[dict[str, int]] */
+        ApiResponse_dict_str__int__: {
+            /** Data */
+            data: {
+                [key: string]: number;
+            };
+        };
         /** ApiResponse[dict[str, str]] */
         ApiResponse_dict_str__str__: {
             /** Data */
@@ -2188,6 +2222,32 @@ export interface components {
             size: number;
             /** Mime */
             mime?: string | null;
+        };
+        /**
+         * ArtifactGateDetail
+         * @description ADR-01：previewable ≠ publishable，build_ok ≠ qa_ok。
+         */
+        ArtifactGateDetail: {
+            /**
+             * Generation Success
+             * @default false
+             */
+            generation_success: boolean;
+            /**
+             * Previewable
+             * @default false
+             */
+            previewable: boolean;
+            /**
+             * Publishable
+             * @default false
+             */
+            publishable: boolean;
+            /**
+             * Qa Ok
+             * @default false
+             */
+            qa_ok: boolean;
         };
         /** AuditLogItem */
         AuditLogItem: {
@@ -2281,7 +2341,7 @@ export interface components {
          * EntryPhase
          * @enum {string}
          */
-        EntryPhase: "plan" | "code";
+        EntryPhase: "plan" | "code" | "chat";
         /** ErrorDetail */
         ErrorDetail: {
             /** Code */
@@ -2549,9 +2609,13 @@ export interface components {
             /** Node */
             node: string;
             /** Decision */
-            decision: string;
+            decision?: string | null;
+            /** Command */
+            command?: string | null;
             /** Modify Text */
             modify_text?: string | null;
+            /** Expected Control Revision */
+            expected_control_revision?: number | null;
         };
         /** HitlResolveResp */
         HitlResolveResp: {
@@ -2580,6 +2644,14 @@ export interface components {
             action_url?: string | null;
             /** Art Options */
             art_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Allowed Commands */
+            allowed_commands?: string[] | null;
+            /** Control Revision */
+            control_revision?: number | null;
+            /** Failure */
+            failure?: {
                 [key: string]: unknown;
             } | null;
         };
@@ -2885,6 +2957,51 @@ export interface components {
              */
             sent: boolean;
         };
+        /** PreferenceItem */
+        PreferenceItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Category */
+            category: string;
+            /** Key */
+            key: string;
+            /** Value Json */
+            value_json: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source: string;
+            /** Confidence */
+            confidence: number;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** PreferenceList */
+        PreferenceList: {
+            /** Items */
+            items: components["schemas"]["PreferenceItem"][];
+        };
+        /** PreferenceUpsert */
+        PreferenceUpsert: {
+            /** Category */
+            category: string;
+            /** Key */
+            key: string;
+            /** Value Json */
+            value_json: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @default active
+             */
+            status: string;
+        };
         /** PreviewTokenResp */
         PreviewTokenResp: {
             /** Preview Url */
@@ -3082,6 +3199,20 @@ export interface components {
             /** Rabbitmq */
             rabbitmq: boolean;
         };
+        /** RecoveryDetail */
+        RecoveryDetail: {
+            /** Node */
+            node: string;
+            /** Error Code */
+            error_code: string;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Can Retry
+             * @default true
+             */
+            can_retry: boolean;
+        };
         /** RedisFlushReq */
         RedisFlushReq: {
             /** Scopes */
@@ -3238,6 +3369,10 @@ export interface components {
             ws_url: string;
             current_hitl?: components["schemas"]["HitlState"] | null;
             hitl_wait?: components["schemas"]["HitlWaitDetail"] | null;
+            /** Pause Reason */
+            pause_reason?: string | null;
+            recovery?: components["schemas"]["RecoveryDetail"] | null;
+            artifact_gate?: components["schemas"]["ArtifactGateDetail"] | null;
         };
         /** RuntimeStatusResp */
         RuntimeStatusResp: {
@@ -3682,6 +3817,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -5563,6 +5707,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_preferences_api_v1_me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PreferenceList_"];
+                };
+            };
+        };
+    };
+    upsert_preference_api_v1_me_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PreferenceItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_preferences_api_v1_me_preferences_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_dict_str__int__"];
                 };
             };
         };

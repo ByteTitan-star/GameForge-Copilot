@@ -17,6 +17,7 @@ def fallback_diagnosis(errors: list[str]) -> str:
     return json.dumps(
         {
             "summary": "QA 诊断模型调用失败，依据确定性运行证据继续修复",
+            "candidate_class": "unknown",
             "root_causes": list(errors) or ["自动试玩未通过"],
             "required_fixes": [
                 {
@@ -73,9 +74,7 @@ async def diagnose_playtest_failure(
     if memory_prefix:
         diagnosis_input = f"{memory_prefix}\n\n{evidence}"
     else:
-        design_block = (
-            "【已确认设计稿 JSON】\n" + design_doc_to_text(design_doc or {})
-        )
+        design_block = "【已确认设计稿 JSON】\n" + design_doc_to_text(design_doc or {})
         diagnosis_input = f"{design_block}\n\n{evidence}"
     try:
         return await llm(build_qa_prompt(failure_kind=failure_kind), diagnosis_input)

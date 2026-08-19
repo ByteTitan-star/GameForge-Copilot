@@ -13,10 +13,11 @@ from app.auth.deps import CurrentUser, DbSession, RedisClient
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
-from app.enums import EntryPhase, PauseReason, RunPhase, RunStatus
+from app.enums import EntryPhase, PauseReason, RunCommandType, RunPhase, RunStatus
 from app.forge import state as ckpt
+from app.forge.commands import legacy_decision_for, normalize_resume_command
 from app.forge.event_log import list_events
-from app.forge.hitl import allowed_decisions_for, is_hitl_phase
+from app.forge.hitl import allowed_commands_for, allowed_decisions_for, is_hitl_phase
 from app.forge.messages import add_message, list_messages, stable_payload_key
 from app.forge.queue import enqueue_resume
 from app.forge.reliability.pause import pause_reason_from_state, recovery_from_state
@@ -165,11 +166,16 @@ def _hitl_from_state(
     if not is_hitl_phase(str(phase) if phase is not None else None):
         return None, None
     current = HitlState(node=str(phase))
+    failure = state.get("failure")
+    fc = failure.get("failure_class") if isinstance(failure, dict) else None
     detail = HitlWaitDetail(
         node=str(phase),
         design_doc=state.get("design_doc"),
         action_url=f"/api/v1/games/{run.game_id}/runs/{run.id}/hitl/resolve",
         art_options=state.get("art_options"),
+        allowed_commands=list(allowed_commands_for(str(phase), str(fc) if fc else None)),
+        control_revision=int(run.control_revision or 0),
+        failure=failure if isinstance(failure, dict) else None,
     )
     return current, detail
 
@@ -363,10 +369,43 @@ async def resolve_hitl(
             )
         if run.status != RunStatus.PAUSED.value:
             raise AppError(ErrorCode.INVALID_STATE, "run 已结束")
-        if req.decision not in allowed_decisions_for(phase):
+
+        command = (req.command or "").strip() or None
+        decision = (req.decision or "").strip() or None
+        if not command and not decision:
+            raise AppError(ErrorCode.INVALID_STATE, "需要提供 decision 或 command")
+        if command and command not in allowed_commands_for(phase):
+            raise AppError(ErrorCode.INVALID_STATE, "当前 HITL 节点不支持该命令")
+        if not command and decision not in allowed_decisions_for(phase):
             raise AppError(ErrorCode.INVALID_STATE, "当前 HITL 节点不支持该决策")
-        if req.decision == "modify" and not (req.modify_text or "").strip():
+
+        mapped = normalize_resume_command(
+            phase=phase, decision=decision or "", command=command, feedback=req.modify_text
+        )
+        decision_key = decision or legacy_decision_for(mapped.command_type)
+        modify_text = req.modify_text
+        if mapped.command_type is RunCommandType.CANCEL_RUN:
+            cancelled = await services.cancel_run(db, r, user, run_id)
+            return ApiResponse(
+                data=HitlResolveResp(
+                    run_id=cancelled.id,
+                    status=RunStatus.FAILED,
+                    phase=RunPhase(cancelled.phase or RunPhase.PLAN.value),
+                )
+            )
+        if (
+            decision_key == "modify"
+            and mapped.command_type is not RunCommandType.REVISE_PLAN
+            and not (modify_text or "").strip()
+        ):
             raise AppError(ErrorCode.INVALID_STATE, "修改意见不能为空")
+        if mapped.command_type is RunCommandType.REVISE_PLAN and not (modify_text or "").strip():
+            modify_text = (
+                "请根据失败报告修订策划，使玩法可实现且可验收。"
+                if state.get("failure_report_id")
+                else "请修订策划后重新确认。"
+            )
+
         result = await db.execute(
             update(GenerationRun)
             .where(
@@ -388,11 +427,12 @@ async def resolve_hitl(
                 "sandbox_failed": "环境问题已处理，继续重试",
                 "qa_failed": "已确认继续修复试玩问题",
             }.get(phase, "已确认，继续"),
+            "modify": "已提交修改意见",
         }
         decision_text = (
-            req.modify_text.strip()
-            if req.modify_text
-            else selected_label.get(req.decision, "已确认，继续")
+            modify_text.strip()
+            if modify_text and decision_key == "modify"
+            else selected_label.get(decision_key, "已确认，继续")
         )
         await add_message(
             db,
@@ -400,18 +440,36 @@ async def resolve_hitl(
             run_id=run.id,
             user_id=user.id,
             role="user",
-            kind="hitl_modify" if req.decision == "modify" else "hitl_approve",
+            kind="hitl_modify" if decision_key == "modify" else "hitl_approve",
             content=decision_text,
-            metadata={"node": req.node, "decision": req.decision},
+            metadata={
+                "node": req.node,
+                "decision": decision_key,
+                "command": mapped.command_type.value,
+            },
             dedupe_key=stable_payload_key(
                 run.id,
-                f"hitl:{req.node}:{req.decision}",
+                f"hitl:{req.node}:{mapped.command_type.value}",
                 {"design_doc": state.get("design_doc"), "content": decision_text},
             ),
         )
-        await enqueue_resume(db, r, run_id, req.decision, req.modify_text)
+        await enqueue_resume(
+            db,
+            r,
+            run_id,
+            decision_key,
+            modify_text,
+            source="hitl",
+            expected_control_revision=req.expected_control_revision,
+            command=mapped.command_type.value,
+        )
         await db.commit()
-        next_phase = RunPhase.ART if phase in {"plan_confirm", "art_confirm"} else RunPhase.CODE
+        if mapped.command_type is RunCommandType.REVISE_PLAN:
+            next_phase = RunPhase.PLAN
+        elif phase in {"plan_confirm", "art_confirm"}:
+            next_phase = RunPhase.ART
+        else:
+            next_phase = RunPhase.CODE
         return ApiResponse(
             data=HitlResolveResp(run_id=run.id, status=RunStatus.RUNNING, phase=next_phase)
         )

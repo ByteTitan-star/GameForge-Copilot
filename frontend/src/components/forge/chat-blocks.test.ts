@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { groupChatMessages, type ChatMsg } from './chat-blocks'
+import {
+  groupChatMessages,
+  isLongChatMessage,
+  LONG_CHAT_MESSAGE_CHARS,
+  type ChatMsg,
+} from './chat-blocks'
 
 const msg = (id: string, kind: ChatMsg['kind'], content: string): ChatMsg => ({
   id,
@@ -23,5 +28,16 @@ describe('groupChatMessages', () => {
     }
     expect(blocks[1]).toMatchObject({ type: 'message' })
     expect(blocks[2]).toMatchObject({ type: 'message' })
+  })
+})
+
+describe('isLongChatMessage', () => {
+  it('短消息不折叠', () => {
+    expect(isLongChatMessage('做个侧视物理越野车')).toBe(false)
+  })
+
+  it('超过阈值才算长消息', () => {
+    expect(isLongChatMessage('侧'.repeat(LONG_CHAT_MESSAGE_CHARS))).toBe(false)
+    expect(isLongChatMessage('侧'.repeat(LONG_CHAT_MESSAGE_CHARS + 1))).toBe(true)
   })
 })

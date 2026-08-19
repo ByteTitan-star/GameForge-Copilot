@@ -180,7 +180,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
     if run.status == RunStatus.PAUSED.value:
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
-        await enqueue_resume(db, r, run_id, "approve", None)
+        await enqueue_resume(db, r, run_id, "approve", None, source="dev_requeue")
         await db.commit()
         return {
             "run_id": run_id,
@@ -191,7 +191,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
 
     if run.status == RunStatus.RUNNING.value:
         if state:
-            await enqueue_resume(db, r, run_id, "approve", None)
+            await enqueue_resume(db, r, run_id, "approve", None, source="dev_requeue")
             task = "resume_run"
         else:
             await add_task(db, TASK_EXECUTE_RUN, run_id_payload(run_id))
@@ -209,7 +209,7 @@ async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -
             raise AppError(ErrorCode.INVALID_STATE, "failed run 无可用检查点，不可 requeue")
         run.status = RunStatus.RUNNING.value
         run.ended_at = None
-        await enqueue_resume(db, r, run_id, "approve", None)
+        await enqueue_resume(db, r, run_id, "approve", None, source="dev_requeue")
         await db.commit()
         return {
             "run_id": run_id,

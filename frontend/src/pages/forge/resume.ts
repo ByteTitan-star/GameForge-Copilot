@@ -15,6 +15,10 @@ type HitlWaitDetail = {
   design_doc?: HitlWaitPayload['design_doc']
   action_url?: string | null
   art_options?: HitlWaitPayload['art_options']
+  allowed_commands?: string[] | null
+  control_revision?: number | null
+  failure?: HitlWaitPayload['failure']
+  issues?: string[] | null
 }
 
 /** 从 API hitl_wait 或 current_hitl 恢复 HITL 卡片 */
@@ -39,6 +43,10 @@ export function buildResumeHitl(run: RunDetail, gameTitle: string): HitlWaitPayl
         hw.action_url ??
         `/api/v1/games/${run.game_id}/runs/${run.run_id}/hitl/resolve`,
       art_options: hw.art_options,
+      allowed_commands: hw.allowed_commands ?? undefined,
+      control_revision: hw.control_revision ?? undefined,
+      failure: hw.failure ?? undefined,
+      issues: hw.issues ?? undefined,
     }
   }
   // current_hitl 兜底仅对仍可交互的 paused 态生效。

@@ -39,6 +39,46 @@ class RunPhase(StrEnum):
     DONE = "done"
 
 
+class RunCommandType(StrEnum):
+    APPROVE_PLAN = "approve_plan"
+    REVISE_PLAN = "revise_plan"
+    SELECT_ART_A = "select_art_a"
+    SELECT_ART_B = "select_art_b"
+    REVISE_ART = "revise_art"
+    RETRY_IMPLEMENTATION = "retry_implementation"
+    RETRY_INFRA = "retry_infra"
+    CANCEL_RUN = "cancel_run"
+
+
+class RunCommandStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class FailureClass(StrEnum):
+    INFRA_TRANSIENT = "infra_transient"
+    IMPLEMENTATION_DEFECT = "implementation_defect"
+    CAPABILITY_MISMATCH = "capability_mismatch"
+    ACCEPTANCE_MISMATCH = "acceptance_mismatch"
+    RESOURCE_EXCEEDED = "resource_exceeded"
+    POLICY_SECURITY = "policy_security"
+    UNKNOWN = "unknown"
+
+
+class ArtifactKind(StrEnum):
+    PLAN = "plan"
+    ART = "art"
+    CANDIDATE = "candidate"
+
+
+class ArtifactStatus(StrEnum):
+    ACTIVE = "active"
+    STALE = "stale"
+
+
 class EntryPhase(StrEnum):
     PLAN = "plan"
     CODE = "code"

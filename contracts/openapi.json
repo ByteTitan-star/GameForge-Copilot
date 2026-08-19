@@ -8179,8 +8179,26 @@
             "title": "Node"
           },
           "decision": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Decision"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command"
           },
           "modify_text": {
             "anyOf": [
@@ -8193,12 +8211,23 @@
               }
             ],
             "title": "Modify Text"
+          },
+          "expected_control_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Control Revision"
           }
         },
         "type": "object",
         "required": [
-          "node",
-          "decision"
+          "node"
         ],
         "title": "HitlResolveReq"
       },
@@ -8280,6 +8309,43 @@
               }
             ],
             "title": "Art Options"
+          },
+          "allowed_commands": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Commands"
+          },
+          "control_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Revision"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
           }
         },
         "type": "object",
