@@ -1,0 +1,91 @@
+name: Eval Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security_eval:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend deps
+        run: uv sync --frozen --no-dev
+
+      - name: Run security eval (quick_filter only)
+        id: sec-eval
+        run: |
+          set -o pipefail
+          OUT=$(PYTHONPATH=. uv run python scripts/ci_security_eval_quickfilter.py | tee /tmp/sec-eval.log)
+          echo "$OUT" > /tmp/sec-eval.out
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-security-eval-report
+          path: tmp/ci_security_eval_report.md
+          if-no-files-found: error
+
+      - name: PR comment
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'tmp/ci_security_eval_report.md';
+            const report = fs.readFileSync(reportPath, 'utf8');
+            const short = report.split('\n').slice(0, 25).join('\n');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### Security Eval Gate\\n\\n\`\`\`\\n${short}\\n\`\`\`\\n`
+            });
+
+  generation_eval:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend deps
+        run: uv sync --frozen --no-dev
+
+      - name: Run generation eval (requires full eval suite)
+        run: |
+          # Placeholder: generation eval requires eval framework + LLM secrets (Phase 4 / #115-#116/#117).
+          # Keep CI green until the full suite lands on main.
+          if [ -f "../eval/runners/generation_eval.py" ]; then
+            echo "Found generation_eval runner, please configure required LLM secrets." \
+              && uv run python ../eval/runners/generation_eval.py
+          else
+            echo "Skip generation eval: eval framework not present on main yet."
+          fi
