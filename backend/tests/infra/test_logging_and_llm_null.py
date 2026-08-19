@@ -110,24 +110,39 @@ _DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 @pytest.mark.asyncio
-async def test_complete_injects_enable_thinking_for_qwen3(
+@pytest.mark.parametrize(
+    "model",
+    ["qwen3-max", "glm-5.1", "deepseek-v4-flash", "gpt-4o"],
+)
+async def test_complete_injects_enable_thinking_false_by_default(
     monkeypatch: pytest.MonkeyPatch,
+    model: str,
 ) -> None:
+    """OpenAI 兼容路径默认关 thinking（plan/审核都不需要思考链占满 max_tokens）。"""
     cap = _CapturingClient()
     monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
-    await complete(
-        LLMProvider.OPENAI_COMPAT, "key", "qwen3-max", "sys", "user", base_url=_DASHSCOPE
-    )
+    await complete(LLMProvider.OPENAI_COMPAT, "key", model, "sys", "user", base_url=_DASHSCOPE)
     assert cap.last_json["enable_thinking"] is False
 
 
 @pytest.mark.asyncio
-async def test_complete_skips_enable_thinking_for_non_qwen(
+async def test_complete_skips_enable_thinking_for_qwq(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """纯推理模型注入 false 会 400，必须跳过。"""
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(LLMProvider.OPENAI_COMPAT, "key", "qwq-32b", "sys", "user", base_url=_DASHSCOPE)
+    assert "enable_thinking" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_skips_enable_thinking_on_anthropic_native(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cap = _CapturingClient()
     monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
-    await complete(LLMProvider.OPENAI, "key", "gpt-4o", "sys", "user")
+    await complete(LLMProvider.ANTHROPIC, "key", "claude-sonnet-5", "sys", "user")
     assert "enable_thinking" not in cap.last_json
 
 
