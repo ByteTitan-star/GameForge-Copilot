@@ -126,6 +126,59 @@ def _quick_patterns() -> list[tuple[re.Pattern[str], str]]:
     return _blacklist_patterns
 
 
+def _decode_encoded_input(text: str) -> list[str]:
+    """Attempt to decode common encoding bypasses; return decoded variants.
+
+    Each variant is checked independently against regex/lexicon. Only
+    non-trivial decodings (different from original) are returned.
+    """
+    import base64
+    import codecs
+    import html
+
+    variants: list[str] = []
+
+    # HTML entity decoding
+    decoded_html = html.unescape(text)
+    if decoded_html != text:
+        variants.append(decoded_html)
+        # HTML → then unicode_escape (catches mixed encoding like &#x...;+\uXXXX)
+        try:
+            decoded_html_then_uni = codecs.decode(decoded_html, "unicode_escape")
+            if decoded_html_then_uni != decoded_html:
+                variants.append(decoded_html_then_uni)
+        except Exception as exc:
+            # Best-effort decoder: ignore failures but keep runtime safe.
+            log.debug("decode html->unicode_escape failed: %s", exc)
+
+    # Unicode escape decoding (\uXXXX, \xXX)
+    try:
+        decoded_uni = codecs.decode(text, "unicode_escape")
+        if decoded_uni != text:
+            variants.append(decoded_uni)
+    except Exception as exc:
+        log.debug("decode unicode_escape failed: %s", exc)
+
+    # Base64 decoding: try the whole text and any base64-looking segments
+    _B64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+    for segment in re.findall(r"[A-Za-z0-9+/]{8,}={0,2}", text):
+        if set(segment) <= _B64_CHARS:
+            try:
+                raw = base64.b64decode(segment, validate=True)
+                decoded_b64 = raw.decode("utf-8", errors="ignore")
+                if decoded_b64 and decoded_b64 != segment:
+                    variants.append(decoded_b64)
+            except Exception as exc:
+                log.debug("decode base64 segment failed: %s", exc)
+
+    # Rot13 decoding
+    decoded_rot13 = codecs.decode(text, "rot_13")
+    if decoded_rot13 != text:
+        variants.append(decoded_rot13)
+
+    return variants
+
+
 class ContentAttacked(Exception):
     """审核命中（输入或输出）。在节点内 raise → run_generation 既有 except 捕获置 FAILED。
 
@@ -166,34 +219,38 @@ def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
         return None
     if not force and not settings.audit_quick_filter:
         return None
-    # 1) 运营自定义规则对【原文】匹配，保证越狱正则词界/空格语义不变
-    for pattern, category in _quick_patterns():
-        m = pattern.search(text)
-        if m:
-            return AuditResult(
-                True,
-                category=category,
-                reason="命中安全规则快筛",
-                evidence=m.group(0),
-            )
-    # 2) AC 敏感词词库（归一化 + 白名单掩码）；开关关闭则跳过
-    if settings.audit_lexicon_enabled:
-        hit = LexiconMatcher.load().scan(text)
-        if hit is not None and hit.level == "block":
-            return AuditResult(
-                True,
-                category=hit.category,
-                reason="命中敏感词词库",
-                evidence=hit.word,
-            )
-        if hit is not None and hit.level == "suspect":
-            return AuditResult(
-                False,
-                category=hit.category,
-                reason="命中灰名单，待审核模型判定",
-                evidence=hit.word,
-                suspected=True,
-            )
+
+    candidates = [text] + _decode_encoded_input(text)
+
+    for candidate in candidates:
+        # 1) regex blacklist on each candidate
+        for pattern, category in _quick_patterns():
+            m = pattern.search(candidate)
+            if m:
+                return AuditResult(
+                    True,
+                    category=category,
+                    reason="命中安全规则快筛",
+                    evidence=m.group(0),
+                )
+        # 2) AC lexicon on each candidate
+        if settings.audit_lexicon_enabled:
+            hit = LexiconMatcher.load().scan(candidate)
+            if hit is not None and hit.level == "block":
+                return AuditResult(
+                    True,
+                    category=hit.category,
+                    reason="命中敏感词词库",
+                    evidence=hit.word,
+                )
+            if hit is not None and hit.level == "suspect":
+                return AuditResult(
+                    False,
+                    category=hit.category,
+                    reason="命中灰名单，待审核模型判定",
+                    evidence=hit.word,
+                    suspected=True,
+                )
     return None
 
 

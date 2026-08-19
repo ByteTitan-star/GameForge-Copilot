@@ -19,7 +19,7 @@
 # ---- 越狱/提示注入 ----
 re:ignore\s+(?:all\s+)?(?:previous|prior|above|system|developer|earlier)\s+(?:instructions?|prompts?|rules?)
 re:disregard\s+(?:all\s+)?(?:previous|prior|above)
-re:\bDAN\b|\bjailbreak\b|\b越狱\b|\b绕过(?:限制|审核|安全|护栏)\b
+re:\bDAN\b|\bjailbreak\b|越狱|绕过(?:限制|审核|安全|护栏)|忽略(?:所有|之前|全部)?(?:指令|规则|限制|提示)
 
 # ---- 恶意代码 ----
 re:<script[^>]*>\s*eval\s*\(
