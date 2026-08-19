@@ -164,21 +164,38 @@ def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=timeout)
 
 
+def _supports_enable_thinking(base_url: str | None, model: str) -> bool:
+    """Only Qwen models via DashScope-compatible endpoints accept ``enable_thinking``.
+
+    Injecting this non-standard parameter into other providers (GLM, DeepSeek,
+    OpenAI, etc.) may trigger 400 or be silently ignored while the thinking
+    tokens still consume the ``max_tokens`` budget — yielding empty responses.
+    """
+    name = (model or "").lower()
+    host = (_host_from_base_url(base_url) or "").lower()
+    is_qwen_model = any(tok in name for tok in ("qwen", "qwq"))
+    is_dashscope_host = "dashscope" in host
+    return is_qwen_model or is_dashscope_host
+
+
 def _requires_thinking_enabled(model: str) -> bool:
-    """纯推理模型：只允许 enable_thinking=true，注入 false 会 400。"""
+    """Pure reasoning models that *require* ``enable_thinking=true``."""
     name = (model or "").lower()
     return any(tok in name for tok in ("qwq",))
 
 
 def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model: str) -> bool:
-    """OpenAI 兼容路径默认关 thinking；Anthropic 原生与纯推理模型跳过。
+    """Inject ``enable_thinking=false`` only for Qwen/DashScope models that support the param.
 
-    plan JSON / 审核 0|1 都不需要思考链：思考 token 会占满 max_tokens，
-    且流式解析只收 content、丢弃 reasoning_content，易得到空正文。
+    plan JSON / audit 0|1 do not need chain-of-thought: thinking tokens eat
+    into ``max_tokens``, and streaming only collects ``content`` — discarding
+    ``reasoning_content`` — which easily produces empty body.
     """
     if not settings.llm_disable_thinking:
         return False
     if _uses_anthropic_native_api(provider, base_url):
+        return False
+    if not _supports_enable_thinking(base_url, model):
         return False
     return not _requires_thinking_enabled(model)
 
