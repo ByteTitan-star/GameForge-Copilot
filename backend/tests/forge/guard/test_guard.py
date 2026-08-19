@@ -1,6 +1,7 @@
 """guard 审核内核单测：quick_filter 正则快筛、Guard.audit 命中/不命中/降级、0/1 解析、
 run_streamed_llm 编排（emit_delta 两种模式 + 输出审核命中）。"""
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -259,11 +260,13 @@ async def test_build_guard_disabled_returns_noop(monkeypatch) -> None:
 
 def _fake_ctx() -> SimpleNamespace:
     """构造 run_streamed_llm 所需的最小 ctx（graph._Ctx 的鸭子类型）。"""
+    run_id = uuid.uuid4()
+    user_id = uuid.uuid4()
     return SimpleNamespace(
         s=None,
         r=None,
         game=SimpleNamespace(id="game-1"),
-        run=SimpleNamespace(id="run-1", user_id="user-1", llm_config_id="cfg-1"),
+        run=SimpleNamespace(id=run_id, user_id=user_id, llm_config_id="cfg-1"),
     )
 
 
