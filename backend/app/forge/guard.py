@@ -425,17 +425,55 @@ def _resolve_provider(value: str) -> LLMProvider:
 
 async def _emit_attacked(ctx: Any, *, side: str, res: AuditResult, phase: str) -> None:
     """发 ATTACKED 事件。前端收到后断 WS + 弹友好提示。run 终态由 run_generation 处理。"""
-    await publish_event(
-        ctx.run.id,
-        WSEventType.ATTACKED,
-        {
-            "phase": phase,
-            "side": side,
-            "category": res.category,
-            "reason": res.reason,
-            "message": "当前检测到您生成中的游戏涉及安全问题，已中断。",
-        },
-    )
+    import uuid
+
+    run_val = getattr(getattr(ctx, "run", None), "id", None)
+    user_val = getattr(getattr(ctx, "run", None), "user_id", None)
+    run_id: uuid.UUID | None = run_val if isinstance(run_val, uuid.UUID) else None
+    user_id: uuid.UUID | None = user_val if isinstance(user_val, uuid.UUID) else None
+
+    # Best-effort: the run must not fail due to WS event publishing issues.
+    try:
+        if run_id is not None:
+            await publish_event(
+                run_id,
+                WSEventType.ATTACKED,
+                {
+                    "phase": phase,
+                    "side": side,
+                    "category": res.category,
+                    "reason": res.reason,
+                    "message": "当前检测到您生成中的游戏涉及安全问题，已中断。",
+                },
+            )
+    except Exception:
+        log.warning("publish_event failed for guard hit", exc_info=True)
+
+    # Best-effort persistence: the run already fails due to ContentAttacked;
+    # here we only add an AuditLog row to the current transaction.
+    try:
+        db = getattr(ctx, "s", None)
+        if db is not None and user_id is not None and run_id is not None:
+            from app.models.audit_log import AuditLog
+
+            action = "guardrail_suspect" if res.suspected else "guardrail_block"
+            detail = {
+                "phase": phase,
+                "side": side,
+                "category": res.category,
+                "reason": res.reason,
+                "evidence": (res.evidence or "")[:300],
+            }
+            db.add(
+                AuditLog(
+                    actor_id=user_id,
+                    action=action,
+                    target=str(run_id),
+                    detail=detail,
+                )
+            )
+    except Exception:
+        log.warning("audit log persistence failed for guard hit", exc_info=True)
 
 
 async def run_streamed_llm(
