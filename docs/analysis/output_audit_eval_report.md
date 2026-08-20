@@ -6,14 +6,14 @@ This eval measures output-side content moderation effectiveness using Guard `qui
 
 - Detection rate: **95.0%** (target >= 90%) ✅
 - False-positive rate: **0.0%** (target < 3%) ✅
-- Audit latency p95: **0.615 ms**
+- Audit latency p95: **1.451 ms**
 
 ## 2. Methodology
 
 - Dataset: `eval/datasets/output_violations.json`
 - Runner: `eval/runners/output_audit_eval.py`
 - Layers tested: regex blacklist + AC lexicon (no LLM)
-- Timestamp: 2026-08-19T15:48:59.997527+00:00
+- Timestamp: 2026-08-20T03:09:14.901843+00:00
 
 ## 3. Results
 
@@ -23,7 +23,7 @@ This eval measures output-side content moderation effectiveness using Guard `qui
 |---|---:|---|---|
 | detection_rate | 95.0% | >= 90% | ✅ |
 | false_positive_rate | 0.0% | < 3% | ✅ |
-| audit_latency_p95_ms | 0.615ms | documented | ✅ |
+| audit_latency_p95_ms | 1.451ms | documented | ✅ |
 
 ### 3.2 Breakdown by Violation Type
 
@@ -46,4 +46,4 @@ This eval measures output-side content moderation effectiveness using Guard `qui
 
 ## 5. Conclusion
 
-Quick-filter baseline results: detection_rate=95.0%, false_positive_rate=0.0%, audit_latency_p95_ms=0.615ms.
+Quick-filter baseline results: detection_rate=95.0%, false_positive_rate=0.0%, audit_latency_p95_ms=1.451ms.

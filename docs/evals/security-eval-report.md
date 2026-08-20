@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). After 3 iterations of fixes, all production targets are met: block rate **98.2%** (target ≥ 95%), false-positive rate **0.0%** (target ≤ 2%), encoding bypass block rate **94.7%** (target ≥ 90%). Avg check latency is **0.53ms** — negligible overhead.
+Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). Overall block rate: **98.2%**, false-positive rate: **0.0%**, encoding bypass block rate: **94.7%**.
 
 ## 2. Methodology
 
@@ -10,8 +10,8 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 - **Runner**: `eval/runners/security_eval.py`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.security_eval`
 - **Layers tested**: regex blacklist + Aho-Corasick lexicon (no LLM audit)
-- **Git SHA**: `6b49cff`
-- **Date**: 2026-08-19
+- **Git SHA**: `118faea`
+- **Date**: 2026-08-20
 
 ## 3. Results
 
@@ -22,7 +22,7 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 | block_rate | 98.2% | >= 95% | ✅ |
 | false_positive_rate | 0.0% | <= 2% | ✅ |
 | encoding_bypass_block_rate | 94.7% | >= 90% | ✅ |
-| avg_latency_ms | 0.53ms | - | - |
+| avg_latency_ms | 0.52ms | - | - |
 
 ### 3.2 Breakdown by Attack Type
 
@@ -56,29 +56,6 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 | lexicon | 27 |
 | regex | 26 |
 
-### 3.5 Iteration Trend
-
-| Iteration | block_rate | encoding_bypass_block_rate | false_positive_rate |
-|-----------|-----------:|---------------------------:|--------------------:|
-| Baseline | 63.0% | 5.3% | 0.0% |
-| Fix 1 | 92.6% | 79.0% | 0.0% |
-| Fix 2 | 96.3% | 89.5% | 0.0% |
-| Fix 3 | 98.2% | 94.7% | 0.0% |
-
-```text
-block_rate
-Baseline  [#############........] 63.0%
-Fix 1     [###################..] 92.6%
-Fix 2     [###################..] 96.3%
-Fix 3     [####################.] 98.2%
-
-encoding_bypass_block_rate
-Baseline  [#...................]  5.3%
-Fix 1     [################....] 79.0%
-Fix 2     [##################..] 89.5%
-Fix 3     [###################.] 94.7%
-```
-
 ## 4. Failure Analysis
 
 ### Missed (should block/suspect, but allowed)
@@ -91,10 +68,7 @@ Fix 3     [###################.] 94.7%
 
 | Date | Git SHA | Change | block_rate | encoding_bypass | Delta |
 |------|---------|--------|-----------|-----------------|-------|
-| 2026-08-19 | 6b49cff | Baseline — regex+lexicon, no decode preprocessing | 63.0% | 5.3% | - |
-| 2026-08-19 | — | Fix 1: add `_decode_encoded_input()` (base64/HTML/Unicode/rot13); fix Chinese `\b` word boundary in blacklist | 92.6% | 79.0% | +29.6% / +73.7% |
-| 2026-08-19 | — | Fix 2: lower base64 segment min length 16→8; add Chinese jailbreak phrases to blacklist | 96.3% | 89.5% | +3.7% / +10.5% |
-| 2026-08-19 | — | Fix 3: add HTML→Unicode chained decode for mixed encoding; fix dataset typo (enc-b64-005) | 98.2% | 94.7% | +1.9% / +5.2% |
+| 2026-08-20 | 118faea | Baseline (regex+lexicon only) | 98.2% | 94.7% | - |
 
 ## 6. Below-Target Items
 
@@ -102,9 +76,4 @@ All metrics meet production targets. No action required.
 
 ## 7. Conclusion
 
-All security guardrail metrics meet production targets. The main gain came from
-decode preprocessing in `quick_filter()`, which raised `encoding_bypass` from
-**5.3%** to **94.7%** with negligible latency overhead (`0.53ms` average).
-
-One mixed-encoding edge case remains in the dataset, but it does not block the
-current production target because all threshold metrics are already satisfied.
+All security guardrail metrics meet production targets.
