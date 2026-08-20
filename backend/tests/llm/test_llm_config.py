@@ -202,6 +202,14 @@ def test_normalize_base_url_appends_v1_for_host_only() -> None:
     assert base == "https://api.deepseek.com/v1"
 
 
+def test_normalize_base_url_appends_v1_for_anthropic_proxy_root() -> None:
+    from app.enums import LLMProvider as P
+    from app.llm.provider import _api_base
+
+    base = _api_base(P.ANTHROPIC, "https://open.bigmodel.cn/api/anthropic")
+    assert base == "https://open.bigmodel.cn/api/anthropic/v1"
+
+
 def test_official_anthropic_base_uses_messages_endpoint() -> None:
     from app.enums import LLMProvider as P
     from app.llm.provider import _auth_headers, _messages_url
