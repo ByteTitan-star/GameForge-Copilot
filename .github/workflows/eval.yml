@@ -66,6 +66,35 @@ jobs:
               body: `### Security Eval Gate\\n\\n\`\`\`\\n${short}\\n\`\`\`\\n`
             });
 
+  offline_eval:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend deps
+        run: uv sync --frozen --no-dev
+
+      - name: Run offline eval gate
+        env:
+          PYTHONPATH: .:..
+        run: uv run python scripts/ci_offline_eval_gate.py
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-offline-eval-report
+          path: tmp/ci_offline_eval_report.md
+          if-no-files-found: error
+
   generation_eval:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -83,13 +112,12 @@ jobs:
       - name: Install backend deps
         run: uv sync --frozen --no-dev
 
-      - name: Run generation eval (requires full eval suite)
-        run: |
-          # Placeholder: generation eval requires eval framework + LLM secrets (Phase 4 / #115-#116/#117).
-          # Keep CI green until the full suite lands on main.
-          if [ -f "../eval/runners/generation_eval.py" ]; then
-            echo "Found generation_eval runner, please configure required LLM secrets." \
-              && uv run python ../eval/runners/generation_eval.py
-          else
-            echo "Skip generation eval: eval framework not present on main yet."
-          fi
+      - name: Run offline eval gate
+        env:
+          PYTHONPATH: .:..
+        run: uv run python scripts/ci_offline_eval_gate.py
+
+      - name: Run full offline eval orchestrator
+        env:
+          PYTHONPATH: .:..
+        run: uv run python ../eval/run_all.py
