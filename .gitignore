@@ -49,3 +49,6 @@ backups/
 # 本地 embedding 模型缓存（bge-small-zh-v1.5 权重 ~184MB，勿入库）
 # 来源：huggingface BAAI/bge-small-zh-v1.5，供本机 TEI/embedding 服务使用
 data/embedding-models/
+
+# eval raw JSON reports (committed markdown lives in docs/evals/)
+eval/reports/
