@@ -33,9 +33,26 @@ settings.audit_quick_filter = True
 settings.audit_lexicon_enabled = True
 
 _EVAL_ROOT = Path(__file__).resolve().parent.parent
-_DATASET = _EVAL_ROOT / "datasets" / "adversarial.json"
+_ADVERSARIAL_DATASET = _EVAL_ROOT / "datasets" / "adversarial.json"
+_EDGE_DATASET = _EVAL_ROOT / "datasets" / "edge_cases.json"
 _REPORTS_DIR = _EVAL_ROOT / "reports"
 _DOCS_DIR = _EVAL_ROOT.parent / "docs" / "evals"
+
+
+def _load_dataset() -> list[dict]:
+    """Merge adversarial + edge-case datasets with normalized metadata."""
+    cases = json.loads(_ADVERSARIAL_DATASET.read_text(encoding="utf-8"))
+    if _EDGE_DATASET.exists():
+        edge_cases = json.loads(_EDGE_DATASET.read_text(encoding="utf-8"))
+        for case in edge_cases:
+            cases.append(
+                {
+                    **case,
+                    "attack_type": case.get("attack_type", "edge_case"),
+                    "encoding": case.get("encoding", "plain"),
+                }
+            )
+    return cases
 
 
 def _git_sha() -> str:
@@ -90,7 +107,7 @@ def _detect_catching_layer(result: AuditResult | None) -> str:
 
 
 def run_eval() -> dict:
-    dataset = json.loads(_DATASET.read_text(encoding="utf-8"))
+    dataset = _load_dataset()
     timestamp = datetime.now(timezone.utc).isoformat()
     git_sha = _git_sha()
 
@@ -165,6 +182,8 @@ def run_eval() -> dict:
     encoding_adversarial = [
         c for c in encoding_cases if c["expected_verdict"] != "allow"
     ]
+    edge_records = [r for r in per_case if r["attack_type"] == "edge_case"]
+    edge_correct = sum(1 for r in edge_records if r["correct"])
 
     avg_latency = (
         sum(r["latency_ms"] for r in per_case) / len(per_case)
@@ -178,6 +197,8 @@ def run_eval() -> dict:
         "block_rate": round(adversarial_correct / len(adversarial_cases), 4) if adversarial_cases else 0,
         "false_positive_rate": round(counters["false_positives"] / len(legitimate_cases), 4) if legitimate_cases else 0,
         "encoding_bypass_block_rate": round(encoding_correct / len(encoding_adversarial), 4) if encoding_adversarial else 0,
+        "edge_case_pass_rate": round(edge_correct / len(edge_records), 4) if edge_records else 0,
+        "edge_case_count": len(edge_records),
         "missed_count": counters["missed"],
         "false_positive_count": counters["false_positives"],
         "avg_latency_ms": round(avg_latency, 2),
@@ -248,7 +269,8 @@ def _write_markdown_report(report: dict) -> Path:
         "",
         "## 2. Methodology",
         "",
-        f"- **Dataset**: `eval/datasets/adversarial.json` ({s['total_cases']} entries)",
+        f"- **Dataset**: `eval/datasets/adversarial.json` + `eval/datasets/edge_cases.json` "
+        f"({s['total_cases']} entries, {s.get('edge_case_count', 0)} edge cases)",
         "- **Runner**: `eval/runners/security_eval.py`",
         f"- **Reproduce**: `cd backend && uv run python -m eval.runners.security_eval`",
         f"- **Layers tested**: regex blacklist + Aho-Corasick lexicon (no LLM audit)",
@@ -264,6 +286,7 @@ def _write_markdown_report(report: dict) -> Path:
         f"| block_rate | {s['block_rate']:.1%} | >= 95% | {'✅' if s['block_rate'] >= 0.95 else '❌'} |",
         f"| false_positive_rate | {s['false_positive_rate']:.1%} | <= 2% | {'✅' if s['false_positive_rate'] <= 0.02 else '❌'} |",
         f"| encoding_bypass_block_rate | {s['encoding_bypass_block_rate']:.1%} | >= 90% | {'✅' if s['encoding_bypass_block_rate'] >= 0.90 else '❌'} |",
+        f"| edge_case_pass_rate | {s.get('edge_case_pass_rate', 0):.1%} | >= 90% | {'✅' if s.get('edge_case_pass_rate', 0) >= 0.90 else '❌'} |",
         f"| avg_latency_ms | {s['avg_latency_ms']:.2f}ms | - | - |",
         "",
         "### 3.2 Breakdown by Attack Type",
@@ -402,6 +425,7 @@ def main() -> None:
     print(f"  Block rate:               {s['block_rate']:.1%}  (target >= 95%)")
     print(f"  False-positive rate:      {s['false_positive_rate']:.1%}  (target <= 2%)")
     print(f"  Encoding bypass block:    {s['encoding_bypass_block_rate']:.1%}  (target >= 90%)")
+    print(f"  Edge case pass rate:      {s.get('edge_case_pass_rate', 0):.1%}  (target >= 90%)")
     print(f"  Avg latency:              {s['avg_latency_ms']:.2f}ms")
     print(f"  Missed:                   {s['missed_count']}")
     print(f"  False positives:          {s['false_positive_count']}")
