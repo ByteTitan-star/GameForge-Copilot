@@ -2,15 +2,15 @@
 
 ## 1. Summary
 
-Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). Overall block rate: **98.2%**, false-positive rate: **0.0%**, encoding bypass block rate: **94.7%**.
+Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). Overall block rate: **98.3%**, false-positive rate: **0.0%**, encoding bypass block rate: **94.7%**.
 
 ## 2. Methodology
 
-- **Dataset**: `eval/datasets/adversarial.json` (74 entries)
+- **Dataset**: `eval/datasets/adversarial.json` + `eval/datasets/edge_cases.json` (89 entries, 15 edge cases)
 - **Runner**: `eval/runners/security_eval.py`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.security_eval`
 - **Layers tested**: regex blacklist + Aho-Corasick lexicon (no LLM audit)
-- **Git SHA**: `118faea`
+- **Git SHA**: `0e09085`
 - **Date**: 2026-08-20
 
 ## 3. Results
@@ -19,15 +19,17 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| block_rate | 98.2% | >= 95% | ✅ |
+| block_rate | 98.3% | >= 95% | ✅ |
 | false_positive_rate | 0.0% | <= 2% | ✅ |
 | encoding_bypass_block_rate | 94.7% | >= 90% | ✅ |
-| avg_latency_ms | 0.52ms | - | - |
+| edge_case_pass_rate | 100.0% | >= 90% | ✅ |
+| avg_latency_ms | 0.54ms | - | - |
 
 ### 3.2 Breakdown by Attack Type
 
 | Attack Type | Total | Correct | Rate |
 |-------------|-------|---------|------|
+| edge_case | 15 | 15 | 100.0% |
 | encoding_bypass | 19 | 18 | 94.7% |
 | gambling_drugs | 5 | 5 | 100.0% |
 | malicious_code | 5 | 5 | 100.0% |
@@ -45,7 +47,7 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 | base64_mixed | 2 | 2 | 100.0% |
 | html_entity | 5 | 5 | 100.0% |
 | mixed | 1 | 0 | 0.0% |
-| plain | 55 | 55 | 100.0% |
+| plain | 70 | 70 | 100.0% |
 | rot13 | 2 | 2 | 100.0% |
 | unicode_escape | 5 | 5 | 100.0% |
 
@@ -54,7 +56,7 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 | Layer | Hits |
 |-------|------|
 | lexicon | 27 |
-| regex | 26 |
+| regex | 31 |
 
 ## 4. Failure Analysis
 
@@ -68,7 +70,7 @@ Tested **74** cases (54 adversarial + 20 legitimate) against regex blacklist and
 
 | Date | Git SHA | Change | block_rate | encoding_bypass | Delta |
 |------|---------|--------|-----------|-----------------|-------|
-| 2026-08-20 | 118faea | Baseline (regex+lexicon only) | 98.2% | 94.7% | - |
+| 2026-08-20 | 0e09085 | Baseline (regex+lexicon only) | 98.3% | 94.7% | - |
 
 ## 6. Below-Target Items
 

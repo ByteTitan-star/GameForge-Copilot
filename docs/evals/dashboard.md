@@ -1,13 +1,13 @@
 # GameForge Eval Dashboard
 
-> Last orchestrator run: 2026-08-20T03:09:15Z | Git SHA: `118faea`
+> Last orchestrator run: 2026-08-20T03:35:52Z | Git SHA: `0e09085`
 
 | Dimension | Value | Target | Status |
 |-----------|-------|--------|--------|
 | Generation Success | offline | >= 90% | ⏳ |
 | Code Quality | 90.0% | >= 90% | ✅ |
-| Security Guardrail | 98.2% | >= 95% | ✅ |
-| Performance | 1.315ms | documented | ✅ |
+| Security Guardrail | 98.3% | >= 95% | ✅ |
+| Performance | 1.203ms | documented | ✅ |
 | Output Audit | 95.0% | >= 90% | ✅ |
 | Model Comparison | offline_registry | - | ✅ |
 | Preference Persistence | 100.0% | 100% | ✅ |

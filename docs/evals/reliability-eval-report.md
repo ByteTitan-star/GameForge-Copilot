@@ -10,7 +10,7 @@ Unit-style reliability checks on **10** scenarios. Pass rate: **100.0%**.
 - **Runner**: `eval/runners/reliability_eval.py`
 - **Mode**: `unit_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `118faea`
+- **Git SHA**: `0e09085`
 - **Date**: 2026-08-20
 
 ## 3. Results

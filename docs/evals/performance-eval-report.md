@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-Guard quick_filter latency over **124** prompts: p50=0.699ms, p95=1.315ms.
+Guard quick_filter latency over **124** prompts: p50=0.729ms, p95=1.203ms.
 
 ## 2. Methodology
 
@@ -10,7 +10,7 @@ Guard quick_filter latency over **124** prompts: p50=0.699ms, p95=1.315ms.
 - **Runner**: `eval/runners/performance_eval.py`
 - **Mode**: `offline_guard_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `118faea`
+- **Git SHA**: `0e09085`
 - **Date**: 2026-08-20
 
 ## 3. Results
@@ -19,9 +19,9 @@ Guard quick_filter latency over **124** prompts: p50=0.699ms, p95=1.315ms.
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| guard_p50_ms | 0.699ms | documented | - |
-| guard_p95_ms | 1.315ms | documented | - |
-| guard_p99_ms | 1.653ms | documented | - |
+| guard_p50_ms | 0.729ms | documented | - |
+| guard_p95_ms | 1.203ms | documented | - |
+| guard_p99_ms | 1.554ms | documented | - |
 | e2e_p50_s | n/a | tracked | - |
 | e2e_p95_s | n/a | tracked | - |
 

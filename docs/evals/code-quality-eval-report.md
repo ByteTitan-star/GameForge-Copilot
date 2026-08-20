@@ -10,7 +10,7 @@ Static structural analysis on **20** curated snippets. Structure detection accur
 - **Runner**: `eval/runners/code_quality_eval.py`
 - **Mode**: `static_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `875b5bb`
+- **Git SHA**: `0e09085`
 - **Date**: 2026-08-20
 
 ## 3. Results

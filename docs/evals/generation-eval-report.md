@@ -10,7 +10,7 @@ Dataset validation: **50** prompts (15 simple / 20 medium / 15 hard). Live gener
 - **Runner**: `eval/runners/generation_eval.py`
 - **Mode**: `offline_readiness`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `118faea`
+- **Git SHA**: `0e09085`
 - **Date**: 2026-08-20
 
 ## 3. Results
