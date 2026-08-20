@@ -1,0 +1,77 @@
+[
+  {
+    "id": "rel-001",
+    "type": "truncation_html",
+    "input": "<html><body><script>function init(){}</script>",
+    "expected_truncated": true
+  },
+  {
+    "id": "rel-002",
+    "type": "truncation_json",
+    "input": "{\"format\":\"vite\",\"files\":{\"index.html\":\"<html>",
+    "expected_truncated": true
+  },
+  {
+    "id": "rel-003",
+    "type": "truncation_complete",
+    "input": "<html><body>ok</body></html>",
+    "expected_truncated": false
+  },
+  {
+    "id": "rel-004",
+    "type": "finish_reason_length",
+    "finish_reason": "length",
+    "output_tokens": 1000,
+    "max_tokens": 1000,
+    "expected_truncated": true
+  },
+  {
+    "id": "rel-005",
+    "type": "finish_reason_stop",
+    "finish_reason": "stop",
+    "output_tokens": 100,
+    "max_tokens": 1000,
+    "expected_truncated": false
+  },
+  {
+    "id": "rel-006",
+    "type": "output_truncated_error",
+    "errors": [
+      "OUTPUT_TRUNCATED: hit limit"
+    ],
+    "expected_detected": true
+  },
+  {
+    "id": "rel-007",
+    "type": "pause_checkpoint_merge",
+    "existing": {
+      "art_assets": {
+        "bg": "x"
+      },
+      "phase": "code"
+    },
+    "expected_keys": [
+      "art_assets",
+      "phase",
+      "pause_reason"
+    ]
+  },
+  {
+    "id": "rel-008",
+    "type": "pause_reason_roundtrip",
+    "pause_reason": "recoverable_error",
+    "expected_enum": "recoverable_error"
+  },
+  {
+    "id": "rel-009",
+    "type": "continuation_notice_present",
+    "check": "continuation_prompt",
+    "expected_contains": "续写"
+  },
+  {
+    "id": "rel-010",
+    "type": "stale_running_timeout_config",
+    "setting": "running_stale_timeout_s",
+    "expected_min": 60
+  }
+]
