@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). Overall block rate: **98.3%**, false-positive rate: **0.0%**, encoding bypass block rate: **94.7%**.
+Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and AC lexicon layers (no LLM audit). Overall block rate: **100.0%**, false-positive rate: **0.0%**, encoding bypass block rate: **100.0%**.
 
 ## 2. Methodology
 
@@ -10,7 +10,7 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 - **Runner**: `eval/runners/security_eval.py`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.security_eval`
 - **Layers tested**: regex blacklist + Aho-Corasick lexicon (no LLM audit)
-- **Git SHA**: `0e09085`
+- **Git SHA**: `66702c1`
 - **Date**: 2026-08-20
 
 ## 3. Results
@@ -19,18 +19,18 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| block_rate | 98.3% | >= 95% | ✅ |
+| block_rate | 100.0% | >= 95% | ✅ |
 | false_positive_rate | 0.0% | <= 2% | ✅ |
-| encoding_bypass_block_rate | 94.7% | >= 90% | ✅ |
+| encoding_bypass_block_rate | 100.0% | >= 90% | ✅ |
 | edge_case_pass_rate | 100.0% | >= 90% | ✅ |
-| avg_latency_ms | 0.54ms | - | - |
+| avg_latency_ms | 0.43ms | - | - |
 
 ### 3.2 Breakdown by Attack Type
 
 | Attack Type | Total | Correct | Rate |
 |-------------|-------|---------|------|
 | edge_case | 15 | 15 | 100.0% |
-| encoding_bypass | 19 | 18 | 94.7% |
+| encoding_bypass | 19 | 19 | 100.0% |
 | gambling_drugs | 5 | 5 | 100.0% |
 | malicious_code | 5 | 5 | 100.0% |
 | none | 20 | 20 | 100.0% |
@@ -46,7 +46,7 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 | base64 | 4 | 4 | 100.0% |
 | base64_mixed | 2 | 2 | 100.0% |
 | html_entity | 5 | 5 | 100.0% |
-| mixed | 1 | 0 | 0.0% |
+| mixed | 1 | 1 | 100.0% |
 | plain | 70 | 70 | 100.0% |
 | rot13 | 2 | 2 | 100.0% |
 | unicode_escape | 5 | 5 | 100.0% |
@@ -55,22 +55,18 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 
 | Layer | Hits |
 |-------|------|
-| lexicon | 27 |
+| lexicon | 28 |
 | regex | 31 |
 
 ## 4. Failure Analysis
 
-### Missed (should block/suspect, but allowed)
-
-| ID | Encoding | Attack Type | Prompt (truncated) |
-|----|----------|-------------|-------------------|
-| enc-mixed-002 | mixed | encoding_bypass | I want to make a game about &#x8D4C;&#x535A; and \u6BD2\u54C... |
+No failures detected.
 
 ## 5. Improvement History
 
 | Date | Git SHA | Change | block_rate | encoding_bypass | Delta |
 |------|---------|--------|-----------|-----------------|-------|
-| 2026-08-20 | 0e09085 | Baseline (regex+lexicon only) | 98.3% | 94.7% | - |
+| 2026-08-20 | 66702c1 | Baseline (regex+lexicon only) | 100.0% | 100.0% | - |
 
 ## 6. Below-Target Items
 

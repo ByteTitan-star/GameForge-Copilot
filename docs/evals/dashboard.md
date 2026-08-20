@@ -6,7 +6,7 @@
 |-----------|-------|--------|--------|
 | Generation Success | offline | >= 90% | ⏳ |
 | Code Quality | 90.0% | >= 90% | ✅ |
-| Security Guardrail | 98.3% | >= 95% | ✅ |
+| Security Guardrail | 100.0% | >= 95% | ✅ |
 | Performance | 1.203ms | documented | ✅ |
 | Output Audit | 95.0% | >= 90% | ✅ |
 | Model Comparison | offline_registry | - | ✅ |
