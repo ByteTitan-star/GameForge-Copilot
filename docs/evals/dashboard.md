@@ -1,26 +1,33 @@
 # GameForge Eval Dashboard
 
-> Last updated: 2026-08-19
+> Last orchestrator run: 2026-08-20T03:35:52Z | Git SHA: `0e09085`
 
-## Current Status
+| Dimension | Value | Target | Status |
+|-----------|-------|--------|--------|
+| Generation Success | offline | >= 90% | ⏳ |
+| Code Quality | 90.0% | >= 90% | ✅ |
+| Security Guardrail | 100.0% | >= 95% | ✅ |
+| Performance | 1.203ms | documented | ✅ |
+| Output Audit | 95.0% | >= 90% | ✅ |
+| Model Comparison | offline_registry | - | ✅ |
+| Preference Persistence | 100.0% | 100% | ✅ |
+| Reliability | 100.0% | >= 90% | ✅ |
 
-| Dimension | Key Metric | Value | Target | Status | Evidence |
-|-----------|------------|-------|--------|--------|----------|
-| Security Guardrail | `block_rate` | 98.2% | >= 95% | ✅ | `docs/evals/security-eval-report.md` |
-| Security Guardrail | `false_positive_rate` | 0.0% | <= 2% | ✅ | `docs/evals/security-eval-report.md` |
-| Security Guardrail | `encoding_bypass_block_rate` | 94.7% | >= 90% | ✅ | `docs/evals/security-eval-report.md` |
+## Issue Coverage
 
-## Iteration Summary
-
-| Iteration | Change | block_rate | encoding_bypass_block_rate |
-|-----------|--------|-----------:|---------------------------:|
-| Baseline | Regex + lexicon only | 63.0% | 5.3% |
-| Fix 1 | Add decode preprocessing; fix Chinese word boundary | 92.6% | 79.0% |
-| Fix 2 | Lower base64 threshold; add Chinese jailbreak phrases | 96.3% | 89.5% |
-| Fix 3 | Add HTML -> Unicode chained decode; fix dataset typo | 98.2% | 94.7% |
+| Issue | Runner |
+|-------|--------|
+| #115 | `eval/runners/generation_eval.py` |
+| #116 | `eval/runners/code_quality_eval.py` |
+| #119 | `eval/runners/security_eval.py` |
+| #117 | `eval/runners/performance_eval.py` |
+| #121 | `eval/runners/output_audit_eval.py` |
+| #123 | `eval/runners/model_comparison_eval.py` |
+| #124 | `eval/runners/preference_eval.py` |
+| #125 | `eval/runners/reliability_eval.py` |
 
 ## Notes
 
-- Raw machine-readable evidence is stored in `eval/reports/2026-08-19_security_eval.json`.
-- Human-readable analysis is stored in `docs/evals/security-eval-report.md`.
-- Remaining dimensions are still pending implementation and have not been evaluated yet.
+- #118 CI gate: `.github/workflows/eval.yml` (security quick_filter on PRs)
+- #122 AuditLog persistence: verified via `backend/scripts/verify_guard_auditlog_persistence.py`
+- Live eval: `EVAL_LIVE=1` + `EVAL_API_BASE_URL` + `EVAL_ACCESS_TOKEN`

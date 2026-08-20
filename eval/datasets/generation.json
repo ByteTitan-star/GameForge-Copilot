@@ -1,0 +1,587 @@
+[
+  {
+    "id": "gen-001",
+    "prompt": "Make a clicker game where clicking increases score",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-002",
+    "prompt": "Create a simple snake game with arrow keys",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-003",
+    "prompt": "Build a pong game with two paddles",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-004",
+    "prompt": "Make a memory card matching game with 8 cards",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-005",
+    "prompt": "Create a whack-a-mole style tapping game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-006",
+    "prompt": "Build a color matching reaction game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-007",
+    "prompt": "Make a simple platformer with jump and left/right",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-008",
+    "prompt": "Create a dodge falling objects survival game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-009",
+    "prompt": "Build a typing speed mini game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-010",
+    "prompt": "Make a coin collector side scroller",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-011",
+    "prompt": "Create a simple quiz game with 3 questions",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-012",
+    "prompt": "Build a tic-tac-toe game for two players",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-013",
+    "prompt": "Make a rock paper scissors browser game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-014",
+    "prompt": "Create a simple maze escape game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-015",
+    "prompt": "Build a balloon pop casual game",
+    "complexity": "simple",
+    "expected_elements": [
+      "playable loop"
+    ],
+    "tags": [
+      "casual"
+    ]
+  },
+  {
+    "id": "gen-101",
+    "prompt": "Build a tower defense game with 3 tower types and 5 enemy waves",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-102",
+    "prompt": "Create a match-3 puzzle game with score combos",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-103",
+    "prompt": "Make a turn-based RPG battle with skills and HP bars",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-104",
+    "prompt": "Build a breakout brick breaker with power-ups",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-105",
+    "prompt": "Create a farming sim with plant/harvest loop",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-106",
+    "prompt": "Make a card battle game with deck draw and mana",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-107",
+    "prompt": "Build a rhythm game with 4 lanes and note hits",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-108",
+    "prompt": "Create a stealth game with vision cones and patrols",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-109",
+    "prompt": "Make a physics puzzle with boxes and levers",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-110",
+    "prompt": "Build a space shooter with upgrades between waves",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-111",
+    "prompt": "Create a cooking time-management game with orders queue",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-112",
+    "prompt": "Make a dungeon crawler with rooms and loot",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-113",
+    "prompt": "Build a racing game with lap timer and obstacles",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-114",
+    "prompt": "Create a word puzzle with letter tiles and hints",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-115",
+    "prompt": "Make a bubble shooter with color chains",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-116",
+    "prompt": "Build a idle incremental game with upgrades",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-117",
+    "prompt": "Create a chess-lite game with basic legal moves",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-118",
+    "prompt": "Make a pinball table with bumpers and flippers",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-119",
+    "prompt": "Build a fishing mini game with timing bar",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-120",
+    "prompt": "Create a paint-by-numbers coloring game",
+    "complexity": "medium",
+    "expected_elements": [
+      "core mechanic",
+      "ui feedback"
+    ],
+    "tags": [
+      "arcade"
+    ]
+  },
+  {
+    "id": "gen-201",
+    "prompt": "Create a multiplayer local co-op platformer with shared screen",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-202",
+    "prompt": "Build a procedural roguelike dungeon with permadeath and meta upgrades",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-203",
+    "prompt": "Make a real-time strategy lite with resource gathering and unit production",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-204",
+    "prompt": "Create a narrative adventure with branching dialogue and inventory",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-205",
+    "prompt": "Build a physics sandbox with joints, motors, and destructible blocks",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-206",
+    "prompt": "Make a MOBA-style lane game with minions and hero abilities",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-207",
+    "prompt": "Create a city builder with zoning, power grid, and citizen happiness",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-208",
+    "prompt": "Build a trading card auto-battler with synergies and shop rerolls",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-209",
+    "prompt": "Make a 4X space exploration game with fog of war and diplomacy",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-210",
+    "prompt": "Create a rhythm-action boss fight with pattern telegraphs",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-211",
+    "prompt": "Build a survival crafting game with day/night and hunger/thirst",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-212",
+    "prompt": "Make a tactical turn-based grid combat with cover and flanking",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-213",
+    "prompt": "Create a deckbuilding roguelike with map nodes and relics",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-214",
+    "prompt": "Build a sports manager sim with roster, training, and match simulation",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  },
+  {
+    "id": "gen-215",
+    "prompt": "Make a complex puzzle box escape room with multi-step interactions",
+    "complexity": "hard",
+    "expected_elements": [
+      "multi-system",
+      "state management"
+    ],
+    "tags": [
+      "advanced"
+    ]
+  }
+]

@@ -101,7 +101,7 @@ export function GamePlayer({
       cancelled = true;
       window.clearTimeout(fallbackTimer);
     };
-  }, [src, accessToken, retryVersion]);
+  }, [src, accessToken, retryVersion, t]);
 
   return (
     <div

@@ -107,6 +107,7 @@ class _CapturingClient:
 
 
 _DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+_BIGMODEL_ANTHROPIC = "https://open.bigmodel.cn/api/anthropic"
 
 
 @pytest.mark.asyncio
@@ -137,12 +138,32 @@ async def test_complete_skips_enable_thinking_for_qwq(
 
 
 @pytest.mark.asyncio
-async def test_complete_skips_enable_thinking_on_anthropic_native(
+async def test_complete_disables_thinking_on_anthropic_native(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cap = _CapturingClient()
     monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
     await complete(LLMProvider.ANTHROPIC, "key", "claude-sonnet-5", "sys", "user")
+    assert cap.last_json["thinking"] == {"type": "disabled"}
+    assert "enable_thinking" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_uses_anthropic_messages_for_anthropic_compat_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.ANTHROPIC,
+        "key",
+        "glm-5.1",
+        "sys",
+        "user",
+        base_url=_BIGMODEL_ANTHROPIC,
+    )
+    assert cap.last_json["system"] == "sys"
+    assert cap.last_json["thinking"] == {"type": "disabled"}
     assert "enable_thinking" not in cap.last_json
 
 

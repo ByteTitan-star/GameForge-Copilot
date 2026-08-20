@@ -1,0 +1,28 @@
+{
+  "subset_ids": [
+    "gen-001",
+    "gen-002",
+    "gen-003",
+    "gen-004",
+    "gen-005",
+    "gen-101",
+    "gen-102",
+    "gen-103",
+    "gen-201",
+    "gen-202"
+  ],
+  "models": [
+    {
+      "id": "deepseek-v4-flash",
+      "provider": "openai_compat"
+    },
+    {
+      "id": "qwen-max",
+      "provider": "openai_compat"
+    },
+    {
+      "id": "glm-4-flash",
+      "provider": "openai_compat"
+    }
+  ]
+}

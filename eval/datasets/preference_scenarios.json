@@ -1,0 +1,283 @@
+[
+  {
+    "id": "pref-001",
+    "session1_text": "I prefer pixel art style and easy difficulty",
+    "expected_preferences": [
+      {
+        "category": "visual",
+        "key": "style",
+        "value_json": {
+          "style": "pixel"
+        },
+        "source": "explicit"
+      },
+      {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "easy"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "visual.style",
+      "gameplay.difficulty"
+    ]
+  },
+  {
+    "id": "pref-002",
+    "session1_text": "Use dark theme UI",
+    "expected_preferences": [
+      {
+        "category": "ui",
+        "key": "theme",
+        "value_json": {
+          "theme": "dark"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "ui.theme"
+    ]
+  },
+  {
+    "id": "pref-003",
+    "session1_text": "Keep games short under 5 minutes",
+    "expected_preferences": [
+      {
+        "category": "gameplay",
+        "key": "session_length",
+        "value_json": {
+          "minutes": 5
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "gameplay.session_length"
+    ]
+  },
+  {
+    "id": "pref-004",
+    "session1_text": "No violence, family friendly only",
+    "expected_preferences": [
+      {
+        "category": "content",
+        "key": "rating",
+        "value_json": {
+          "rating": "family"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "content.rating"
+    ]
+  },
+  {
+    "id": "pref-005",
+    "session1_text": "Mobile-friendly touch controls",
+    "expected_preferences": [
+      {
+        "category": "input",
+        "key": "control",
+        "value_json": {
+          "mode": "touch"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "input.control"
+    ]
+  },
+  {
+    "id": "pref-006",
+    "session1_text": "I like sci-fi settings",
+    "expected_preferences": [
+      {
+        "category": "theme",
+        "key": "genre",
+        "value_json": {
+          "genre": "sci-fi"
+        },
+        "source": "inferred"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": []
+  },
+  {
+    "id": "pref-007",
+    "session1_text": "Prefer Chinese UI labels",
+    "expected_preferences": [
+      {
+        "category": "ui",
+        "key": "language",
+        "value_json": {
+          "lang": "zh"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "ui.language"
+    ]
+  },
+  {
+    "id": "pref-008",
+    "session1_text": "Hardcore difficulty please",
+    "expected_preferences": [
+      {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "hard"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "gameplay.difficulty"
+    ]
+  },
+  {
+    "id": "pref-009",
+    "session1_text": "Minimalist flat design",
+    "expected_preferences": [
+      {
+        "category": "visual",
+        "key": "style",
+        "value_json": {
+          "style": "flat"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "visual.style"
+    ]
+  },
+  {
+    "id": "pref-010",
+    "session1_text": "Co-op local multiplayer preferred",
+    "expected_preferences": [
+      {
+        "category": "gameplay",
+        "key": "multiplayer",
+        "value_json": {
+          "mode": "local_coop"
+        },
+        "source": "inferred"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": []
+  },
+  {
+    "id": "pref-011",
+    "session1_text": "No microtransactions in design",
+    "expected_preferences": [
+      {
+        "category": "monetization",
+        "key": "model",
+        "value_json": {
+          "model": "none"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "monetization.model"
+    ]
+  },
+  {
+    "id": "pref-012",
+    "session1_text": "Keyboard only controls",
+    "expected_preferences": [
+      {
+        "category": "input",
+        "key": "control",
+        "value_json": {
+          "mode": "keyboard"
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "input.control"
+    ]
+  },
+  {
+    "id": "pref-013",
+    "session1_text": "Retro chiptune audio style",
+    "expected_preferences": [
+      {
+        "category": "audio",
+        "key": "style",
+        "value_json": {
+          "style": "chiptune"
+        },
+        "source": "inferred"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": []
+  },
+  {
+    "id": "pref-014",
+    "session1_text": "Tutorial on first launch",
+    "expected_preferences": [
+      {
+        "category": "ux",
+        "key": "onboarding",
+        "value_json": {
+          "tutorial": true
+        },
+        "source": "explicit"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "ux.onboarding"
+    ]
+  },
+  {
+    "id": "pref-015",
+    "session1_text": "Explicit easy mode; user likes puzzle games in chat",
+    "expected_preferences": [
+      {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "easy"
+        },
+        "source": "explicit"
+      },
+      {
+        "category": "genre",
+        "key": "preferred",
+        "value_json": {
+          "genre": "puzzle"
+        },
+        "source": "inferred"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "gameplay.difficulty"
+    ]
+  }
+]

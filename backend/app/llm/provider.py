@@ -7,6 +7,7 @@ complete() 返回 (content, usage)，usage 取响应真实字段，不估算（d
 import asyncio
 import logging
 import random
+import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -84,10 +85,14 @@ def _is_official_base(provider: LLMProvider, base_url: str | None) -> bool:
 
 
 def _uses_anthropic_native_api(provider: LLMProvider, base_url: str | None) -> bool:
-    """Anthropic /messages 仅用于官方域名；自定义代理一律 OpenAI 兼容。"""
+    """Use Anthropic /messages for official hosts and known Anthropic-style proxies."""
     if provider != LLMProvider.ANTHROPIC:
         return False
-    return _is_official_base(provider, base_url)
+    if _is_official_base(provider, base_url):
+        return True
+    if not base_url:
+        return False
+    return "/anthropic" in _normalize_base_url(base_url).lower()
 
 
 def _auth_headers(
@@ -116,7 +121,10 @@ def _ensure_api_version_path(base: str, provider: LLMProvider) -> str:
 
     parsed = urlparse(base)
     path = (parsed.path or "").strip("/")
-    if path:
+    if not path:
+        return f"{base}/v1"
+    last = path.split("/")[-1].lower()
+    if re.fullmatch(r"v\d+(?:beta\d+)?", last):
         return base
     return f"{base}/v1"
 
@@ -200,6 +208,13 @@ def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model:
     return not _requires_thinking_enabled(model)
 
 
+def _should_disable_anthropic_thinking(provider: LLMProvider, base_url: str | None) -> bool:
+    """Anthropic 原生 /messages（含 GLM Anthropic 代理）关闭 thinking 扩展块。"""
+    if not settings.llm_disable_thinking:
+        return False
+    return _uses_anthropic_native_api(provider, base_url)
+
+
 async def test_connectivity(
     provider: LLMProvider,
     apikey: str,
@@ -275,6 +290,8 @@ def _build_body(
             "system": system,
             "messages": [{"role": "user", "content": user_msg}],
         }
+        if _should_disable_anthropic_thinking(provider, base_url):
+            body["thinking"] = {"type": "disabled"}
     else:
         body = {
             "model": model,

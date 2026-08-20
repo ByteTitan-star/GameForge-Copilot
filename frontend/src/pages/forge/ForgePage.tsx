@@ -66,7 +66,7 @@ import {
   previewFromGameDetail,
   syncUiFromRun,
 } from "./resume";
-import { mintDraftPreviewUrl } from "@/lib/hosting";
+import { mintDraftPreviewUrl, isPreviewTokenUrl } from "@/lib/hosting";
 import {
   clearActiveRun,
   readActiveRun,
@@ -279,6 +279,29 @@ export function ForgePage() {
     return () => window.clearTimeout(timer);
   }, [previewUrl]);
 
+  // done/WS 常下发 /draft/...；iframe 无法带 Bearer，这里一次性兑成 /preview/{token}/...
+  // 避免 GamePlayer 与父级各自 mint，也避免 draft src 在重渲染下反复兑换。
+  useEffect(() => {
+    if (!token || !previewUrl) return;
+    if (isPreviewTokenUrl(previewUrl)) return;
+    if (!/\/draft\//.test(previewUrl)) return;
+    const match = previewUrl.match(/\/draft\/([^/]+)\/([^/?#]+)/);
+    if (!match) return;
+    let cancelled = false;
+    const game = decodeURIComponent(match[1]);
+    const ver = decodeURIComponent(match[2]);
+    void mintDraftPreviewUrl(game, ver, token)
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url);
+      })
+      .catch(() => {
+        /* 保留 draft URL，交给 GamePlayer 再试一次并展示错误 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUrl, token]);
+
   function connectWs(activeGameId: string, activeRunId: string) {
     if (!token) return;
     const prev = handleRef.current;
@@ -431,7 +454,8 @@ export function ForgePage() {
       }
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [runId, token, gameId, runStatus, detail, title, t]);
+    // detail / t 不进 deps：react-query result 与旧版 useT 引用不稳，会反复重置轮询
+  }, [runId, token, gameId, runStatus, title]);
 
   function pushItem(
     partial: Omit<TimelineItem, "id" | "at"> & { at?: string },

@@ -30,7 +30,8 @@ export function DraftPlayPage() {
     return () => {
       cancelled = true
     }
-  }, [gameId, version, token, t])
+    // t 已按 locale memo；此处仍不依赖 t，避免文案函数变动触发重新 mint
+  }, [gameId, version, token])
 
   if (!token) return <Navigate to="/login" replace />
 

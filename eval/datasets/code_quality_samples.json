@@ -1,0 +1,122 @@
+[
+  {
+    "id": "cq-001",
+    "html": "<html><body><button id='b'>Click</button></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-002",
+    "html": "<html><body><script>function init(){",
+    "expected_complete": false,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-003",
+    "html": "",
+    "expected_complete": false,
+    "expected_empty": true
+  },
+  {
+    "id": "cq-004",
+    "html": "<html><body><p> </p></body></html>",
+    "expected_complete": true,
+    "expected_empty": true
+  },
+  {
+    "id": "cq-005",
+    "html": "{\"format\":\"html\",\"content\":\"<html></html>\"}",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-006",
+    "html": "{\"format\":\"html\",\"content\":\"<html><body>",
+    "expected_complete": false,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-007",
+    "html": "<html><body><canvas></canvas><script>init()</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-008",
+    "html": "<html><body><script>while(true){}</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-009",
+    "html": "<html><body></body>",
+    "expected_complete": false,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-010",
+    "html": "<html><body><div id='score'>0</div></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-011",
+    "html": "<html><body><script>eval('x')</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-012",
+    "html": "<html><body><script type='module'>import x</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-013",
+    "html": "<html><body><script>function init(){}</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-014",
+    "html": "<html><body><script>const a=[1,2,",
+    "expected_complete": false,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-015",
+    "html": "<html><body><script>console.log('ok')</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-016",
+    "html": "   \n\t  ",
+    "expected_complete": false,
+    "expected_empty": true
+  },
+  {
+    "id": "cq-017",
+    "html": "<html><body><script>document.addEventListener('DOMContentLoaded', init)</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-018",
+    "html": "<html><body><script>/* unfinished",
+    "expected_complete": false,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-019",
+    "html": "<html><body><script>function init(){}init()</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  },
+  {
+    "id": "cq-020",
+    "html": "<html><body><script>export default {}</script></body></html>",
+    "expected_complete": true,
+    "expected_empty": false
+  }
+]
