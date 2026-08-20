@@ -20,6 +20,8 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BACKEND_DIR = _REPO_ROOT / "backend"
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
@@ -229,6 +231,10 @@ def _write_md(report: dict, out_path: Path) -> None:
 
 def main() -> None:
     report = run_eval()
+
+    from eval.runners._common import write_json_report
+
+    write_json_report("output_audit_eval", report)
 
     md_main = _REPO_ROOT / "docs" / "evals" / "output-audit-eval-report.md"
     md_mirror = _REPO_ROOT / "docs" / "analysis" / "output_audit_eval_report.md"
