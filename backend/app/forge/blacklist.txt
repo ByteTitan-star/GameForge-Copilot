@@ -24,5 +24,6 @@ re:\bDAN\b|\bjailbreak\b|越狱|绕过(?:限制|审核|安全|护栏)|忽略(?:�
 # ---- 恶意代码 ----
 re:<script[^>]*>\s*eval\s*\(
 re:javascript:[^;\s]
-re:onerror\s*=\s*["']
+re:onerror\s*=
+re:reveal\s+(?:your\s+)?(?:system|developer)\s+prompt
 re:new\s+WebSocket\s*\(|navigator\.sendBeacon\s*\(
