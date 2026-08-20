@@ -126,6 +126,16 @@ def _quick_patterns() -> list[tuple[re.Pattern[str], str]]:
     return _blacklist_patterns
 
 
+_UNI_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
+_HEX_ESCAPE_RE = re.compile(r"\\x([0-9a-fA-F]{2})")
+
+
+def _decode_unicode_escapes(text: str) -> str:
+    """Decode \\uXXXX / \\xXX without latin-1, so CJK + escapes can mix."""
+    out = _UNI_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), text)
+    return _HEX_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), out)
+
+
 def _decode_encoded_input(text: str) -> list[str]:
     """Attempt to decode common encoding bypasses; return decoded variants.
 
@@ -138,28 +148,18 @@ def _decode_encoded_input(text: str) -> list[str]:
 
     variants: list[str] = []
 
-    # HTML entity decoding
     decoded_html = html.unescape(text)
     if decoded_html != text:
         variants.append(decoded_html)
-        # HTML → then unicode_escape (catches mixed encoding like &#x...;+\uXXXX)
-        try:
-            decoded_html_then_uni = codecs.decode(decoded_html, "unicode_escape")
-            if decoded_html_then_uni != decoded_html:
-                variants.append(decoded_html_then_uni)
-        except Exception as exc:
-            # Best-effort decoder: ignore failures but keep runtime safe.
-            log.debug("decode html->unicode_escape failed: %s", exc)
 
-    # Unicode escape decoding (\uXXXX, \xXX)
-    try:
-        decoded_uni = codecs.decode(text, "unicode_escape")
-        if decoded_uni != text:
-            variants.append(decoded_uni)
-    except Exception as exc:
-        log.debug("decode unicode_escape failed: %s", exc)
+    decoded_html_then_uni = _decode_unicode_escapes(decoded_html)
+    if decoded_html_then_uni != decoded_html:
+        variants.append(decoded_html_then_uni)
 
-    # Base64 decoding: try the whole text and any base64-looking segments
+    decoded_uni = _decode_unicode_escapes(text)
+    if decoded_uni != text:
+        variants.append(decoded_uni)
+
     _B64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
     for segment in re.findall(r"[A-Za-z0-9+/]{8,}={0,2}", text):
         if set(segment) <= _B64_CHARS:
@@ -171,7 +171,6 @@ def _decode_encoded_input(text: str) -> list[str]:
             except Exception as exc:
                 log.debug("decode base64 segment failed: %s", exc)
 
-    # Rot13 decoding
     decoded_rot13 = codecs.decode(text, "rot_13")
     if decoded_rot13 != text:
         variants.append(decoded_rot13)

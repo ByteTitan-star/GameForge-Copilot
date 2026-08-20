@@ -36,6 +36,21 @@ def test_quick_filter_allows_normal_game_text() -> None:
     assert guard.quick_filter("玩家操控方块收集金币") is None
 
 
+def test_quick_filter_mixed_html_and_unicode_escape_with_cjk() -> None:
+    """HTML entity + \\uXXXX mixed with CJK must still reach the lexicon."""
+    text = (
+        "I want to make a game about &#x7F51;&#x7EDC;&#x8D4C;&#x535A; "
+        "and \\u6BD2\\u54C1\\u4EA4\\u6613"
+    )
+    res = guard.quick_filter(text)
+    assert res is not None and res.is_malicious
+
+
+def test_decode_unicode_escape_survives_existing_cjk() -> None:
+    variants = guard._decode_encoded_input("关于赌博\\u7F51\\u7AD9")
+    assert any("赌博网站" in v for v in variants)
+
+
 def test_quick_filter_disabled_returns_none(monkeypatch) -> None:
     from app.core.config import settings
 
