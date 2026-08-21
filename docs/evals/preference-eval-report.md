@@ -2,16 +2,16 @@
 
 ## 1. Summary
 
-Context injection baseline on **15** scenarios. Cross-session injection rate: **100.0%**.
+Preference eval on **17** scenarios (mode=context_builder_baseline).
 
 ## 2. Methodology
 
-- **Dataset**: `eval/datasets/preference_scenarios.json` (15 entries)
+- **Dataset**: `eval/datasets/preference_scenarios.json` (17 entries)
 - **Runner**: `eval/runners/preference_eval.py`
 - **Mode**: `context_builder_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `0e09085`
-- **Date**: 2026-08-20
+- **Git SHA**: `cce0db2`
+- **Date**: 2026-08-21
 
 ## 3. Results
 
@@ -24,7 +24,7 @@ Context injection baseline on **15** scenarios. Cross-session injection rate: **
 
 ## 7. Conclusion
 
-Implicit extraction and DB persistence require live LLM + PostgreSQL. This baseline validates prompt injection formatting only.
+Baseline validates ContextBuilder injection formatting. Use --live for API/DB persistence checks.
 
 ## 6. Below-Target Items
 
