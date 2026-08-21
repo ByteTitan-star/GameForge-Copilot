@@ -11,8 +11,8 @@ _TERMINAL_EVENT_TYPES = frozenset({"done", "failed", "error"})
 def _event_type(event: dict) -> str:
     raw = event.get("type", "")
     if isinstance(raw, StrEnum):
-        return str(raw.value)
-    return str(raw).lower()
+        return str(raw.value).lower()
+    return str(getattr(raw, "value", raw)).lower()
 
 
 def _parse_ts(ts: str) -> datetime:
