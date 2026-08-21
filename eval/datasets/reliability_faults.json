@@ -73,5 +73,34 @@
     "type": "stale_running_timeout_config",
     "setting": "running_stale_timeout_s",
     "expected_min": 60
+  },
+  {
+    "id": "rel-011",
+    "type": "llm_timeout_then_ok",
+    "fail_times": 1,
+    "expected_recovery": true
+  },
+  {
+    "id": "rel-012",
+    "type": "mid_run_kill_resume",
+    "expected_resume": true
+  },
+  {
+    "id": "rel-013",
+    "type": "oversized_continuation",
+    "input": "<html><body><script>function init(){",
+    "expected_truncated": true,
+    "expected_contains": "续写"
+  },
+  {
+    "id": "rel-014",
+    "type": "all_fail_degradation",
+    "expected_pause_reason": "recoverable_error"
+  },
+  {
+    "id": "rel-015",
+    "type": "stale_cleanup",
+    "setting": "running_stale_timeout_s",
+    "expected_min": 60
   }
 ]

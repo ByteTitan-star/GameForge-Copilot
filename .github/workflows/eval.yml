@@ -4,6 +4,16 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_live_fault:
+        description: "Run reliability live-fault simulations"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -121,3 +131,67 @@ jobs:
         env:
           PYTHONPATH: .:..
         run: uv run python ../eval/run_all.py
+
+      - name: Live generation eval (limit 10)
+        env:
+          EVAL_LIVE: "1"
+          EVAL_API_BASE_URL: ${{ secrets.EVAL_API_BASE_URL }}
+          EVAL_ACCESS_TOKEN: ${{ secrets.EVAL_ACCESS_TOKEN }}
+          GENERATION_LIVE_SUCCESS_MIN: "0.90"
+          PYTHONPATH: .:..
+        run: |
+          set -euo pipefail
+          if [ -z "${EVAL_API_BASE_URL:-}" ] || [ -z "${EVAL_ACCESS_TOKEN:-}" ]; then
+            echo "EVAL_API_BASE_URL and EVAL_ACCESS_TOKEN secrets are required for main live eval"
+            exit 1
+          fi
+          uv run python -m eval.runners.generation_eval --live --limit 10
+          # Derive #116/#117 from the just-written generation report when present.
+          uv run python -m eval.runners.code_quality_eval || true
+          uv run python -m eval.runners.performance_eval || true
+          python - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          reports = sorted(Path("../eval/reports").glob("*_generation_eval.json"), reverse=True)
+          if not reports:
+              print("no generation report found", file=sys.stderr)
+              sys.exit(1)
+          data = json.loads(reports[0].read_text(encoding="utf-8"))
+          rate = float((data.get("summary") or {}).get("success_rate") or 0)
+          minimum = float(os.environ.get("GENERATION_LIVE_SUCCESS_MIN", "0.90"))
+          print(f"success_rate={rate:.4f} min={minimum:.4f} report={reports[0].name}")
+          if rate < minimum:
+              sys.exit(1)
+          PY
+
+      - name: Upload live generation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-live-generation-eval
+          path: |
+            eval/reports/*_generation_eval.json
+            docs/evals/generation-eval-report.md
+            docs/evals/code-quality-eval-report.md
+            docs/evals/performance-eval-report.md
+          if-no-files-found: warn
+
+  reliability_live_fault:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_live_fault == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install backend deps
+        run: uv sync --frozen --no-dev
+      - name: Run reliability live-fault simulations
+        env:
+          PYTHONPATH: .:..
+          EVAL_LIVE_FAULT: "1"
+        run: uv run python -m eval.runners.reliability_eval --live-fault

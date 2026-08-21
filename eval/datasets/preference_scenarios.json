@@ -24,6 +24,11 @@
     "expected_in_prompt": [
       "visual.style",
       "gameplay.difficulty"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "visual.style",
+      "gameplay.difficulty"
     ]
   },
   {
@@ -41,6 +46,10 @@
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
+      "ui.theme"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
       "ui.theme"
     ]
   },
@@ -60,6 +69,10 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "gameplay.session_length"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "gameplay.session_length"
     ]
   },
   {
@@ -77,6 +90,10 @@
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
+      "content.rating"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
       "content.rating"
     ]
   },
@@ -96,6 +113,10 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "input.control"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "input.control"
     ]
   },
   {
@@ -112,7 +133,9 @@
       }
     ],
     "session2_prompt": "Make a new casual game",
-    "expected_in_prompt": []
+    "expected_in_prompt": [],
+    "mode": "implicit",
+    "expected_in_context": []
   },
   {
     "id": "pref-007",
@@ -129,6 +152,10 @@
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
+      "ui.language"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
       "ui.language"
     ]
   },
@@ -148,6 +175,10 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "gameplay.difficulty"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "gameplay.difficulty"
     ]
   },
   {
@@ -166,6 +197,10 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "visual.style"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "visual.style"
     ]
   },
   {
@@ -182,7 +217,9 @@
       }
     ],
     "session2_prompt": "Make a new casual game",
-    "expected_in_prompt": []
+    "expected_in_prompt": [],
+    "mode": "implicit",
+    "expected_in_context": []
   },
   {
     "id": "pref-011",
@@ -199,6 +236,10 @@
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
+      "monetization.model"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
       "monetization.model"
     ]
   },
@@ -218,6 +259,10 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "input.control"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "input.control"
     ]
   },
   {
@@ -234,7 +279,9 @@
       }
     ],
     "session2_prompt": "Make a new casual game",
-    "expected_in_prompt": []
+    "expected_in_prompt": [],
+    "mode": "implicit",
+    "expected_in_context": []
   },
   {
     "id": "pref-014",
@@ -251,6 +298,10 @@
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
+      "ux.onboarding"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
       "ux.onboarding"
     ]
   },
@@ -278,6 +329,77 @@
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
       "gameplay.difficulty"
+    ],
+    "mode": "explicit",
+    "expected_in_context": [
+      "gameplay.difficulty"
+    ]
+  },
+  {
+    "id": "pref-016",
+    "mode": "conflict",
+    "session1_text": "Earlier chat implied hard difficulty; user later says easy",
+    "expected_preferences": [
+      {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "easy"
+        },
+        "source": "explicit"
+      }
+    ],
+    "conflict": {
+      "older_implicit": {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "hard"
+        },
+        "source": "inferred"
+      },
+      "newer_explicit": {
+        "category": "gameplay",
+        "key": "difficulty",
+        "value_json": {
+          "level": "easy"
+        },
+        "source": "explicit"
+      }
+    },
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [
+      "gameplay.difficulty"
+    ],
+    "expected_in_context": [
+      "gameplay.difficulty"
+    ],
+    "relevance_keywords": [
+      "easy"
+    ]
+  },
+  {
+    "id": "pref-017",
+    "mode": "implicit",
+    "session1_text": "User keeps mentioning neon cyberpunk vibes",
+    "expected_preferences": [
+      {
+        "category": "visual",
+        "key": "theme",
+        "value_json": {
+          "theme": "cyberpunk"
+        },
+        "source": "inferred"
+      }
+    ],
+    "session2_prompt": "Make a new casual game",
+    "expected_in_prompt": [],
+    "expected_in_context": [
+      "visual.theme"
+    ],
+    "relevance_keywords": [
+      "cyberpunk",
+      "neon"
     ]
   }
 ]

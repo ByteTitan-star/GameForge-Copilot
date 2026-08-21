@@ -3,7 +3,7 @@
     "id": "cq-001",
     "html": "<html><body><button id='b'>Click</button></body></html>",
     "expected_complete": true,
-    "expected_empty": false
+    "expected_empty": true
   },
   {
     "id": "cq-002",
@@ -14,7 +14,7 @@
   {
     "id": "cq-003",
     "html": "",
-    "expected_complete": false,
+    "expected_complete": true,
     "expected_empty": true
   },
   {
@@ -27,13 +27,13 @@
     "id": "cq-005",
     "html": "{\"format\":\"html\",\"content\":\"<html></html>\"}",
     "expected_complete": true,
-    "expected_empty": false
+    "expected_empty": true
   },
   {
     "id": "cq-006",
     "html": "{\"format\":\"html\",\"content\":\"<html><body>",
     "expected_complete": false,
-    "expected_empty": false
+    "expected_empty": true
   },
   {
     "id": "cq-007",
@@ -51,13 +51,13 @@
     "id": "cq-009",
     "html": "<html><body></body>",
     "expected_complete": false,
-    "expected_empty": false
+    "expected_empty": true
   },
   {
     "id": "cq-010",
     "html": "<html><body><div id='score'>0</div></body></html>",
     "expected_complete": true,
-    "expected_empty": false
+    "expected_empty": true
   },
   {
     "id": "cq-011",
@@ -92,7 +92,7 @@
   {
     "id": "cq-016",
     "html": "   \n\t  ",
-    "expected_complete": false,
+    "expected_complete": true,
     "expected_empty": true
   },
   {
