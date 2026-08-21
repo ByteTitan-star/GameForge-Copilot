@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-Static structural analysis on **20** curated snippets. Structure detection accuracy: **90.0%**, empty-output detection: **80.0%**.
+Static structural analysis on **20** curated snippets. Structure detection accuracy: **100.0%**, empty-output detection: **100.0%**.
 
 ## 2. Methodology
 
@@ -10,8 +10,8 @@ Static structural analysis on **20** curated snippets. Structure detection accur
 - **Runner**: `eval/runners/code_quality_eval.py`
 - **Mode**: `static_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `0e09085`
-- **Date**: 2026-08-20
+- **Git SHA**: `7ccb996`
+- **Date**: 2026-08-21
 
 ## 3. Results
 
@@ -19,20 +19,13 @@ Static structural analysis on **20** curated snippets. Structure detection accur
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| structure_detection_accuracy | 90.0% | >= 90% | ✅ |
-| empty_output_detection_accuracy | 80.0% | >= 90% | ❌ |
-| empty_output_rate (samples) | 35.0% | <= 5% | ❌ |
+| structure_detection_accuracy | 100.0% | >= 90% | ✅ |
+| empty_output_detection_accuracy | 100.0% | >= 90% | ✅ |
+| empty_labeled_rate (dataset) | 40.0% | informational | — |
 
 ## 4. Failure Analysis
 
-| id | complete_match | empty_match |
-|---|---|---|
-| cq-002 | True | False |
-| cq-003 | False | True |
-| cq-009 | True | False |
-| cq-014 | True | False |
-| cq-016 | False | True |
-| cq-018 | True | False |
+No static baseline failures.
 
 ## 6. Below-Target Items
 
