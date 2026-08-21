@@ -514,7 +514,9 @@ async def _run_live(dataset: list[dict[str, Any]], *, limit: int) -> list[dict[s
     sem = asyncio.Semaphore(concurrency)
     create_lock = asyncio.Lock()
 
-    async with httpx.AsyncClient(base_url=base, headers=headers, timeout=120.0) as client:
+    async with httpx.AsyncClient(
+        base_url=base, headers=headers, timeout=120.0, trust_env=False
+    ) as client:
 
         async def _bounded(idx: int, case: dict[str, Any]) -> None:
             async with sem:

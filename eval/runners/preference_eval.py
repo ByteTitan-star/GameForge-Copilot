@@ -180,18 +180,25 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
         raise RuntimeError("EVAL_API_BASE_URL required for preference live_api")
 
     limit = int(os.environ.get("EVAL_PREF_LIVE_LIMIT", "5"))
-    cases = scenarios[:limit]
+    # Always include conflict scenarios so resolution metric is meaningful.
+    conflict_cases = [s for s in scenarios if s.get("mode") == "conflict"]
+    other = [s for s in scenarios if s.get("mode") != "conflict"]
+    cases = (conflict_cases + other)[: max(limit, len(conflict_cases))]
     per_case: list[dict[str, Any]] = []
     db_ok = 0
     conflict_ok = 0
     conflict_n = 0
     injection_ok = 0
 
-    async with httpx.AsyncClient(base_url=base, timeout=60.0) as anon:
+    async with httpx.AsyncClient(
+        base_url=base, timeout=60.0, trust_env=False
+    ) as anon:
         token = await _register_and_login(anon)
 
     headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(base_url=base, headers=headers, timeout=60.0) as client:
+    async with httpx.AsyncClient(
+        base_url=base, headers=headers, timeout=60.0, trust_env=False
+    ) as client:
         user_id = await _me_user_id(client)
         await client.delete("/api/v1/me/preferences")
 
@@ -315,16 +322,18 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
             per_case.append(case_result)
 
     n = max(1, len(cases))
+    summary: dict[str, Any] = {
+        "scenario_count": len(cases),
+        "db_match_rate": round(db_ok / n, 4),
+        "cross_session_injection_rate": round(injection_ok / n, 4),
+        "mode": "live_api",
+    }
+    if conflict_n:
+        summary["preference_conflict_resolution"] = round(conflict_ok / conflict_n, 4)
+    else:
+        summary["preference_conflict_resolution"] = None
     return {
-        "summary": {
-            "scenario_count": len(cases),
-            "db_match_rate": round(db_ok / n, 4),
-            "cross_session_injection_rate": round(injection_ok / n, 4),
-            "preference_conflict_resolution": (
-                round(conflict_ok / conflict_n, 4) if conflict_n else 1.0
-            ),
-            "mode": "live_api",
-        },
+        "summary": summary,
         "per_case": per_case,
         "note": "Live API preference persistence against running backend + PostgreSQL.",
     }
@@ -370,9 +379,17 @@ def write_markdown_report(report: dict[str, Any]) -> Path:
             f"{status_cell(s['db_match_rate'], 0.95, higher_is_better=True)} |",
             f"| cross_session_injection_rate | {s['cross_session_injection_rate']:.1%} | 100% | "
             f"{status_cell(s['cross_session_injection_rate'], 1.0, higher_is_better=True)} |",
-            f"| preference_conflict_resolution | {s['preference_conflict_resolution']:.1%} | 100% | "
-            f"{status_cell(s['preference_conflict_resolution'], 1.0, higher_is_better=True)} |",
         ]
+        conflict = s.get("preference_conflict_resolution")
+        if conflict is None:
+            lines.append(
+                "| preference_conflict_resolution | n/a | 100% | ⏳ |"
+            )
+        else:
+            lines.append(
+                f"| preference_conflict_resolution | {conflict:.1%} | 100% | "
+                f"{status_cell(conflict, 1.0, higher_is_better=True)} |"
+            )
     else:
         lines += [
             f"| cross_session_injection_rate | {s['cross_session_injection_rate']:.1%} | 100% | "
@@ -386,7 +403,9 @@ def write_markdown_report(report: dict[str, Any]) -> Path:
         below.append("- cross_session_injection_rate below 100%")
     if s.get("db_match_rate") is not None and s["db_match_rate"] < 0.95:
         below.append("- db_match_rate below 95%")
-    if s.get("preference_conflict_resolution", 1) < 1.0:
+    if s.get("preference_conflict_resolution") is not None and s[
+        "preference_conflict_resolution"
+    ] < 1.0:
         below.append("- preference_conflict_resolution below 100%")
     lines.extend(below_target_section(below))
     return write_markdown(DOCS_EVALS_DIR / "preference-eval-report.md", lines)
