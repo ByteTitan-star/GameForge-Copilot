@@ -43,7 +43,23 @@ def test_derive_qa_metrics_repair_round() -> None:
     assert qa["repair_rounds"] == 1
 
 
+def test_derive_qa_metrics_first_pass_zero_repairs() -> None:
+    qa = derive_qa_metrics(
+        attempts=3,
+        first_playtest_ok=True,
+        final_playtest_ok=True,
+        error_categories=["syntax", "runtime"],
+    )
+    assert qa["first_pass"] is True
+    assert qa["repair_rounds"] == 0
+    assert qa["error_categories"] == ["syntax", "runtime"]
+
+
 def test_empty_or_trivial_html() -> None:
     assert is_empty_or_trivial_html("") is True
     assert is_empty_or_trivial_html("<html><body></body></html>") is True
     assert is_empty_or_trivial_html("<html><body><canvas id='g'></canvas><script>boot()</script></body></html>") is False
+
+
+def test_empty_html_short_without_canvas_or_script() -> None:
+    assert is_empty_or_trivial_html("<p>x</p>") is True
