@@ -10,8 +10,8 @@ Context injection baseline on **15** scenarios. Cross-session injection rate: **
 - **Runner**: `eval/runners/preference_eval.py`
 - **Mode**: `context_builder_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `0e09085`
-- **Date**: 2026-08-20
+- **Git SHA**: `0497cc6`
+- **Date**: 2026-08-21
 
 ## 3. Results
 
