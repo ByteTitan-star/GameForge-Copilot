@@ -601,6 +601,10 @@ async def run_playtest(
             ),
         )
 
+    acceptance = _design_acceptance_result(html, design_doc)
+    if acceptance is not None:
+        return _with_cdn_check(html, acceptance)
+
     unavailable = await asyncio.to_thread(_check_playwright_available)
     if unavailable is not None:
         return _with_cdn_check(html, unavailable)
@@ -615,10 +619,6 @@ async def run_playtest(
                 failure_kind="product",
             ),
         )
-
-    acceptance = _design_acceptance_result(html, design_doc)
-    if acceptance is not None:
-        return _with_cdn_check(html, acceptance)
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
