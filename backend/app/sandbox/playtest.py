@@ -590,21 +590,6 @@ async def run_playtest(
     design_doc: dict[str, Any] | None = None,
     runtime_design_doc: dict[str, Any] | None = None,
 ) -> PlaytestResult:
-    structural = structural_html_errors(html)
-    if structural:
-        return _with_cdn_check(
-            html,
-            make_playtest_result(
-                errors=structural,
-                console_logs=["playtest: structural gate"],
-                failure_kind="product",
-            ),
-        )
-
-    acceptance = _design_acceptance_result(html, design_doc)
-    if acceptance is not None:
-        return _with_cdn_check(html, acceptance)
-
     api_errors = illegal_engine_api_errors(html)
     if api_errors:
         return _with_cdn_check(
@@ -619,6 +604,21 @@ async def run_playtest(
     unavailable = await asyncio.to_thread(_check_playwright_available)
     if unavailable is not None:
         return _with_cdn_check(html, unavailable)
+
+    structural = structural_html_errors(html)
+    if structural:
+        return _with_cdn_check(
+            html,
+            make_playtest_result(
+                errors=structural,
+                console_logs=["playtest: structural gate"],
+                failure_kind="product",
+            ),
+        )
+
+    acceptance = _design_acceptance_result(html, design_doc)
+    if acceptance is not None:
+        return _with_cdn_check(html, acceptance)
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

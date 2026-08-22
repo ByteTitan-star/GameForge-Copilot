@@ -270,9 +270,12 @@ async def test_art_options_retry_exhaustion_falls_back_and_finishes(
 
     calls = {"art": 0}
 
+    def _is_art_options_prompt(system: str) -> bool:
+        return "方向提案" in system or "并行单方案任务" in system or "TARGET=" in system
+
     async def fail_art_options(*args, **kwargs):
         system = args[4]
-        if "方向提案" in system:
+        if _is_art_options_prompt(system):
             calls["art"] += 1
             from app.enums import LLMProvider
             from app.llm.provider import LLMCompletion, Usage
@@ -283,7 +286,7 @@ async def test_art_options_retry_exhaustion_falls_back_and_finishes(
     async def fail_art_options_stream(*args, **kwargs):
         # art 节点切流式后走 call_llm_stream；匹配方向提案让连续失败触发重试耗尽兜底。
         system = args[4]
-        if "方向提案" in system:
+        if _is_art_options_prompt(system):
             calls["art"] += 1
             from app.llm.provider import StreamChunk, Usage
 
@@ -310,7 +313,8 @@ async def test_art_options_retry_exhaustion_falls_back_and_finishes(
     await run_generation(ctx, rid, resume=True, decision="approve")
 
     run = (await verified_client.get(f"/api/v1/runs/{rid}")).json()["data"]
-    assert calls["art"] == 2
+    # 并行 A/B：每次重试各调 2 次 LLM，art_max_retries=2 → 共 4 次
+    assert calls["art"] == 4
     assert run["status"] == "done"
     versions = (await verified_client.get(f"/api/v1/games/{gid}/versions")).json()["data"]
     assert len(versions) == 1

@@ -305,7 +305,10 @@ async def test_run_playtest_mock_pass(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.sandbox.playtest._check_playwright_available", lambda: None)
     monkeypatch.setattr("app.sandbox.playtest._with_browser", _fake_browser)
-    html = "<html><body><canvas id='game'></canvas></body></html>"
+    html = (
+        "<html><body><canvas id='game'></canvas>"
+        "<script>requestAnimationFrame(() => {});</script></body></html>"
+    )
     r = await run_playtest(html, want_thumb=True)
     assert r.ok
     assert r.motion_signal == "raf"
