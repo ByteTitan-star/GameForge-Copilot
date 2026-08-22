@@ -484,12 +484,16 @@ async def resume_run_control(
 
 
 async def cancel_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
+    """用户取消：终态 cancelled；保留 revision 引用的瘦 checkpoint，不删产物行。"""
+    from app.forge.checkpoint_slim import slim_checkpoint_payloads
+
     run = await get_run(db, user, run_id)
     if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
         raise AppError(ErrorCode.INVALID_STATE, "仅进行中的 run 可取消")
     await run_ctrl.request_cancel(r, run_id)
     await record_cancel_command(db, run_id)
-    run.status = RunStatus.FAILED.value
+    existing = await ckpt.load_state(r, run_id, db) or {}
+    run.status = RunStatus.CANCELLED.value
     run.ended_at = datetime.now(UTC)
     await add_message(
         db,
@@ -497,16 +501,35 @@ async def cancel_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID)
         run_id=run.id,
         user_id=user.id,
         role="system",
-        kind="failed",
+        kind="cancelled",
         content="本轮生成已由用户取消。",
         metadata={"code": "CANCELLED"},
-        dedupe_key=f"{run.id}:failed:CANCELLED",
+        dedupe_key=f"{run.id}:cancelled:CANCELLED",
     )
     await cancel_run_tasks(db, run_id)
+    terminal = slim_checkpoint_payloads(
+        {
+            **{
+                k: v
+                for k, v in existing.items()
+                if k
+                in {
+                    "phase",
+                    "active_plan_revision_id",
+                    "active_art_revision_id",
+                    "active_art_options_revision_id",
+                    "active_candidate_revision_id",
+                    "hitl_trace",
+                    "replan_count",
+                }
+            },
+            "phase": str(existing.get("phase") or run.phase or "plan"),
+            "cancelled": True,
+        }
+    )
+    await ckpt.save_state(r, run_id, terminal, db)
     await db.commit()
-    await ckpt.clear_state(r, run_id, db)
-    await db.commit()
-    await r.delete(f"run:hitl:{run_id}")  # 清掉 HITL 并发锁，避免残留 resolve 重新触发已取消的 run
+    await r.delete(f"run:hitl:{run_id}")
     await db.refresh(run)
     return run
 

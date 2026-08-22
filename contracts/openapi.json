@@ -10015,7 +10015,8 @@
           "running",
           "paused",
           "done",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "title": "RunStatus"
       },

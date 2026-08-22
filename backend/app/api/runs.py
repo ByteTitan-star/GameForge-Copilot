@@ -389,7 +389,7 @@ async def resolve_hitl(
             return ApiResponse(
                 data=HitlResolveResp(
                     run_id=cancelled.id,
-                    status=RunStatus.FAILED,
+                    status=RunStatus.CANCELLED,
                     phase=RunPhase(cancelled.phase or RunPhase.PLAN.value),
                 )
             )

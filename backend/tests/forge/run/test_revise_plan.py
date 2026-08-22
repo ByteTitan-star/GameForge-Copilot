@@ -214,4 +214,4 @@ async def test_cancel_run_command_from_plan_confirm(
     )
     assert r.status_code == 200, r.text
     detail = await verified_client.get(f"/api/v1/runs/{rid}")
-    assert detail.json()["data"]["status"] == "failed"
+    assert detail.json()["data"]["status"] == "cancelled"

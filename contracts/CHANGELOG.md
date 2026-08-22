@@ -19,6 +19,8 @@
 
 ## 未发布（working copy）
 
+- MODIFIED: `RunStatus` — 增 `cancelled`（用户取消终态，与 `failed` 区分）
+
 - MODIFIED: `GET /games/public`、`GET /games/featured`、`GET /official/games` — 增 `locale` query（zh | en，官方样例标题随 locale 切换）
 - MODIFIED: `GET /play/{slug}/` — 增 `locale` query（en 时优先返回英文静态页）
 - MODIFIED: `PublicGameMeta` — 增 `featured: bool`（由 `featured_rank` 推导）

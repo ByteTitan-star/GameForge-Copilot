@@ -609,6 +609,7 @@ async def execute_playtest(
         html_path = store.index_path(ctx.game.id, version)
         html = ""
         pt = None
+        gate_doc = design_doc if settings.forge_acceptance_gate else None
         if html_path is None or not html_path.exists():
             errors = ["产物 index.html 不存在，无法试玩"]
             result_ok = False
@@ -617,7 +618,11 @@ async def execute_playtest(
             motion_signal = None
         elif serve.is_project_artifact(ctx.game.id, version):
             artifact_dir = store.artifact_dir(ctx.game.id, version)
-            pt = await run_playtest_dist(artifact_dir, want_thumb=settings.thumbnail_enabled)
+            pt = await run_playtest_dist(
+                artifact_dir,
+                want_thumb=settings.thumbnail_enabled,
+                design_doc=gate_doc,
+            )
             result_ok = pt.ok
             errors = pt.errors
             console_logs = pt.console_logs
@@ -627,7 +632,11 @@ async def execute_playtest(
             html = _read_html(html_path) if html_path.is_file() else ""
         else:
             html = _read_html(html_path)
-            pt = await run_playtest(html, want_thumb=settings.thumbnail_enabled)
+            pt = await run_playtest(
+                html,
+                want_thumb=settings.thumbnail_enabled,
+                design_doc=gate_doc,
+            )
             result_ok = pt.ok
             errors = pt.errors
             console_logs = pt.console_logs

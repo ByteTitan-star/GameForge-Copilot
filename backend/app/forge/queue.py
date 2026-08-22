@@ -51,6 +51,9 @@ async def enqueue_resume(
     retry_run / dev_requeue）。
     """
     st = await ckpt.load_state(r, run_id, db) or {}
+    from app.forge.checkpoint_slim import hydrate_checkpoint_payloads
+
+    st = await hydrate_checkpoint_payloads(db, st)
     phase = str(st.get("phase") or "")
     mapped = normalize_resume_command(
         phase=phase,

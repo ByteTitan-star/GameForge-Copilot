@@ -291,7 +291,7 @@ function applyUserCancelled(ev: WsEnvelope, h: ForgeEventHandlers) {
   h.flushStreamingMessage?.()
   h.setHitl(null)
   h.setBusy(false)
-  h.setRunStatus?.('idle')
+  h.setRunStatus?.(RunStatus.cancelled)
   h.setPhase('idle')
   h.onRunFinished?.()
   h.pushItem({

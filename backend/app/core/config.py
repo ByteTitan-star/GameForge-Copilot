@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     # CodeQaLoop 总 attempt（含首次 generate）；infra/product/build 共用此预算。
     code_qa_max_attempts: int = 3
+    # 单次 Forge Run 累计 LLM tokens 上限（input+output）；<=0 关闭。
+    forge_run_max_tokens: int = 500_000
     # 跨阶段 REVISE_PLAN（qa/art 失败后改策划）独立预算，与 PLAN 同阶段 modify 无关。
     replan_max_revisions: int = 2
     # P0 可靠性：为 LangGraph 节点挂 TimeoutPolicy/RetryPolicy；关则保持旧行为便于回滚
@@ -186,6 +188,12 @@ class Settings(BaseSettings):
     semantic_confirm_base_url: str = ""
 
     art_max_retries: int = 2  # 美术 LLM 尝试次数，耗尽后走内置素材兜底
+    # 美术 A/B 是否并行各调一次模型（更快、成本约 2 倍）；关则单次返回两套
+    forge_art_options_parallel: bool = True
+    # 试玩前按策划稿做静态验收（引擎/输入/HUD 等）；关则仅结构+浏览器冒烟
+    forge_acceptance_gate: bool = True
+    # 试玩会话内按 acceptance_criteria 做运行时状态探针
+    forge_acceptance_runtime: bool = True
     # 封面截图：QA 通过后用 Playwright 截当前 candidate。Worker 必须具备 Chromium。
     thumbnail_enabled: bool = True
     models_cache_ttl_s: int = 600  # /models 短期缓存（docs/05）
