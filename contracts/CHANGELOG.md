@@ -22,6 +22,7 @@
 - MODIFIED: `GET /games/public`、`GET /games/featured`、`GET /official/games` — 增 `locale` query（zh | en，官方样例标题随 locale 切换）
 - MODIFIED: `GET /play/{slug}/` — 增 `locale` query（en 时优先返回英文静态页）
 - MODIFIED: `PublicGameMeta` — 增 `featured: bool`（由 `featured_rank` 推导）
+- MODIFIED: `AdminAuditLlmSettings` — 增可选字段 `interval_ms` / `min_chars_between` / `max_buffer_chars`（输出审核滑窗参数，DB 优先 env 兜底；null=保留旧值）
 
 - ADDED: Run 事件 Redis 缓冲 + WS 连接时 replay；`GET /runs/{id}/events` HTTP 回退
 - ADDED: `GET /me/runs/active` — 跨游戏进行中的 run 列表（刷新/跳转后找回）
@@ -65,7 +66,7 @@
 - ADDED: `GET /admin/games` — 管理员已发布/审批中游戏列表（不含草稿）(docs/01 §8)
 - MODIFIED: `AdminSettings` — 新增 `default_monthly_token_limit`；配额日/月双限 + LLM 调用限流
 - MODIFIED: `GET /me/llm-configs/models` — Redis 缓存（`models_cache_ttl_s`）
-- ADDED: `POST /auth/password/change` — 登录态改密（Bearer + `old_password`/`new_password`）；旧密码错 → 401
+- ADDED: `POST /auth/password/change` — 登录态改密（Bearer： `old_password`/`new_password`）；旧密码错 → 401
 - MODIFIED: `AdminUserItem` — 新增 `daily_token_limit`（用户级覆盖回显，null=全局默认）
 - MODIFIED: `POST /auth/verify-email` — 请求体改为 `{ email, code }`（6 位数字验证码）；不再使用邮件链接 token
 - ADDED: `POST /auth/resend-verification` — 重发邮箱验证码（防枚举恒 `sent: true`）
@@ -87,14 +88,14 @@
 - ADDED: `GET /admin/users`（分页，admin）、`PATCH /admin/users/{id}`（disable/role，admin，落审计）、`GET /admin/settings`、`PUT /admin/settings`（admin，存 system_settings 表，运行时配额读取覆盖值）— M8 管理后台；新增 403(非 admin)/404(用户不存在)；禁用用户登录/访问 → 403 (M8)
 - ADDED: `users.disabled` 列、`system_settings` 表（迁移 0005）；`/me/usage`、`POST /games/{id}/runs` 的日配额读取 admin 设置覆盖值（env 默认回退） (M8)
 - MODIFIED: `POST /games/{game_id}/publish/submit`、`GET /publish/queue`、`POST /publish/{id}/approve`、`POST /publish/{id}/reject`、`POST /games/{game_id}/take-down` — M0 桩 → M7 真实逻辑（发布审批状态机 docs/04：draft→submitted→reviewing→approved(published)/rejected，slug 在 approve 时分配；admin 操作落 audit_logs）；submit=owner，queue/approve/reject/take_down=admin；新增 401/403/404/409(状态冲突) (M7)
-- MODIFIED: `POST /games/{game_id}/runs/{run_id}/hitl/resolve` — M4 桩 → M6 真实 HITL（校验 plan_confirm 检查点态 → enqueue resume_run 继续 art→done）；需 Bearer + owner；新增 409(非 HITL 态/已结束)；`GET /runs/{run_id}` 的 `current_hitl` 据检查点态返回 `{node:"plan_confirm"}` 或 null (M6)
+- MODIFIED: `POST /games/{game_id}/runs/{run_id}/hitl/resolve` — M4 桩 → M6 真实 HITL（校验 plan_confirm 检查点态 → enqueue resume_run 继续 art→done）；需 Bearer： owner；新增 409(非 HITL 态/已结束)；`GET /runs/{run_id}` 的 `current_hitl` 据检查点态返回 `{node:"plan_confirm"}` 或 null (M6)
 - ADDED: 生成主链真实化——`app/forge/graph.py` 固定 DAG `plan→art→code→qa→done`（显式状态机，非 LangGraph，环境约束 + 固定 DAG 非自研 agent loop）；节点调 LLM（`app/llm/provider.complete` + `app/llm/client.call_llm` 解密用户 key + `record_usage`）+ 沙箱构建 + 产物托管 + WS 事件；HITL 在 plan_confirm 中断、Redis 检查点 `run:ckpt:{run_id}` 恢复；arq 新增 `resume_run` 任务 (M6)
 - 注：M6 用显式状态机替代 docs/02 的 LangGraph（环境装不起 langgraph 重依赖；固定 DAG 非自研 agent loop）；LangGraph 替换留待环境支持时。沙箱仍用 M5 本地后端（DockerSandbox 留 ops） (M6)
 - ADDED: `GET /play/{slug}`（公开，仅 published，FileResponse + CSP）、`GET /draft/{game_id}/{version}`（owner only，FileResponse + CSP）— M5 产物托管路由，根路由无 `/api/v1` 前缀；非 published/非 owner → 404 不泄露；产物响应非 JSON（text/html），openapi 标注 (M5)
 - MODIFIED: `GameVersion.artifact_path` — 由桩串改为真实托管路径 `{game_id}/{version}/index.html`；forge runner 接沙箱（`LocalSandbox.execute` 本地后端）+ hosting 写真实产物 (M5)
 - 注：沙箱 `execute_code` 本轮交付抽象 + 本地后端（无容器隔离），真实 docker 沙箱（`gameforge/sandbox` 镜像 + seccomp/无网络）留 M6 (M5)
-- MODIFIED: `POST/GET /games`、`GET/DELETE /games/{game_id}`、`GET /games/{game_id}/versions` — M0 桩 → M4 真实逻辑（Game CRUD + versions + owner 可见性过滤，非 owner 含 admin → 404）；需 Bearer + 邮箱已验证；新增错误响应 401/403(EMAIL_NOT_VERIFIED)/404(GAME_NOT_FOUND)/409(非可删状态) (M4)
-- MODIFIED: `POST /games/{game_id}/runs`、`GET /games/{game_id}/runs`、`GET /runs/{run_id}` — M0 桩 → M4 真实逻辑（发起 run + 配额检查 + 列表 + 状态）；需 Bearer + 已验证；新增 401/403/404/429(QUOTA_EXCEEDED)；`POST /games/{id}/runs/{id}/hitl/resolve` 仍桩（M6） (M4)
+- MODIFIED: `POST/GET /games`、`GET/DELETE /games/{game_id}`、`GET /games/{game_id}/versions` — M0 桩 → M4 真实逻辑（Game CRUD + versions + owner 可见性过滤，非 owner 含 admin → 404）；需 Bearer： 邮箱已验证；新增错误响应 401/403(EMAIL_NOT_VERIFIED)/404(GAME_NOT_FOUND)/409(非可删状态) (M4)
+- MODIFIED: `POST /games/{game_id}/runs`、`GET /games/{game_id}/runs`、`GET /runs/{run_id}` — M0 桩 → M4 真实逻辑（发起 run + 配额检查 + 列表 + 状态）；需 Bearer： 已验证；新增 401/403/404/429(QUOTA_EXCEEDED)；`POST /games/{id}/runs/{id}/hitl/resolve` 仍桩（M6） (M4)
 - 注：WS `/ws/runs/{run_id}` 事件流已真实（query token 鉴权 + Redis pubsub 转发），不进 openapi；事件契约见 docs/10 §5 (M4)
 - MODIFIED: `GET /me/usage`、`GET /admin/usage` — M0 桩 → M3 真实逻辑（Redis hash 累计 today/month/total + 月榜 ZSET；/admin/usage 含 top_users）；全部需 Bearer 鉴权，新增错误响应 401(UNAUTHORIZED)/403(FORBIDDEN，/admin/usage 需 admin) (M3)
 - MODIFIED: openapi 新增 `securitySchemes: bearer`（HTTPBearer）— 凡带 current_user/require_admin 的端点（me/*、admin/*、llm-config）openapi 标注需 Bearer (M1-M3 渐进)
