@@ -191,7 +191,7 @@ export function FailureRecoveryBar({
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              maxLength={2000}
+              maxLength={10000}
               rows={4}
               placeholder={t("feedbackPlaceholder")}
               disabled={feedbackBusy}
