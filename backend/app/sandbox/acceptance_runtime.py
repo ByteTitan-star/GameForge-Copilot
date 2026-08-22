@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.forge.design_doc import coerce_design_doc
+from app.sandbox.acceptance_states import cheat_probe_state_ids
 
 _ENTER_STATE_RE = re.compile(
     r"(?:进入|到达|切换(?:到|为)?|返回)\s*['\"]?([a-z][a-z0-9_]*)['\"]?",
@@ -41,10 +42,15 @@ READ_RUNTIME_STATE_JS = """() => {
     if (s) active = active || s;
     mark(s);
   };
-  for (const key of ['gameState', 'currentState', 'state', '__gameState', '__AG_STATE__']) {
+  for (const key of ['gameState', 'currentState', 'state', '__gameState__']) {
     const v = window[key];
     if (typeof v === 'string') setActive(v);
   }
+  try {
+    const ag = window.__AG_STATE__;
+    if (typeof ag === 'function') setActive(ag());
+    else if (typeof ag === 'string') setActive(ag);
+  } catch (_) {}
   try {
     const game = window.Phaser?.Games?.[0];
     const scenes = game?.scene?.getScenes?.(true) || [];
@@ -65,28 +71,30 @@ READ_RUNTIME_STATE_JS = """() => {
 
 ProbeKind = Literal["after_start", "pause_resume", "terminal_state"]
 
-_TERMINAL_CHEAT_METHODS: dict[str, tuple[str, ...]] = {
-    "game_over": ("triggerGameOver", "gameOver", "lose", "triggerLose"),
-    "level_complete": ("triggerLevelComplete", "levelComplete", "win", "triggerWin"),
-    "victory": ("triggerVictory", "victory", "allClear", "triggerWin"),
-}
-
-INVOKE_TERMINAL_CHEAT_JS = """({ stateKey, methods }) => {
+INVOKE_SET_STATE_JS = """(stateKey) => {
   const cheat = window.__AG_CHEAT__;
   if (!cheat || typeof cheat !== 'object') return { available: false, invoked: null };
-  for (const name of methods || []) {
+  if (typeof cheat.setState === 'function') {
+    try { cheat.setState(stateKey); return { available: true, invoked: 'setState' }; }
+    catch (e) { return { available: true, invoked: null, error: String(e) }; }
+  }
+  const methodMap = {
+    paused: ['pause', 'triggerPause'],
+    game_over: ['gameOver', 'triggerGameOver', 'lose', 'triggerLose'],
+    level_complete: ['levelComplete', 'triggerLevelComplete', 'win', 'triggerWin'],
+    victory: ['victory', 'triggerVictory', 'allClear'],
+  };
+  for (const name of (methodMap[stateKey] || [])) {
     const fn = cheat[name];
     if (typeof fn === 'function') {
       try { fn(); return { available: true, invoked: name }; }
       catch (e) { return { available: true, invoked: null, error: String(e) }; }
     }
   }
-  if (typeof cheat.setState === 'function') {
-    try { cheat.setState(stateKey); return { available: true, invoked: 'setState' }; }
-    catch (e) { return { available: true, invoked: null, error: String(e) }; }
-  }
   return { available: true, invoked: null };
 }"""
+
+CHEAT_AVAILABLE_JS = "() => !!(window.__AG_CHEAT__ && typeof window.__AG_CHEAT__ === 'object')"
 
 
 @dataclass(frozen=True)
@@ -219,15 +227,47 @@ async def read_runtime_game_state(page: Any) -> tuple[str | None, list[str]]:
 
 
 async def invoke_terminal_cheat(page: Any, target_state: str) -> dict[str, Any]:
-    methods = list(_TERMINAL_CHEAT_METHODS.get(target_state, ()))
     try:
-        payload = await page.evaluate(
-            INVOKE_TERMINAL_CHEAT_JS,
-            {"stateKey": target_state, "methods": methods},
-        )
+        payload = await page.evaluate(INVOKE_SET_STATE_JS, target_state)
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "invoked": None, "error": str(exc)}
     return payload if isinstance(payload, dict) else {"available": False, "invoked": None}
+
+
+async def required_cheat_state_errors(
+    page: Any,
+    design_doc: dict[str, Any] | str | None,
+) -> list[str]:
+    """产物暴露 __AG_CHEAT__ 时，策划声明的终态/暂停态必须可切换。"""
+    targets = cheat_probe_state_ids(design_doc)
+    if not targets:
+        return []
+    try:
+        available = await page.evaluate(CHEAT_AVAILABLE_JS)
+    except Exception:  # noqa: BLE001
+        return []
+    if not available:
+        return []
+    errors: list[str] = []
+    for state_id in targets:
+        result = await invoke_terminal_cheat(page, state_id)
+        if result.get("error"):
+            errors.append(
+                f"ACCEPTANCE_RT[CHEAT]: __AG_CHEAT__ 切换 {state_id!r} 失败: {result['error']}"
+            )
+            continue
+        if not result.get("invoked"):
+            errors.append(
+                f"ACCEPTANCE_RT[CHEAT]: __AG_CHEAT__ 未提供 {state_id!r} 的 setState/专用方法"
+            )
+            continue
+        with suppress(Exception):
+            await page.wait_for_timeout(120)
+        active, observed = await read_runtime_game_state(page)
+        if state_observed(observed, state_id) or state_matches(active, state_id):
+            continue
+        errors.append(f"ACCEPTANCE_RT[CHEAT]: __AG_CHEAT__ 调用后未进入 {state_id!r}")
+    return errors
 
 
 async def terminal_cheat_probe_errors(
@@ -283,6 +323,7 @@ async def run_runtime_acceptance(
         )
     )
     errors.extend(await terminal_cheat_probe_errors(page, probes))
+    errors.extend(await required_cheat_state_errors(page, design_doc))
     return errors
 
 

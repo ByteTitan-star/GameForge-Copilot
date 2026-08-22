@@ -610,6 +610,7 @@ async def execute_playtest(
         html = ""
         pt = None
         gate_doc = design_doc if settings.forge_acceptance_gate else None
+        runtime_doc = design_doc if settings.forge_acceptance_runtime else None
         if html_path is None or not html_path.exists():
             errors = ["产物 index.html 不存在，无法试玩"]
             result_ok = False
@@ -622,6 +623,7 @@ async def execute_playtest(
                 artifact_dir,
                 want_thumb=settings.thumbnail_enabled,
                 design_doc=gate_doc,
+                runtime_design_doc=runtime_doc,
             )
             result_ok = pt.ok
             errors = pt.errors
@@ -636,6 +638,7 @@ async def execute_playtest(
                 html,
                 want_thumb=settings.thumbnail_enabled,
                 design_doc=gate_doc,
+                runtime_design_doc=runtime_doc,
             )
             result_ok = pt.ok
             errors = pt.errors

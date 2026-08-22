@@ -62,6 +62,15 @@
         entityLayer.removeChildren(); // 重开时清空实体，防上一局残留。
       }
 
+      window.__AG_STATE__ = function () { return state; };
+      window.__AG_CHEAT__ = {
+        setState: function (id) { state = id; },
+        pause: function () { this.setState('paused'); },
+        gameOver: function () { this.setState('game_over'); },
+        levelComplete: function () { this.setState('level_complete'); },
+        victory: function () { this.setState('victory'); },
+      };
+
       // 响应式：resize 重算画布。
       window.addEventListener('resize', function () {
         app.renderer.resize(window.innerWidth, window.innerHeight);

@@ -7,6 +7,7 @@ from typing import Any
 
 from app.forge.design_doc import coerce_design_doc
 from app.forge.engine_router import normalize_engine_id
+from app.sandbox.acceptance_states import required_state_source_errors
 
 _KEY_EVENT_RE = re.compile(
     r"(keydown|keyup|keypress|KeyboardEvent|e\.code|e\.key|addEventListener\s*\(\s*['\"]key)",
@@ -58,4 +59,5 @@ def design_acceptance_errors(html: str, design_doc: dict[str, Any] | str | None)
     if (hud or rules.get("scoring")) and not _SCORE_RE.search(text):
         errors.append("ACCEPTANCE: 策划要求分数 HUD，但未发现 score/分数 相关变量或文案")
 
+    errors.extend(required_state_source_errors(text, doc))
     return errors

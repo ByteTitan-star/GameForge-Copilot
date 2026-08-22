@@ -83,9 +83,8 @@ _CODE_COMMON = f"""
     开始按钮上。玩家点得到的必须是当前状态真正响应的按钮。
 13. 输入若包含“已确认美术实现设计稿 JSON”，必须逐项落实其中的布局、配色、绘制、
     状态视觉、动效、响应式、可访问性与性能约束，不得退回通用模板风格。
-14. 可选暴露 `window.__AG_CHEAT__` 供平台自动试玩触发终态（不挂玩家可见按钮）：
-    提供 `gameOver` / `levelComplete` / `victory` 等方法，或 `setState(stateId)`；
-    调用后须切换到对应 game_states / `#screen-*`，且不得产生 pageerror。
+14. 保留或等价实现 `window.__AG_CHEAT__` / `window.__AG_STATE__`（Phaser/Pixi 骨架已内置）：
+    供平台自动试玩切换终态；调用后须进入对应 game_states / 场景，且不得 pageerror。
 
 实现优先级：先确保完整状态闭环和核心玩法正确，再完成关卡递进、反馈和视觉润色。
 输出前在内部逐项核对设计稿的 acceptance_criteria 和下方引擎方法论与试玩规范，

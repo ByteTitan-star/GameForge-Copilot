@@ -350,6 +350,7 @@ async def _session_playtest(
     mode_label: str,
     goto_timeout_ms: int,
     design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
     html: str = "",
 ) -> PlaytestResult:
     errors: list[str] = []
@@ -388,15 +389,15 @@ async def _session_playtest(
         return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
     if (
-        design_doc
+        runtime_design_doc
         and settings.forge_acceptance_runtime
-        and any(p.kind == "pause_resume" for p in parse_runtime_probes(design_doc))
+        and any(p.kind == "pause_resume" for p in parse_runtime_probes(runtime_design_doc))
     ):
         await try_pause_resume_probe(page, logs)
         await page.wait_for_timeout(150)
 
-    if design_doc and settings.forge_acceptance_runtime:
-        rt_errors = await run_runtime_acceptance(page, design_doc, html=html)
+    if runtime_design_doc and settings.forge_acceptance_runtime:
+        rt_errors = await run_runtime_acceptance(page, runtime_design_doc, html=html)
         if rt_errors:
             errors.extend(rt_errors)
             return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
@@ -441,6 +442,7 @@ async def _with_browser(
     timeout: int,
     *,
     design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
     html: str = "",
 ) -> PlaytestResult:
     from playwright.async_api import async_playwright
@@ -458,6 +460,7 @@ async def _with_browser(
                     mode_label=mode_label,
                     goto_timeout_ms=timeout,
                     design_doc=design_doc,
+                    runtime_design_doc=runtime_design_doc,
                     html=html,
                 )
                 return session_result
@@ -535,6 +538,7 @@ async def run_playtest_dist(
     want_thumb: bool = False,
     *,
     design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
 ) -> PlaytestResult:
     refs = scan_dist_external_refs(dist_dir)
     ok, violations = validate_dist_self_contained(refs)
@@ -572,6 +576,7 @@ async def run_playtest_dist(
             "playwright dist mode",
             20_000,
             design_doc=design_doc,
+            runtime_design_doc=runtime_design_doc,
             html=dist_html,
         )
     finally:
@@ -583,6 +588,7 @@ async def run_playtest(
     want_thumb: bool = False,
     *,
     design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
 ) -> PlaytestResult:
     structural = structural_html_errors(html)
     if structural:
@@ -626,6 +632,7 @@ async def run_playtest(
                 "playwright mode",
                 15_000,
                 design_doc=design_doc,
+                runtime_design_doc=runtime_design_doc,
                 html=html,
             )
         finally:

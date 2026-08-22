@@ -92,8 +92,10 @@ async def test_run_runtime_acceptance_with_fake_page() -> None:
 @pytest.mark.asyncio
 async def test_terminal_cheat_probe_verifies_state() -> None:
     from app.sandbox.acceptance_runtime import (
-        INVOKE_TERMINAL_CHEAT_JS,
+        CHEAT_AVAILABLE_JS,
+        INVOKE_SET_STATE_JS,
         READ_RUNTIME_STATE_JS,
+        required_cheat_state_errors,
         terminal_cheat_probe_errors,
     )
 
@@ -101,24 +103,22 @@ async def test_terminal_cheat_probe_verifies_state() -> None:
         def __init__(self) -> None:
             self.state = "playing"
 
-        async def evaluate(self, js: str, arg: object | None = None) -> dict[str, object]:
+        async def evaluate(self, js: str, arg: object | None = None) -> object:
+            if js == CHEAT_AVAILABLE_JS:
+                return True
             if js == READ_RUNTIME_STATE_JS:
                 return {"active": self.state, "states": [self.state]}
-            if (
-                js == INVOKE_TERMINAL_CHEAT_JS
-                and isinstance(arg, dict)
-                and arg.get("stateKey") == "game_over"
-            ):
+            if js == INVOKE_SET_STATE_JS and arg == "game_over":
                 self.state = "game_over"
-                return {"available": True, "invoked": "gameOver"}
+                return {"available": True, "invoked": "setState"}
             return {"available": False, "invoked": None}
 
         async def wait_for_timeout(self, _ms: int) -> None:
             return None
 
     class _CheatPageBroken(_CheatPage):
-        async def evaluate(self, js: str, arg: object | None = None) -> dict[str, object]:
-            if js == INVOKE_TERMINAL_CHEAT_JS:
+        async def evaluate(self, js: str, arg: object | None = None) -> object:
+            if js == INVOKE_SET_STATE_JS:
                 return {"available": True, "invoked": "gameOver"}
             return await super().evaluate(js, arg)
 
@@ -127,6 +127,12 @@ async def test_terminal_cheat_probe_verifies_state() -> None:
     ]
     page = _CheatPage()
     assert await terminal_cheat_probe_errors(page, probes) == []
+
+    doc = {
+        "title": "t",
+        "game_states": [{"id": "playing"}, {"id": "game_over"}],
+    }
+    assert await required_cheat_state_errors(page, doc) == []
 
     errs = await terminal_cheat_probe_errors(_CheatPageBroken(), probes)
     assert errs
