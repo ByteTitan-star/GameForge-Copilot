@@ -92,6 +92,70 @@ async def test_audit_llm_disabled_returns_noop(admin_client: httpx.AsyncClient, 
     assert isinstance(g, guard.NoopGuard)
 
 
+async def test_audit_llm_window_fields_roundtrip_and_keep(
+    admin_client: httpx.AsyncClient, db_session
+) -> None:
+    """滑窗参数 PUT 落库回显；再次 PUT 不带（None）→ 保留旧值。"""
+    body = {
+        "enabled": True,
+        "provider": "openai_compat",
+        "model": "qwen-plus",
+        "apikey": "sk-win-1",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }
+    await _put_audit(
+        admin_client,
+        {**body, "interval_ms": 120_000, "min_chars_between": 120, "max_buffer_chars": 800},
+    )
+    cfg = await admin_services.get_audit_llm_config(db_session)
+    assert (cfg["interval_ms"], cfg["min_chars_between"], cfg["max_buffer_chars"]) == (
+        120_000,
+        120,
+        800,
+    )
+
+    await _put_audit(admin_client, body)  # 不带窗口字段
+    cfg = await admin_services.get_audit_llm_config(db_session)
+    assert cfg["interval_ms"] == 120_000  # 旧值保留
+    assert cfg["min_chars_between"] == 120
+    assert cfg["max_buffer_chars"] == 800
+
+    g = await guard.build_guard(type("C", (), {"s": db_session})())
+    assert (g.interval_ms, g.min_chars_between, g.max_buffer_chars) == (120_000, 120, 800)
+
+
+async def test_audit_llm_window_fields_validation(
+    admin_client: httpx.AsyncClient,
+) -> None:
+    """interval_ms 下界 100ms：过小值直接拒绝（防止每个 chunk 都触发审核）。"""
+    r = await admin_client.put(
+        "/api/v1/admin/settings",
+        json={
+            **_BASE_BODY,
+            "audit_llm": {"enabled": True, "provider": "openai", "model": "m", "interval_ms": 1},
+        },
+    )
+    assert r.status_code == 400  # 请求校验失败统一映射 400（非 FastAPI 默认 422）
+
+
+async def test_audit_llm_config_hot_reload_within_same_session(
+    admin_client: httpx.AsyncClient, db_session
+) -> None:
+    """回归：同一 session 二次读取必须看到 admin 更新。
+
+    worker 整个 run 复用一个 session（expire_on_commit=False），若 get_audit_llm_config
+    用 db.get 会命中 identity map 旧快照，admin 改配置对进行中的 run 永不生效。
+    """
+    body = {"enabled": True, "provider": "openai", "apikey": "sk-hot-1"}
+    await _put_audit(admin_client, {**body, "model": "m1"})
+    cfg1 = await admin_services.get_audit_llm_config(db_session)
+    assert cfg1["model"] == "m1"
+
+    await _put_audit(admin_client, {**body, "model": "m2"})  # 另一 session 更新
+    cfg2 = await admin_services.get_audit_llm_config(db_session)  # 同一 session 再读
+    assert cfg2["model"] == "m2"
+
+
 async def test_audit_llm_test_endpoint_admin_only(
     auth_client: httpx.AsyncClient,
 ) -> None:
