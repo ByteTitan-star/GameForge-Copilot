@@ -203,8 +203,8 @@ class Settings(BaseSettings):
     # 传输层有限重试：瞬时网络抖动 / 429 / 502-504；与业务自修复预算正交
     llm_http_max_retries: int = 3
     llm_http_retry_base_delay_s: float = 0.5
-    # 默认 max_tokens；推理模型的「思考 token」也计入此预算，故默认调高
-    llm_max_tokens: int = 8192
+    # 默认 max_tokens（plan/art/qa 等）；GLM 冗长设计稿 JSON 在 8k 易截断，默认 24k
+    llm_max_tokens: int = 24576
     # Code 阶段单独上限（整段 HTML / project JSON 体量大）
     llm_code_max_tokens: int = 32768
     # 输出截断后最多续写轮数（每轮独立 LLM 调用）
@@ -220,9 +220,8 @@ class Settings(BaseSettings):
         "open.bigmodel.cn,api.siliconflow.cn,api.minimaxi.com,"
         "api.baichuan-ai.com,api.lingyiwanwu.com"
     )
-    # OpenAI 兼容路径默认关 thinking（含用户模型与审核模型）。
-    # 避免思考链占满 max_tokens、流式又丢弃 reasoning_content 导致空正文。
-    # 纯推理模型（如 qwq）由 provider 侧跳过注入。需深度推理置 false。
+    # 默认关 thinking：见 app.llm.thinking 厂商能力表（Qwen/GLM/DeepSeek/Kimi/…）。
+    # 避免思考链占满 max_tokens。需深度推理置 false。
     llm_disable_thinking: bool = True
 
     # 流式输出（打字机）：complete_stream 微批 LLM_DELTA 事件给前端。关闭则 run_streamed_llm
@@ -238,7 +237,9 @@ class Settings(BaseSettings):
     audit_model: str = ""  # 必填，如 gpt-4o-mini / qwen-plus；空则审核降级为仅正则快筛
     audit_apikey: str = ""  # 平台 key，单独 env，不进用户配置表
     audit_base_url: str = ""  # compat 必填
-    audit_interval_ms: int = 500  # 输出审核最小间隔（ms）：两次审核间最小时间窗
+    audit_interval_ms: int = (
+        60_000  # 输出审核最小间隔（ms）：两次审核间最小时间窗（默认 1 分钟；admin 后台可调）
+    )
     audit_min_chars_between: int = 80  # 输出审核最小字符增量：攒够这么多字才触发一次
     audit_max_buffer_chars: int = 1500  # 审核滑窗上限：只取最近这么多字，避免越审越贵
     audit_request_timeout: int = 20  # 审核读超时（秒，短，避免拖垮打字机体验）
