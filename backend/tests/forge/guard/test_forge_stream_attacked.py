@@ -117,7 +117,11 @@ async def test_input_audit_hit_emits_attacked(
     _fake_llm,
     monkeypatch,
 ) -> None:
-    """输入审核命中：在 LLM 调用前就拦截，发 ATTACKED，无任何 LLM_DELTA/LLM_CALL。"""
+    """输入审核命中（异步并行）：中断生成、发 ATTACKED + CONTENT_BLOCKED，run FAILED。
+
+    输入审核与生成流并行，设计上允许部分 LLM_DELTA 先流出（输出侧同语义）；
+    但 LLM_CALL 仅在流正常走完后发，命中即中断时不应出现。
+    """
 
     class _InputHitGuard(guard.NoopGuard):
         async def audit(self, text: str):
@@ -133,6 +137,15 @@ async def test_input_audit_hit_emits_attacked(
     events = _parse_events(await list_events(redis_client, rid))
     types = _event_types(events)
     assert WSEventType.ATTACKED in types
-    # 输入侧命中在 LLM 之前，不应有 LLM_DELTA / LLM_CALL
-    assert WSEventType.LLM_DELTA not in types
+    error_events = [e for e in events if e["type"] == WSEventType.ERROR]
+    assert error_events and error_events[-1]["payload"]["code"] == "CONTENT_BLOCKED"
+    # 命中即中断：流未正常走完，不发 LLM_CALL，也不进 HITL
     assert WSEventType.LLM_CALL not in types
+    assert WSEventType.HITL_WAIT not in types
+
+    from app.core import db as db_module
+    from app.models.generation_run import GenerationRun
+
+    async with db_module.SessionLocal() as s:
+        run = await s.get(GenerationRun, rid)
+        assert run.status == RunStatus.FAILED.value
