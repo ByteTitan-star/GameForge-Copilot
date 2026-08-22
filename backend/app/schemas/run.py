@@ -9,7 +9,7 @@ from app.enums import EntryPhase, RunPhase, RunStatus
 class RunCreate(BaseModel):
     # max_length 既是输入校验，也是 prompt injection 的防线之一：拒绝超长 jailbreak payload。
     # 非空校验由 services 层 .strip() 兜底，这里不强制 min_length 以兼容最小 input 的测试。
-    requirement: str = Field(..., max_length=2000)
+    requirement: str = Field(..., max_length=10000)
     llm_config_id: uuid.UUID | None = None
 
 
@@ -79,7 +79,7 @@ class HitlResolveReq(BaseModel):
     # 兼容旧客户端：decision；P2 起优先使用 command（RunCommandType）。
     decision: str | None = None
     command: str | None = None
-    modify_text: str | None = Field(default=None, max_length=2000)
+    modify_text: str | None = Field(default=None, max_length=10000)
     expected_control_revision: int | None = Field(default=None, ge=0)
 
 

@@ -18,6 +18,7 @@ type Props = {
 };
 
 const MAX_LINES = 5;
+const MAX_REQUIREMENT_CHARS = 10000;
 const LINE_HEIGHT = 1.5;
 const FONT_PX = 15;
 
@@ -67,6 +68,7 @@ export function ForgeComposer({
         name="forge-requirement"
         autoComplete="off"
         rows={1}
+        maxLength={MAX_REQUIREMENT_CHARS}
         value={value}
         disabled={disabled || busy}
         placeholder={visiblePlaceholder}
