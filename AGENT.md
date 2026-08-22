@@ -7,8 +7,10 @@
   以及进行编码的时候，请遵循如下规则：
   1. 分析问题和技术架构、代码模块组合等的时候请遵循"第一性原理"
   2. 在编码的时候，请遵循 "DRY原则"、"KISS原则"、"SOLID原则"、"YAGNI原则"
-  3. 如果单独的类、函数或代码文件超过500行，请进行识别分解和分离，
-     在识别、分解、分离的过程中请遵循以上原则
+  3. 如果单独的类、函数或代码文件超过 1000 行，请进行识别分解和分离，
+     在识别、分解、分离的过程中请遵循以上原则；特定情况下可超过 1000 行
+     （例如内聚强、强行拆分反而损害可读性/一致性的功能模块），
+     此时以不勉强拆分为准，并在必要时简要说明保留原因
 
 ## 代码风格
 
@@ -41,6 +43,17 @@
 - 后端生产代码必须使用异步非阻塞 I/O
   （如 `httpx.AsyncClient`、`aiohttp`、`asyncio`），
   严禁使用同步阻塞调用（如 `requests.get`）
+- 【LLM 配置必检】推理（thinking）模型会先输出思考 token 再输出正文。
+  凡涉及模型配置或以小 `max_tokens` 调用 LLM 的场景
+  （0/1 判定、JSON 抽取、连通性探测等），必须显式关闭 thinking，
+  否则思考内容耗尽 `max_tokens`，`message.content` 恒为空：
+  - DeepSeek / GLM 兼容协议：`thinking:{"type":"disabled"}`
+  - Qwen / DashScope：`enable_thinking:false`
+  - Anthropic 原生：`thinking:{"type":"disabled"}`
+  - 排查特征：输出 empty 且 `output_tokens` 恰等于 `max_tokens`、
+    `finish_reason=length`、
+    `completion_tokens_details.reasoning_tokens=max_tokens`
+  - 连通性 / 审核类校验必须检查 content 非空，而非仅看 HTTP 200
 - 涉及 Matplotlib、Pillow 等绘图库生成图片/图表的场景，
   必须确保 Dockerfile 中已安装中文字体（如 `fonts-wqy-zenhei`）并正确配置，
   否则图表中文会渲染为方框乱码
