@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.enums import GameStatus, Role
 
@@ -31,6 +31,10 @@ class AdminAuditLlmSettings(BaseModel):
     model: str = ""
     apikey: str = ""
     base_url: str = ""
+    # 输出审核滑窗：None=不改（保留 DB 旧值，回退 env 默认）
+    interval_ms: int | None = Field(default=None, ge=100, le=3_600_000)
+    min_chars_between: int | None = Field(default=None, ge=1, le=100_000)
+    max_buffer_chars: int | None = Field(default=None, ge=50, le=100_000)
 
 
 class AdminSettings(BaseModel):

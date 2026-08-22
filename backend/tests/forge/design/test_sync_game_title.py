@@ -28,7 +28,9 @@ async def test_pause_plan_confirm_syncs_game_title(monkeypatch: pytest.MonkeyPat
     session.commit = AsyncMock()
     session.add = MagicMock()
 
-    ctx = _Ctx(s=session, r=MagicMock(), run=run, game=game)
+    mock_redis = AsyncMock()
+    mock_redis.set = AsyncMock(return_value=True)
+    ctx = _Ctx(s=session, r=mock_redis, run=run, game=game)
     design_doc = {"title": "Isle Manager: 孤岛经营", "gameplay": "x"}
 
     monkeypatch.setattr("app.forge.graph.apply_paused_metadata", lambda _run: None)
@@ -75,7 +77,9 @@ async def test_pause_art_confirm_does_not_sync_title(monkeypatch: pytest.MonkeyP
     session.refresh = AsyncMock()
     session.commit = AsyncMock()
 
-    ctx = _Ctx(s=session, r=MagicMock(), run=run, game=game)
+    mock_redis = AsyncMock()
+    mock_redis.set = AsyncMock(return_value=True)
+    ctx = _Ctx(s=session, r=mock_redis, run=run, game=game)
     design_doc = {"title": "Should Not Apply: 不该覆盖", "gameplay": "x"}
 
     monkeypatch.setattr("app.forge.graph.apply_paused_metadata", lambda _run: None)

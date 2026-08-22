@@ -102,7 +102,7 @@ describe('forge websocket event state', () => {
       event(WSEventType.error, { code: 'CANCELLED', message: '用户取消', fatal: true }),
       h,
     )
-    expect(setRunStatus).toHaveBeenCalledWith('idle')
+    expect(setRunStatus).toHaveBeenCalledWith(RunStatus.cancelled)
     expect(setPhase).toHaveBeenCalledWith('idle')
     expect(setBusy).toHaveBeenCalledWith(false)
     expect(setRunError).not.toHaveBeenCalled()

@@ -6063,6 +6063,45 @@
             "type": "string",
             "title": "Base Url",
             "default": ""
+          },
+          "interval_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3600000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Ms"
+          },
+          "min_chars_between": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Chars Between"
+          },
+          "max_buffer_chars": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 50.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Buffer Chars"
           }
         },
         "type": "object",
@@ -9976,7 +10015,8 @@
           "running",
           "paused",
           "done",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "title": "RunStatus"
       },
