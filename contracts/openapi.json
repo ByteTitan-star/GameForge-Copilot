@@ -8204,7 +8204,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 2000
+                "maxLength": 10000
               },
               {
                 "type": "null"
@@ -9860,7 +9860,7 @@
         "properties": {
           "requirement": {
             "type": "string",
-            "maxLength": 2000,
+            "maxLength": 10000,
             "title": "Requirement"
           },
           "llm_config_id": {
