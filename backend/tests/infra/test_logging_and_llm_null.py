@@ -108,22 +108,25 @@ class _CapturingClient:
 
 _DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 _BIGMODEL_ANTHROPIC = "https://open.bigmodel.cn/api/anthropic"
+_BIGMODEL_OPENAI = "https://open.bigmodel.cn/api/coding/paas/v4"
+_DEEPSEEK = "https://api.deepseek.com"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "model",
-    ["qwen3-max", "glm-5.1", "deepseek-v4-flash", "gpt-4o"],
+    ["qwen3-max", "gpt-4o"],
 )
 async def test_complete_injects_enable_thinking_false_by_default(
     monkeypatch: pytest.MonkeyPatch,
     model: str,
 ) -> None:
-    """OpenAI 兼容路径默认关 thinking（plan/审核都不需要思考链占满 max_tokens）。"""
+    """DashScope 兼容路径对非 GLM/DeepSeek 模型注入 enable_thinking=false。"""
     cap = _CapturingClient()
     monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
     await complete(LLMProvider.OPENAI_COMPAT, "key", model, "sys", "user", base_url=_DASHSCOPE)
     assert cap.last_json["enable_thinking"] is False
+    assert "thinking" not in cap.last_json
 
 
 @pytest.mark.asyncio
@@ -168,6 +171,87 @@ async def test_complete_uses_anthropic_messages_for_anthropic_compat_proxy(
 
 
 @pytest.mark.asyncio
+async def test_complete_disables_glm_thinking_on_openai_compat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """智谱 openai_compat 必须用 thinking.type=disabled，禁止 enable_thinking。"""
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "glm-5.1",
+        "sys",
+        "user",
+        base_url=_BIGMODEL_OPENAI,
+    )
+    assert cap.last_json["thinking"] == {"type": "disabled"}
+    assert "enable_thinking" not in cap.last_json
+    assert "reasoning_effort" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_glm53_uses_low_effort_instead_of_disable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GLM-5.3 不能 disabled，降为 enabled + reasoning_effort=low。"""
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "glm-5.3",
+        "sys",
+        "user",
+        base_url=_BIGMODEL_OPENAI,
+    )
+    assert cap.last_json["thinking"] == {"type": "enabled"}
+    assert cap.last_json["reasoning_effort"] == "low"
+    assert "enable_thinking" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_disables_deepseek_thinking_on_openai_compat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DeepSeek 混合推理模型必须 thinking.type=disabled，否则思考吃光 max_tokens。"""
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "deepseek-v4-flash",
+        "sys",
+        "user",
+        base_url=_DEEPSEEK,
+    )
+    assert cap.last_json["thinking"] == {"type": "disabled"}
+    assert "enable_thinking" not in cap.last_json
+    assert "reasoning_effort" not in cap.last_json
+
+
+@pytest.mark.asyncio
+async def test_complete_non_glm_openai_compat_skips_thinking_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """未知 compat 提供方（模型名/host 均不识别）不得被注入 thinking 字段。"""
+    cap = _CapturingClient()
+    monkeypatch.setattr("app.llm.provider.httpx.AsyncClient", lambda **_k: cap)
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "unknown-corp-model",
+        "sys",
+        "user",
+        base_url="https://api.unknown-llm.example/v1",
+    )
+    assert "thinking" not in cap.last_json
+    assert "enable_thinking" not in cap.last_json
+    assert "reasoning_effort" not in cap.last_json
+    assert "reasoning" not in cap.last_json
+
+
+@pytest.mark.asyncio
 async def test_complete_respects_disable_thinking_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -178,6 +262,20 @@ async def test_complete_respects_disable_thinking_off(
         LLMProvider.OPENAI_COMPAT, "key", "qwen3-max", "sys", "user", base_url=_DASHSCOPE
     )
     assert "enable_thinking" not in cap.last_json
+    await complete(
+        LLMProvider.OPENAI_COMPAT,
+        "key",
+        "glm-5.1",
+        "sys",
+        "user",
+        base_url=_BIGMODEL_OPENAI,
+    )
+    assert "thinking" not in cap.last_json
+
+
+def test_llm_max_tokens_default_covers_verbose_plan() -> None:
+    """plan/art 共用默认上限；GLM 冗长 JSON 在 8k 易截断，默认抬到 24k。"""
+    assert provider.settings.llm_max_tokens >= 24576
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ async def test_pause_cancel_run(verified_client: httpx.AsyncClient, redis_client
 
     cancelled = await verified_client.post(f"/api/v1/runs/{rid}/cancel")
     assert cancelled.status_code == 200
-    assert cancelled.json()["data"]["status"] == "failed"
+    assert cancelled.json()["data"]["status"] == "cancelled"
 
 
 async def test_admin_audit_and_games(

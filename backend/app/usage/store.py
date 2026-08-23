@@ -5,7 +5,9 @@ M4 LLM 层每次调用后调 record_usage；本模块也提供读取供 /me/usag
 """
 
 import uuid
+from collections.abc import Awaitable
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import redis.asyncio as redis
 from sqlalchemy import select
@@ -126,7 +128,7 @@ async def record_usage(
 
 
 async def _bucket(r: redis.Redis, key: str) -> UsageBucket:
-    raw = await r.hgetall(key) or {}
+    raw = await cast(Awaitable[dict[Any, Any]], r.hgetall(key))
     return UsageBucket(
         input_tokens=int(raw.get("input_tokens", 0)),
         output_tokens=int(raw.get("output_tokens", 0)),
@@ -134,9 +136,7 @@ async def _bucket(r: redis.Redis, key: str) -> UsageBucket:
     )
 
 
-async def get_user_usage(
-    r: redis.Redis, user_id: uuid.UUID, daily_limit: int
-) -> UsageResp:
+async def get_user_usage(r: redis.Redis, user_id: uuid.UUID, daily_limit: int) -> UsageResp:
     today = await _bucket(r, _day_key(user_id))
     month = await _bucket(r, _month_key(user_id))
     total = await _bucket(r, _total_key(user_id))
@@ -161,9 +161,7 @@ async def get_system_usage(r: redis.Redis) -> SystemUsage:
     )
 
 
-async def get_top_users(
-    r: redis.Redis, db: AsyncSession, limit: int = 10
-) -> list[AdminUserUsage]:
+async def get_top_users(r: redis.Redis, db: AsyncSession, limit: int = 10) -> list[AdminUserUsage]:
     """月榜 ZSET top N → 各用户 month hash 拆分 + DB 取 email。"""
     ranked = await r.zrevrange(_rank_key(), 0, limit - 1, withscores=True)
     if not ranked:
@@ -187,9 +185,7 @@ async def get_top_users(
 
 
 async def get_admin_usage(r: redis.Redis, db: AsyncSession) -> AdminUsageResp:
-    return AdminUsageResp(
-        system=await get_system_usage(r), top_users=await get_top_users(r, db)
-    )
+    return AdminUsageResp(system=await get_system_usage(r), top_users=await get_top_users(r, db))
 
 
 async def get_game_usage(r: redis.Redis, game_id: uuid.UUID) -> UsageBucket:
@@ -198,6 +194,28 @@ async def get_game_usage(r: redis.Redis, game_id: uuid.UUID) -> UsageBucket:
 
 async def get_run_usage(r: redis.Redis, run_id: uuid.UUID) -> UsageBucket:
     return await _bucket(r, _run_month_key(run_id))
+
+
+async def run_tokens_used(r: redis.Redis, run_id: uuid.UUID) -> int:
+    """单次 Forge Run 已记账的 input+output tokens。"""
+    bucket = await get_run_usage(r, run_id)
+    return int(bucket.input_tokens) + int(bucket.output_tokens)
+
+
+async def assert_run_token_budget(r: redis.Redis, run_id: uuid.UUID, *, limit: int) -> None:
+    """limit<=0 表示关闭；已用 tokens >= limit 时抛 QUOTA_EXCEEDED。"""
+    if limit <= 0:
+        return
+    used = await run_tokens_used(r, run_id)
+    if used < limit:
+        return
+    from app.core.errors import AppError, ErrorCode
+
+    raise AppError(
+        ErrorCode.QUOTA_EXCEEDED,
+        f"本轮生成 token 预算已用尽（{used}/{limit}）",
+        detail={"run_id": str(run_id), "used": used, "limit": limit, "scope": "forge_run"},
+    )
 
 
 async def list_usage_breakdown(
@@ -218,7 +236,7 @@ async def list_usage_breakdown(
 
     if scope == "game":
         idx = _user_games_index(user_id)
-        ids_raw = await r.smembers(idx)
+        ids_raw = await cast(Awaitable[set[Any]], r.smembers(idx))
         ids = [uuid.UUID(x) for x in ids_raw]
         rows = (await db.scalars(select(Game).where(Game.id.in_(ids)))).all() if ids else []
         title_map = {g.id: g.title for g in rows}
@@ -230,11 +248,13 @@ async def list_usage_breakdown(
             items.append((gid, b, title_map.get(gid)))
     elif scope == "run":
         idx = _user_runs_index(user_id)
-        ids_raw = await r.smembers(idx)
+        ids_raw = await cast(Awaitable[set[Any]], r.smembers(idx))
         ids = [uuid.UUID(x) for x in ids_raw]
         runs = (
-            await db.scalars(select(GenerationRun).where(GenerationRun.id.in_(ids)))
-        ).all() if ids else []
+            (await db.scalars(select(GenerationRun).where(GenerationRun.id.in_(ids)))).all()
+            if ids
+            else []
+        )
         title_by_run: dict[uuid.UUID, str | None] = {}
         if runs:
             gids = {run.game_id for run in runs}

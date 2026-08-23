@@ -3,9 +3,10 @@
 设计见 docs/护栏机制设计（plan: giggly-watching-raven）。核心：
 - quick_filter：正则前置快筛（命中即决，零成本），拦 80% 典型越狱/恶意代码。
 - Guard.audit：快筛未命中再调平台预设审核模型（非流式 provider.complete，0/1 判定）。
-- run_streamed_llm：编排——输入审核（阻塞）→ 消费 call_llm_stream 流，边攒全文边微批发
-  LLM_DELTA、审核窗到期把窗口丢给后台 asyncio.Task（真零停顿，token 流不等审核）→ 命中
-  发 ATTACKED 后 raise ContentAttacked，由 run_generation 既有 except 把 run 置 FAILED。
+- run_streamed_llm：编排——输入审核与输出审核均为后台并行 task（不阻塞 token 流），
+  消费 call_llm_stream 流边攒全文边微批发 LLM_DELTA、审核窗到期把窗口丢给后台
+  asyncio.Task → 命中发 ATTACKED 后 raise ContentAttacked，由 run_generation 既有
+  except 把 run 置 FAILED。滑窗周期/长度由 admin 后台可配（DB 优先 env 兜底）。
 
 审核模型不可用（超时/限流/key 错）→ 强制走正则快筛（_QUICK_PATTERNS）降级。
 审核模型输出非 0/1 → 带软提示重试至多 3 次，仍失败则放行。
@@ -294,6 +295,9 @@ class Guard:
         user_id: str | None = None,
         game_id: str | None = None,
         run_id: str | None = None,
+        interval_ms: int | None = None,
+        min_chars_between: int | None = None,
+        max_buffer_chars: int | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
@@ -302,6 +306,14 @@ class Guard:
         self._user_id = user_id
         self._game_id = game_id
         self._run_id = run_id
+        # 输出审核滑窗参数：DB（admin 后台）优先注入，未传回退 env
+        self.interval_ms = interval_ms if interval_ms is not None else settings.audit_interval_ms
+        self.min_chars_between = (
+            min_chars_between if min_chars_between is not None else settings.audit_min_chars_between
+        )
+        self.max_buffer_chars = (
+            max_buffer_chars if max_buffer_chars is not None else settings.audit_max_buffer_chars
+        )
 
     async def _audit_with_llm(self, text: str) -> _LlmAuditStatus:
         """调平台预设审核模型审一次（0/1 判定），输出异常时带软提示重试。
@@ -426,6 +438,12 @@ class Guard:
 class NoopGuard:
     """审核关闭时的空实现：所有 audit_* 返回 None（永不命中）。"""
 
+    def __init__(self) -> None:
+        # 暴露与 Guard 相同的滑窗参数接口（env 默认值），供流式编排统一读取
+        self.interval_ms = settings.audit_interval_ms
+        self.min_chars_between = settings.audit_min_chars_between
+        self.max_buffer_chars = settings.audit_max_buffer_chars
+
     async def audit(self, text: str) -> AuditResult | None:  # noqa: ARG002
         return None
 
@@ -451,6 +469,9 @@ async def build_guard(ctx: Any) -> Guard | NoopGuard:
         user_id=str(ctx.run.user_id) if getattr(ctx, "run", None) is not None else None,
         game_id=str(ctx.game.id) if getattr(ctx, "game", None) is not None else None,
         run_id=str(ctx.run.id) if getattr(ctx, "run", None) is not None else None,
+        interval_ms=cfg["interval_ms"],
+        min_chars_between=cfg["min_chars_between"],
+        max_buffer_chars=cfg["max_buffer_chars"],
     )
 
 
@@ -468,6 +489,9 @@ async def _load_audit_config(ctx: Any) -> dict:
             "model": settings.audit_model,
             "apikey": settings.audit_apikey,
             "base_url": settings.audit_base_url,
+            "interval_ms": settings.audit_interval_ms,
+            "min_chars_between": settings.audit_min_chars_between,
+            "max_buffer_chars": settings.audit_max_buffer_chars,
         }
 
 
@@ -571,22 +595,9 @@ async def run_streamed_llm_result(
     """同 run_streamed_llm，但返回 LLMCompletion（含 usage / finish_reason）。"""
     guard = await build_guard(ctx)
 
-    # 1) 输入侧审核（受 audit_request_timeout 约束，超时视为未命中）
-    try:
-        in_res = await asyncio.wait_for(
-            guard.audit(user_msg),
-            timeout=settings.audit_request_timeout,
-        )
-    except TimeoutError:
-        in_res = None
-    if in_res is not None and in_res.is_malicious:
-        await _emit_attacked(ctx, side="input", res=in_res, phase=phase)
-        raise ContentAttacked(
-            category=in_res.category,
-            reason=in_res.reason,
-            evidence=in_res.evidence,
-            side="input",
-        )
+    # 1) 输入审核与生成流并行（异步，不阻塞首 token）；命中即中断，语义同输出侧。
+    #    流结束前在途必等（受 audit_request_timeout 约束，超时视为未命中）。
+    input_task: asyncio.Task | None = asyncio.create_task(guard.audit(user_msg))
 
     started = time.monotonic()
     content_parts: list[str] = []
@@ -636,7 +647,11 @@ async def run_streamed_llm_result(
                 usage = chunk.usage
             if chunk.finish_reason:
                 finish_reason = chunk.finish_reason
-            # 已启动的后台审核完成 → 立刻检查结果（不阻塞 token 流）
+            # 输入/输出后台审核完成 → 立刻检查结果（不阻塞 token 流）
+            if input_task is not None and input_task.done():
+                done_res = input_task.result()
+                input_task = None
+                await _raise_if_hit(done_res, "input")
             if audit_task is not None and audit_task.done():
                 done_res = audit_task.result()
                 audit_task = None
@@ -644,27 +659,31 @@ async def run_streamed_llm_result(
             # 审核窗到期且无在途审核 → 把当前窗口丢给后台 task
             now = time.monotonic()
             pending_text = "".join(pending)
-            time_due = (now - last_audit_at) * 1000 >= settings.audit_interval_ms
-            chars_due = len(pending_text) >= settings.audit_min_chars_between
+            time_due = (now - last_audit_at) * 1000 >= guard.interval_ms
+            chars_due = len(pending_text) >= guard.min_chars_between
             if time_due and chars_due and pending_text and audit_task is None:
-                window = pending_text[-settings.audit_max_buffer_chars :]
+                window = pending_text[-guard.max_buffer_chars :]
                 audit_task = asyncio.create_task(guard.audit(window))
                 last_audit_at = now
                 pending.clear()
-        # 流读完：末窗若在途必须等结果（最后一段内容不能漏审），限时防拖
-        if audit_task is not None and not audit_task.done():
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    asyncio.shield(audit_task),
-                    timeout=settings.audit_request_timeout,
-                )
+        # 流读完：输入审核与末窗在途必须等结果（最后一段不能漏审），限时防拖
+        for pending_task in (input_task, audit_task):
+            if pending_task is not None and not pending_task.done():
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.shield(pending_task),
+                        timeout=settings.audit_request_timeout,
+                    )
+        if input_task is not None and input_task.done():
+            await _raise_if_hit(input_task.result(), "input")
         if audit_task is not None and audit_task.done():
             await _raise_if_hit(audit_task.result(), "output")
     finally:
-        if audit_task is not None and not audit_task.done():
-            audit_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await audit_task
+        for pending_task in (input_task, audit_task):
+            if pending_task is not None and not pending_task.done():
+                pending_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pending_task
         await gen.aclose()  # type: ignore[attr-defined]
 
     # 流结束：emit_delta 时 flush 残留微批；再发 LLM_CALL（usage，对齐现有 _llm 事件字段）

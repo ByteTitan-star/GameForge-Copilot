@@ -27,8 +27,10 @@ from app.enums import PauseReason, RunCommandType, RunPhase, RunStatus, WSEventT
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
+from app.forge.art_options_parallel import generate_art_options_parallel
 from app.forge.assets.picker import asset_pick
 from app.forge.capability import developability_precheck
+from app.forge.checkpoint_slim import hydrate_checkpoint_payloads, slim_checkpoint_payloads
 from app.forge.code_candidate import claim_candidate_version, promote_candidate
 from app.forge.commands import mark_command_succeeded
 from app.forge.design_doc import (
@@ -44,6 +46,7 @@ from app.forge.guard import ContentAttacked, run_streamed_llm
 from app.forge.hitl import HITL_PHASES, allowed_commands_for
 from app.forge.lineage import (
     assert_candidate_promotable,
+    ensure_art_options_revision,
     ensure_art_revision,
     ensure_plan_revision,
     parse_revision_id,
@@ -72,6 +75,7 @@ from app.forge.reliability import (
     classify_exception,
     is_fatal,
     is_recoverable,
+    merge_pause_checkpoint,
 )
 from app.forge.reliability.artifact_gate import derive_artifact_gate
 from app.forge.reliability.idempotency import (
@@ -81,6 +85,8 @@ from app.forge.reliability.idempotency import (
     try_begin_side_effect,
 )
 from app.forge.reliability.policy import langgraph_retry_policy, langgraph_timeout_policy
+from app.forge.run_budget import is_forge_run_budget_error
+from app.forge.run_lifecycle import is_terminal_run_status
 from app.forge.subgraphs.code_qa_loop import build_code_qa_loop
 from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
@@ -563,7 +569,14 @@ async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> Non
     await ctx.s.refresh(ctx.run)
     if ctx.run.ended_at is not None:
         return
-    ctx.run.status = RunStatus.FAILED.value
+    if code == "CANCELLED":
+        ctx.run.status = RunStatus.CANCELLED.value
+        kind = "cancelled"
+        content = f"本轮生成已取消：{message}"
+    else:
+        ctx.run.status = RunStatus.FAILED.value
+        kind = "failed"
+        content = f"本轮生成失败：{message}"
     ctx.run.ended_at = datetime.now(UTC)
     await add_message(
         ctx.s,
@@ -571,10 +584,10 @@ async def _fail(ctx: _Ctx, message: str, *, code: str = "SANDBOX_FAILED") -> Non
         run_id=ctx.run.id,
         user_id=ctx.run.user_id,
         role="assistant",
-        kind="failed",
-        content=f"本轮生成失败：{message}",
+        kind=kind,
+        content=content,
         metadata={"code": code, "phase": ctx.run.phase},
-        dedupe_key=f"{ctx.run.id}:failed:{code}",
+        dedupe_key=f"{ctx.run.id}:{kind}:{code}",
     )
     await ctx.s.commit()
     await publish_event(
@@ -668,6 +681,7 @@ async def _attach_plan_revision(
 
 async def _persist_art_revision(ctx: _Ctx, art_direction: dict[str, Any]) -> None:
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    existing = await hydrate_checkpoint_payloads(ctx.s, existing)
     design_doc = existing.get("design_doc") if isinstance(existing.get("design_doc"), dict) else {}
     row = await ensure_art_revision(
         ctx.s,
@@ -677,7 +691,8 @@ async def _persist_art_revision(ctx: _Ctx, art_direction: dict[str, Any]) -> Non
         design_doc=design_doc,
     )
     existing["active_art_revision_id"] = str(row.id)
-    await ckpt.save_state(ctx.r, ctx.run.id, existing, ctx.s)
+    existing["art_direction"] = art_direction
+    await ckpt.save_state(ctx.r, ctx.run.id, slim_checkpoint_payloads(existing), ctx.s)
 
 
 async def _pause_hitl(
@@ -688,27 +703,30 @@ async def _pause_hitl(
     *,
     force_new_plan: bool = False,
 ) -> None:
+    """HITL 等待：先提交可幂等副作用，再落 Wait State（瘦 checkpoint）并发事件。"""
     await ctx.s.refresh(ctx.run)
     if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
         raise RunFinalized
-    # 策划确认暂停：始终用 design_doc.title 覆盖 Game.title（双语正式名）
-    if node == "plan_confirm":
-        new_title = str(design_doc.get("title") or "").strip()[:255]
-        if new_title and new_title != ctx.game.title:
-            ctx.game.title = new_title
-            ctx.s.add(ctx.game)
-    apply_paused_metadata(ctx.run)
+
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
     extra_data = dict(extra or {})
     extra_data.setdefault("hitl_trace", ctx.hitl_trace or "")
     if ctx.resume_command_id is not None:
         await mark_command_succeeded(ctx.resume_command_id, db=ctx.s)
-    await _attach_plan_revision(ctx, node, design_doc, extra_data, force_new_plan=force_new_plan)
+
+    # --- 副作用阶段（暂停状态写入之前）---
+    await _commit_hitl_side_effects(
+        ctx,
+        node,
+        design_doc,
+        extra_data,
+        existing=existing,
+        force_new_plan=force_new_plan,
+    )
     if not isinstance(extra_data.get("failure"), dict):
         snapshot = await _failure_snapshot(ctx, {**existing, **extra_data})
         if snapshot:
             extra_data["failure"] = snapshot
-    # HITL 长等待：若携带活沙箱会话则显式 destroy，不保留计费会话
     live_session = extra_data.pop("sandbox_session", None)
     if live_session is not None:
         from app.sandbox import get_sandbox_backend
@@ -723,8 +741,12 @@ async def _pause_hitl(
         if session_obj is not None and not session_obj.closed:
             hitl_meta = await destroy_for_hitl(get_sandbox_backend(), session_obj)
             extra_data["sandbox_hitl"] = hitl_meta
+
+    # --- Wait State：仅暂停元数据 + 瘦 checkpoint ---
+    apply_paused_metadata(ctx.run)
+    phase = str(existing.get("phase") or node)
     checkpoint = build_pause_checkpoint(
-        phase=str(existing.get("phase") or node),
+        phase=phase,
         pause_reason=PauseReason.WAITING_USER,
         design_doc=design_doc,
         extra={
@@ -733,26 +755,16 @@ async def _pause_hitl(
                 for k, v in existing.items()
                 if k not in {"recovery", "pause_reason", "resume_grant"}
             },
-            "phase": str(existing.get("phase") or node),
+            "phase": phase,
             "design_doc": design_doc,
             **extra_data,
         },
     )
-    # build_pause_checkpoint 已写入 pause_reason；去掉可能被 extra 带入的 recovery
     checkpoint.pop("recovery", None)
+    checkpoint = slim_checkpoint_payloads(checkpoint)
     await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
-    await add_message(
-        ctx.s,
-        game_id=ctx.game.id,
-        run_id=ctx.run.id,
-        user_id=ctx.run.user_id,
-        role="assistant",
-        kind="design",
-        content=design_message_content(design_doc),
-        metadata={"node": node, "design_doc": design_doc},
-        dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
-    )
     await ctx.s.commit()
+
     failure = extra_data.get("failure") if isinstance(extra_data.get("failure"), dict) else None
     payload = {
         "node": node,
@@ -772,6 +784,51 @@ async def _pause_hitl(
     await publish_event(ctx.run.id, WSEventType.HITL_WAIT, payload)
 
 
+async def _commit_hitl_side_effects(
+    ctx: _Ctx,
+    node: str,
+    design_doc: dict[str, Any],
+    extra_data: dict[str, Any],
+    *,
+    existing: dict[str, Any],
+    force_new_plan: bool,
+) -> None:
+    """进入等待前的业务副作用：标题、revision、设计消息（均可幂等/去重）。"""
+    from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
+
+    if node == "plan_confirm":
+        new_title = str(design_doc.get("title") or "").strip()[:255]
+        if new_title and new_title != ctx.game.title:
+            title_key = side_effect_key(ctx.run.id, node, "hitl", "game_title")
+            if await try_begin_side_effect(ctx.r, title_key):
+                ctx.game.title = new_title
+                ctx.s.add(ctx.game)
+    await _attach_plan_revision(ctx, node, design_doc, extra_data, force_new_plan=force_new_plan)
+    art_opts = extra_data.get("art_options")
+    if isinstance(art_opts, dict) and art_opts:
+        plan_rev = parse_revision_id(
+            extra_data.get("active_plan_revision_id")
+        ) or parse_revision_id(existing.get("active_plan_revision_id"))
+        row, _changed = await ensure_art_options_revision(
+            ctx.s,
+            ctx.run.id,
+            art_opts,
+            plan_revision_id=plan_rev,
+        )
+        extra_data["active_art_options_revision_id"] = str(row.id)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="design",
+        content=design_message_content(design_doc),
+        metadata={"node": node, "design_doc": design_doc},
+        dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
+    )
+
+
 async def _pause_recoverable(
     ctx: _Ctx,
     *,
@@ -779,10 +836,11 @@ async def _pause_recoverable(
     error_code: str,
     message: str,
     attempts: int = 1,
+    pause_reason: PauseReason = PauseReason.RECOVERABLE_ERROR,
 ) -> None:
-    """可恢复故障：status=paused + pause_reason=recoverable_error（ADR-05）。"""
+    """可恢复暂停：默认 recoverable_error；预算耗尽可传 quota_blocked。"""
     await ctx.s.refresh(ctx.run)
-    if ctx.run.ended_at is not None or ctx.run.status == RunStatus.FAILED.value:
+    if ctx.run.ended_at is not None or is_terminal_run_status(ctx.run.status):
         raise RunFinalized
     apply_paused_metadata(ctx.run)
     existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
@@ -802,7 +860,7 @@ async def _pause_recoverable(
     )
     checkpoint = build_pause_checkpoint(
         phase=phase,
-        pause_reason=PauseReason.RECOVERABLE_ERROR,
+        pause_reason=pause_reason,
         design_doc=existing.get("design_doc"),
         recovery=recovery,
         extra={
@@ -810,7 +868,7 @@ async def _pause_recoverable(
             "failure_report_id": str(report.id),
         },
     )
-    await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
+    await ckpt.save_state(ctx.r, ctx.run.id, slim_checkpoint_payloads(checkpoint), ctx.s)
     await add_message(
         ctx.s,
         game_id=ctx.game.id,
@@ -820,7 +878,7 @@ async def _pause_recoverable(
         kind="paused",
         content=message,
         metadata={
-            "pause_reason": PauseReason.RECOVERABLE_ERROR.value,
+            "pause_reason": pause_reason.value,
             "recovery": {
                 "node": recovery.node,
                 "error_code": recovery.error_code,
@@ -838,7 +896,7 @@ async def _pause_recoverable(
             "code": error_code,
             "message": message,
             "fatal": False,
-            "pause_reason": PauseReason.RECOVERABLE_ERROR.value,
+            "pause_reason": pause_reason.value,
             "recovery": {
                 "node": recovery.node,
                 "error_code": recovery.error_code,
@@ -858,14 +916,17 @@ async def _check_ctrl(
         return "cancel"
     if flag == "pause":
         doc = coerce_design_doc(design_doc, ctx.game.title)
+        existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+        paused = merge_pause_checkpoint(
+            existing,
+            phase="user_pause",
+            pause_reason=PauseReason.MANUAL_HOLD,
+            design_doc=doc,
+        )
         await ckpt.save_state(
             ctx.r,
             ctx.run.id,
-            build_pause_checkpoint(
-                phase="user_pause",
-                pause_reason=PauseReason.MANUAL_HOLD,
-                design_doc=doc,
-            ),
+            slim_checkpoint_payloads(paused),
             ctx.s,
         )
         apply_paused_metadata(ctx.run)
@@ -1096,7 +1157,18 @@ def _build_graph(ctx: _Ctx) -> Any:
         last_error = "未知错误"
         for attempt in range(1, settings.art_max_retries + 1):
             try:
-                # art 输出是 JSON，打字机价值低；只审核（emit_delta=False）省事件量。
+                if settings.forge_art_options_parallel:
+
+                    async def _complete(system: str, user: str) -> str:
+                        return await _streamed_llm_or_fallback(
+                            ctx, system, user, "art", emit_delta=False
+                        )
+
+                    return await generate_art_options_parallel(
+                        system_prompt=system_prompt,
+                        user_msg=user_msg,
+                        complete=_complete,
+                    )
                 raw = await _streamed_llm_or_fallback(
                     ctx, system_prompt, user_msg, "art", emit_delta=False
                 )
@@ -1112,7 +1184,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     {
                         "phase": "art",
                         "tool": "art_options_lint",
-                        "args": {"attempt": attempt},
+                        "args": {
+                            "attempt": attempt,
+                            "parallel": bool(settings.forge_art_options_parallel),
+                        },
                         "status": "error",
                         "summary": last_error,
                     },
@@ -1182,11 +1257,21 @@ def _build_graph(ctx: _Ctx) -> Any:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
                 return await fallback_art(design_doc, str(exc))
+            prior = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
             checkpoint = {
                 "phase": "art_confirm",
                 "design_doc": design_doc,
                 "art_options": art_options,
             }
+            for key in (
+                "active_plan_revision_id",
+                "active_art_revision_id",
+                "active_art_options_revision_id",
+                "active_candidate_revision_id",
+                "hitl_trace",
+            ):
+                if prior.get(key) is not None:
+                    checkpoint[key] = prior[key]
             await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
             await _pause_hitl(ctx, "art_confirm", design_doc, extra={"art_options": art_options})
             return {
@@ -1228,14 +1313,25 @@ def _build_graph(ctx: _Ctx) -> Any:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
                 return await fallback_art(design_doc, str(exc))
+            prior = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+            checkpoint = {
+                "phase": "art_confirm",
+                "design_doc": design_doc,
+                "art_options": art_options,
+            }
+            for key in (
+                "active_plan_revision_id",
+                "active_art_revision_id",
+                "active_art_options_revision_id",
+                "active_candidate_revision_id",
+                "hitl_trace",
+            ):
+                if prior.get(key) is not None:
+                    checkpoint[key] = prior[key]
             await ckpt.save_state(
                 ctx.r,
                 ctx.run.id,
-                {
-                    "phase": "art_confirm",
-                    "design_doc": design_doc,
-                    "art_options": art_options,
-                },
+                checkpoint,
                 ctx.s,
             )
             await _pause_hitl(ctx, "art_confirm", design_doc, extra={"art_options": art_options})
@@ -1651,7 +1747,7 @@ async def run_generation(
             # 又改回 RUNNING 继续跑（HITL 等待中点「终止」后 worker 仍复活的根因）。
             # 合法的复活路径（retry_run / dev_requeue / HITL resolve）都会在入队前
             # 把 status 重置为 RUNNING 并清空 ended_at，故不会误伤。
-            inactive = run.status in (RunStatus.FAILED.value, RunStatus.DONE.value)
+            inactive = is_terminal_run_status(run.status)
             duplicate_execute = not resume and run.status != RunStatus.RUNNING.value
             if inactive or duplicate_execute or run.ended_at is not None:
                 log.warning("skip inactive run", extra={"stage": stage, "status": run.status})
@@ -1721,6 +1817,19 @@ async def run_generation(
                         run_id,
                         WSEventType.ERROR,
                         {"code": fail_code, "message": fail_msg, "fatal": True},
+                    )
+                    return
+
+                # 单次 Run token 预算耗尽：可恢复暂停，交还用户（非日配额 fatal）
+                if is_forge_run_budget_error(e):
+                    forge_ctx = _Ctx(s, r, run, game)
+                    await _pause_recoverable(
+                        forge_ctx,
+                        phase=run.phase or "code",
+                        error_code="FORGE_RUN_TOKEN_BUDGET",
+                        message=str(e),
+                        attempts=1,
+                        pause_reason=PauseReason.QUOTA_BLOCKED,
                     )
                     return
 
@@ -1808,8 +1917,9 @@ async def _run_body(
     command_type: str | None = None
     if resume:
         st = await ckpt.load_state(r, run_id, s) or {}
+        st = await hydrate_checkpoint_payloads(s, st)
         # 一次性推进凭据：合法入口写入；陈旧 resume 无凭据则跳过。
-        # ADR-10：延迟到图成功推进后再消费，避免「grant 已吃、消息重投被跳过、永 RUNNING」。
+        # 延迟到图成功推进后再消费，避免「grant 已吃、消息重投被跳过、永 RUNNING」。
         grant = st.get("resume_grant")
         phase = st.get("phase")
         if phase in _HITL_RESUME_PHASES and not grant:

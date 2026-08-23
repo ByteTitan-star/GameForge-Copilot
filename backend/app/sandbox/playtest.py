@@ -24,6 +24,13 @@ from app.core.cdn_policy import (
     validate_dist_self_contained,
     validate_refs,
 )
+from app.core.config import settings
+from app.sandbox.acceptance_gate import design_acceptance_errors
+from app.sandbox.acceptance_runtime import (
+    parse_runtime_probes,
+    run_runtime_acceptance,
+    try_pause_resume_probe,
+)
 from app.sandbox.motion import RAF_INIT_SCRIPT, evaluate_motion_signal
 
 log = logging.getLogger(__name__)
@@ -101,6 +108,9 @@ def is_browser_launch_failure(exc: BaseException) -> bool:
 
 
 _MATTER_ADD_GROUP_RE = re.compile(r"matter\.add\.group\s*\(")
+_EVAL_RE = re.compile(r"\beval\s*\(")
+_SCRIPT_RE = re.compile(r"<script\b", re.I)
+_SCRIPT_CLOSE_RE = re.compile(r"</script\s*>", re.I)
 
 
 def illegal_engine_api_errors(html: str) -> list[str]:
@@ -112,6 +122,24 @@ def illegal_engine_api_errors(html: str) -> list[str]:
         "（Phaser Matter 无 group API；显示分组用 this.add.group()；"
         "物理体用 matter.add.rectangle/circle/image + constraint）"
     ]
+
+
+def structural_html_errors(html: str) -> list[str]:
+    """进浏览器前的确定性结构门禁：空页、无脚本、危险 API。"""
+    text = (html or "").strip()
+    errors: list[str] = []
+    if not text:
+        errors.append("STRUCTURAL: 产物 HTML 为空")
+        return errors
+    if not _SCRIPT_RE.search(text):
+        errors.append("STRUCTURAL: 缺少 <script>，无法运行游戏逻辑")
+    opens = len(_SCRIPT_RE.findall(text))
+    closes = len(_SCRIPT_CLOSE_RE.findall(text))
+    if opens and closes and opens != closes:
+        errors.append("STRUCTURAL: <script> 标签未正确闭合")
+    if _EVAL_RE.search(text):
+        errors.append("STRUCTURAL: 禁止使用 eval()")
+    return errors
 
 
 def playwright_import_available() -> bool:
@@ -321,6 +349,9 @@ async def _session_playtest(
     want_thumb: bool,
     mode_label: str,
     goto_timeout_ms: int,
+    design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
+    html: str = "",
 ) -> PlaytestResult:
     errors: list[str] = []
     logs: list[str] = [f"playtest: {mode_label}"]
@@ -357,6 +388,20 @@ async def _session_playtest(
     if errors:
         return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
 
+    if (
+        runtime_design_doc
+        and settings.forge_acceptance_runtime
+        and any(p.kind == "pause_resume" for p in parse_runtime_probes(runtime_design_doc))
+    ):
+        await try_pause_resume_probe(page, logs)
+        await page.wait_for_timeout(150)
+
+    if runtime_design_doc and settings.forge_acceptance_runtime:
+        rt_errors = await run_runtime_acceptance(page, runtime_design_doc, html=html)
+        if rt_errors:
+            errors.extend(rt_errors)
+            return make_playtest_result(errors=errors, console_logs=logs, failure_kind="product")
+
     motion = await evaluate_motion_signal(page)
     if motion is None:
         errors.append("NO_RUNTIME_SIGNAL: no raf/canvas_diff/engine_runtime")
@@ -391,7 +436,14 @@ async def _close_browser_quietly(browser: Any) -> None:
 
 
 async def _with_browser(
-    url: str, want_thumb: bool, mode_label: str, timeout: int
+    url: str,
+    want_thumb: bool,
+    mode_label: str,
+    timeout: int,
+    *,
+    design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
+    html: str = "",
 ) -> PlaytestResult:
     from playwright.async_api import async_playwright
 
@@ -407,6 +459,9 @@ async def _with_browser(
                     want_thumb=want_thumb,
                     mode_label=mode_label,
                     goto_timeout_ms=timeout,
+                    design_doc=design_doc,
+                    runtime_design_doc=runtime_design_doc,
+                    html=html,
                 )
                 return session_result
             finally:
@@ -463,7 +518,28 @@ def _stop_server(server: ThreadingHTTPServer, thread: threading.Thread) -> None:
     server.server_close()
 
 
-async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> PlaytestResult:
+def _design_acceptance_result(
+    html: str, design_doc: dict[str, Any] | None
+) -> PlaytestResult | None:
+    if not design_doc:
+        return None
+    errors = design_acceptance_errors(html, design_doc)
+    if not errors:
+        return None
+    return make_playtest_result(
+        errors=errors,
+        console_logs=["playtest: design acceptance gate"],
+        failure_kind="product",
+    )
+
+
+async def run_playtest_dist(
+    dist_dir: Path,
+    want_thumb: bool = False,
+    *,
+    design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
+) -> PlaytestResult:
     refs = scan_dist_external_refs(dist_dir)
     ok, violations = validate_dist_self_contained(refs)
     if not ok:
@@ -481,18 +557,39 @@ async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> Playtes
             failure_kind="product",
         )
 
+    index_html = dist_dir / "index.html"
+    dist_html = index_html.read_text(encoding="utf-8") if index_html.is_file() else ""
+    if design_doc and dist_html:
+        acceptance = _design_acceptance_result(dist_html, design_doc)
+        if acceptance is not None:
+            return acceptance
+
     unavailable = await asyncio.to_thread(_check_playwright_available)
     if unavailable is not None:
         return unavailable
 
     server, thread, base = _serve(dist_dir)
     try:
-        return await _with_browser(f"{base}/", want_thumb, "playwright dist mode", 20_000)
+        return await _with_browser(
+            f"{base}/",
+            want_thumb,
+            "playwright dist mode",
+            20_000,
+            design_doc=design_doc,
+            runtime_design_doc=runtime_design_doc,
+            html=dist_html,
+        )
     finally:
         _stop_server(server, thread)
 
 
-async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
+async def run_playtest(
+    html: str,
+    want_thumb: bool = False,
+    *,
+    design_doc: dict[str, Any] | None = None,
+    runtime_design_doc: dict[str, Any] | None = None,
+) -> PlaytestResult:
     api_errors = illegal_engine_api_errors(html)
     if api_errors:
         return _with_cdn_check(
@@ -504,9 +601,24 @@ async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
             ),
         )
 
+    acceptance = _design_acceptance_result(html, design_doc)
+    if acceptance is not None:
+        return _with_cdn_check(html, acceptance)
+
     unavailable = await asyncio.to_thread(_check_playwright_available)
     if unavailable is not None:
         return _with_cdn_check(html, unavailable)
+
+    structural = structural_html_errors(html)
+    if structural:
+        return _with_cdn_check(
+            html,
+            make_playtest_result(
+                errors=structural,
+                console_logs=["playtest: structural gate"],
+                failure_kind="product",
+            ),
+        )
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -515,7 +627,13 @@ async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
         server, thread, base = _serve(root)
         try:
             result = await _with_browser(
-                f"{base}/index.html", want_thumb, "playwright mode", 15_000
+                f"{base}/index.html",
+                want_thumb,
+                "playwright mode",
+                15_000,
+                design_doc=design_doc,
+                runtime_design_doc=runtime_design_doc,
+                html=html,
             )
         finally:
             _stop_server(server, thread)

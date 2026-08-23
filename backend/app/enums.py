@@ -20,6 +20,7 @@ class RunStatus(StrEnum):
     PAUSED = "paused"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class PauseReason(StrEnum):
@@ -71,6 +72,7 @@ class FailureClass(StrEnum):
 class ArtifactKind(StrEnum):
     PLAN = "plan"
     ART = "art"
+    ART_OPTIONS = "art_options"
     CANDIDATE = "candidate"
 
 

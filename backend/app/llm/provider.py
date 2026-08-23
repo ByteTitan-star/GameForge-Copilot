@@ -17,6 +17,7 @@ import httpx
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
+from app.llm.thinking import thinking_disable_fields
 
 log = logging.getLogger(__name__)
 
@@ -172,49 +173,6 @@ def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=timeout)
 
 
-def _supports_enable_thinking(base_url: str | None, model: str) -> bool:
-    """Only Qwen models via DashScope-compatible endpoints accept ``enable_thinking``.
-
-    Injecting this non-standard parameter into other providers (GLM, DeepSeek,
-    OpenAI, etc.) may trigger 400 or be silently ignored while the thinking
-    tokens still consume the ``max_tokens`` budget — yielding empty responses.
-    """
-    name = (model or "").lower()
-    host = (_host_from_base_url(base_url) or "").lower()
-    is_qwen_model = any(tok in name for tok in ("qwen", "qwq"))
-    is_dashscope_host = "dashscope" in host
-    return is_qwen_model or is_dashscope_host
-
-
-def _requires_thinking_enabled(model: str) -> bool:
-    """Pure reasoning models that *require* ``enable_thinking=true``."""
-    name = (model or "").lower()
-    return any(tok in name for tok in ("qwq",))
-
-
-def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model: str) -> bool:
-    """Inject ``enable_thinking=false`` only for Qwen/DashScope models that support the param.
-
-    plan JSON / audit 0|1 do not need chain-of-thought: thinking tokens eat
-    into ``max_tokens``, and streaming only collects ``content`` — discarding
-    ``reasoning_content`` — which easily produces empty body.
-    """
-    if not settings.llm_disable_thinking:
-        return False
-    if _uses_anthropic_native_api(provider, base_url):
-        return False
-    if not _supports_enable_thinking(base_url, model):
-        return False
-    return not _requires_thinking_enabled(model)
-
-
-def _should_disable_anthropic_thinking(provider: LLMProvider, base_url: str | None) -> bool:
-    """Anthropic 原生 /messages（含 GLM Anthropic 代理）关闭 thinking 扩展块。"""
-    if not settings.llm_disable_thinking:
-        return False
-    return _uses_anthropic_native_api(provider, base_url)
-
-
 async def test_connectivity(
     provider: LLMProvider,
     apikey: str,
@@ -228,7 +186,7 @@ async def test_connectivity(
     if provider == LLMProvider.OPENAI_COMPAT and not base_url:
         return False, "openai_compat 需配置 base_url"
     try:
-        await complete(
+        result = await complete(
             provider,
             apikey,
             trimmed,
@@ -237,6 +195,12 @@ async def test_connectivity(
             base_url=base_url,
             max_tokens=8,
         )
+        if not result.content.strip():
+            # 推理模型未关 thinking 时会耗尽 max_tokens，content 恒空（HTTP 200 假成功）
+            return (
+                False,
+                "模型返回空内容：thinking 可能耗尽 max_tokens，请关闭 thinking",
+            )
         return True, None
     except httpx.HTTPError as e:
         return False, f"网络错误: {e}"
@@ -281,7 +245,7 @@ def _build_body(
     """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
 
     Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
-    thinking 默认关闭（见 _should_disable_thinking）。
+    thinking 默认关闭：见 ``thinking_disable_fields`` 厂商能力表。
     """
     if _uses_anthropic_native_api(provider, base_url):
         body = {
@@ -290,8 +254,6 @@ def _build_body(
             "system": system,
             "messages": [{"role": "user", "content": user_msg}],
         }
-        if _should_disable_anthropic_thinking(provider, base_url):
-            body["thinking"] = {"type": "disabled"}
     else:
         body = {
             "model": model,
@@ -305,8 +267,7 @@ def _build_body(
         # 缺失时由 complete_stream 兜底估算。
         if stream:
             body["stream_options"] = {"include_usage": True}
-    if _should_disable_thinking(provider, base_url, model):
-        body["enable_thinking"] = False
+    body.update(thinking_disable_fields(provider, base_url, model))
     if stream:
         body["stream"] = True
     return body

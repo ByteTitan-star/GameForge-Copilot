@@ -52,8 +52,17 @@ async def get_audit_llm_config(db: AsyncSession) -> dict:
 
     被 guard.build_guard（worker 侧）和 admin 测试端点共用；guard 侧调用若
     DB 异常需自行 try/except 回退纯 env。
+    注意必须 select + populate_existing 而非 db.get：worker 整个 run 复用一个
+    session（expire_on_commit=False），db.get 会命中 identity map 旧快照，
+    导致 admin 后台改配置对进行中的 run 永不生效。
     """
-    row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
+    row = (
+        await db.execute(
+            select(SystemSetting)
+            .where(SystemSetting.key == _AUDIT_LLM_KEY)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
     v = (row.value or {}) if row is not None else {}
     apikey_enc = v.get("apikey_enc", "")
     apikey = crypto.decrypt_apikey(apikey_enc) if apikey_enc else settings.audit_apikey
@@ -63,6 +72,9 @@ async def get_audit_llm_config(db: AsyncSession) -> dict:
         "model": str(v.get("model") or settings.audit_model).strip(),
         "apikey": apikey,
         "base_url": str(v.get("base_url") or settings.audit_base_url),
+        "interval_ms": int(v.get("interval_ms") or settings.audit_interval_ms),
+        "min_chars_between": int(v.get("min_chars_between") or settings.audit_min_chars_between),
+        "max_buffer_chars": int(v.get("max_buffer_chars") or settings.audit_max_buffer_chars),
     }
 
 
@@ -75,13 +87,18 @@ async def get_audit_llm_settings_view(db: AsyncSession) -> AdminAuditLlmSettings
         model=cfg["model"],
         apikey=_mask_apikey(cfg["apikey"]) if cfg["apikey"] else "",
         base_url=cfg["base_url"],
+        interval_ms=cfg["interval_ms"],
+        min_chars_between=cfg["min_chars_between"],
+        max_buffer_chars=cfg["max_buffer_chars"],
     )
 
 
 async def _active_admin_count(db: AsyncSession) -> int:
     return int(
         await db.scalar(
-            select(func.count()).select_from(User).where(
+            select(func.count())
+            .select_from(User)
+            .where(
                 User.role == Role.ADMIN.value,
                 User.disabled.is_(False),
             )
@@ -90,9 +107,7 @@ async def _active_admin_count(db: AsyncSession) -> int:
     )
 
 
-async def list_users(
-    db: AsyncSession, page: int, size: int
-) -> tuple[list[User], int]:
+async def list_users(db: AsyncSession, page: int, size: int) -> tuple[list[User], int]:
     base = select(User)
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     rows = (
@@ -103,9 +118,7 @@ async def list_users(
     return list(rows), int(total or 0)
 
 
-async def user_daily_limits(
-    r: redis.Redis, users: list[User]
-) -> dict[uuid.UUID, int | None]:
+async def user_daily_limits(r: redis.Redis, users: list[User]) -> dict[uuid.UUID, int | None]:
     out: dict[uuid.UUID, int | None] = {}
     for u in users:
         raw = await r.get(f"quota:user:{u.id}")
@@ -205,9 +218,7 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     general = await db.get(SystemSetting, _GENERAL_KEY)
     general_value = {"admin_contact_email": req.admin_contact_email.strip()}
     if general is None:
-        db.add(
-            SystemSetting(key=_GENERAL_KEY, value=general_value, updated_by=admin.id)
-        )
+        db.add(SystemSetting(key=_GENERAL_KEY, value=general_value, updated_by=admin.id))
     else:
         general.value = general_value
         general.updated_by = admin.id
@@ -216,11 +227,7 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
         audit_value = await _merge_audit_llm_value(db, req.audit_llm)
         audit_row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
         if audit_row is None:
-            db.add(
-                SystemSetting(
-                    key=_AUDIT_LLM_KEY, value=audit_value, updated_by=admin.id
-                )
-            )
+            db.add(SystemSetting(key=_AUDIT_LLM_KEY, value=audit_value, updated_by=admin.id))
         else:
             audit_row.value = audit_value
             audit_row.updated_by = admin.id
@@ -241,15 +248,18 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     return req
 
 
-async def _merge_audit_llm_value(
-    db: AsyncSession, req: AdminAuditLlmSettings
-) -> dict:
-    """合并审核模型配置：apikey 为空或 masked → 保留 DB 旧密文；否则加密新 key。"""
+async def _merge_audit_llm_value(db: AsyncSession, req: AdminAuditLlmSettings) -> dict:
+    """合并审核模型配置：apikey 为空或 masked → 保留 DB 旧密文；否则加密新 key。
+
+    滑窗参数（interval_ms 等）None → 保留 DB 旧值，再回退 env（GET→PUT 回传不丢配置）。
+    """
     existing = await db.get(SystemSetting, _AUDIT_LLM_KEY)
-    old_enc = (existing.value or {}).get("apikey_enc", "") if existing else ""
+    old = (existing.value or {}) if existing else {}
     apikey = req.apikey.strip()
     apikey_enc = (
-        old_enc if not apikey or "***" in apikey else crypto.encrypt_apikey(apikey)
+        old.get("apikey_enc", "")
+        if not apikey or "***" in apikey
+        else crypto.encrypt_apikey(apikey)
     )
     return {
         "enabled": req.enabled,
@@ -257,6 +267,17 @@ async def _merge_audit_llm_value(
         "model": req.model.strip(),
         "apikey_enc": apikey_enc,
         "base_url": req.base_url.strip(),
+        "interval_ms": (req.interval_ms if req.interval_ms is not None else old.get("interval_ms")),
+        "min_chars_between": (
+            req.min_chars_between
+            if req.min_chars_between is not None
+            else old.get("min_chars_between")
+        ),
+        "max_buffer_chars": (
+            req.max_buffer_chars
+            if req.max_buffer_chars is not None
+            else old.get("max_buffer_chars")
+        ),
     }
 
 
@@ -288,9 +309,7 @@ async def get_effective_limits(db: AsyncSession) -> tuple[int, int, int]:
     )
 
 
-async def list_audit_logs(
-    db: AsyncSession, page: int, size: int
-) -> tuple[list[AuditLog], int]:
+async def list_audit_logs(db: AsyncSession, page: int, size: int) -> tuple[list[AuditLog], int]:
     base = select(AuditLog)
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     rows = (

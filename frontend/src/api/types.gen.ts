@@ -1779,6 +1779,12 @@ export interface components {
              * @default
              */
             base_url: string;
+            /** Interval Ms */
+            interval_ms?: number | null;
+            /** Min Chars Between */
+            min_chars_between?: number | null;
+            /** Max Buffer Chars */
+            max_buffer_chars?: number | null;
         };
         /** AdminAuditLlmTestResp */
         AdminAuditLlmTestResp: {

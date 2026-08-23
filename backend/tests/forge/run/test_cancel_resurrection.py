@@ -32,7 +32,7 @@ async def test_cancelled_run_not_resurrected_by_resume(
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
 ) -> None:
-    """已 cancel（FAILED）的 run，worker 再消费 resume 消息时应被入口守卫跳过。"""
+    """已 cancel（cancelled）的 run，worker 再消费 resume 消息时应被入口守卫跳过。"""
     gid = await _make_game(verified_client)
     rid = uuid.UUID(
         (await verified_client.post(f"/api/v1/games/{gid}/runs", json={"requirement": "x"})).json()[
@@ -40,14 +40,14 @@ async def test_cancelled_run_not_resurrected_by_resume(
         ]["run_id"]
     )
 
-    # 终止 run（RUNNING → FAILED，ended_at 置位，checkpoint/control 清空）
+    # 终止 run（RUNNING → CANCELLED，ended_at 置位）
     cancelled = await verified_client.post(f"/api/v1/runs/{rid}/cancel")
     assert cancelled.status_code == 200, cancelled.text
-    assert cancelled.json()["data"]["status"] == RunStatus.FAILED.value
+    assert cancelled.json()["data"]["status"] == RunStatus.CANCELLED.value
 
     # 模拟 worker 消费到一条针对该 run 的残留 resume 消息
     ctx = {"redis": redis_client}
     await run_generation(ctx, rid, resume=True, decision="approve")
 
     # 守卫应直接跳过：run 不得被改回 RUNNING
-    assert await _run_status(rid) == RunStatus.FAILED.value
+    assert await _run_status(rid) == RunStatus.CANCELLED.value

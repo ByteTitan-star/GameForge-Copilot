@@ -11,7 +11,8 @@ Static structural analysis on **20** curated snippets. Structure detection accur
 - **Mode**: `static_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
 - **Git SHA**: `cce0db2`
-- **Date**: 2026-08-21
+
+
 
 ## 3. Results
 

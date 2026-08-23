@@ -212,6 +212,24 @@ def _valid_art_options_json() -> str:
     )
 
 
+def _valid_single_art_option_json(option_id: str) -> str:
+    oid = option_id.strip().upper()
+    presets = {
+        "A": ("清透霓虹", "Canvas 几何实体配合青色轨迹、命中粒子和高对比 HUD。", True),
+        "B": ("纸雕街机", "CSS 层叠纸片、硬边阴影与逐帧形变构成轻量手作视觉。", False),
+    }
+    name, summary, recommended = presets.get(oid, presets["A"])
+    return json.dumps(
+        {
+            "id": oid,
+            "name": name,
+            "summary": summary,
+            "recommended": recommended,
+        },
+        ensure_ascii=False,
+    )
+
+
 def _valid_art_detail_json() -> str:
     return json.dumps(
         {
@@ -253,6 +271,15 @@ def _fake_llm(monkeypatch: pytest.MonkeyPatch):
         """按 system prompt 决定返回内容 + usage。流式/非流式共用。"""
         if "Skill 路由器" in system or "skill_ids" in system:
             return LLMCompletion(content='{"skill_ids":[]}', usage=Usage(5, 2))
+        if "并行单方案任务" in system or "TARGET=" in system:
+            import re
+
+            match = re.search(r"TARGET=([AB])", system)
+            oid = match.group(1) if match else "A"
+            return LLMCompletion(
+                content=_valid_single_art_option_json(oid),
+                usage=Usage(10, 5),
+            )
         if "方向提案" in system or "上一轮两个视觉方向" in system:
             return LLMCompletion(content=_valid_art_options_json(), usage=Usage(10, 5))
         if "前端动效负责人" in system:
