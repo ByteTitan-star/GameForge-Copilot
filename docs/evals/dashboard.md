@@ -30,6 +30,6 @@
 
 - #118 CI gate: `.github/workflows/eval.yml` (PR security+offline; main live generation `--limit 10`)
 - #122 AuditLog persistence: verified via `backend/scripts/verify_guard_auditlog_persistence.py`
-- Live generation: `EVAL_LIVE=1` + `EVAL_API_BASE_URL` + `EVAL_ACCESS_TOKEN`
+- Live generation: `EVAL_LIVE=1` + `EVAL_API_BASE_URL` + `EVAL_ACCESS_TOKEN` (main push skips live step with a warning when secrets are unset)
 - Preference live API: `EVAL_PREF_LIVE=1` (separate from generation EVAL_LIVE)
 - Reliability fault sims: `EVAL_LIVE_FAULT=1` or workflow_dispatch `run_live_fault=true`
