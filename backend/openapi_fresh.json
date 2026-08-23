@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GameForge-Copilot",
-    "version": "1.0.1"
+    "version": "2.0.1"
   },
   "paths": {
     "/healthz": {
@@ -252,6 +252,16 @@
           },
           "400": {
             "description": "token 无效或已过期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "限流",
             "content": {
               "application/json": {
                 "schema": {
@@ -1470,6 +1480,24 @@
               "default": "updated_at",
               "title": "Sort"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -1527,6 +1555,24 @@
               "default": 20,
               "title": "Size"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -1569,6 +1615,24 @@
               "type": "string",
               "title": "Slug"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en，官方样例标题随 locale 切换",
+              "title": "Locale"
+            },
+            "description": "zh | en，官方样例标题随 locale 切换"
           }
         ],
         "responses": {
@@ -2292,6 +2356,74 @@
         }
       }
     },
+    "/api/v1/games/{game_id}/versions/{version}/preview-token": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Create Preview Token",
+        "description": "签发 draft 多文件 preview token（owner only，§19.2）。",
+        "operationId": "create_preview_token_api_v1_games__game_id__versions__version__preview_token_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreviewTokenResp_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "游戏不存在或不可见",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/games/{game_id}/versions/{version}/files/{file_path}": {
       "get": {
         "tags": [
@@ -2744,6 +2876,26 @@
         ],
         "summary": "List Official Games",
         "operationId": "list_official_games_api_v1_official_games_get",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "zh | en",
+              "title": "Locale"
+            },
+            "description": "zh | en"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2751,6 +2903,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_list_OfficialGameItem__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2857,6 +3019,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/preferences": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "List Preferences",
+        "operationId": "list_preferences_api_v1_me_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceList_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Upsert Preference",
+        "operationId": "upsert_preference_api_v1_me_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceItem_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Clear Preferences",
+        "operationId": "clear_preferences_api_v1_me_preferences_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_str__int__"
                 }
               }
             }
@@ -5207,14 +5463,55 @@
         }
       }
     },
-    "/play/{slug}": {
+    "/play/template/{template_id}": {
       "get": {
         "tags": [
           "hosting"
         ],
-        "summary": "Play",
-        "description": "已发布游戏入口，公开。非 published 一律 404。",
-        "operationId": "play_play__slug__get",
+        "summary": "Play Template",
+        "description": "模板 reference 产物试玩（catalog.json reference_artifact），公开。",
+        "operationId": "play_template_play_template__template_id__get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/{slug}/thumb.png": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Thumb",
+        "description": "已发布游戏封面截图，公开。不触发 PV 统计。",
+        "operationId": "play_thumb_play__slug__thumb_png_get",
         "parameters": [
           {
             "name": "slug",
@@ -5248,13 +5545,120 @@
         }
       }
     },
+    "/play/{slug}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play",
+        "description": "已发布游戏入口，公开。非 published 一律 404。",
+        "operationId": "play_play__slug__get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lang"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/{slug}/{path}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Play Asset",
+        "description": "已发布游戏 dist 子资源（assets/* 等），公开。",
+        "operationId": "play_asset_play__slug___path__get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/draft/{game_id}/{version}": {
       "get": {
         "tags": [
           "hosting"
         ],
         "summary": "Draft",
-        "description": "草稿试玩，仅 owner。非 owner/不存在 → 404 不泄露。",
+        "description": "草稿试玩 index.html，仅 owner。非 owner/不存在 → 404 不泄露。",
         "operationId": "draft_draft__game_id___version__get",
         "security": [
           {
@@ -5304,22 +5708,235 @@
         }
       }
     },
-    "/play/{slug}/thumb.png": {
+    "/draft/{game_id}/{version}/{path}": {
       "get": {
         "tags": [
           "hosting"
         ],
-        "summary": "Play Thumb",
-        "description": "已发布游戏封面截图，公开。不触发 PV 统计。",
-        "operationId": "play_thumb_play__slug__thumb_png_get",
+        "summary": "Draft Asset",
+        "description": "草稿 dist 子资源，仅 owner。",
+        "operationId": "draft_asset_draft__game_id___version___path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "slug",
+            "name": "game_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Slug"
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}/": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Index",
+        "description": "Draft 多文件 preview 入口（短期 token，§19.2）。",
+        "operationId": "preview_index_preview__token___game_id___version___get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Index",
+        "description": "Draft 多文件 preview 入口（短期 token，§19.2）。",
+        "operationId": "preview_index_preview__token___game_id___version__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview/{token}/{game_id}/{version}/{path}": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "summary": "Preview Asset",
+        "description": "Draft 多文件 preview 子资源（与 index 共享 token 授权）。",
+        "operationId": "preview_asset_preview__token___game_id___version___path__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
             }
           }
         ],
@@ -5446,6 +6063,45 @@
             "type": "string",
             "title": "Base Url",
             "default": ""
+          },
+          "interval_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3600000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Ms"
+          },
+          "min_chars_between": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Chars Between"
+          },
+          "max_buffer_chars": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 50.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Buffer Chars"
           }
         },
         "type": "object",
@@ -6154,6 +6810,42 @@
         ],
         "title": "ApiResponse[PasswordResetResp]"
       },
+      "ApiResponse_PreferenceItem_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreferenceItem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreferenceItem]"
+      },
+      "ApiResponse_PreferenceList_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreferenceList"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreferenceList]"
+      },
+      "ApiResponse_PreviewTokenResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreviewTokenResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreviewTokenResp]"
+      },
       "ApiResponse_PublicGameMeta_": {
         "properties": {
           "data": {
@@ -6420,6 +7112,22 @@
         ],
         "title": "ApiResponse[dict]"
       },
+      "ApiResponse_dict_str__int__": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[dict[str, int]]"
+      },
       "ApiResponse_dict_str__str__": {
         "properties": {
           "data": {
@@ -6657,6 +7365,33 @@
         ],
         "title": "ArtifactFileItem",
         "description": "产物单个文件的只读描述（代码预览用）。路径为相对产物根的 POSIX 路径。"
+      },
+      "ArtifactGateDetail": {
+        "properties": {
+          "generation_success": {
+            "type": "boolean",
+            "title": "Generation Success",
+            "default": false
+          },
+          "previewable": {
+            "type": "boolean",
+            "title": "Previewable",
+            "default": false
+          },
+          "publishable": {
+            "type": "boolean",
+            "title": "Publishable",
+            "default": false
+          },
+          "qa_ok": {
+            "type": "boolean",
+            "title": "Qa Ok",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ArtifactGateDetail",
+        "description": "ADR-01：previewable ≠ publishable，build_ok ≠ qa_ok。"
       },
       "AuditLogItem": {
         "properties": {
@@ -6908,7 +7643,8 @@
         "type": "string",
         "enum": [
           "plan",
-          "code"
+          "code",
+          "chat"
         ],
         "title": "EntryPhase"
       },
@@ -7482,26 +8218,55 @@
             "title": "Node"
           },
           "decision": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Decision"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command"
           },
           "modify_text": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 2000
+                "maxLength": 10000
               },
               {
                 "type": "null"
               }
             ],
             "title": "Modify Text"
+          },
+          "expected_control_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Control Revision"
           }
         },
         "type": "object",
         "required": [
-          "node",
-          "decision"
+          "node"
         ],
         "title": "HitlResolveReq"
       },
@@ -7583,6 +8348,43 @@
               }
             ],
             "title": "Art Options"
+          },
+          "allowed_commands": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Commands"
+          },
+          "control_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Revision"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
           }
         },
         "type": "object",
@@ -8307,6 +9109,132 @@
         "type": "object",
         "title": "PasswordResetResp"
       },
+      "PreferenceItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Value Json"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "key",
+          "value_json",
+          "source",
+          "confidence",
+          "status"
+        ],
+        "title": "PreferenceItem"
+      },
+      "PreferenceList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PreferenceList"
+      },
+      "PreferenceUpsert": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "value_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Value Json"
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Status",
+            "default": "active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "key",
+          "value_json"
+        ],
+        "title": "PreferenceUpsert"
+      },
+      "PreviewTokenResp": {
+        "properties": {
+          "preview_url": {
+            "type": "string",
+            "title": "Preview Url"
+          },
+          "expires_in_s": {
+            "type": "integer",
+            "title": "Expires In S",
+            "description": "token 有效期（秒）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preview_url",
+          "expires_in_s"
+        ],
+        "title": "PreviewTokenResp"
+      },
       "ProfilePatch": {
         "properties": {
           "handle": {
@@ -8387,6 +9315,11 @@
           "play_count": {
             "type": "integer",
             "title": "Play Count"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured",
+            "default": false
           },
           "like_count": {
             "type": "integer",
@@ -8746,6 +9679,34 @@
         ],
         "title": "Ready"
       },
+      "RecoveryDetail": {
+        "properties": {
+          "node": {
+            "type": "string",
+            "title": "Node"
+          },
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "node",
+          "error_code",
+          "attempts"
+        ],
+        "title": "RecoveryDetail"
+      },
       "RedisFlushReq": {
         "properties": {
           "scopes": {
@@ -8938,7 +9899,7 @@
         "properties": {
           "requirement": {
             "type": "string",
-            "maxLength": 2000,
+            "maxLength": 10000,
             "title": "Requirement"
           },
           "llm_config_id": {
@@ -9054,7 +10015,8 @@
           "running",
           "paused",
           "done",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "title": "RunStatus"
       },
@@ -9097,6 +10059,37 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/HitlWaitDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pause Reason"
+          },
+          "recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecoveryDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artifact_gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactGateDetail"
               },
               {
                 "type": "null"
@@ -9225,6 +10218,27 @@
             },
             "type": "array",
             "title": "Tags"
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "default": "canvas"
+          },
+          "playable": {
+            "type": "boolean",
+            "title": "Playable",
+            "default": false
+          },
+          "play_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play Url"
           }
         },
         "type": "object",
