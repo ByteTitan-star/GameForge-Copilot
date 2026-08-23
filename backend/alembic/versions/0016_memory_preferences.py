@@ -38,9 +38,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "category", "key", name="uq_user_pref_user_cat_key"),
     )
     op.create_index("ix_user_preferences_user_id", "user_preferences", ["user_id"])
-    op.create_index(
-        "ix_user_preferences_user_status", "user_preferences", ["user_id", "status"]
-    )
+    op.create_index("ix_user_preferences_user_status", "user_preferences", ["user_id", "status"])
     op.add_column(
         "games",
         sa.Column("session_summary_json", sa.JSON(), nullable=True),

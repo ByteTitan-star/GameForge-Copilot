@@ -70,13 +70,15 @@ async def main() -> int:
     print(f"        prefix    = {settings.s3_prefix}")
     print(f"        style     = {settings.s3_addressing_style}")
     missing = [
-        n for n, v in (
+        n
+        for n, v in (
             ("S3_ENDPOINT", settings.s3_endpoint),
             ("S3_REGION", settings.s3_region),
             ("S3_BUCKET", settings.s3_bucket),
             ("S3_AK", settings.s3_ak),
             ("S3_SK", settings.s3_sk),
-        ) if not v
+        )
+        if not v
     ]
     if missing:
         print(f"[FAIL] 缺少必填配置: {', '.join(missing)}")
@@ -85,8 +87,7 @@ async def main() -> int:
     # endpoint 含 -internal 且本机不在阿里云内网时给个提示（不阻断，让真实错误说话）
     if "internal" in settings.s3_endpoint:
         print(
-            "        ⚠️  endpoint 含 -internal："
-            "本机/非阿里云内网环境连不上，建议改公网 endpoint。"
+            "        ⚠️  endpoint 含 -internal：本机/非阿里云内网环境连不上，建议改公网 endpoint。"
         )
 
     # 构造后端（走项目真实代码；构造失败通常是 addressing_style / 凭证问题）
@@ -129,8 +130,7 @@ async def main() -> int:
     got = await backend.read_bytes(_TEST_GAME_ID, _TEST_VERSION, _README_REL)
     if got != readme_bytes:
         print(
-            f"[FAIL] 回读内容与原文不一致"
-            f"（len 期望 {len(readme_bytes)}，实际 {len(got or b'')}）"
+            f"[FAIL] 回读内容与原文不一致（len 期望 {len(readme_bytes)}，实际 {len(got or b'')}）"
         )
         await _delete_test_objects(backend, _TEST_GAME_ID, _TEST_VERSION)
         return 1

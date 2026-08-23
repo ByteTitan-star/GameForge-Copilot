@@ -20,9 +20,7 @@ depends_on: str | Sequence[str] | None = None
 
 def _ts(name: str) -> sa.Column:
     """created_at / updated_at 公共列。"""
-    return sa.Column(
-        name, sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-    )
+    return sa.Column(name, sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False)
 
 
 def upgrade() -> None:

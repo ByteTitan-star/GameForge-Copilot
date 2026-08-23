@@ -35,9 +35,7 @@ def upgrade() -> None:
     op.create_index("ix_forge_messages_run_id", "forge_messages", ["run_id"])
     op.create_index("ix_forge_messages_user_id", "forge_messages", ["user_id"])
     op.create_index("ix_forge_messages_created_at", "forge_messages", ["created_at"])
-    op.create_index(
-        "ix_forge_messages_game_created", "forge_messages", ["game_id", "created_at"]
-    )
+    op.create_index("ix_forge_messages_game_created", "forge_messages", ["game_id", "created_at"])
     op.get_bind().exec_driver_sql(
         """
             INSERT INTO forge_messages (

@@ -125,12 +125,12 @@ async def test_engine_root_alone_is_not_motion() -> None:
 
 顺序钉死：
 
-1. `page.on("pageerror")` 在 goto 前注册  
-2. goto（避免只靠 `networkidle`；用 `domcontentloaded` + 短 wait）  
-3. 注入 ArrowRight、Space；可见 enabled 按钮则 click  
-4. 再检查新增 pageerror → `failure_kind=product`  
-5. `evaluate_motion_signal`；全无 → `NO_RUNTIME_SIGNAL` / product  
-6. 仅 `ok` 派生后且 `thumbnail_enabled` 时截图  
+1. `page.on("pageerror")` 在 goto 前注册
+2. goto（避免只靠 `networkidle`；用 `domcontentloaded` + 短 wait）
+3. 注入 ArrowRight、Space；可见 enabled 按钮则 click
+4. 再检查新增 pageerror → `failure_kind=product`
+5. `evaluate_motion_signal`；全无 → `NO_RUNTIME_SIGNAL` / product
+6. 仅 `ok` 派生后且 `thumbnail_enabled` 时截图
 
 - [ ] **步骤 3：跑测 + commit**
 

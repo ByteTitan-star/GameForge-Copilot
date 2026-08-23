@@ -229,14 +229,27 @@ class Runner:
         return resp.status_code, resp
 
     def add(
-        self, group: str, label: str, method: str, path: str,
-        status: int | None, verdict: str, note: str = "",
+        self,
+        group: str,
+        label: str,
+        method: str,
+        path: str,
+        status: int | None,
+        verdict: str,
+        note: str = "",
     ) -> None:
         self.cases.append(Case(group, label, method, path, status, verdict, note))
 
     async def step(
-        self, group: str, label: str, method: str, path: str, *,
-        expect: set[int], token: str | None = None, body: object = _MISSING,
+        self,
+        group: str,
+        label: str,
+        method: str,
+        path: str,
+        *,
+        expect: set[int],
+        token: str | None = None,
+        body: object = _MISSING,
         params: dict[str, str] | None = None,
     ) -> tuple[bool, object]:
         """发请求、判定、记录，返回 (是否 PASS, data 字段)。"""
@@ -259,13 +272,15 @@ class Runner:
         with contextlib.suppress(httpx.HTTPError):
             await self.client.post(
                 f"{API}/api/v1/auth/resend-verification",
-                json={"email": email}, timeout=TIMEOUT,
+                json={"email": email},
+                timeout=TIMEOUT,
             )
         for _ in range(20):
             try:
                 r = await self.client.get(
                     f"{API}/api/v1/dev/verification-code",
-                    params={"email": email}, timeout=TIMEOUT,
+                    params={"email": email},
+                    timeout=TIMEOUT,
                 )
                 if r.status_code == 200:
                     data = (r.json() or {}).get("data") or {}
@@ -288,21 +303,42 @@ class Runner:
                         for k, v in (resp.json() or {}).items()  # type: ignore[attr-defined]
                     )
             ok = status == 200
-            self.add("health", f"{key} {path}", "GET", path, status,
-                     "PASS" if ok else "FAIL", "" if ok else self.err_msg(resp) + detail)
+            self.add(
+                "health",
+                f"{key} {path}",
+                "GET",
+                path,
+                status,
+                "PASS" if ok else "FAIL",
+                "" if ok else self.err_msg(resp) + detail,
+            )
 
     # ---- Layer 1：全量探活（不带 token）----
     async def layer1(self) -> None:
         for group, method, path, kind in LAYER1:
             if kind == "dev_destruct":
-                self.add(group, f"{method} {path}", method, path, None,
-                         "SKIP", "破坏性操作，默认跳过（手动验证）")
+                self.add(
+                    group,
+                    f"{method} {path}",
+                    method,
+                    path,
+                    None,
+                    "SKIP",
+                    "破坏性操作，默认跳过（手动验证）",
+                )
                 continue
             expect = EXPECT_BY_KIND[kind]
             status, resp = await self.call(method, path)
             verdict = self.judge(status, expect)
-            self.add(group, f"{method} {path}", method, path, status, verdict,
-                     "" if verdict == "PASS" else self.err_msg(resp))
+            self.add(
+                group,
+                f"{method} {path}",
+                method,
+                path,
+                status,
+                verdict,
+                "" if verdict == "PASS" else self.err_msg(resp),
+            )
 
     # ---- Layer 2：主链路（合法请求）----
     async def layer2(self) -> None:
@@ -318,17 +354,42 @@ class Runner:
 
     async def _l2_register_login(self, email: str, pw: str) -> str | None:
         g = "L2 认证"
-        await self.step(g, "注册", "POST", "/api/v1/auth/register",
-                        expect={200, 201}, body={"email": email, "password": pw})
+        await self.step(
+            g,
+            "注册",
+            "POST",
+            "/api/v1/auth/register",
+            expect={200, 201},
+            body={"email": email, "password": pw},
+        )
         code = await self.fetch_verify_code(email)
         if code:
-            await self.step(g, "验证邮箱", "POST", "/api/v1/auth/verify-email",
-                            expect={200}, body={"email": email, "code": code})
+            await self.step(
+                g,
+                "验证邮箱",
+                "POST",
+                "/api/v1/auth/verify-email",
+                expect={200},
+                body={"email": email, "code": code},
+            )
         else:
-            self.add(g, "验证邮箱", "POST", "/api/v1/auth/verify-email", None, "WARN",
-                     "未取到验证码（确认 ENV=development + Redis 已起）")
-        ok, data = await self.step(g, "登录", "POST", "/api/v1/auth/login",
-                                   expect={200}, body={"email": email, "password": pw})
+            self.add(
+                g,
+                "验证邮箱",
+                "POST",
+                "/api/v1/auth/verify-email",
+                None,
+                "WARN",
+                "未取到验证码（确认 ENV=development + Redis 已起）",
+            )
+        ok, data = await self.step(
+            g,
+            "登录",
+            "POST",
+            "/api/v1/auth/login",
+            expect={200},
+            body={"email": email, "password": pw},
+        )
         return (data or {}).get("access_token") if ok else None
 
     async def _l2_me_reads(self, token: str) -> None:
@@ -350,23 +411,44 @@ class Runner:
         g = "L2 写流程"
         # dry 连通测试：假 key → 200 且 tested_ok=false（接口正常工作）
         await self.step(
-            g, "LLM dry 测试(假key)", "POST", "/api/v1/me/llm-configs/test",
-            expect={200}, token=token,
+            g,
+            "LLM dry 测试(假key)",
+            "POST",
+            "/api/v1/me/llm-configs/test",
+            expect={200},
+            token=token,
             body={"provider": LLM_PROVIDER, "model": LLM_MODEL, "apikey": "sk-smoke-invalid"},
         )
         # 创建配置：有真 key 期望 201，否则期望 400（连通失败=接口正确拒绝）
         expect = {201} if LLM_APIKEY else {400}
         label = "创建 LLM 配置" + ("(真key)" if LLM_APIKEY else "(假key→应拒)")
-        await self.step(g, label, "POST", "/api/v1/me/llm-configs", expect=expect, token=token,
-                        body={"provider": LLM_PROVIDER, "model": LLM_MODEL,
-                              "apikey": LLM_APIKEY or "sk-smoke-invalid", "is_default": True})
+        await self.step(
+            g,
+            label,
+            "POST",
+            "/api/v1/me/llm-configs",
+            expect=expect,
+            token=token,
+            body={
+                "provider": LLM_PROVIDER,
+                "model": LLM_MODEL,
+                "apikey": LLM_APIKEY or "sk-smoke-invalid",
+                "is_default": True,
+            },
+        )
 
     async def _l2_games_runs(self, token: str, email: str) -> None:
         g = "L2 写流程"
         ts = int(time.time())
-        ok, data = await self.step(g, "创建游戏", "POST", "/api/v1/games", expect={201},
-                                   token=token, body={"title": f"smoke-{ts}",
-                                                       "requirement": "smoke requirement"})
+        ok, data = await self.step(
+            g,
+            "创建游戏",
+            "POST",
+            "/api/v1/games",
+            expect={201},
+            token=token,
+            body={"title": f"smoke-{ts}", "requirement": "smoke requirement"},
+        )
         if not ok or not data:
             self.add(g, "游戏相关链路", "-", "-", None, "SKIP", "创建游戏失败，后续跳过")
             return
@@ -378,22 +460,43 @@ class Runner:
         await self.step(g, "点赞", "POST", f"{gbase}/like", expect={200}, token=token)
         await self.step(g, "收藏", "POST", f"{gbase}/favorite", expect={200}, token=token)
         await self._l2_run(token, game_id)
-        await self.step(g, "Fork 官方游戏", "POST", "/api/v1/games/fork/{slug}",
-                        expect={200, 201, 404, 409}, token=token)
-        await self.step(g, "提交发布", "POST", f"{gbase}/publish/submit",
-                        expect={200, 201, 409}, token=token, body={"version": 1})
+        await self.step(
+            g,
+            "Fork 官方游戏",
+            "POST",
+            "/api/v1/games/fork/{slug}",
+            expect={200, 201, 404, 409},
+            token=token,
+        )
+        await self.step(
+            g,
+            "提交发布",
+            "POST",
+            f"{gbase}/publish/submit",
+            expect={200, 201, 409},
+            token=token,
+            body={"version": 1},
+        )
 
     async def _l2_run(self, token: str, game_id: str) -> None:
         g = "L2 写流程"
-        ok, data = await self.step(g, "创建 run", "POST", f"/api/v1/games/{game_id}/runs",
-                                   expect={201}, token=token, body={"requirement": "smoke run"})
+        ok, data = await self.step(
+            g,
+            "创建 run",
+            "POST",
+            f"/api/v1/games/{game_id}/runs",
+            expect={201},
+            token=token,
+            body={"requirement": "smoke run"},
+        )
         if not ok or not data:
             return
         run_id = str(data.get("run_id"))
         rbase = f"/api/v1/runs/{run_id}"
         # 验到 201 后立即 cancel：避免 Worker 真跑 LLM（节点前 _check_ctrl 会拦截）
-        await self.step(g, "取消 run(防耗token)", "POST", f"{rbase}/cancel",
-                        expect={200}, token=token)
+        await self.step(
+            g, "取消 run(防耗token)", "POST", f"{rbase}/cancel", expect={200}, token=token
+        )
         await self.step(g, "run 状态", "GET", rbase, expect={200}, token=token)
         await self.step(g, "run 事件", "GET", f"{rbase}/events", expect={200}, token=token)
 
@@ -401,8 +504,15 @@ class Runner:
     async def layer3(self) -> None:
         g = "L3 admin"
         if not ADMIN_TOKEN:
-            self.add(g, "admin 域", "-", "-", None, "SKIP",
-                     "未设 SMOKE_ADMIN_TOKEN，admin 端点仅在 Layer1 做了 401 探活")
+            self.add(
+                g,
+                "admin 域",
+                "-",
+                "-",
+                None,
+                "SKIP",
+                "未设 SMOKE_ADMIN_TOKEN，admin 端点仅在 Layer1 做了 401 探活",
+            )
             return
         for label, path in [
             ("用户列表", "/api/v1/admin/users"),
@@ -426,8 +536,9 @@ class Runner:
             print(f"\n— {group} —")
             for c in groups[group]:
                 counts[c.verdict] += 1
-                tag = {"PASS": "[ OK ]", "FAIL": "[FAIL]", "WARN": "[WARN]",
-                       "SKIP": "[SKIP]"}[c.verdict]
+                tag = {"PASS": "[ OK ]", "FAIL": "[FAIL]", "WARN": "[WARN]", "SKIP": "[SKIP]"}[
+                    c.verdict
+                ]
                 code = c.status if c.status is not None else "  —"
                 line = f"{tag} {str(code):>4}  {c.label}"
                 if c.note:
@@ -444,8 +555,10 @@ class Runner:
 async def main() -> None:
     with contextlib.suppress(Exception):
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
-    print(f"GameForge 接口冒烟 → {API}\n（Layer2 写流程：{'开' if RUN_LAYER2 else '关'} · "
-          f"admin token：{'已提供' if ADMIN_TOKEN else '未提供'}）")
+    print(
+        f"GameForge 接口冒烟 → {API}\n（Layer2 写流程：{'开' if RUN_LAYER2 else '关'} · "
+        f"admin token：{'已提供' if ADMIN_TOKEN else '未提供'}）"
+    )
     async with httpx.AsyncClient() as client:
         runner = Runner(client)
         await runner.health()

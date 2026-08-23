@@ -9,16 +9,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-    
-    body { 
-      margin: 0; 
-      background-color: #0a0a1a; 
-      color: #fff; 
-      font-family: 'Orbitron', sans-serif; 
-      overflow: hidden; 
-      touch-action: none; 
+
+    body {
+      margin: 0;
+      background-color: #0a0a1a;
+      color: #fff;
+      font-family: 'Orbitron', sans-serif;
+      overflow: hidden;
+      touch-action: none;
     }
-    
+
     #game-container {
       position: relative;
       width: 100vw;
@@ -29,8 +29,8 @@
       background: radial-gradient(circle at center, #1a1a3a 0%, #050510 100%);
     }
 
-    canvas { 
-      display: block; 
+    canvas {
+      display: block;
       box-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
       border-top: 2px solid #0ff;
       border-bottom: 2px solid #f0f;
@@ -60,7 +60,7 @@
     .neon-text-cyan { text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; color: #e0ffff; }
     .neon-text-magenta { text-shadow: 0 0 10px #f0f, 0 0 20px #f0f; color: #ffe0ff; }
     .neon-text-gold { text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700; color: #fffacd; }
-    
+
     button { transition: all 0.2s ease; }
     button:hover { transform: scale(1.05); box-shadow: 0 0 25px currentColor; }
     button:active { transform: scale(0.95); }
@@ -79,7 +79,7 @@
 
   <div id="game-container">
     <canvas id="c" width="800" height="400"></canvas>
-    
+
     <div class="ui-layer">
       <!-- 顶部信息栏 -->
       <div class="flex justify-between items-start">
@@ -133,7 +133,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    let gameState = 'START'; 
+    let gameState = 'START';
     let score = 0;
     let highScore;
     try { highScore = localStorage.getItem('neonGravityHighScore') || 0; } catch { highScore = 0; }
@@ -149,7 +149,7 @@
       init: async function() {
         if(this.isReady) return;
         await Tone.start();
-        
+
         // 1. 赛博朋克风的背景低音合成器 (Bass Synth)
         this.bassSynth = new Tone.Synth({
           oscillator: { type: "sawtooth" },
@@ -167,13 +167,13 @@
         }, "8n");
 
         Tone.Transport.bpm.value = 140; // 动感节奏
-        
+
         // 2. 音效合成器 (SFX)
         this.sfxFm = new Tone.FMSynth().toDestination();
         this.sfxFm.volume.value = -10;
-        
+
         this.sfxMembrane = new Tone.MembraneSynth().toDestination(); // 用于爆炸声
-        
+
         this.isReady = true;
       },
       playBGM: function() {
@@ -206,18 +206,18 @@
         this.x = 80;
         this.y = canvas.height - this.size - 10;
         this.vy = 0;
-        this.gravity = 0.8; 
-        this.isFlipped = false; 
-        this.color = '#0ff'; 
-        this.trail = []; 
+        this.gravity = 0.8;
+        this.isFlipped = false;
+        this.color = '#0ff';
+        this.trail = [];
         this.hasShield = false; // 新增护盾状态
       }
 
       flip() {
         this.isFlipped = !this.isFlipped;
         this.gravity = this.isFlipped ? -0.8 : 0.8;
-        this.vy = 0; 
-        this.color = this.isFlipped ? '#f0f' : '#0ff'; 
+        this.vy = 0;
+        this.color = this.isFlipped ? '#f0f' : '#0ff';
         createParticles(this.x + this.size/2, this.y + this.size/2, this.color, 5);
         audioSys.playFlip(); // 播放音效
       }
@@ -248,7 +248,7 @@
         ctx.shadowBlur = 20;
         ctx.shadowColor = this.color;
         ctx.fillRect(this.x, this.y, this.size, this.size);
-        
+
         ctx.fillStyle = '#fff';
         ctx.shadowBlur = 0;
         ctx.fillRect(this.x + 6, this.y + 6, this.size - 12, this.size - 12);
@@ -334,7 +334,7 @@
       draw(ctx) {
         if(!this.active) return;
         let floatY = this.y + Math.sin(frames * 0.1 + this.offsetY) * 10;
-        
+
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 15;
         ctx.shadowColor = this.color;
@@ -381,11 +381,11 @@
       speedMultiplier = 1;
       distEl.textContent = '0';
       shieldUi.className = 'mt-2 flex items-center text-[#0f0] opacity-0 transition-opacity';
-      
+
       gameState = 'PLAYING';
       menuPanel.style.display = 'none';
       initStars();
-      
+
       audioSys.playBGM();
 
       if(animationId) cancelAnimationFrame(animationId);
@@ -397,7 +397,7 @@
       audioSys.stopBGM();
       audioSys.playCrash();
       createParticles(player.x + player.size/2, player.y + player.size/2, '#fff', 50, 2);
-      
+
       if (score > highScore) {
         highScore = score;
         try { localStorage.setItem('neonGravityHighScore', highScore); } catch {}
@@ -449,7 +449,7 @@
       let currentSpeed = baseSpeed * speedMultiplier;
       speedMultiplier += 0.0005; // 随时间缓慢加速
       Tone.Transport.bpm.value = 140 + (speedMultiplier - 1) * 50; // 音乐随着速度加快！
-      
+
       // 障碍物生成
       if (frames % Math.floor(90 / speedMultiplier) === 0) {
         obstacles.push(new Obstacle());
@@ -474,16 +474,16 @@
         let item = items[i];
         item.update(currentSpeed);
         item.draw(ctx);
-        
+
         let floatY = item.y + Math.sin(frames * 0.1 + item.offsetY) * 10;
-        
+
         // 简单的圆/矩形碰撞检测
-        if (item.active && 
+        if (item.active &&
             player.x < item.x + item.size && player.x + player.size > item.x - item.size &&
             player.y < floatY + item.size && player.y + player.size > floatY - item.size) {
-            
+
             item.active = false; // 吃掉
-            
+
             if (item.type === 'orb') {
                score += 50; // 大幅加分
                audioSys.playScore();
@@ -550,7 +550,7 @@
 
     function triggerAction(e) {
       if(e.type === 'keydown' && e.code !== 'Space') return;
-      if(e.type === 'keydown') e.preventDefault(); 
+      if(e.type === 'keydown') e.preventDefault();
       if (gameState === 'PLAYING') player.flip();
     }
 
@@ -570,7 +570,7 @@
       resetGame();
     });
     playBtn.addEventListener('touchstart', async (e) => {
-      e.preventDefault(); 
+      e.preventDefault();
       await audioSys.init();
       resetGame();
     });

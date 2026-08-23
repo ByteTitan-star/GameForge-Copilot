@@ -61,7 +61,5 @@ def downgrade() -> None:
     op.drop_index("ix_task_outbox_task", table_name="task_outbox")
     op.drop_table("task_outbox")
     op.drop_table("run_checkpoints")
-    op.drop_constraint(
-        "uq_generation_run_user_request", "generation_runs", type_="unique"
-    )
+    op.drop_constraint("uq_generation_run_user_request", "generation_runs", type_="unique")
     op.drop_column("generation_runs", "client_request_id")

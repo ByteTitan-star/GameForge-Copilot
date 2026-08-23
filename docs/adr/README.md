@@ -21,5 +21,5 @@ Design-review follow-up (verify + modification guide):
 | [ADR-11](./ADR-11-sandbox-hosting-resources.md) | Sandbox & Hosting Resources / SoT | **Accepted** | ByteTitan-star |
 | [ADR-12](./ADR-12-api-frontend-ops-debt.md) | API, Frontend & Ops Debt | **Accepted** | ByteTitan-star |
 
-Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)  
+Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)
 Feature flag defaults: [FLAG-INVENTORY.md](./FLAG-INVENTORY.md)

@@ -821,4 +821,3 @@ ALTER TABLE ONLY public.user_llm_config
 --
 
 \unrestrict PSTpav61TN6IPIjgrCxVP3dBTElOa9BycLBz2qJlpL5KycQNpWmYHihBxpYF5Qw
-

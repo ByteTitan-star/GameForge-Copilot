@@ -77,7 +77,7 @@
 
 ### 3.1 整体结构（评审修订：流水线顺序）
 
-```
+```text
 quick_filter(text)                        # guard.py，对外签名不变
  ├─ 0. audit_quick_filter 开关
  ├─ 1. blacklist.txt 正则/字面规则          # 对【原文】匹配，行为零变化
@@ -92,7 +92,7 @@ quick_filter(text)                        # guard.py，对外签名不变
 
 ### 3.2 词库文件布局
 
-```
+```text
 backend/app/forge/lexicons/
  ├─ NOTICE                      # 上游许可与拉取日期
  ├─ allow.txt                   # 白名单
@@ -154,7 +154,7 @@ pyahocorasick = "^2.1"
 
 ### 4.1 误报（核心风险）
 
-三重对策：入库前裁剪、白名单、（P2）灰名单。  
+三重对策：入库前裁剪、白名单、（P2）灰名单。
 **P1 入口条件**：官方游戏 / 模板语料全量扫描，断言 0 命中 block；评测脚本可复现。
 
 ### 4.2 性能
@@ -179,17 +179,17 @@ AC 扫描 ~O(文本长度)；构建仅在热加载时发生。
 
 ### P1：黑名单级最小闭环（本期）
 
-1. pyahocorasick + `lexicons/` + 自动机构建/热加载  
-2. 裁剪暴恐 / 色情 / 赌博毒品入 block  
-3. 归一化（全半角 + 去干扰）+ allow.txt  
-4. `quick_filter`：原文 blacklist → 归一化 AC  
-5. **验证**：官方语料 0 误拦；单测绿；audit 耗时无劣化  
+1. pyahocorasick + `lexicons/` + 自动机构建/热加载
+2. 裁剪暴恐 / 色情 / 赌博毒品入 block
+3. 归一化（全半角 + 去干扰）+ allow.txt
+4. `quick_filter`：原文 blacklist → 归一化 AC
+5. **验证**：官方语料 0 误拦；单测绿；audit 耗时无劣化
 
 ### P2：灰名单与扩展分类（本期续）
 
-1. `AuditResult.suspected`；`Guard.audit` 灰名单强制 LLM  
-2. `suspect/politics.txt` 极短清单  
-3. **验证**：LLM 判 0 放行 / 判 1 拦截（保留 politics category）/ 无模型与 LLM 挂掉放行  
+1. `AuditResult.suspected`；`Guard.audit` 灰名单强制 LLM
+2. `suspect/politics.txt` 极短清单
+3. **验证**：LLM 判 0 放行 / 判 1 拦截（保留 politics category）/ 无模型与 LLM 挂掉放行
 
 两步均不动 `run_streamed_llm` 编排与 WS ATTACKED 字段形状（category 取值集合版本化扩充）。
 

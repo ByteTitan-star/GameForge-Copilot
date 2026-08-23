@@ -100,9 +100,7 @@ async def _run() -> int:
         if code != 0:
             return code
     if demos in ("all", "phaser", "phaser-matter"):
-        code = await _verify_demo(
-            "Phaser+Matter (§26.7)", pipeline.run_phaser_matter_demo()
-        )
+        code = await _verify_demo("Phaser+Matter (§26.7)", pipeline.run_phaser_matter_demo())
         if code != 0:
             return code
 

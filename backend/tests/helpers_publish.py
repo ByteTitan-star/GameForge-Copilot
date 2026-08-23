@@ -35,9 +35,7 @@ async def publish_test_game(
             )
         )
         await s.commit()
-    submit = await verified_client.post(
-        f"/api/v1/games/{gid}/publish/submit", json={"version": 1}
-    )
+    submit = await verified_client.post(f"/api/v1/games/{gid}/publish/submit", json={"version": 1})
     pr_id = submit.json()["data"]["publish_request_id"]
     await admin_client.post(f"/api/v1/publish/{pr_id}/approve")
     return gid

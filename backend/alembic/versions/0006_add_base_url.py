@@ -19,9 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "user_llm_config", sa.Column("base_url", sa.String(512), nullable=True)
-    )
+    op.add_column("user_llm_config", sa.Column("base_url", sa.String(512), nullable=True))
 
 
 def downgrade() -> None:

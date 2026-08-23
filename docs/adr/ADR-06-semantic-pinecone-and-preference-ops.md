@@ -33,7 +33,7 @@ Semantic / Exact 缓存的是 **白名单「低熵节点」的结构化结果**�
 | `template_selection` | template dict / list | 同左 |
 | `intent_classification` / `deterministic_metadata` | 既有 JSON 结果 | 同左 |
 
-Pinecone **vector** = `embed(规范化 query 文本)`  
+Pinecone **vector** = `embed(规范化 query 文本)`
 Pinecone **metadata**（最少）=
 
 ```json
@@ -46,7 +46,7 @@ Pinecone **metadata**（最少）=
 }
 ```
 
-Redis Exact 仍存同一 `result`（精确 key）。  
+Redis Exact 仍存同一 `result`（精确 key）。
 Redis Shadow 仍只记 hash 指纹（标定用）。
 
 **不存**：完整 LLM 聊天消息流、plan/art/code 正文、用户隐私长文。
@@ -84,9 +84,9 @@ else:
 
 * 检索：`user_id + status=active` + 索引 → ≤50 行，快。
 * 超额：**物理删除最早**（先 inferred，再 explicit）。
-* 抽取：**禁止规则作为正式路径**；仅轻量 chat 模型抽取 JSON 偏好。  
-  - 未配置 `PREFERENCE_EXTRACT_MODEL` → **不自动抽取**（不写偏好）。  
-  - Explicit / Inferred 由模型输出 `source` 字段区分；服务端仍强制：不得用 inferred 覆盖已有 explicit。
+* 抽取：**禁止规则作为正式路径**；仅轻量 chat 模型抽取 JSON 偏好。
+  * 未配置 `PREFERENCE_EXTRACT_MODEL` → **不自动抽取**（不写偏好）。
+  * Explicit / Inferred 由模型输出 `source` 字段区分；服务端仍强制：不得用 inferred 覆盖已有 explicit。
 * 配置：与审核模型同体系字段风格；**本阶段只保证 `.env.example` 完整**，管理后台 UI 可随后补。
 
 ---
@@ -103,5 +103,5 @@ Phase 0 配置与偏好删除策略 → 1 Embedding 客户端 → 2 Pinecone + �
 
 ## 7. 回滚
 
-* `SEMANTIC_CACHE_DIRECT_HIT_ENABLED=false` 或无 Pinecone key → 仅 Exact + shadow  
+* `SEMANTIC_CACHE_DIRECT_HIT_ENABLED=false` 或无 Pinecone key → 仅 Exact + shadow
 * 无偏好抽取模型 → 不写自动偏好
