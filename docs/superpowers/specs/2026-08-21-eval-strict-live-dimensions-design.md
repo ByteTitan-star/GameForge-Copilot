@@ -132,7 +132,7 @@ Mapping rules (first match wins) documented in runner helpers; unit-tested with 
 
 ## 5. Issue `#116` — Code Quality & QA Loop
 
-### Modes
+### Modes (#116)
 
 | Mode | When | What |
 |------|------|------|
@@ -210,7 +210,7 @@ Requirements:
 4. Session 2: create game/run with `session2_prompt`; verify preferences appear in context/messages.
 5. Optional relevance: if run reaches playable artifact, check keywords (soft metric `preference_relevance` ≥ 85%).
 
-### Preference modes
+### Modes (#124)
 
 - `context_builder_baseline` (CI offline) — keep.
 - `live_api` — full flow above.
@@ -233,7 +233,7 @@ Requirements:
 
 Prefer **test doubles / dev hooks** over brittle production-only behavior. Document any required `DEV_ROUTES_ENABLED` or eval-only flags.
 
-### Reliability modes
+### Modes (#125)
 
 - `unit_baseline` — PR CI
 - `live_fault` — manual / nightly / optional main (not required on every PR)

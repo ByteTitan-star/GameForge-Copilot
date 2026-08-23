@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-Unit-style reliability checks on **10** scenarios. Pass rate: **100.0%**.
+Reliability checks on **10** scenarios (mode=unit_baseline).
 
 ## 2. Methodology
 
@@ -10,7 +10,7 @@ Unit-style reliability checks on **10** scenarios. Pass rate: **100.0%**.
 - **Runner**: `eval/runners/reliability_eval.py`
 - **Mode**: `unit_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `0497cc6`
+- **Git SHA**: `cce0db2`
 - **Date**: 2026-08-21
 
 ## 3. Results
@@ -23,7 +23,7 @@ Unit-style reliability checks on **10** scenarios. Pass rate: **100.0%**.
 
 ## 4. Failure Analysis
 
-All unit baseline cases passed.
+All evaluated cases passed.
 
 ## 6. Below-Target Items
 
@@ -31,4 +31,4 @@ All metrics meet production targets for this mode.
 
 ## 7. Conclusion
 
-Live fault injection (timeout retry, checkpoint resume under kill) requires integration tests with worker + PostgreSQL.
+Unit baseline only. Run with --live-fault for simulated fault-injection metrics.

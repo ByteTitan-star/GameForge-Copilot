@@ -35,6 +35,12 @@ from eval.runners._common import (
     write_json_report,
     write_markdown,
 )
+from eval.runners.telemetry import (
+    aggregate_phases,
+    classify_qa_error,
+    derive_qa_metrics,
+    is_empty_or_trivial_html,
+)
 
 # HITL auto-resolve map for unattended agent eval.
 _HITL_DECISION: dict[str, str] = {
@@ -66,6 +72,126 @@ def classify_terminal(
             return True, None
         return False, "done_without_artifact"
     return False, "unexpected_status"
+
+
+def _event_type_name(event: dict[str, Any]) -> str:
+    raw = event.get("type", "")
+    return str(getattr(raw, "value", raw)).lower()
+
+
+def _qa_reports_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    for event in events:
+        if _event_type_name(event) != "qa_report":
+            continue
+        payload = event.get("payload") or {}
+        if isinstance(payload, dict):
+            reports.append(payload)
+    return reports
+
+
+def _error_categories_from_qa(reports: list[dict[str, Any]]) -> list[str]:
+    cats: list[str] = []
+    seen: set[str] = set()
+    for report in reports:
+        if report.get("passed"):
+            continue
+        chunks = [
+            str(report.get("failure_kind") or ""),
+            str(report.get("log_excerpt") or ""),
+            " ".join(str(x) for x in (report.get("issues") or [])),
+        ]
+        cat = classify_qa_error(" ".join(chunks))
+        if cat not in seen:
+            seen.add(cat)
+            cats.append(cat)
+    return cats
+
+
+def _html_snippet_from_messages(messages: list[dict[str, Any]]) -> str | None:
+    for message in reversed(messages):
+        content = str(message.get("content") or "")
+        if "<html" in content.lower() or "<canvas" in content.lower():
+            return content
+    return None
+
+
+def _build_telemetry_from_payloads(
+    events: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    game: dict[str, Any],
+    terminal: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive phases/qa/artifact from harvested API payloads (pure, testable)."""
+    phases = aggregate_phases(events)
+    reports = _qa_reports_from_events(events)
+    attempts = 0
+    for report in reports:
+        try:
+            attempts = max(attempts, int(report.get("attempt") or 0))
+        except (TypeError, ValueError):
+            continue
+    if attempts == 0 and reports:
+        attempts = len(reports)
+
+    first_pass = bool(reports[0].get("passed")) if reports else False
+    final_pass = bool(reports[-1].get("passed")) if reports else bool(
+        (terminal.get("artifact_gate") or {}).get("generation_success")
+        or (terminal.get("artifact_gate") or {}).get("previewable")
+    )
+    qa = derive_qa_metrics(
+        attempts=attempts,
+        first_playtest_ok=first_pass,
+        final_playtest_ok=final_pass,
+        error_categories=_error_categories_from_qa(reports),
+    )
+
+    gate = terminal.get("artifact_gate") or {}
+    html = _html_snippet_from_messages(messages)
+    empty = is_empty_or_trivial_html(html) if html is not None else False
+    try:
+        current_version = int(game.get("current_version") or 0)
+    except (TypeError, ValueError):
+        current_version = 0
+
+    artifact = {
+        "current_version": current_version,
+        "previewable": bool(gate.get("previewable")),
+        "generation_success": bool(gate.get("generation_success")),
+        "empty_or_trivial": empty,
+    }
+    return {"phases": phases, "qa": qa, "artifact": artifact}
+
+
+async def _harvest_run_telemetry(
+    client: Any,
+    *,
+    game_id: str,
+    run_id: str,
+    terminal: dict[str, Any],
+) -> dict[str, Any]:
+    events: list[dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
+    game: dict[str, Any] = {}
+    try:
+        events_resp = await client.get(f"/api/v1/runs/{run_id}/events")
+        if events_resp.status_code == 200:
+            events = list(events_resp.json().get("data") or [])
+    except Exception:  # noqa: BLE001
+        events = []
+    try:
+        msgs_resp = await client.get(f"/api/v1/games/{game_id}/messages")
+        if msgs_resp.status_code == 200:
+            messages = list(msgs_resp.json().get("data") or [])
+    except Exception:  # noqa: BLE001
+        messages = []
+    try:
+        game_resp = await client.get(f"/api/v1/games/{game_id}")
+        if game_resp.status_code == 200:
+            game = dict(game_resp.json().get("data") or {})
+    except Exception:  # noqa: BLE001
+        game = {}
+    return _build_telemetry_from_payloads(events, messages, game, terminal)
 
 
 def _validate_dataset(dataset: list[dict[str, Any]]) -> dict[str, Any]:
@@ -345,6 +471,10 @@ async def _run_one_case(
         except Exception:  # noqa: BLE001
             error_detail = None
 
+    telemetry = await _harvest_run_telemetry(
+        client, game_id=game_id, run_id=run_id, terminal=terminal
+    )
+
     return {
         "id": case["id"],
         "prompt": prompt,
@@ -359,6 +489,9 @@ async def _run_one_case(
         "wall_clock_s": terminal.get("wall_clock_s"),
         "failure_category": category,
         "error_detail": error_detail,
+        "phases": telemetry.get("phases") or [],
+        "qa": telemetry.get("qa") or {},
+        "artifact": telemetry.get("artifact") or {},
     }
 
 
@@ -381,7 +514,9 @@ async def _run_live(dataset: list[dict[str, Any]], *, limit: int) -> list[dict[s
     sem = asyncio.Semaphore(concurrency)
     create_lock = asyncio.Lock()
 
-    async with httpx.AsyncClient(base_url=base, headers=headers, timeout=120.0) as client:
+    async with httpx.AsyncClient(
+        base_url=base, headers=headers, timeout=120.0, trust_env=False
+    ) as client:
 
         async def _bounded(idx: int, case: dict[str, Any]) -> None:
             async with sem:
@@ -580,7 +715,7 @@ def write_markdown_report(report: dict[str, Any]) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generation success rate eval")
     parser.add_argument("--live", action="store_true", help="Run live API subset")
-    parser.add_argument("--limit", type=int, default=3, help="Live prompt limit")
+    parser.add_argument("--limit", type=int, default=10, help="Live prompt limit")
     args = parser.parse_args()
     live = args.live or os.environ.get("EVAL_LIVE", "").lower() in {"1", "true", "yes"}
     report = run_eval(live=live, limit=args.limit)
