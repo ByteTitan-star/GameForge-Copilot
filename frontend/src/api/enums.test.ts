@@ -22,7 +22,9 @@ describe('enums 与 docs/10 §2 字面量一致', () => {
   })
 
   it('RunStatus / RunPhase', () => {
-    expect(Object.values(RunStatus).sort()).toEqual(['done', 'failed', 'paused', 'running'])
+    expect(Object.values(RunStatus).sort()).toEqual(
+      ['cancelled', 'done', 'failed', 'paused', 'running'],
+    )
     expect(Object.values(RunPhase).sort()).toEqual(['art', 'code', 'done', 'plan', 'qa'])
   })
 

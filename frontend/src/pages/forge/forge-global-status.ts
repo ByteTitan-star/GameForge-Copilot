@@ -107,6 +107,17 @@ export function deriveForgeStatus(i: Input): ForgeGlobalStatus {
     };
   }
 
+  // 2b. 用户取消：终态但不阻塞下一轮发送
+  if (i.runStatus === RunStatus.cancelled) {
+    return {
+      level: "idle",
+      labelKey: "runCancelled",
+      tone: "amber",
+      canSend: true,
+      blocked: false,
+    };
+  }
+
   // 3. 暂停：HITL 等待 或 run 暂停
   if (i.hitl || i.runStatus === RunStatus.paused) {
     return {

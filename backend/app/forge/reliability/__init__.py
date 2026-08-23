@@ -30,6 +30,7 @@ from app.forge.reliability.pause import (
     RecoveryInfo,
     apply_paused_metadata,
     build_pause_checkpoint,
+    merge_pause_checkpoint,
     pause_reason_from_state,
     recovery_from_state,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "is_recoverable",
     "langgraph_retry_policy",
     "langgraph_timeout_policy",
+    "merge_pause_checkpoint",
     "pause_reason_from_state",
     "recovery_from_state",
     "resolve_node_run_timeout",

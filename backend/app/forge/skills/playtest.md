@@ -12,6 +12,9 @@
 3. **模拟输入**：先检查是否多个全屏 `.screen` 同时接收指针，再点当前未被遮挡的可见按钮，再按 `ArrowRight` / `Space`；不得崩溃
 4. **遮罩**：多个全屏 `.screen` 同时接收 pointer-events，或开始按钮被 `#screen-paused` 拦住，记 `OVERLAY_BLOCKS_POINTER`。遮罩自己的 Resume 可点也不能当通过
 5. **运行弱信号**至少一种：`raf` / `canvas_diff` / `engine_runtime`
+6. **终态探针（可选）**：若产物暴露 `window.__AG_CHEAT__`，平台会调用
+   `gameOver` / `levelComplete` / `victory` 或 `setState(id)` 验证终态切换；
+   未暴露时仅做源码引用检查，不因此单独失败。
 
 ## 失败处理
 

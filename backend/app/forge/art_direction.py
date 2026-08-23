@@ -70,6 +70,43 @@ def parse_art_options(raw: Any) -> dict[str, list[dict[str, Any]]]:
     return {"options": parsed}
 
 
+def parse_single_art_option(raw: Any, *, expected_id: str) -> dict[str, Any]:
+    """解析并行链路中的单个方案。"""
+    expected = expected_id.strip().upper()
+    if expected not in {"A", "B"}:
+        raise ValueError("expected_id 必须为 A 或 B")
+    value = _decode_object(raw)
+    option_id = str(value.get("id") or "").strip().upper()
+    name = str(value.get("name") or "").strip()
+    summary = str(value.get("summary") or "").strip()
+    recommended = value.get("recommended")
+    if option_id != expected:
+        raise ValueError(f"美术方案 id 必须为 {expected}")
+    if not name or not summary:
+        raise ValueError(f"美术方案 {expected} 缺少 name 或 summary")
+    if not isinstance(recommended, bool):
+        raise ValueError(f"美术方案 {expected}.recommended 必须是布尔值")
+    return {
+        "id": expected,
+        "name": name[:40],
+        "summary": summary[:500],
+        "recommended": recommended,
+    }
+
+
+def merge_parallel_art_options(
+    option_a: dict[str, Any], option_b: dict[str, Any]
+) -> dict[str, list[dict[str, Any]]]:
+    """聚合并行结果：强制 id=A/B，恰好一个 recommended（冲突时保留 A）。"""
+    a = parse_single_art_option(option_a, expected_id="A")
+    b = parse_single_art_option(option_b, expected_id="B")
+    if a["recommended"] and b["recommended"]:
+        b = {**b, "recommended": False}
+    elif not a["recommended"] and not b["recommended"]:
+        a = {**a, "recommended": True}
+    return {"options": [a, b]}
+
+
 def parse_art_detail(raw: Any, selected_option: str) -> dict[str, Any]:
     """解析用户选定方向的实现级设计稿。"""
     value = _decode_object(raw)
@@ -88,9 +125,7 @@ def parse_art_detail(raw: Any, selected_option: str) -> dict[str, Any]:
     )
     missing = [key for key in required_text if not str(value.get(key) or "").strip()]
     missing += [
-        key
-        for key in required_lists
-        if not isinstance(value.get(key), list) or not value[key]
+        key for key in required_lists if not isinstance(value.get(key), list) or not value[key]
     ]
     if not isinstance(value.get("palette"), dict) or not value["palette"]:
         missing.append("palette")
@@ -101,4 +136,9 @@ def parse_art_detail(raw: Any, selected_option: str) -> dict[str, Any]:
     return value
 
 
-__all__ = ["parse_art_detail", "parse_art_options"]
+__all__ = [
+    "parse_art_detail",
+    "parse_art_options",
+    "parse_single_art_option",
+    "merge_parallel_art_options",
+]

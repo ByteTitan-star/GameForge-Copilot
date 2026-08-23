@@ -21,6 +21,7 @@ export const RunStatus = {
   paused: 'paused',
   done: 'done',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const
 export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus]
 

@@ -15,6 +15,7 @@ from app.core.errors import AppError, ErrorCode
 from app.core.response import ApiResponse, ErrorResponse
 from app.enums import EntryPhase, PauseReason, RunCommandType, RunPhase, RunStatus
 from app.forge import state as ckpt
+from app.forge.checkpoint_slim import hydrate_checkpoint_payloads
 from app.forge.commands import legacy_decision_for, normalize_resume_command
 from app.forge.event_log import list_events
 from app.forge.hitl import allowed_commands_for, allowed_decisions_for, is_hitl_phase
@@ -207,6 +208,8 @@ async def get_run(
 ) -> ApiResponse[RunStatusResp]:
     run = await services.get_run(db, user, run_id)
     state = await ckpt.load_state(r, run_id, db)
+    if state:
+        state = await hydrate_checkpoint_payloads(db, state)
     current_hitl, hitl_wait = _hitl_from_state(run, state)
     pause_reason = None
     recovery = None
@@ -389,7 +392,7 @@ async def resolve_hitl(
             return ApiResponse(
                 data=HitlResolveResp(
                     run_id=cancelled.id,
-                    status=RunStatus.FAILED,
+                    status=RunStatus.CANCELLED,
                     phase=RunPhase(cancelled.phase or RunPhase.PLAN.value),
                 )
             )

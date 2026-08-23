@@ -56,3 +56,9 @@ data/embedding-models/
 # eval raw JSON reports (committed markdown lives in docs/evals/)
 eval/reports/
 tmp/
+
+# git worktrees (local isolation)
+.worktrees/
+
+# local deploy pack (do not commit)
+change/

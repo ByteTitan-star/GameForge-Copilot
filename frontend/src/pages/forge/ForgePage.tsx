@@ -350,7 +350,7 @@ export function ForgePage() {
           const saved = readActiveRun();
           if (saved && saved.gameId === gameId) {
             const savedRun = await gamesApi.getRun(saved.runId, token!);
-            if (savedRun.status === "done" || savedRun.status === "failed") {
+            if (savedRun.status === "done" || savedRun.status === "failed" || savedRun.status === "cancelled") {
               clearActiveRun(saved.runId);
               if (savedRun.status === "done") {
                 await detail.refetch();
@@ -424,7 +424,7 @@ export function ForgePage() {
         setBusy(ui.busy);
         // 轮询兜底只同步状态，不再强制打开试玩区（曾导致用户手动关掉后几秒被自动打开）。
         // 试玩区的自动打开唯一入口收敛到 done 事件。
-        if (run.status === "done" || run.status === "failed") {
+        if (run.status === "done" || run.status === "failed" || run.status === "cancelled") {
           clearActiveRun(runId);
           closeHandle();
           if (run.status === "done") {
@@ -982,7 +982,7 @@ export function ForgePage() {
         setHitl(hitlPayload);
         setPhase("paused");
         setBusy(false);
-      } else if (detail.status === "failed") {
+      } else if (detail.status === "failed" || detail.status === "cancelled") {
         setPhase("idle");
         setBusy(false);
         setHitl(null);

@@ -82,6 +82,7 @@ async def _stale_kind(db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind, r
 
 
 async def stale_downstream(db: AsyncSession, run_id: uuid.UUID) -> None:
+    await _stale_kind(db, run_id, ArtifactKind.ART_OPTIONS, STALE_PLAN_SUPERSEDED)
     await _stale_kind(db, run_id, ArtifactKind.ART, STALE_PLAN_SUPERSEDED)
     await _stale_kind(db, run_id, ArtifactKind.CANDIDATE, STALE_PLAN_SUPERSEDED)
 
@@ -163,6 +164,35 @@ async def ensure_art_revision(
     db.add(row)
     await db.flush()
     return row
+
+
+async def ensure_art_options_revision(
+    db: AsyncSession,
+    run_id: uuid.UUID,
+    art_options: dict[str, Any],
+    *,
+    plan_revision_id: uuid.UUID | None,
+) -> tuple[ArtifactRevision, bool]:
+    """美术 A/B 方案集：变更则新 revision，旧 ACTIVE → STALE。"""
+    digest = payload_hash(art_options)
+    current = await _active_of_kind(db, run_id, ArtifactKind.ART_OPTIONS)
+    if current is not None and payload_hash(current.payload) == digest:
+        return current, False
+    if current is not None:
+        current.status = ArtifactStatus.STALE.value
+        current.stale_reason = STALE_PLAN_SUPERSEDED
+    row = ArtifactRevision(
+        run_id=run_id,
+        kind=ArtifactKind.ART_OPTIONS.value,
+        revision=await _next_revision(db, run_id, ArtifactKind.ART_OPTIONS),
+        status=ArtifactStatus.ACTIVE.value,
+        supersedes=current.id if current is not None else None,
+        plan_revision_id=plan_revision_id,
+        payload=art_options,
+    )
+    db.add(row)
+    await db.flush()
+    return row, True
 
 
 async def record_candidate_revision(

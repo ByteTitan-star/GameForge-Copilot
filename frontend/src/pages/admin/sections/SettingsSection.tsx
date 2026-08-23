@@ -28,6 +28,10 @@ export function SettingsSection() {
   const [auditModel, setAuditModel] = useState('')
   const [auditApikey, setAuditApikey] = useState('')
   const [auditBaseUrl, setAuditBaseUrl] = useState('')
+  // 审核滑窗参数：本地空串 = 未编辑，回显 loaded 值（无 DB/env 值时用产品默认）
+  const [auditIntervalMs, setAuditIntervalMs] = useState<number | ''>('')
+  const [auditMinChars, setAuditMinChars] = useState<number | ''>('')
+  const [auditMaxBuffer, setAuditMaxBuffer] = useState<number | ''>('')
   const [disableAuditConfirmOpen, setDisableAuditConfirmOpen] = useState(false)
 
   const loaded = settings.data
@@ -41,6 +45,9 @@ export function SettingsSection() {
   const auditModelVal = auditModel || auditLoaded?.model || ''
   const auditApikeyVal = auditApikey || auditLoaded?.apikey || ''
   const auditBaseUrlVal = auditBaseUrl || auditLoaded?.base_url || ''
+  const auditIntervalMsVal = auditIntervalMs === '' ? (auditLoaded?.interval_ms ?? 60000) : auditIntervalMs
+  const auditMinCharsVal = auditMinChars === '' ? (auditLoaded?.min_chars_between ?? 80) : auditMinChars
+  const auditMaxBufferVal = auditMaxBuffer === '' ? (auditLoaded?.max_buffer_chars ?? 500) : auditMaxBuffer
 
   const handleAuditEnabledChange = (checked: boolean) => {
     if (!checked && auditEnabledVal) {
@@ -65,6 +72,9 @@ export function SettingsSection() {
             // masked 形态原样回传 → 后端保留旧密钥；空串同理
             apikey: auditApikey.trim() ? auditApikeyVal : '',
             base_url: auditBaseUrlVal.trim(),
+            interval_ms: auditIntervalMsVal,
+            min_chars_between: auditMinCharsVal,
+            max_buffer_chars: auditMaxBufferVal,
           },
         },
         token!,
@@ -80,6 +90,9 @@ export function SettingsSection() {
       setAuditModel('')
       setAuditApikey('')
       setAuditBaseUrl('')
+      setAuditIntervalMs('')
+      setAuditMinChars('')
+      setAuditMaxBuffer('')
       onToast(t('adminSettingsSaved'))
     },
     onError: (e) => onToast(formatApiError(e, t('adminSettingsSaveFail')), 'error'),
@@ -231,6 +244,50 @@ export function SettingsSection() {
             className="gf-input h-10 w-full rounded-xl px-3"
           />
         </label>
+        <div className="grid grid-cols-3 gap-3">
+          <label className="block space-y-1.5 text-sm">
+            <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+              {t('auditLlmIntervalMs')}
+            </span>
+            <input
+              type="number"
+              value={auditIntervalMsVal}
+              onChange={(e) =>
+                setAuditIntervalMs(e.target.value === '' ? '' : Number(e.target.value))
+              }
+              placeholder={t('auditLlmIntervalMsPh')}
+              className="gf-input h-10 w-full rounded-xl px-3"
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+              {t('auditLlmMinChars')}
+            </span>
+            <input
+              type="number"
+              value={auditMinCharsVal}
+              onChange={(e) =>
+                setAuditMinChars(e.target.value === '' ? '' : Number(e.target.value))
+              }
+              placeholder={t('auditLlmMinCharsPh')}
+              className="gf-input h-10 w-full rounded-xl px-3"
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+              {t('auditLlmMaxBuffer')}
+            </span>
+            <input
+              type="number"
+              value={auditMaxBufferVal}
+              onChange={(e) =>
+                setAuditMaxBuffer(e.target.value === '' ? '' : Number(e.target.value))
+              }
+              placeholder={t('auditLlmMaxBufferPh')}
+              className="gf-input h-10 w-full rounded-xl px-3"
+            />
+          </label>
+        </div>
         <div className="flex items-center gap-3">
           <button
             type="button"

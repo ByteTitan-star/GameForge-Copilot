@@ -27,7 +27,12 @@ from app.models.llm_config import UserLLMConfig
 from app.models.user import User
 from app.notify import services as notify_services
 from app.usage import quota as quota_mod
-from app.usage.store import get_system_usage, get_user_usage, record_usage
+from app.usage.store import (
+    assert_run_token_budget,
+    get_system_usage,
+    get_user_usage,
+    record_usage,
+)
 
 
 def _usage_idem_key(
@@ -168,6 +173,8 @@ async def call_llm(
 ) -> tuple[provider.LLMCompletion, LLMProvider]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
+    if run_id is not None:
+        await assert_run_token_budget(r, run_id, limit=int(settings.forge_run_max_tokens))
 
     cfg = await _get_config(db, user_id, config_id)
     apikey = crypto.decrypt_apikey(cfg.apikey_enc)
@@ -246,6 +253,8 @@ async def call_llm_stream(
     """
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
+    if run_id is not None:
+        await assert_run_token_budget(r, run_id, limit=int(settings.forge_run_max_tokens))
 
     cfg = await _get_config(db, user_id, config_id)
     apikey = crypto.decrypt_apikey(cfg.apikey_enc)
