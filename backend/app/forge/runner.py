@@ -194,6 +194,7 @@ async def resume_run(
         返回：无。
         """
         bind_event_redis(ctx.get("redis"))
+        await run_generation(ctx, run_id, resume=True, decision=decision, modify_text=modify_text)
         if command_id is not None:
             await mark_command_succeeded(command_id)
 

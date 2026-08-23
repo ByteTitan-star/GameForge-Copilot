@@ -11,7 +11,7 @@
           "health"
         ],
         "summary": "Health",
-        "description": "存活检查（进程在），无需鉴权。",
+        "description": "进程存活探针。\n\n作用：确认 API 进程可响应请求。\n场景：K8s liveness / 负载均衡健康检查，无需鉴权。\n参数：无。\n返回：ApiResponse，data.status 为 \"ok\"。",
         "operationId": "health_healthz_get",
         "responses": {
           "200": {
@@ -33,7 +33,7 @@
           "health"
         ],
         "summary": "Ready",
-        "description": "就绪检查：DB + Redis + RabbitMQ（memory 后端时 rabbitmq=true）。",
+        "description": "依赖就绪探针。\n\n作用：探测 DB、Redis、RabbitMQ（memory 后端时 rabbitmq 恒为 true）是否可用。\n场景：K8s readiness / 部署后冒烟，无需鉴权。\n参数：db — 数据库会话；r — Redis 客户端。\n返回：ApiResponse，data 含 db/redis/rabbitmq 布尔就绪态。",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
@@ -55,6 +55,7 @@
           "auth"
         ],
         "summary": "Register",
+        "description": "注册新用户并发送邮箱验证码。\n\n作用：限流后创建用户并入队验证邮件。\n场景：POST /auth/register。\n参数：req — 注册请求；request/db/r — 依赖。\n返回：ApiResponse[RegisterResp]。",
         "operationId": "register_api_v1_auth_register_post",
         "requestBody": {
           "content": {
@@ -116,6 +117,7 @@
           "auth"
         ],
         "summary": "Login",
+        "description": "邮箱密码登录并签发 token。\n\n作用：限流后校验凭据，返回 access/refresh 与用户信息。\n场景：POST /auth/login。\n参数：req — 登录请求；request/db/r — 依赖。\n返回：ApiResponse[LoginResp]。",
         "operationId": "login_api_v1_auth_login_post",
         "requestBody": {
           "content": {
@@ -177,6 +179,7 @@
           "auth"
         ],
         "summary": "Refresh",
+        "description": "轮换 refresh token 并签发新 access token。\n\n作用：委托 services.refresh_tokens。\n场景：POST /auth/refresh。\n参数：req — 含 refresh_token；db/r — 依赖。\n返回：ApiResponse[TokenResp]。",
         "operationId": "refresh_api_v1_auth_refresh_post",
         "requestBody": {
           "content": {
@@ -228,6 +231,7 @@
           "auth"
         ],
         "summary": "Verify Email",
+        "description": "校验邮箱验证码并标记已验证。\n\n作用：限流与失败计数，超限作废待验证记录。\n场景：POST /auth/verify-email。\n参数：req — 邮箱与验证码；request/db/r — 依赖。\n返回：ApiResponse[VerifyEmailResp]。",
         "operationId": "verify_email_api_v1_auth_verify_email_post",
         "requestBody": {
           "content": {
@@ -393,6 +397,7 @@
           "auth"
         ],
         "summary": "Password Reset Confirm",
+        "description": "凭重置 token 设置新密码。\n\n作用：委托 services.confirm_password_reset。\n场景：POST /auth/password/reset/confirm。\n参数：req — token 与新密码；db — 依赖。\n返回：ApiResponse[PasswordResetConfirmResp]。",
         "operationId": "password_reset_confirm_api_v1_auth_password_reset_confirm_post",
         "requestBody": {
           "content": {
@@ -556,6 +561,7 @@
           "auth"
         ],
         "summary": "Oauth Start",
+        "description": "发起 OAuth 授权跳转。\n\n作用：生成 state 并返回第三方授权 URL。\n场景：GET /auth/oauth/{provider}/start。\n参数：provider — github/google；r — Redis。\n返回：ApiResponse 含 redirect_url 与 state。",
         "operationId": "oauth_start_api_v1_auth_oauth__provider__start_get",
         "parameters": [
           {
@@ -598,6 +604,7 @@
           "auth"
         ],
         "summary": "Oauth Callback",
+        "description": "OAuth 回调：关联或创建用户并登录。\n\n作用：校验 state、交换 code、签发会话 token。\n场景：GET /auth/oauth/{provider}/callback。\n参数：provider — 提供商；code/state — OAuth 回调参数；db/r — 依赖。\n返回：ApiResponse[LoginResp]。",
         "operationId": "oauth_callback_api_v1_auth_oauth__provider__callback_get",
         "parameters": [
           {
@@ -658,6 +665,7 @@
           "dev"
         ],
         "summary": "Peek Verification Code",
+        "description": "开发环境查看邮箱验证码。\n\n作用：从 Redis dev 键读取待验证邮箱的 6 位码。\n场景：本地开发跳过真实邮件收信。\n参数：r — Redis；email — 目标邮箱。\n返回：ApiResponse，data.code 为验证码；无 pending 则 400。",
         "operationId": "peek_verification_code_api_v1_dev_verification_code_get",
         "parameters": [
           {
@@ -701,7 +709,7 @@
           "dev"
         ],
         "summary": "Runtime Status",
-        "description": "Redis key counts by scope + RabbitMQ queue depth.",
+        "description": "查询运行时 Redis 键统计与队列深度。\n\n作用：汇总 forge/run 等 scope 的 Redis key 数量及 MQ 队列状态。\n场景：本地调试 forge 运行态与消息堆积。\n参数：r — Redis 客户端。\n返回：ApiResponse，data 为 RuntimeStatusResp。",
         "operationId": "runtime_status_api_v1_dev_runtime_status_get",
         "responses": {
           "200": {
@@ -723,6 +731,7 @@
           "dev"
         ],
         "summary": "Queue Stats",
+        "description": "查询 worker 任务队列统计。\n\n作用：返回待处理/进行中任务数量等队列指标。\n场景：开发环境排查 worker 是否消费任务。\n参数：无。\n返回：ApiResponse，data 为 QueueStatsResp。",
         "operationId": "queue_stats_api_v1_dev_queue_stats_get",
         "responses": {
           "200": {
@@ -744,7 +753,7 @@
           "dev"
         ],
         "summary": "Queue Purge",
-        "description": "Purge pending worker tasks (e.g. after worker crash during debug).",
+        "description": "清空待处理 worker 任务队列。\n\n作用：purge 队列中未消费的任务（如 worker 崩溃后残留）。\n场景：开发调试；需 confirm=FLUSH。\n参数：confirm — 破坏性操作确认口令。\n返回：ApiResponse，data 为 QueuePurgeResp（含清除数量）。",
         "operationId": "queue_purge_api_v1_dev_queue_purge_post",
         "parameters": [
           {
@@ -787,7 +796,7 @@
           "dev"
         ],
         "summary": "Redis Flush",
-        "description": "Delete Redis keys by scope. Use run_id with forge scope for a single run.",
+        "description": "按 scope 删除 Redis 键。\n\n作用：批量删除指定 scope 的 Redis 键，forge scope 可带 run_id 精确清理。\n场景：开发环境清理 forge 缓存或单 run 状态；需 confirm=FLUSH。\n参数：body — scope/run_id/pattern/confirm；r — Redis 客户端。\n返回：ApiResponse，data.deleted 为删除键数量。",
         "operationId": "redis_flush_api_v1_dev_redis_flush_post",
         "requestBody": {
           "content": {
@@ -829,7 +838,7 @@
           "dev"
         ],
         "summary": "Requeue Run",
-        "description": "Re-enqueue a stuck run after worker restart.",
+        "description": "将卡住的 run 重新入队执行。\n\n作用：worker 重启后把 stuck run 重新 enqueue 到任务队列。\n场景：开发环境 run 卡在 running 但 worker 已退出。\n参数：run_id — 目标 run；r — Redis；db — 数据库会话。\n返回：ApiResponse，data 为 DevRequeueResp。",
         "operationId": "requeue_run_api_v1_dev_runs__run_id__requeue_post",
         "parameters": [
           {
@@ -873,7 +882,7 @@
           "dev"
         ],
         "summary": "Reset Dev",
-        "description": "一键清本地 dev 的 forge 运行态：失败所有 active run + 清 forge Redis + 清任务队列。",
+        "description": "一键重置本地 dev forge 运行态。\n\n作用：失败所有 active run、清空 forge Redis、清空任务队列。\n场景：开发环境快速回到干净 forge 状态；需 confirm=FLUSH。\n参数：r — Redis；db — 数据库会话；confirm — 确认口令。\n返回：ApiResponse，data 为 DevResetResp 汇总结果。",
         "operationId": "reset_dev_api_v1_dev_reset_post",
         "parameters": [
           {
@@ -916,6 +925,7 @@
           "llm-config"
         ],
         "summary": "List Configs",
+        "description": "列出当前用户全部 LLM 配置。\n\n作用：返回已保存的 provider/model/base_url 等（apikey 脱敏）。\n场景：设置页 LLM 配置列表。\n参数：user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data 为 LLMConfigResp 列表。",
         "operationId": "list_configs_api_v1_me_llm_configs_get",
         "responses": {
           "200": {
@@ -940,6 +950,7 @@
           "llm-config"
         ],
         "summary": "Create Config",
+        "description": "创建 LLM 配置（含连通性探测）。\n\n作用：保存前发最小 completion 验证配置，成功则落库。\n场景：设置页新增 LLM 配置；按用户限流防成本放大。\n参数：user/db/r — 用户与存储；req — 配置创建体。\n返回：ApiResponse，data 为 LLMConfigCreateResp；探测失败 400，限流 429。",
         "operationId": "create_config_api_v1_me_llm_configs_post",
         "requestBody": {
           "content": {
@@ -1006,7 +1017,7 @@
           "llm-config"
         ],
         "summary": "List Models",
-        "description": "按 provider 拉可选模型（用户配置 key；失败回退白名单，docs/05）。",
+        "description": "按 provider 拉取可选模型列表。\n\n作用：调用用户配置的 key 请求 /models；失败回退内置白名单。\n场景：LLM 配置页模型下拉（docs/05）。\n参数：user — 当前用户；db/r — 存储；provider — LLM 提供商枚举。\n返回：ApiResponse，data 为模型 id 字符串列表。",
         "operationId": "list_models_api_v1_me_llm_configs_models_get",
         "security": [
           {
@@ -1054,7 +1065,7 @@
           "llm-config"
         ],
         "summary": "Test Draft Config",
-        "description": "保存前连通测试（provider + model + apikey + base_url），不落库。\n\n纯付费 LLM 调用，按用户限流防成本放大。",
+        "description": "保存前连通测试（不落库）。\n\n作用：用 provider + model + apikey + base_url 发最小 completion。\n场景：LLM 配置表单保存前验证；按用户限流防成本放大。\n参数：user/r — 用户与 Redis；req — 待测配置体。\n返回：ApiResponse，data 为 LLMConfigDryTestResp；限流 429。",
         "operationId": "test_draft_config_api_v1_me_llm_configs_test_post",
         "requestBody": {
           "content": {
@@ -1111,6 +1122,7 @@
           "llm-config"
         ],
         "summary": "Patch Config",
+        "description": "部分更新 LLM 配置。\n\n作用：修改 provider/model/base_url/默认标记等字段。\n场景：设置页编辑已有 LLM 配置。\n参数：user/db — 用户与存储；config_id — 配置 ID；req — 待更新字段。\n返回：ApiResponse，data 为 LLMConfigResp；不存在 404。",
         "operationId": "patch_config_api_v1_me_llm_configs__config_id__patch",
         "security": [
           {
@@ -1177,6 +1189,7 @@
           "llm-config"
         ],
         "summary": "Delete Config",
+        "description": "删除 LLM 配置。\n\n作用：删除指定配置；默认配置须先指定新默认。\n场景：设置页移除 LLM 配置。\n参数：user/db — 用户与存储；config_id — 配置 ID。\n返回：ApiResponse，data 为 LLMConfigDeleteResp；删默认且无替代 409。",
         "operationId": "delete_config_api_v1_me_llm_configs__config_id__delete",
         "security": [
           {
@@ -1245,6 +1258,7 @@
           "llm-config"
         ],
         "summary": "Test Config",
+        "description": "对已存 LLM 配置执行连通测试。\n\n作用：用库中 apikey 发最小 completion 验证连通性。\n场景：设置页「测试」按钮；按用户限流防成本放大。\n参数：user/db/r — 用户与存储；config_id — 配置 ID。\n返回：ApiResponse，data 为 LLMConfigTestResp；不存在 404，限流 429。",
         "operationId": "test_config_api_v1_me_llm_configs__config_id__test_post",
         "security": [
           {
@@ -1313,6 +1327,7 @@
           "games"
         ],
         "summary": "Create Game",
+        "description": "创建草稿游戏。\n\n作用：委托 services.create_game 并包装响应。\n场景：POST /games。\n参数：req — 创建请求；user/db/r — 依赖注入。\n返回：ApiResponse[GameResp]。",
         "operationId": "create_game_api_v1_games_post",
         "security": [
           {
@@ -1367,6 +1382,7 @@
           "games"
         ],
         "summary": "List Games",
+        "description": "分页列出当前用户的游戏。\n\n作用：owner 仓库视图，可按状态筛选。\n场景：GET /games。\n参数：user/db — 依赖；status — 可选状态；page/size — 分页。\n返回：PaginatedData[GameListItem]。",
         "operationId": "list_games_api_v1_games_get",
         "security": [
           {
@@ -1605,6 +1621,7 @@
           "games"
         ],
         "summary": "Get Public Game Meta",
+        "description": "获取公开游戏元数据。\n\n作用：按 slug 查已发布游戏并组装 PublicGameMeta。\n场景：GET /games/public/{slug}。\n参数：slug — 游戏 slug；db — 会话；locale — 可选语言。\n返回：ApiResponse[PublicGameMeta]。",
         "operationId": "get_public_game_meta_api_v1_games_public__slug__get",
         "parameters": [
           {
@@ -1897,6 +1914,7 @@
           "games"
         ],
         "summary": "Get Game",
+        "description": "获取游戏详情（含版本列表）。\n\n作用：owner 校验后返回完整详情。\n场景：GET /games/{game_id}。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[GameDetailResp]。",
         "operationId": "get_game_api_v1_games__game_id__get",
         "security": [
           {
@@ -1953,6 +1971,7 @@
           "games"
         ],
         "summary": "Delete Game",
+        "description": "删除可删状态的游戏。\n\n作用：委托 services.delete_game。\n场景：DELETE /games/{game_id}。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[GameDeleteResp]。",
         "operationId": "delete_game_api_v1_games__game_id__delete",
         "security": [
           {
@@ -2159,6 +2178,7 @@
           "games"
         ],
         "summary": "List Versions",
+        "description": "列出游戏全部版本。\n\n作用：owner 校验后返回版本列表。\n场景：GET /games/{game_id}/versions。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[list[VersionItem]]。",
         "operationId": "list_versions_api_v1_games__game_id__versions_get",
         "security": [
           {
@@ -2217,7 +2237,7 @@
           "games"
         ],
         "summary": "Download Version",
-        "description": "Download an owned version as a standalone HTML file.",
+        "description": "下载指定版本的独立 HTML 文件。\n\n作用：读取 index.html 并以附件形式返回。\n场景：GET /games/{game_id}/versions/{version}/download。\n参数：game_id — 游戏 ID；version — 版本号；user/db — 依赖。\n返回：text/html Response。",
         "operationId": "download_version_api_v1_games__game_id__versions__version__download_get",
         "security": [
           {
@@ -2645,6 +2665,7 @@
           "games"
         ],
         "summary": "Toggle Like",
+        "description": "切换点赞状态（有则取消、无则添加）。\n\n作用：委托 reaction_services.toggle_reaction。\n场景：POST /games/{game_id}/like。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[ReactionToggleResp]。",
         "operationId": "toggle_like_api_v1_games__game_id__like_post",
         "security": [
           {
@@ -2760,6 +2781,7 @@
           "games"
         ],
         "summary": "Toggle Favorite",
+        "description": "切换收藏状态（有则取消、无则添加）。\n\n作用：委托 reaction_services.toggle_reaction。\n场景：POST /games/{game_id}/favorite。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[ReactionToggleResp]。",
         "operationId": "toggle_favorite_api_v1_games__game_id__favorite_post",
         "security": [
           {
@@ -2875,6 +2897,7 @@
           "official"
         ],
         "summary": "List Official Games",
+        "description": "列出全部官方预置游戏。\n\n作用：返回内置官方样例的 slug、标题、描述与试玩链接。\n场景：首页官方游戏区、无需登录。\n参数：db — 数据库会话；locale — 语言（zh/en）控制标题描述。\n返回：ApiResponse，data 为 OfficialGameItem 列表。",
         "operationId": "list_official_games_api_v1_official_games_get",
         "parameters": [
           {
@@ -2926,6 +2949,7 @@
           "templates"
         ],
         "summary": "Get Templates",
+        "description": "列出全部 forge 模板（只读）。\n\n作用：从缓存读取模板目录并规范化 engine 字段。\n场景：创建游戏时选择模板，无需登录。\n参数：r — Redis 客户端（模板缓存）。\n返回：ApiResponse，data 为 TemplateItem 列表。",
         "operationId": "get_templates_api_v1_templates_get",
         "responses": {
           "200": {
@@ -2947,6 +2971,7 @@
           "profile"
         ],
         "summary": "Get Profile",
+        "description": "获取当前用户资料。\n\n作用：读取昵称、handle、头像等个人资料字段。\n场景：设置页或个人中心展示。\n参数：user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data 为 UserProfile。",
         "operationId": "get_profile_api_v1_me_profile_get",
         "responses": {
           "200": {
@@ -2971,6 +2996,7 @@
           "profile"
         ],
         "summary": "Patch Profile",
+        "description": "部分更新当前用户资料。\n\n作用：修改 display_name、handle 等可编辑字段。\n场景：用户编辑个人资料；试用账号只读 403，handle 冲突 409。\n参数：req — 待更新字段；user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data 为更新后的 UserProfile。",
         "operationId": "patch_profile_api_v1_me_profile_patch",
         "requestBody": {
           "content": {
@@ -3037,6 +3063,7 @@
           "preferences"
         ],
         "summary": "List Preferences",
+        "description": "列出当前用户全部有效偏好。\n\n作用：读取 active 状态的 forge 记忆偏好项。\n场景：设置页展示或 forge 上下文加载。\n参数：user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data.items 为 PreferenceItem 列表。",
         "operationId": "list_preferences_api_v1_me_preferences_get",
         "responses": {
           "200": {
@@ -3061,6 +3088,7 @@
           "preferences"
         ],
         "summary": "Upsert Preference",
+        "description": "创建或更新一条用户偏好。\n\n作用：按 category/key upsert 偏好值，source 固定为 explicit。\n场景：用户显式修改 forge 记忆偏好。\n参数：req — 偏好写入体；user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data 为更新后的 PreferenceItem。",
         "operationId": "upsert_preference_api_v1_me_preferences_put",
         "requestBody": {
           "content": {
@@ -3105,6 +3133,7 @@
           "preferences"
         ],
         "summary": "Clear Preferences",
+        "description": "清空当前用户全部偏好。\n\n作用：删除该用户所有偏好记录。\n场景：用户重置 forge 记忆偏好。\n参数：user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data.deleted 为删除条数。",
         "operationId": "clear_preferences_api_v1_me_preferences_delete",
         "responses": {
           "200": {
@@ -3131,6 +3160,7 @@
           "creator"
         ],
         "summary": "Get Creator",
+        "description": "按 handle 获取公开创作者主页。\n\n作用：返回创作者公开资料与作品摘要。\n场景：创作者主页 /u/{handle}，无需登录。\n参数：handle — 创作者唯一标识；db — 数据库会话。\n返回：ApiResponse，data 为 CreatorProfile；不存在则 404。",
         "operationId": "get_creator_api_v1_u__handle__get",
         "parameters": [
           {
@@ -3183,6 +3213,7 @@
           "reactions"
         ],
         "summary": "List Favorites",
+        "description": "分页列出当前用户收藏的游戏。\n\n作用：返回用户收藏列表及公开元数据。\n场景：个人中心「我的收藏」页。\n参数：user — 当前用户；db — 数据库会话；page/size — 分页。\n返回：PaginatedData，含 PublicGameMeta 列表与 total/page/size。",
         "operationId": "list_favorites_api_v1_me_favorites_get",
         "security": [
           {
@@ -3244,7 +3275,7 @@
           "feedback"
         ],
         "summary": "Submit Feedback",
-        "description": "代发一封反馈邮件给管理员；run 必须属于当前用户。",
+        "description": "代发用户反馈邮件给管理员。\n\n作用：校验 run 归属后，将反馈内容通过邮件队列发送给管理员。\n场景：forge 失败时「联系管理员」入口。\n参数：req — 反馈内容与关联 run_id；request — 取客户端 IP 限流；user/db/r — 鉴权与存储。\n返回：ApiResponse，data 为 FeedbackResp；run 不可见 404，限流 429。",
         "operationId": "submit_feedback_api_v1_me_feedback_post",
         "requestBody": {
           "content": {
@@ -3311,6 +3342,7 @@
           "runs"
         ],
         "summary": "Create Run",
+        "description": "为游戏创建并入队生成 run。\n\n作用：支持 Idempotency-Key 防重复提交。\n场景：POST /games/{game_id}/runs。\n参数：game_id — 游戏 ID；req — 创建请求；request/user/db/r — 依赖。\n返回：ApiResponse[RunResp]。",
         "operationId": "create_run_api_v1_games__game_id__runs_post",
         "security": [
           {
@@ -3397,6 +3429,7 @@
           "runs"
         ],
         "summary": "List Runs",
+        "description": "列出某游戏下的全部 run。\n\n作用：owner 校验后返回 run 摘要列表。\n场景：GET /games/{game_id}/runs。\n参数：game_id — 游戏 ID；user/db — 依赖。\n返回：ApiResponse[list[RunListItem]]。",
         "operationId": "list_runs_api_v1_games__game_id__runs_get",
         "security": [
           {
@@ -3455,6 +3488,7 @@
           "runs"
         ],
         "summary": "Get Forge Messages",
+        "description": "分页获取 Forge 对话消息历史。\n\n作用：owner 校验后拉取游戏消息流。\n场景：GET /games/{game_id}/messages。\n参数：game_id — 游戏 ID；limit/before — 分页；user/db — 依赖。\n返回：ApiResponse[list[ForgeMessageItem]]。",
         "operationId": "get_forge_messages_api_v1_games__game_id__messages_get",
         "security": [
           {
@@ -3569,6 +3603,7 @@
           "runs"
         ],
         "summary": "Get Run",
+        "description": "获取 run 完整状态（含 HITL、暂停与产物门禁）。\n\n作用：联查 DB 行与 Redis 检查点组装 RunStatusResp。\n场景：GET /runs/{run_id}。\n参数：run_id — run ID；user/db/r — 依赖。\n返回：ApiResponse[RunStatusResp]。",
         "operationId": "get_run_api_v1_runs__run_id__get",
         "security": [
           {
@@ -3686,6 +3721,7 @@
           "runs"
         ],
         "summary": "Pause Run",
+        "description": "暂停进行中的 run。\n\n作用：委托 services.pause_run 并返回控制态。\n场景：POST /runs/{run_id}/pause。\n参数：run_id — run ID；user/db/r — 依赖。\n返回：ApiResponse[RunControlResp]。",
         "operationId": "pause_run_api_v1_runs__run_id__pause_post",
         "security": [
           {
@@ -3754,6 +3790,7 @@
           "runs"
         ],
         "summary": "Resume Run",
+        "description": "从暂停态续跑 run。\n\n作用：委托 services.resume_run_control。\n场景：POST /runs/{run_id}/resume。\n参数：run_id — run ID；user/db/r — 依赖。\n返回：ApiResponse[RunControlResp]。",
         "operationId": "resume_run_api_v1_runs__run_id__resume_post",
         "security": [
           {
@@ -3822,6 +3859,7 @@
           "runs"
         ],
         "summary": "Cancel Run",
+        "description": "取消进行中的 run。\n\n作用：委托 services.cancel_run。\n场景：POST /runs/{run_id}/cancel。\n参数：run_id — run ID；user/db/r — 依赖。\n返回：ApiResponse[RunControlResp]。",
         "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
         "security": [
           {
@@ -4048,6 +4086,7 @@
           "publish"
         ],
         "summary": "Submit Publish",
+        "description": "创作者提交游戏版本进入发布审核队列。\n\n作用：创建 PublishRequest 并将游戏状态置为 submitted。\n场景：游戏编辑页「提交发布」；游戏须为 draft/rejected/taken_down。\n参数：game_id — 游戏 ID；req — 版本与备注；user/db — 提交者与存储。\n返回：ApiResponse，data 为 PublishSubmitResp；状态冲突 409。",
         "operationId": "submit_publish_api_v1_games__game_id__publish_submit_post",
         "security": [
           {
@@ -4126,6 +4165,7 @@
           "publish"
         ],
         "summary": "Publish Queue",
+        "description": "列出发布审核队列（admin only）。\n\n作用：返回待审申请及关联游戏标题等信息。\n场景：管理后台发布审核台；可选 status 过滤。\n参数：admin — 管理员；db — 数据库会话；status — 可选 PublishStatus。\n返回：ApiResponse，data 为 PublishQueueItem 列表。",
         "operationId": "publish_queue_api_v1_publish_queue_get",
         "security": [
           {
@@ -4180,6 +4220,7 @@
           "publish"
         ],
         "summary": "Approve Publish",
+        "description": "管理员审批通过发布申请并上架游戏。\n\n作用：申请 approved、游戏 published、分配 slug、通知 owner。\n场景：POST /publish/{id}/approve。\n参数：publish_request_id — 申请 ID；admin/db — 审批人与存储。\n返回：ApiResponse，data 为 PublishApproveResp；不可审批 409。",
         "operationId": "approve_publish_api_v1_publish__publish_request_id__approve_post",
         "security": [
           {
@@ -4248,6 +4289,7 @@
           "publish"
         ],
         "summary": "Reject Publish",
+        "description": "管理员驳回发布申请。\n\n作用：申请 rejected、游戏 rejected、记录理由并通知 owner。\n场景：POST /publish/{id}/reject。\n参数：publish_request_id — 申请 ID；req.reason — 驳回理由；admin/db — 审批人与存储。\n返回：ApiResponse，data 为 PublishRejectResp。",
         "operationId": "reject_publish_api_v1_publish__publish_request_id__reject_post",
         "security": [
           {
@@ -4326,7 +4368,7 @@
           "publish"
         ],
         "summary": "Withdraw Publish",
-        "description": "owner 撤回自己的发布申请（submitted/reviewing → withdrawn，游戏回 draft）。",
+        "description": "owner 撤回自己的发布申请。\n\n作用：submitted/reviewing → withdrawn，游戏回 draft。\n场景：创作者在审核中撤回发布申请。\n参数：publish_request_id — 申请 ID；user/db — owner 与存储。\n返回：ApiResponse，data 为 PublishSubmitResp；不可撤回 409。",
         "operationId": "withdraw_publish_api_v1_publish__publish_request_id__withdraw_post",
         "security": [
           {
@@ -4395,6 +4437,7 @@
           "publish"
         ],
         "summary": "Take Down",
+        "description": "管理员下架已发布游戏。\n\n作用：游戏状态 taken_down、记审计并通知 owner。\n场景：admin 手动下架或 scheduler 定时下架。\n参数：game_id — 游戏 ID；req.reason — 下架理由；admin/db — 操作者与存储。\n返回：ApiResponse，data 为 TakeDownResp；非 published 409。",
         "operationId": "take_down_api_v1_games__game_id__take_down_post",
         "security": [
           {
@@ -4473,6 +4516,7 @@
           "usage"
         ],
         "summary": "My Usage",
+        "description": "读取当前用户 token 用量与日配额剩余。\n\n作用：从 Redis 聚合今日/本月/累计用量及配额信息。\n场景：个人中心用量页、forge 配额提示。\n参数：user — 当前用户；r — Redis；db — 读取生效日限额。\n返回：ApiResponse，data 为 UsageResp。",
         "operationId": "my_usage_api_v1_me_usage_get",
         "responses": {
           "200": {
@@ -4509,6 +4553,7 @@
           "usage"
         ],
         "summary": "Admin Usage",
+        "description": "读取全站用量总览与月榜 top 用户（admin only）。\n\n作用：聚合系统级用量与各用户当月 token 排行。\n场景：管理后台用量分析页。\n参数：user — 管理员；r — Redis；db — 补全用户邮箱。\n返回：ApiResponse，data 为 AdminUsageResp。",
         "operationId": "admin_usage_api_v1_admin_usage_get",
         "responses": {
           "200": {
@@ -4555,6 +4600,7 @@
           "usage"
         ],
         "summary": "Usage Breakdown",
+        "description": "分页列出用户用量按游戏或 run 的拆分明细。\n\n作用：scope=game|run 时列举当月有用量记录的维度及 USD 估算。\n场景：个人中心用量明细页。\n参数：user — 当前用户；r/db — 存储；scope — game 或 run；page/size — 分页。\n返回：PaginatedData，data 为 UsageBreakdownItem 列表。",
         "operationId": "usage_breakdown_api_v1_me_usage_breakdown_get",
         "security": [
           {
@@ -4627,6 +4673,7 @@
           "usage"
         ],
         "summary": "Game Usage",
+        "description": "读取单游戏当月 token 用量与 USD 估算。\n\n作用：校验游戏归属后读取 Redis 游戏月桶并估算费用。\n场景：游戏详情页用量卡片。\n参数：game_id — 游戏 ID；user — 当前用户；r/db — 存储。\n返回：ApiResponse，data 为 GameUsageResp。",
         "operationId": "game_usage_api_v1_games__game_id__usage_get",
         "security": [
           {
@@ -4685,6 +4732,7 @@
           "usage"
         ],
         "summary": "Game Analytics",
+        "description": "读取单游戏的试玩统计（play_count + 近 30 日 PV/UV）。\n\n作用：合并 DB play_count 与 Redis 按 slug 的访问分析。\n场景：游戏详情页数据概览。\n参数：game_id — 游戏 ID；user — 当前用户；r/db — 存储。\n返回：ApiResponse，data 为 GameAnalyticsResp。",
         "operationId": "game_analytics_api_v1_games__game_id__analytics_get",
         "security": [
           {
@@ -4733,6 +4781,7 @@
           "usage"
         ],
         "summary": "Admin Analytics Top",
+        "description": "读取全站访问分析：热门游戏榜 + 近 30 日趋势（admin only）。\n\n作用：按 play_count 取 top 已发布游戏，并聚合全站 PV/UV 趋势。\n场景：管理后台访问分析页。\n参数：admin — 管理员；db/r — 存储；limit — 榜单条数。\n返回：ApiResponse，data 为 AdminAnalyticsResp。",
         "operationId": "admin_analytics_top_api_v1_admin_analytics_top_get",
         "security": [
           {
@@ -4783,6 +4832,7 @@
           "notifications"
         ],
         "summary": "List Notifications",
+        "description": "列出当前用户站内通知。\n\n作用：按时间倒序返回通知，可选仅未读。\n场景：通知中心铃铛下拉或列表页。\n参数：user — 当前用户；db — 数据库会话；unread_only — 是否仅未读。\n返回：ApiResponse，data 为 NotificationItem 列表。",
         "operationId": "list_notifications_api_v1_me_notifications_get",
         "security": [
           {
@@ -4831,6 +4881,7 @@
           "notifications"
         ],
         "summary": "Mark Read",
+        "description": "将单条通知标为已读。\n\n作用：更新指定通知的 read 状态。\n场景：用户点开或批量已读某条通知。\n参数：notification_id — 通知 ID；user — 当前用户；db — 数据库会话。\n返回：ApiResponse，data 含 id 与 read；不存在 404。",
         "operationId": "mark_read_api_v1_me_notifications__notification_id__read_post",
         "security": [
           {
@@ -4889,6 +4940,7 @@
           "admin"
         ],
         "summary": "List Users",
+        "description": "分页列出全部用户（含日 token 限额覆盖）。\n\n作用：返回用户列表及每人 Redis 配额覆盖值。\n场景：管理后台用户管理页。\n参数：admin — 管理员；db/r — 数据库与 Redis；page/size — 分页。\n返回：PaginatedData，data 为 AdminUserItem 列表。",
         "operationId": "list_users_api_v1_admin_users_get",
         "security": [
           {
@@ -4950,6 +5002,7 @@
           "admin"
         ],
         "summary": "Patch User",
+        "description": "管理员修改用户角色、禁用状态或日 token 限额。\n\n作用：更新用户字段；daily_token_limit 仅在 body 含该字段时写入（null 清除覆盖）。\n场景：PATCH /admin/users/{id}。\n参数：user_id — 目标用户；req — 待更新字段；admin/db/r — 操作者与存储。\n返回：ApiResponse，data 为更新后的 AdminUserItem；不存在 404。",
         "operationId": "patch_user_api_v1_admin_users__user_id__patch",
         "security": [
           {
@@ -5016,6 +5069,7 @@
           "admin"
         ],
         "summary": "Delete User",
+        "description": "管理员删除用户账号。\n\n作用：物理删除用户并清除 Redis 配额键，记审计日志。\n场景：DELETE /admin/users/{id}。\n参数：user_id — 目标用户；admin/db/r — 操作者与存储。\n返回：204 无 body；不可删自己或唯一管理员时 400。",
         "operationId": "delete_user_api_v1_admin_users__user_id__delete",
         "security": [
           {
@@ -5067,6 +5121,7 @@
           "admin"
         ],
         "summary": "Get Settings",
+        "description": "读取全局 admin 设置。\n\n作用：返回限额默认值、联系邮箱、审核模型回显（apikey 脱敏）。\n场景：管理后台全局设置页。\n参数：admin — 管理员；db — 数据库会话。\n返回：ApiResponse，data 为 AdminSettings。",
         "operationId": "get_settings_api_v1_admin_settings_get",
         "responses": {
           "200": {
@@ -5091,6 +5146,7 @@
           "admin"
         ],
         "summary": "Update Settings",
+        "description": "更新全局 admin 设置。\n\n作用：写入限额、联系邮箱、审核模型配置并记审计。\n场景：PUT /admin/settings。\n参数：admin — 操作者；db — 数据库会话；req — 新设置体。\n返回：ApiResponse，data 为提交后的 AdminSettings。",
         "operationId": "update_settings_api_v1_admin_settings_put",
         "requestBody": {
           "content": {
@@ -5137,7 +5193,7 @@
           "admin"
         ],
         "summary": "Test Audit Llm",
-        "description": "审核模型连通测试（表单当前值 dry-test，不落库）。\n\napikey 为空/masked 时回退 DB 已存密钥（只改 model 不重填 key 也能测）。\n纯付费 LLM 调用，按 admin 限流防成本放大（同用户 LLM 配置探测限流）。",
+        "description": "审核模型连通测试（表单当前值 dry-test，不落库）。\n\n作用：用最小 completion 验证 provider/model/apikey/base_url。\n场景：管理后台保存前测试审核 LLM；apikey 为空或含 *** 时回退 DB 已存密钥。\n参数：admin/db/r — 操作者与存储；req — 审核模型表单值。\n返回：ApiResponse，data.tested_ok 与可选 error；限流 429。",
         "operationId": "test_audit_llm_api_v1_admin_settings_audit_llm_test_post",
         "requestBody": {
           "content": {
@@ -5194,6 +5250,7 @@
           "admin"
         ],
         "summary": "List Audit Logs",
+        "description": "分页列出管理员审计日志。\n\n作用：按时间倒序返回 audit_logs 记录。\n场景：管理后台审计日志页。\n参数：admin — 管理员；db — 数据库会话；page/size — 分页。\n返回：PaginatedData，data 为 AuditLogItem 列表。",
         "operationId": "list_audit_logs_api_v1_admin_audit_logs_get",
         "security": [
           {
@@ -5255,7 +5312,7 @@
           "admin"
         ],
         "summary": "List Admin Games",
-        "description": "管理员游戏列表（不含草稿），默认含 published/submitted/reviewing/taken_down。",
+        "description": "管理员游戏列表（不含草稿）。\n\n作用：筛选 published/taken_down/submitted/reviewing 态游戏。\n场景：管理后台游戏管理页；可选 status 过滤。\n参数：admin — 管理员；db — 数据库会话；status — 可选状态；page/size — 分页。\n返回：PaginatedData，data 为 AdminGameItem 列表。",
         "operationId": "list_admin_games_api_v1_admin_games_get",
         "security": [
           {
@@ -5333,6 +5390,7 @@
           "admin"
         ],
         "summary": "Patch Game Schedule",
+        "description": "设置游戏定时下架/上架时间。\n\n作用：更新 scheduled_take_down_at 与 scheduled_publish_at。\n场景：管理后台定时上下架配置；scheduler 到期自动执行。\n参数：game_id — 游戏 ID；req — 计划时间；admin/db — 操作者与存储。\n返回：ApiResponse，data 为 AdminGameItem；不存在 404。",
         "operationId": "patch_game_schedule_api_v1_admin_games__game_id__schedule_patch",
         "security": [
           {
@@ -5401,6 +5459,7 @@
           "admin"
         ],
         "summary": "Patch Game Featured",
+        "description": "设置或取消游戏精选排序位。\n\n作用：更新 featured_rank（None 表示取消精选）。\n场景：管理后台精选游戏配置。\n参数：game_id — 游戏 ID；req.featured_rank — 排序值或 None；admin/db — 操作者与存储。\n返回：ApiResponse，data 为 AdminGameItem；非 published 或不存在时报错。",
         "operationId": "patch_game_featured_api_v1_admin_games__game_id__featured_patch",
         "security": [
           {
@@ -6011,7 +6070,8 @@
           "started_at",
           "ws_url"
         ],
-        "title": "ActiveRunItem"
+        "title": "ActiveRunItem",
+        "description": "ActiveRunItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "AdminAnalyticsResp": {
         "properties": {
@@ -6035,7 +6095,8 @@
           "top_games",
           "trend"
         ],
-        "title": "AdminAnalyticsResp"
+        "title": "AdminAnalyticsResp",
+        "description": "AdminAnalyticsResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "AdminAuditLlmSettings": {
         "properties": {
@@ -6091,7 +6152,8 @@
         "required": [
           "tested_ok"
         ],
-        "title": "AdminAuditLlmTestResp"
+        "title": "AdminAuditLlmTestResp",
+        "description": "AdminAuditLlmTestResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "AdminGameFeaturedPatch": {
         "properties": {
@@ -6108,7 +6170,8 @@
           }
         },
         "type": "object",
-        "title": "AdminGameFeaturedPatch"
+        "title": "AdminGameFeaturedPatch",
+        "description": "AdminGameFeaturedPatch 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AdminGameItem": {
         "properties": {
@@ -6165,7 +6228,8 @@
           "current_version",
           "updated_at"
         ],
-        "title": "AdminGameItem"
+        "title": "AdminGameItem",
+        "description": "AdminGameItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "AdminGameSchedulePatch": {
         "properties": {
@@ -6195,7 +6259,8 @@
           }
         },
         "type": "object",
-        "title": "AdminGameSchedulePatch"
+        "title": "AdminGameSchedulePatch",
+        "description": "AdminGameSchedulePatch 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AdminSettings": {
         "properties": {
@@ -6233,7 +6298,8 @@
           "default_daily_token_limit",
           "default_rate_limit_per_min"
         ],
-        "title": "AdminSettings"
+        "title": "AdminSettings",
+        "description": "AdminSettings 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AdminUsageResp": {
         "properties": {
@@ -6253,7 +6319,8 @@
           "system",
           "top_users"
         ],
-        "title": "AdminUsageResp"
+        "title": "AdminUsageResp",
+        "description": "AdminUsageResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "AdminUserItem": {
         "properties": {
@@ -6303,7 +6370,8 @@
           "disabled",
           "created_at"
         ],
-        "title": "AdminUserItem"
+        "title": "AdminUserItem",
+        "description": "AdminUserItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "AdminUserPatch": {
         "properties": {
@@ -6341,7 +6409,8 @@
           }
         },
         "type": "object",
-        "title": "AdminUserPatch"
+        "title": "AdminUserPatch",
+        "description": "AdminUserPatch 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AdminUserUsage": {
         "properties": {
@@ -6375,7 +6444,8 @@
           "month_output_tokens",
           "calls"
         ],
-        "title": "AdminUserUsage"
+        "title": "AdminUserUsage",
+        "description": "AdminUserUsage 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AnalyticsTopItem": {
         "properties": {
@@ -6410,7 +6480,8 @@
           "title",
           "play_count"
         ],
-        "title": "AnalyticsTopItem"
+        "title": "AnalyticsTopItem",
+        "description": "AnalyticsTopItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "AnalyticsTrendPoint": {
         "properties": {
@@ -6433,7 +6504,8 @@
           "page_views",
           "unique_visitors"
         ],
-        "title": "AnalyticsTrendPoint"
+        "title": "AnalyticsTrendPoint",
+        "description": "AnalyticsTrendPoint 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "ApiResponse_AdminAnalyticsResp_": {
         "properties": {
@@ -7352,7 +7424,7 @@
         },
         "type": "object",
         "title": "ArtifactGateDetail",
-        "description": "ADR-01：previewable ≠ publishable，build_ok ≠ qa_ok。"
+        "description": "ArtifactGateDetail 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "AuditLogItem": {
         "properties": {
@@ -7408,7 +7480,8 @@
           "detail",
           "created_at"
         ],
-        "title": "AuditLogItem"
+        "title": "AuditLogItem",
+        "description": "AuditLogItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "CreatorBrief": {
         "properties": {
@@ -7436,7 +7509,8 @@
           }
         },
         "type": "object",
-        "title": "CreatorBrief"
+        "title": "CreatorBrief",
+        "description": "CreatorBrief 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "CreatorGameItem": {
         "properties": {
@@ -7478,7 +7552,8 @@
           "play_count",
           "published_at"
         ],
-        "title": "CreatorGameItem"
+        "title": "CreatorGameItem",
+        "description": "CreatorGameItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "CreatorProfile": {
         "properties": {
@@ -7529,7 +7604,8 @@
           "latest_published_at",
           "games"
         ],
-        "title": "CreatorProfile"
+        "title": "CreatorProfile",
+        "description": "CreatorProfile 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "DevRequeueResp": {
         "properties": {
@@ -7564,7 +7640,8 @@
           "task",
           "status"
         ],
-        "title": "DevRequeueResp"
+        "title": "DevRequeueResp",
+        "description": "DevRequeueResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "DevResetResp": {
         "properties": {
@@ -7598,7 +7675,8 @@
           "redis_deleted",
           "queue"
         ],
-        "title": "DevResetResp"
+        "title": "DevResetResp",
+        "description": "DevResetResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "EntryPhase": {
         "type": "string",
@@ -7607,7 +7685,8 @@
           "code",
           "chat"
         ],
-        "title": "EntryPhase"
+        "title": "EntryPhase",
+        "description": "用户进入 Forge 时的起始阶段。"
       },
       "ErrorDetail": {
         "properties": {
@@ -7689,7 +7768,8 @@
           }
         },
         "type": "object",
-        "title": "FeedbackResp"
+        "title": "FeedbackResp",
+        "description": "FeedbackResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "ForgeMessageItem": {
         "properties": {
@@ -7753,7 +7833,8 @@
           "metadata",
           "created_at"
         ],
-        "title": "ForgeMessageItem"
+        "title": "ForgeMessageItem",
+        "description": "ForgeMessageItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "GameAnalyticsResp": {
         "properties": {
@@ -7782,7 +7863,8 @@
           "pv_30d",
           "uv_30d"
         ],
-        "title": "GameAnalyticsResp"
+        "title": "GameAnalyticsResp",
+        "description": "GameAnalyticsResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "GameBatchDeleteItem": {
         "properties": {
@@ -7801,7 +7883,8 @@
           "game_id",
           "reason"
         ],
-        "title": "GameBatchDeleteItem"
+        "title": "GameBatchDeleteItem",
+        "description": "GameBatchDeleteItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "GameBatchDeleteReq": {
         "properties": {
@@ -7820,7 +7903,8 @@
         "required": [
           "game_ids"
         ],
-        "title": "GameBatchDeleteReq"
+        "title": "GameBatchDeleteReq",
+        "description": "GameBatchDeleteReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "GameBatchDeleteResp": {
         "properties": {
@@ -7845,7 +7929,8 @@
           "deleted",
           "failed"
         ],
-        "title": "GameBatchDeleteResp"
+        "title": "GameBatchDeleteResp",
+        "description": "GameBatchDeleteResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "GameCreate": {
         "properties": {
@@ -7884,7 +7969,8 @@
           }
         },
         "type": "object",
-        "title": "GameCreate"
+        "title": "GameCreate",
+        "description": "GameCreate 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "GameDeleteResp": {
         "properties": {
@@ -7903,7 +7989,8 @@
         "required": [
           "game_id"
         ],
-        "title": "GameDeleteResp"
+        "title": "GameDeleteResp",
+        "description": "GameDeleteResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "GameDetailResp": {
         "properties": {
@@ -7968,7 +8055,8 @@
           "created_at",
           "updated_at"
         ],
-        "title": "GameDetailResp"
+        "title": "GameDetailResp",
+        "description": "GameDetailResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "GameListItem": {
         "properties": {
@@ -8024,7 +8112,8 @@
           "current_version",
           "updated_at"
         ],
-        "title": "GameListItem"
+        "title": "GameListItem",
+        "description": "GameListItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "GamePatch": {
         "properties": {
@@ -8071,7 +8160,8 @@
           "game_id",
           "status"
         ],
-        "title": "GameRef"
+        "title": "GameRef",
+        "description": "GameRef 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "GameResp": {
         "properties": {
@@ -8111,7 +8201,8 @@
           "current_version",
           "created_at"
         ],
-        "title": "GameResp"
+        "title": "GameResp",
+        "description": "GameResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "GameStatus": {
         "type": "string",
@@ -8123,7 +8214,8 @@
           "rejected",
           "taken_down"
         ],
-        "title": "GameStatus"
+        "title": "GameStatus",
+        "description": "游戏生命周期状态（草稿至上下架）。"
       },
       "GameUsageResp": {
         "properties": {
@@ -8146,7 +8238,8 @@
           "month",
           "estimated_usd"
         ],
-        "title": "GameUsageResp"
+        "title": "GameUsageResp",
+        "description": "GameUsageResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "HTTPValidationError": {
         "properties": {
@@ -8229,7 +8322,8 @@
         "required": [
           "node"
         ],
-        "title": "HitlResolveReq"
+        "title": "HitlResolveReq",
+        "description": "HitlResolveReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "HitlResolveResp": {
         "properties": {
@@ -8251,7 +8345,8 @@
           "status",
           "phase"
         ],
-        "title": "HitlResolveResp"
+        "title": "HitlResolveResp",
+        "description": "HitlResolveResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "HitlState": {
         "properties": {
@@ -8264,7 +8359,8 @@
         "required": [
           "node"
         ],
-        "title": "HitlState"
+        "title": "HitlState",
+        "description": "HitlState 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "HitlWaitDetail": {
         "properties": {
@@ -8352,7 +8448,8 @@
         "required": [
           "node"
         ],
-        "title": "HitlWaitDetail"
+        "title": "HitlWaitDetail",
+        "description": "HitlWaitDetail 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "LLMConfigCreate": {
         "properties": {
@@ -8390,7 +8487,8 @@
           "model",
           "apikey"
         ],
-        "title": "LLMConfigCreate"
+        "title": "LLMConfigCreate",
+        "description": "LLMConfigCreate 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "LLMConfigCreateResp": {
         "properties": {
@@ -8439,7 +8537,8 @@
           "is_default",
           "tested_ok"
         ],
-        "title": "LLMConfigCreateResp"
+        "title": "LLMConfigCreateResp",
+        "description": "LLMConfigCreateResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "LLMConfigDeleteResp": {
         "properties": {
@@ -8458,7 +8557,8 @@
         "required": [
           "config_id"
         ],
-        "title": "LLMConfigDeleteResp"
+        "title": "LLMConfigDeleteResp",
+        "description": "LLMConfigDeleteResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "LLMConfigDryTestResp": {
         "properties": {
@@ -8482,7 +8582,8 @@
         "required": [
           "tested_ok"
         ],
-        "title": "LLMConfigDryTestResp"
+        "title": "LLMConfigDryTestResp",
+        "description": "LLMConfigDryTestResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "LLMConfigPatch": {
         "properties": {
@@ -8510,7 +8611,8 @@
           }
         },
         "type": "object",
-        "title": "LLMConfigPatch"
+        "title": "LLMConfigPatch",
+        "description": "LLMConfigPatch 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "LLMConfigResp": {
         "properties": {
@@ -8554,7 +8656,8 @@
           "apikey_masked",
           "is_default"
         ],
-        "title": "LLMConfigResp"
+        "title": "LLMConfigResp",
+        "description": "LLMConfigResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "LLMConfigTestReq": {
         "properties": {
@@ -8618,7 +8721,8 @@
           "config_id",
           "tested_ok"
         ],
-        "title": "LLMConfigTestResp"
+        "title": "LLMConfigTestResp",
+        "description": "LLMConfigTestResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "LLMProvider": {
         "type": "string",
@@ -8627,7 +8731,8 @@
           "openai",
           "openai_compat"
         ],
-        "title": "LLMProvider"
+        "title": "LLMProvider",
+        "description": "平台支持的 LLM 供应商标识。"
       },
       "LoginReq": {
         "properties": {
@@ -8646,7 +8751,8 @@
           "email",
           "password"
         ],
-        "title": "LoginReq"
+        "title": "LoginReq",
+        "description": "LoginReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "LoginResp": {
         "properties": {
@@ -8673,7 +8779,8 @@
           "expires_in",
           "user"
         ],
-        "title": "LoginResp"
+        "title": "LoginResp",
+        "description": "LoginResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "NotificationItem": {
         "properties": {
@@ -8713,7 +8820,8 @@
           "read",
           "created_at"
         ],
-        "title": "NotificationItem"
+        "title": "NotificationItem",
+        "description": "NotificationItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "NotificationReadResp": {
         "properties": {
@@ -8732,7 +8840,8 @@
         "required": [
           "id"
         ],
-        "title": "NotificationReadResp"
+        "title": "NotificationReadResp",
+        "description": "NotificationReadResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "OfficialGameItem": {
         "properties": {
@@ -8771,7 +8880,8 @@
           "description",
           "play_url"
         ],
-        "title": "OfficialGameItem"
+        "title": "OfficialGameItem",
+        "description": "OfficialGameItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "PaginatedData_AdminGameItem_": {
         "properties": {
@@ -8999,7 +9109,8 @@
         "required": [
           "user_id"
         ],
-        "title": "PasswordChangeResp"
+        "title": "PasswordChangeResp",
+        "description": "PasswordChangeResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "PasswordResetConfirmReq": {
         "properties": {
@@ -9019,7 +9130,8 @@
           "token",
           "new_password"
         ],
-        "title": "PasswordResetConfirmReq"
+        "title": "PasswordResetConfirmReq",
+        "description": "PasswordResetConfirmReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "PasswordResetConfirmResp": {
         "properties": {
@@ -9043,7 +9155,8 @@
           "user_id",
           "email"
         ],
-        "title": "PasswordResetConfirmResp"
+        "title": "PasswordResetConfirmResp",
+        "description": "PasswordResetConfirmResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "PasswordResetReq": {
         "properties": {
@@ -9057,7 +9170,8 @@
         "required": [
           "email"
         ],
-        "title": "PasswordResetReq"
+        "title": "PasswordResetReq",
+        "description": "PasswordResetReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "PasswordResetResp": {
         "properties": {
@@ -9068,7 +9182,8 @@
           }
         },
         "type": "object",
-        "title": "PasswordResetResp"
+        "title": "PasswordResetResp",
+        "description": "PasswordResetResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "PreferenceItem": {
         "properties": {
@@ -9125,7 +9240,8 @@
           "confidence",
           "status"
         ],
-        "title": "PreferenceItem"
+        "title": "PreferenceItem",
+        "description": "PreferenceItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "PreferenceList": {
         "properties": {
@@ -9141,7 +9257,8 @@
         "required": [
           "items"
         ],
-        "title": "PreferenceList"
+        "title": "PreferenceList",
+        "description": "PreferenceList 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "PreferenceUpsert": {
         "properties": {
@@ -9175,7 +9292,8 @@
           "key",
           "value_json"
         ],
-        "title": "PreferenceUpsert"
+        "title": "PreferenceUpsert",
+        "description": "PreferenceUpsert 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "PreviewTokenResp": {
         "properties": {
@@ -9194,7 +9312,8 @@
           "preview_url",
           "expires_in_s"
         ],
-        "title": "PreviewTokenResp"
+        "title": "PreviewTokenResp",
+        "description": "PreviewTokenResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "ProfilePatch": {
         "properties": {
@@ -9233,7 +9352,8 @@
           }
         },
         "type": "object",
-        "title": "ProfilePatch"
+        "title": "ProfilePatch",
+        "description": "ProfilePatch 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "PublicGameMeta": {
         "properties": {
@@ -9311,7 +9431,8 @@
           "published_at",
           "play_count"
         ],
-        "title": "PublicGameMeta"
+        "title": "PublicGameMeta",
+        "description": "PublicGameMeta 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "PublishApproveResp": {
         "properties": {
@@ -9333,7 +9454,8 @@
           "status",
           "game"
         ],
-        "title": "PublishApproveResp"
+        "title": "PublishApproveResp",
+        "description": "PublishApproveResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "PublishQueueItem": {
         "properties": {
@@ -9373,7 +9495,8 @@
           "status",
           "created_at"
         ],
-        "title": "PublishQueueItem"
+        "title": "PublishQueueItem",
+        "description": "PublishQueueItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "PublishRejectReq": {
         "properties": {
@@ -9386,7 +9509,8 @@
         "required": [
           "reason"
         ],
-        "title": "PublishRejectReq"
+        "title": "PublishRejectReq",
+        "description": "PublishRejectReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "PublishRejectResp": {
         "properties": {
@@ -9408,7 +9532,8 @@
           "status",
           "game"
         ],
-        "title": "PublishRejectResp"
+        "title": "PublishRejectResp",
+        "description": "PublishRejectResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "PublishStatus": {
         "type": "string",
@@ -9419,7 +9544,8 @@
           "rejected",
           "withdrawn"
         ],
-        "title": "PublishStatus"
+        "title": "PublishStatus",
+        "description": "游戏提审与发布审核状态。"
       },
       "PublishSubmitReq": {
         "properties": {
@@ -9443,7 +9569,8 @@
         "required": [
           "version"
         ],
-        "title": "PublishSubmitReq"
+        "title": "PublishSubmitReq",
+        "description": "PublishSubmitReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "PublishSubmitResp": {
         "properties": {
@@ -9472,7 +9599,8 @@
           "game_id",
           "version"
         ],
-        "title": "PublishSubmitResp"
+        "title": "PublishSubmitResp",
+        "description": "PublishSubmitResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "QueuePurgeResp": {
         "properties": {
@@ -9495,7 +9623,8 @@
           "queue",
           "purged"
         ],
-        "title": "QueuePurgeResp"
+        "title": "QueuePurgeResp",
+        "description": "QueuePurgeResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "QueueStatsResp": {
         "properties": {
@@ -9529,7 +9658,8 @@
           "queue",
           "messages"
         ],
-        "title": "QueueStatsResp"
+        "title": "QueueStatsResp",
+        "description": "QueueStatsResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "QuotaInfo": {
         "properties": {
@@ -9552,7 +9682,8 @@
           "daily_used",
           "remaining"
         ],
-        "title": "QuotaInfo"
+        "title": "QuotaInfo",
+        "description": "QuotaInfo 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "ReactionStateResp": {
         "properties": {
@@ -9586,7 +9717,8 @@
           "like_count",
           "favorite_count"
         ],
-        "title": "ReactionStateResp"
+        "title": "ReactionStateResp",
+        "description": "ReactionStateResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "ReactionToggleResp": {
         "properties": {
@@ -9615,7 +9747,8 @@
           "like_count",
           "favorite_count"
         ],
-        "title": "ReactionToggleResp"
+        "title": "ReactionToggleResp",
+        "description": "ReactionToggleResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "Ready": {
         "properties": {
@@ -9666,7 +9799,8 @@
           "error_code",
           "attempts"
         ],
-        "title": "RecoveryDetail"
+        "title": "RecoveryDetail",
+        "description": "RecoveryDetail 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "RedisFlushReq": {
         "properties": {
@@ -9725,7 +9859,8 @@
           "scopes",
           "confirm"
         ],
-        "title": "RedisFlushReq"
+        "title": "RedisFlushReq",
+        "description": "RedisFlushReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "RedisFlushResp": {
         "properties": {
@@ -9741,7 +9876,8 @@
         "required": [
           "deleted"
         ],
-        "title": "RedisFlushResp"
+        "title": "RedisFlushResp",
+        "description": "RedisFlushResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "RefreshReq": {
         "properties": {
@@ -9754,7 +9890,8 @@
         "required": [
           "refresh_token"
         ],
-        "title": "RefreshReq"
+        "title": "RefreshReq",
+        "description": "RefreshReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "RegisterReq": {
         "properties": {
@@ -9775,7 +9912,8 @@
           "email",
           "password"
         ],
-        "title": "RegisterReq"
+        "title": "RegisterReq",
+        "description": "RegisterReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "RegisterResp": {
         "properties": {
@@ -9799,7 +9937,8 @@
           "user_id",
           "email"
         ],
-        "title": "RegisterResp"
+        "title": "RegisterResp",
+        "description": "RegisterResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "ResendVerificationReq": {
         "properties": {
@@ -9813,7 +9952,8 @@
         "required": [
           "email"
         ],
-        "title": "ResendVerificationReq"
+        "title": "ResendVerificationReq",
+        "description": "ResendVerificationReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "ResendVerificationResp": {
         "properties": {
@@ -9824,7 +9964,8 @@
           }
         },
         "type": "object",
-        "title": "ResendVerificationResp"
+        "title": "ResendVerificationResp",
+        "description": "ResendVerificationResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "Role": {
         "type": "string",
@@ -9832,7 +9973,8 @@
           "user",
           "admin"
         ],
-        "title": "Role"
+        "title": "Role",
+        "description": "用户角色：普通用户与管理员。"
       },
       "RunControlResp": {
         "properties": {
@@ -9854,7 +9996,8 @@
           "status",
           "phase"
         ],
-        "title": "RunControlResp"
+        "title": "RunControlResp",
+        "description": "RunControlResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "RunCreate": {
         "properties": {
@@ -9880,7 +10023,8 @@
         "required": [
           "requirement"
         ],
-        "title": "RunCreate"
+        "title": "RunCreate",
+        "description": "RunCreate 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "RunListItem": {
         "properties": {
@@ -9920,7 +10064,8 @@
           "phase",
           "started_at"
         ],
-        "title": "RunListItem"
+        "title": "RunListItem",
+        "description": "RunListItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "RunPhase": {
         "type": "string",
@@ -9931,7 +10076,8 @@
           "qa",
           "done"
         ],
-        "title": "RunPhase"
+        "title": "RunPhase",
+        "description": "Forge 流水线当前阶段。"
       },
       "RunResp": {
         "properties": {
@@ -9968,7 +10114,8 @@
           "entry_phase",
           "ws_url"
         ],
-        "title": "RunResp"
+        "title": "RunResp",
+        "description": "RunResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "RunStatus": {
         "type": "string",
@@ -9978,7 +10125,8 @@
           "done",
           "failed"
         ],
-        "title": "RunStatus"
+        "title": "RunStatus",
+        "description": "Forge 运行会话的顶层状态。"
       },
       "RunStatusResp": {
         "properties": {
@@ -10066,7 +10214,8 @@
           "entry_phase",
           "ws_url"
         ],
-        "title": "RunStatusResp"
+        "title": "RunStatusResp",
+        "description": "RunStatusResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "RuntimeStatusResp": {
         "properties": {
@@ -10096,7 +10245,8 @@
           "redis",
           "queue"
         ],
-        "title": "RuntimeStatusResp"
+        "title": "RuntimeStatusResp",
+        "description": "RuntimeStatusResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "SystemUsage": {
         "properties": {
@@ -10116,7 +10266,8 @@
           "month",
           "total"
         ],
-        "title": "SystemUsage"
+        "title": "SystemUsage",
+        "description": "SystemUsage 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "TakeDownReq": {
         "properties": {
@@ -10129,7 +10280,8 @@
         "required": [
           "reason"
         ],
-        "title": "TakeDownReq"
+        "title": "TakeDownReq",
+        "description": "TakeDownReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "TakeDownResp": {
         "properties": {
@@ -10152,7 +10304,8 @@
           "status",
           "reason"
         ],
-        "title": "TakeDownResp"
+        "title": "TakeDownResp",
+        "description": "TakeDownResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "TemplateItem": {
         "properties": {
@@ -10232,7 +10385,8 @@
           "refresh_token",
           "expires_in"
         ],
-        "title": "TokenResp"
+        "title": "TokenResp",
+        "description": "TokenResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "UsageBreakdownItem": {
         "properties": {
@@ -10277,7 +10431,8 @@
           "calls",
           "estimated_usd"
         ],
-        "title": "UsageBreakdownItem"
+        "title": "UsageBreakdownItem",
+        "description": "UsageBreakdownItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "UsageBucket": {
         "properties": {
@@ -10300,7 +10455,8 @@
           "output_tokens",
           "calls"
         ],
-        "title": "UsageBucket"
+        "title": "UsageBucket",
+        "description": "UsageBucket 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "UsageResp": {
         "properties": {
@@ -10324,7 +10480,8 @@
           "total",
           "quota"
         ],
-        "title": "UsageResp"
+        "title": "UsageResp",
+        "description": "UsageResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "UserProfile": {
         "properties": {
@@ -10370,7 +10527,8 @@
           "user_id",
           "email"
         ],
-        "title": "UserProfile"
+        "title": "UserProfile",
+        "description": "UserProfile 数据传输对象。\n\n场景：API 或内部序列化契约。"
       },
       "UserPublic": {
         "properties": {
@@ -10398,7 +10556,8 @@
           "role",
           "email_verified"
         ],
-        "title": "UserPublic"
+        "title": "UserPublic",
+        "description": "用户公开信息 DTO。\n\n场景：登录响应、profile 等对外暴露字段。"
       },
       "ValidationError": {
         "properties": {
@@ -10460,7 +10619,8 @@
           "email",
           "code"
         ],
-        "title": "VerifyEmailReq"
+        "title": "VerifyEmailReq",
+        "description": "VerifyEmailReq API 请求体。\n\n场景：对应端点入参 Pydantic 校验。"
       },
       "VerifyEmailResp": {
         "properties": {
@@ -10479,7 +10639,8 @@
         "required": [
           "user_id"
         ],
-        "title": "VerifyEmailResp"
+        "title": "VerifyEmailResp",
+        "description": "VerifyEmailResp API 响应体。\n\n场景：对应端点成功响应 data 字段。"
       },
       "VersionItem": {
         "properties": {
@@ -10514,7 +10675,8 @@
           "artifact_path",
           "created_at"
         ],
-        "title": "VersionItem"
+        "title": "VersionItem",
+        "description": "VersionItem 列表项 DTO。\n\n场景：分页/列表 API 的单条记录结构。"
       },
       "WSEvent": {
         "properties": {
@@ -10573,7 +10735,8 @@
           "attacked",
           "error"
         ],
-        "title": "WSEventType"
+        "title": "WSEventType",
+        "description": "Forge 运行 WebSocket 推送的事件类型。"
       }
     },
     "securitySchemes": {
