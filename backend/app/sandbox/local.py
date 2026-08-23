@@ -26,6 +26,12 @@ class LocalSandbox:
     backend_id = "local"
 
     async def create(self, *, tier: str | None = None) -> SandboxSession:
+        """创建本地临时工作区目录。
+
+        场景：开发联调或无 Docker 环境 fallback。
+        参数：tier - 资源档位（影响超时）。
+        返回：handle 为目录路径的 SandboxSession。
+        """
         workspace = Path(tempfile.mkdtemp(prefix="gf-local-sandbox-"))
         return SandboxSession.new(self.backend_id, tier=tier or "standard", handle=str(workspace))
 
@@ -37,6 +43,12 @@ class LocalSandbox:
         *,
         collect_root: str = ".",
     ) -> BuildResult:
+        """在会话工作区内写入源码、可选构建并采集产物。
+
+        场景：LocalSandbox 主执行路径（无容器隔离）。
+        参数：session、source、build_cmd、collect_root。
+        返回：BuildResult。
+        """
         if session.closed or not session.handle:
             return BuildResult(ok=False, error="sandbox session closed")
         workspace = Path(session.handle)
@@ -49,6 +61,11 @@ class LocalSandbox:
         )
 
     async def destroy(self, session: SandboxSession) -> None:
+        """删除本地工作区并关闭会话。
+
+        场景：oneshot 结束或 HITL 销毁。
+        参数：session - 待清理会话。
+        """
         if session.closed:
             return
         if session.handle:
@@ -79,6 +96,12 @@ class LocalSandbox:
         collect_root: str,
         tier: str | None = None,
     ) -> BuildResult:
+        """在指定工作区执行写入、构建与产物采集（内部复用）。
+
+        场景：execute 与 execute_oneshot 共用逻辑。
+        参数：workspace、source、build_cmd、collect_root、tier。
+        返回：BuildResult。
+        """
         for rel, content in source.items():
             p = resolve_workspace_rel(workspace, rel)
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -114,6 +137,12 @@ class LocalSandbox:
         *,
         tier: str | None = None,
     ) -> tuple[str, str | None]:
+        """在本地子进程执行构建命令并处理超时。
+
+        场景：_execute_in_workspace 有 build_cmd 时。
+        参数：workspace、build_cmd、tier（决定 timeout）。
+        返回：(日志文本, 错误文案或 None)。
+        """
         timeout = float(tier_limits(tier)["timeout_s"])
         try:
             code, logs = await run_local_process(build_cmd, cwd=workspace, timeout_s=timeout)

@@ -135,10 +135,22 @@ _REGISTRY: tuple[SkillMeta, ...] = (
 
 @lru_cache(maxsize=1)
 def list_skill_metas() -> tuple[SkillMeta, ...]:
+    """返回进程内 Skill 元数据注册表（lru_cache）。
+
+    场景：skills router、catalog hash。
+    参数：无。
+    返回：SkillMeta 元组。
+    """
     return _REGISTRY
 
 
 def get_skill_meta(skill_id: str) -> SkillMeta | None:
+    """按 id 查找单个 Skill 元数据。
+
+    场景：skill_bundle_hash、router 加载。
+    参数：skill_id - 如 art/pixel-art。
+    返回：SkillMeta 或 None。
+    """
     for meta in list_skill_metas():
         if meta.id == skill_id:
             return meta
@@ -146,7 +158,12 @@ def get_skill_meta(skill_id: str) -> SkillMeta | None:
 
 
 def skill_bundle_hash(skill_ids: list[str] | tuple[str, ...]) -> str:
-    """Hash selected skill ids + bodies for cache invalidation (P4-ready)."""
+    """对选定 Skill id 及正文计算 SHA256 哈希（缓存失效用）。
+
+    场景：exact cache key 维度。
+    参数：skill_ids - 参与哈希的 skill id 列表。
+    返回：hex 摘要。
+    """
     h = hashlib.sha256()
     for skill_id in sorted(skill_ids):
         meta = get_skill_meta(skill_id)

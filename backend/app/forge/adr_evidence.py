@@ -76,15 +76,33 @@ def collect_adr_evidence() -> list[EvidenceCheck]:
 
 
 def _accept_checklist_path() -> Path:
+    """返回 ADR 验收清单 Markdown 文件路径。
+
+    场景：collect_adr_evidence 读取人工验收项。
+    参数：无。
+    返回：docs/adr/ACCEPT-CHECKLIST.md 的 Path。
+    """
     return Path(__file__).resolve().parents[3] / "docs" / "adr" / "ACCEPT-CHECKLIST.md"
 
 
 def _settings_field_default(name: str) -> object:
+    """读取 Settings 模型字段的默认值。
+
+    场景：evidence 检查 settings 默认配置。
+    参数：name - 字段名。
+    返回：Pydantic model_fields 中的 default。
+    """
     from app.core.config import Settings
 
     return Settings.model_fields[name].default
 
 
 def evidence_all_machine_checks_ok(checks: list[EvidenceCheck] | None = None) -> bool:
+    """判断 ADR 机器可检项是否全部通过。
+
+    场景：CI / 离线 eval 门禁。
+    参数：checks - 可选预收集结果，默认重新 collect。
+    返回：全部 ok 时为 True。
+    """
     rows = checks if checks is not None else collect_adr_evidence()
     return all(c.ok for c in rows)

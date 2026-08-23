@@ -11,14 +11,32 @@ from app.hosting.backend import ArtifactFileMeta
 
 
 def _root() -> Path:
+    """返回本地托管根目录 Path。
+
+    场景：artifact_dir 等路径拼接。
+    参数：无（读 settings.hosting_root）。
+    返回：托管根 Path。
+    """
     return Path(settings.hosting_root)
 
 
 def artifact_dir(game_id: uuid.UUID, version: int) -> Path:
+    """某游戏版本的本地产物目录路径。
+
+    场景：读写产物前定位目录。
+    参数：game_id、version。
+    返回：{hosting_root}/{game_id}/{version}。
+    """
     return _root() / str(game_id) / str(version)
 
 
 def _check_path(base_resolved: Path, rel: str) -> Path:
+    """校验相对路径不穿越 base，返回解析后的绝对 Path。
+
+    场景：读写单个产物文件前。
+    参数：base_resolved - 版本根目录；rel - 相对路径。
+    返回：安全的目标 Path；非法时抛 SANDBOX_FAILED。
+    """
     p = Path(rel)
     if p.is_absolute() or ".." in p.parts:
         raise AppError(ErrorCode.SANDBOX_FAILED, "非法产物路径")
@@ -40,6 +58,12 @@ def _is_within(base_resolved: Path, target: Path) -> bool:
 
 
 def _write_sync(base: Path, files: dict[str, str | bytes], limit: int) -> None:
+    """同步批量写入产物文件并校验总大小上限。
+
+    场景：write_artifact 经 asyncio.to_thread 调用。
+    参数：base - 版本目录；files - 相对路径到内容；limit - 字节上限。
+    返回：无。
+    """
     base.mkdir(parents=True, exist_ok=True)
     base_r = base.resolve()
     total = 0
@@ -53,9 +77,13 @@ def _write_sync(base: Path, files: dict[str, str | bytes], limit: int) -> None:
         target.write_bytes(data)
 
 
-async def write_artifact(
-    game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
-) -> Path:
+async def write_artifact(game_id: uuid.UUID, version: int, files: dict[str, str | bytes]) -> Path:
+    """异步写入版本产物（必须含 index.html）。
+
+    场景：Forge promote 后落盘试玩产物。
+    参数：game_id、version、files。
+    返回：index.html 的绝对 Path。
+    """
     if "index.html" not in files:
         raise AppError(ErrorCode.SANDBOX_FAILED, "产物缺少 index.html")
     base = artifact_dir(game_id, version)
@@ -65,10 +93,22 @@ async def write_artifact(
 
 
 def _prefix_files(prefix: str, files: dict[str, str | bytes]) -> dict[str, str | bytes]:
+    """为产物相对路径加子目录前缀（source/、build/）。
+
+    场景：write_version_layers 合并三层产物。
+    参数：prefix - 子目录名；files - 原始映射。
+    返回：加前缀后的新 dict。
+    """
     return {f"{prefix}/{rel}": content for rel, content in files.items()}
 
 
 def _layer_bytes(files: dict[str, bytes]) -> int:
+    """统计一层产物文件总字节数。
+
+    场景：write_version_layers 校验 source 配额。
+    参数：files - 路径到 bytes。
+    返回：总字节数。
+    """
     return sum(len(v) for v in files.values())
 
 
@@ -97,11 +137,23 @@ async def write_version_layers(
 
 
 def index_path(game_id: uuid.UUID, version: int) -> Path | None:
+    """返回 index.html 路径（存在时）供试玩路由直出。
+
+    场景：hosting routes 解析试玩 URL。
+    参数：game_id、version。
+    返回：Path 或 None。
+    """
     p = artifact_dir(game_id, version) / "index.html"
     return p if p.exists() else None
 
 
 def _read_bytes_sync(base: Path, rel: str) -> bytes | None:
+    """同步读取版本目录下单个文件内容。
+
+    场景：read_bytes 线程池调用。
+    参数：base - 版本根；rel - 相对路径。
+    返回：文件 bytes 或 None。
+    """
     if not base.exists():
         return None
     target = _check_path(base.resolve(), rel)
@@ -109,26 +161,40 @@ def _read_bytes_sync(base: Path, rel: str) -> bytes | None:
 
 
 async def read_bytes(game_id: uuid.UUID, version: int, rel: str) -> bytes | None:
-    """Read a single artifact file without exposing the hosting root to callers."""
+    """异步读取单个产物文件，不向调用方暴露 hosting 根路径。
+
+    场景：下载旁路文件、S3 回源前查本地缓存。
+    参数：game_id、version、rel。
+    返回：文件内容或 None。
+    """
     return await asyncio.to_thread(_read_bytes_sync, artifact_dir(game_id, version), rel)
 
 
 def _write_bytes_sync(base: Path, rel: str, data: bytes) -> None:
-    # 产物目录可能尚未存在（首版截图先于 index.html 落盘的场景不多，但这里不依赖外部保证）。
+    """同步写入单个旁路产物文件（如缩略图）。
+
+    场景：write_bytes 线程池调用。
+    参数：base、rel、data。
+    返回：无。
+    """
     base.mkdir(parents=True, exist_ok=True)
     target = _check_path(base.resolve(), rel)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
 
 
-async def write_bytes(
-    game_id: uuid.UUID, version: int, rel: str, data: bytes
-) -> None:
+async def write_bytes(game_id: uuid.UUID, version: int, rel: str, data: bytes) -> None:
     """写入单个旁路产物文件（如 thumb.png），复用 _check_path 防穿越，不强制 index.html。"""
     await asyncio.to_thread(_write_bytes_sync, artifact_dir(game_id, version), rel, data)
 
 
 def _list_files_sync(base: Path) -> list[ArtifactFileMeta]:
+    """递归列出版本目录下所有文件元信息（防路径穿越）。
+
+    场景：list_files 线程池调用。
+    参数：base - 版本根目录。
+    返回：按 path 排序的 ArtifactFileMeta 列表。
+    """
     if not base.is_dir():
         # 目录不存在（版本未生成/已清理）视为空，不抛错——与空目录一视同仁。
         return []
@@ -148,9 +214,7 @@ def _list_files_sync(base: Path) -> list[ArtifactFileMeta]:
     return metas
 
 
-async def list_files(
-    game_id: uuid.UUID, version: int
-) -> list[ArtifactFileMeta]:
+async def list_files(game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]:
     """列出某版本产物下所有文件（扁平，含相对路径/大小/mime）。
 
     仅供 owner 端点消费；防御性过滤越界文件。目录不存在返回 []。

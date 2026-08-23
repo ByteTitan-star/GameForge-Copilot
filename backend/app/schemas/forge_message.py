@@ -6,6 +6,10 @@ from pydantic import BaseModel
 
 
 class ForgeMessageItem(BaseModel):
+    """ForgeMessageItem 列表项 DTO。
+
+    场景：分页/列表 API 的单条记录结构。"""
+
     message_id: uuid.UUID
     game_id: uuid.UUID
     run_id: uuid.UUID | None = None

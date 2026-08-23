@@ -42,6 +42,11 @@ async def run_local_process(
 
 
 async def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
+    """终止子进程；POSIX 杀整组，Windows 退化为 proc.kill。
+
+    场景：run_local_process 超时时清理残留子进程。
+    参数：proc - 已启动的 asyncio 子进程。
+    """
     if proc.returncode is not None:
         return
     if os.name != "nt" and proc.pid:

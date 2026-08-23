@@ -30,6 +30,13 @@ class OAuthProfile:
 
 
 async def oauth_start(r: redis.Redis, provider: str) -> dict[str, str]:
+    """生成 OAuth 授权 URL 与 state。
+
+    作用：写入 oauth:state 并拼装 GitHub/Google 授权链接。
+    场景：GET /auth/oauth/{provider}/start。
+    参数：r — Redis；provider — github 或 google。
+    返回：含 redirect_url 与 state 的字典。
+    """
     if provider not in _PROVIDERS:
         raise AppError(ErrorCode.VALIDATION_ERROR, "不支持的 OAuth 提供商")
     state = secrets.token_urlsafe(24)
@@ -61,6 +68,13 @@ async def oauth_start(r: redis.Redis, provider: str) -> dict[str, str]:
 
 
 def _callback_url(provider: str) -> str:
+    """构造 OAuth 回调绝对 URL。
+
+    作用：基于 api_public_url 生成 redirect_uri。
+    场景：oauth_start、token 交换。
+    参数：provider — github 或 google。
+    返回：回调 URL 字符串。
+    """
     return f"{settings.api_public_url.rstrip('/')}/api/v1/auth/oauth/{provider}/callback"
 
 
@@ -72,6 +86,13 @@ async def fetch_oauth_profile(provider: str, code: str) -> OAuthProfile:
 
 
 async def _github_profile(code: str) -> OAuthProfile:
+    """用授权码换取 GitHub 用户资料。
+
+    作用：OAuth token 交换后拉取 /user API。
+    场景：fetch_oauth_profile(provider=github)。
+    参数：code — GitHub 授权码。
+    返回：OAuthProfile。
+    """
     async with httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
             "https://github.com/login/oauth/access_token",
@@ -98,6 +119,13 @@ async def _github_profile(code: str) -> OAuthProfile:
 
 
 async def _google_profile(code: str) -> OAuthProfile:
+    """用授权码换取 Google 用户资料。
+
+    作用：OAuth token 交换后拉取 userinfo API。
+    场景：fetch_oauth_profile(provider=google)。
+    参数：code — Google 授权码。
+    返回：OAuthProfile。
+    """
     async with httpx.AsyncClient(timeout=15) as client:
         tok = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -131,6 +159,13 @@ async def oauth_callback(
     code: str,
     state: str,
 ) -> tuple[User, str, str]:
+    """OAuth 回调：关联或创建用户并签发会话。
+
+    作用：校验 state、拉取 profile、绑定/注册后 issue_session。
+    场景：GET /auth/oauth/{provider}/callback。
+    参数：db — 会话；r — Redis；provider — 提供商；code/state — 回调参数。
+    返回：(User, access_token, refresh_token)。
+    """
     saved = await r.getdel(f"oauth:state:{state}")
     if saved != provider:
         raise AppError(ErrorCode.UNAUTHORIZED, "OAuth state 无效")

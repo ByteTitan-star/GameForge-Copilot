@@ -13,12 +13,24 @@ class ArtifactGate:
     qa_ok: bool
 
     def __post_init__(self) -> None:
+        """校验门禁不变量：publishable 须 qa_ok，qa_ok 须 previewable。
+
+        场景：derive_artifact_gate 构造后。
+        参数：无。
+        返回：无；违反时抛 ValueError。
+        """
         if self.publishable and not self.qa_ok:
             raise ValueError("publishable requires qa_ok=True")
         if self.qa_ok and not self.previewable:
             raise ValueError("qa_ok requires previewable=True")
 
     def as_dict(self) -> dict[str, bool]:
+        """序列化为 BUILD_DONE 等事件中的门禁标志 dict。
+
+        场景：derive_artifact_gate 写入 WS 事件。
+        参数：无。
+        返回：四布尔字段的 dict。
+        """
         return asdict(self)
 
 

@@ -18,6 +18,12 @@ async def publish_event(
     event_type: WSEventType,
     payload: dict,
 ) -> None:
+    """组装 WSEvent 并发布到 RabbitMQ topic，同时写入 Redis 环形缓冲。
+
+    场景：graph 节点进度/阶段/HITL 状态推送到前端 WebSocket。
+    参数：run_id - 生成任务 ID；event_type - WS 事件类型；payload - 事件载荷 dict。
+    返回：无。
+    """
     client, owned = await _client()
     try:
         seq = await next_event_seq(client, run_id)

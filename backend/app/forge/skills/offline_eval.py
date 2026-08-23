@@ -151,6 +151,12 @@ def routing_beats_full_injection(report: EvalReport, *, min_reduction: float = 0
 
 
 def _normalize_art(node: str) -> bool:
+    """判断节点是否属于 art 子图范围。
+
+    场景：offline_eval 跨域违规检测。
+    参数：node - 原始节点名。
+    返回：art 相关节点时为 True。
+    """
     return (node or "").strip().lower() in {
         "art",
         "art_options",
@@ -160,20 +166,28 @@ def _normalize_art(node: str) -> bool:
 
 
 def _has_policy_for_node(node: str) -> bool:
+    """判断 catalog 中是否存在应挂载到该节点的 Policy Skill。
+
+    场景：offline_eval policy_coverage 统计。
+    参数：node。
+    返回：存在匹配 policy 时为 True。
+    """
     from app.forge.skills.router import _node_allowed, _normalize_node
 
     node_key = _normalize_node(node)
-    return any(
-        m.kind == "policy" and _node_allowed(m, node_key) for m in list_skill_metas()
-    )
+    return any(m.kind == "policy" and _node_allowed(m, node_key) for m in list_skill_metas())
 
 
 def _full_methodology_count(node: str) -> int:
+    """统计某节点允许的全量 Methodology Skill 数量。
+
+    场景：offline_eval body 压缩率计算。
+    参数：node。
+    返回：候选 methodology 个数。
+    """
     from app.forge.skills.router import _node_allowed, _normalize_node
 
     node_key = _normalize_node(node)
     return sum(
-        1
-        for m in list_skill_metas()
-        if m.kind == "methodology" and _node_allowed(m, node_key)
+        1 for m in list_skill_metas() if m.kind == "methodology" and _node_allowed(m, node_key)
     )

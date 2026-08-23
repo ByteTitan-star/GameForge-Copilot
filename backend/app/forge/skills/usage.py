@@ -14,6 +14,12 @@ async def maybe_publish_skill_usage(
     node: str,
     resolved: ResolvedSkills,
 ) -> None:
+    """将本次节点加载的 Skill id 写入 TOOL_CALL 事件（可观测）。
+
+    场景：graph 节点 resolve skills 后。
+    参数：hints（含 run_id）、node、resolved。
+    返回：无；无 run_id 或空 methodology 时跳过。
+    """
     raw = hints.get("run_id")
     if not raw:
         return

@@ -23,6 +23,12 @@ class PricePerMillion:
 
 
 def price_for(provider: LLMProvider | str, model: str) -> PricePerMillion:
+    """查询公开价表中的每百万 token USD 单价。
+
+    场景：estimate_usd、用量展示。
+    参数：provider、model。
+    返回：PricePerMillion（未知模型用 provider 默认或 1/3）。
+    """
     prov = provider.value if isinstance(provider, LLMProvider) else str(provider)
     key = (prov, model)
     if key in _DEFAULT_TABLE:
@@ -43,5 +49,11 @@ def estimate_usd(
     input_tokens: int,
     output_tokens: int,
 ) -> float:
+    """按公开价表估算 token 用量对应的 USD 成本。
+
+    场景：admin 用量页、账单展示（非计费真相源）。
+    参数：provider、model、input/output token 数。
+    返回：估算美元浮点数。
+    """
     p = price_for(provider, model)
     return (input_tokens * p.input_usd + output_tokens * p.output_usd) / 1_000_000

@@ -9,6 +9,11 @@ from app.models.base import Base
 
 
 class TaskOutbox(Base):
+    """事务性 outbox：与业务同事务写入、异步投递到 MQ。
+
+    场景：execute_run/resume_run 可靠入队。
+    """
+
     __tablename__ = "task_outbox"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

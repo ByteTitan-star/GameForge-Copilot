@@ -16,6 +16,12 @@ class ForgeRuntimeError(Exception):
     error_code: str = "forge_runtime_error"
 
     def __init__(self, message: str = "", *, cause: BaseException | None = None) -> None:
+        """构造 Forge 运行时错误。
+
+        场景：classify_exception 或节点显式抛出。
+        参数：message、cause - 原始异常链。
+        返回：无。
+        """
         super().__init__(message or self.error_code)
         self.cause = cause
 
@@ -79,10 +85,22 @@ class SecurityViolation(FatalError):
 
 
 def is_recoverable(exc: BaseException) -> bool:
+    """判断异常是否属于可恢复类（可 retry / pause）。
+
+    场景：runner 错误处理分支。
+    参数：exc。
+    返回：RecoverableError 子类时为 True。
+    """
     return isinstance(exc, RecoverableError)
 
 
 def is_fatal(exc: BaseException) -> bool:
+    """判断异常是否不可恢复（应 FAILED 终态）。
+
+    场景：runner 错误处理分支。
+    参数：exc。
+    返回：FatalError 子类时为 True。
+    """
     return isinstance(exc, FatalError)
 
 

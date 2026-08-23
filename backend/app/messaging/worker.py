@@ -115,6 +115,11 @@ async def _scheduler_loop() -> None:
 
 
 async def _outbox_loop() -> None:
+    """后台循环：每 2 秒派发 pending outbox 任务。
+
+    场景：worker 进程与 RabbitMQ 消费并行运行。
+    返回：无（常驻协程）。
+    """
     from app.messaging.outbox import dispatch_pending
 
     while True:
@@ -136,6 +141,12 @@ def _message_retry_count(message: AbstractIncomingMessage) -> int:
 
 
 def _merged_headers(message: AbstractIncomingMessage, **extra: Any) -> dict[str, Any]:
+    """合并 RabbitMQ 消息头与额外键值。
+
+    场景：重投/DLQ 时保留原 headers 并写入 retry 计数等。
+    参数：message - 入站消息；extra - 待合并字段。
+    返回：新 headers dict。
+    """
     headers: dict[str, Any] = dict(message.headers or {})
     headers.update(extra)
     return headers
@@ -356,6 +367,11 @@ def main() -> None:
     init_langfuse()
 
     async def _boot() -> None:
+        """Worker 启动：孤儿沙箱清理后进入消息消费循环。
+
+        场景：main 中 asyncio.run 的入口协程。
+        返回：无（长期运行直至进程退出）。
+        """
         from app.sandbox.cleanup import cleanup_orphan_sandbox_resources
 
         try:

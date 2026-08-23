@@ -32,6 +32,10 @@ _CDN_ALLOWLIST = "、".join(sorted(ALLOWED_CDN_HOSTS))
 
 # 引擎 CDN 段：phaser3/pixijs 有钉死 URL；canvas 为空段。LLM 必须照搬，禁止改版本。
 def _engine_cdn_clause(engine_id: str) -> str:
+    """按引擎生成「必须使用钉死 CDN URL」的提示词片段。
+
+    canvas 无外部引擎脚本时返回空串；phaser3/pixijs 返回带精确 script src 的约束段。
+    """
     url = recommended_cdn_url(engine_id)
     if not url:
         return ""
@@ -347,6 +351,7 @@ ART_DETAIL_PROMPT = """
 
 
 def _art_skill_appendix(hints: dict[str, Any] | None = None) -> str:
+    """同步解析 art 节点 Skill 并拼接 policy + methodology 附录。"""
     if not settings.skills_router_enabled:
         return ""
     resolved = resolve_skills_for_node("art", hints=hints or {})
@@ -359,6 +364,7 @@ async def _art_skill_appendix_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步解析 art 节点 Skill；可选 LLM 自选 methodology，并上报 skill 使用事件。"""
     if not settings.skills_router_enabled:
         return ""
     from app.forge.skills import resolve_skills_for_node_async
@@ -372,7 +378,12 @@ async def _art_skill_appendix_async(
 
 
 def build_art_options_prompt(hints: dict[str, Any] | None = None) -> str:
-    """P2/P5：Art options system prompt + Methodology Skill。"""
+    """组装美术方向提案 system prompt（含方法论 Skill 附录）。
+
+    场景：art_options_node 同步路径。
+    参数：hints - 可选技能路由提示。
+    返回：完整 ART_OPTIONS_PROMPT 字符串。
+    """
     appendix = _art_skill_appendix(hints)
     if not appendix:
         return ART_OPTIONS_PROMPT
@@ -384,6 +395,7 @@ async def build_art_options_prompt_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步版美术方向提案 system prompt（含 Skill 附录）。"""
     appendix = await _art_skill_appendix_async(hints, complete=complete)
     if not appendix:
         return ART_OPTIONS_PROMPT
@@ -391,6 +403,7 @@ async def build_art_options_prompt_async(
 
 
 def build_art_options_revise_prompt(hints: dict[str, Any] | None = None) -> str:
+    """根据用户反馈修订美术方向的 system prompt（含 Skill 附录）。"""
     appendix = _art_skill_appendix(hints)
     if not appendix:
         return ART_OPTIONS_REVISE_PROMPT
@@ -402,6 +415,7 @@ async def build_art_options_revise_prompt_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步版修订美术方向 system prompt（含 Skill 附录）。"""
     appendix = await _art_skill_appendix_async(hints, complete=complete)
     if not appendix:
         return ART_OPTIONS_REVISE_PROMPT
@@ -409,6 +423,7 @@ async def build_art_options_revise_prompt_async(
 
 
 def build_art_detail_prompt(hints: dict[str, Any] | None = None) -> str:
+    """生成详细美术实现设计稿的 system prompt（含 Skill 附录）。"""
     appendix = _art_skill_appendix(hints)
     if not appendix:
         return ART_DETAIL_PROMPT
@@ -420,6 +435,7 @@ async def build_art_detail_prompt_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步版详细美术设计稿 system prompt（含 Skill 附录）。"""
     appendix = await _art_skill_appendix_async(hints, complete=complete)
     if not appendix:
         return ART_DETAIL_PROMPT
@@ -472,6 +488,7 @@ async def build_code_prompt_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步拼装代码生成 prompt；可选 LLM 自选 methodology 并上报 skill 使用。"""
     merged = {"engine_id": normalize_engine_id(engine_id), **(hints or {})}
     if settings.skills_router_enabled:
         from app.forge.skills import resolve_skills_for_node, resolve_skills_for_node_async
@@ -492,6 +509,7 @@ async def build_repair_prompt_async(
     *,
     complete: Any | None = None,
 ) -> str:
+    """异步拼装修复工程师 prompt；可选 LLM 自选 methodology 并上报 skill 使用。"""
     merged = {
         "engine_id": normalize_engine_id(engine_id),
         "failure_kind": "product",
@@ -586,6 +604,7 @@ def build_repair_prompt(engine_id: str, hints: dict[str, Any] | None = None) -> 
 
 
 def _build_repair_prompt_routed(engine_id: str, hints: dict[str, Any] | None = None) -> str:
+    """Skill 路由版修复 prompt：Policy 强制 + 所选 methodology + 引擎 CDN。"""
     eid = normalize_engine_id(engine_id)
     merged = {"engine_id": eid, "failure_kind": "product", **(hints or {})}
     resolved = resolve_skills_for_node("repair", hints=merged)

@@ -40,6 +40,13 @@ def _usage_idem_key(
     input_tokens: int,
     output_tokens: int,
 ) -> str:
+    """生成 LLM 用量记账的幂等键。
+
+    作用：对一次补全的输入/输出内容做摘要，避免重复记账。
+    场景：call_llm / call_llm_stream 在 record_usage 前调用。
+    参数：user_id、run_id、system、user_msg、content、input_tokens、output_tokens。
+    返回：side_effect_key 格式的字符串键。
+    """
     digest = hashlib.sha256(
         f"{system}\0{user_msg}\0{content}\0{input_tokens}\0{output_tokens}".encode()
     ).hexdigest()[:24]
@@ -50,6 +57,13 @@ def _usage_idem_key(
 async def _get_config(
     db: AsyncSession, user_id: uuid.UUID, config_id: uuid.UUID | None
 ) -> UserLLMConfig:
+    """按用户与可选 config_id 加载 LLM 配置。
+
+    作用：解析 BYOK 配置行；config_id 为空时取 is_default。
+    场景：call_llm / call_llm_stream 调用前。
+    参数：db 会话、user_id、config_id（可选）。
+    返回：UserLLMConfig；无可用配置抛 LLM_CONFIG_INVALID。
+    """
     stmt = select(UserLLMConfig).where(UserLLMConfig.user_id == user_id)
     if config_id is not None:
         stmt = stmt.where(UserLLMConfig.id == config_id)
@@ -62,6 +76,13 @@ async def _get_config(
 
 
 async def _maybe_quota_alert(db: AsyncSession, r: redis.Redis, user_id: uuid.UUID) -> None:
+    """用户日 token 配额耗尽时发送一次通知。
+
+    作用：配额 remaining≤0 且当日未告警时 notify_user。
+    场景：LLM 调用成功记账后。
+    参数：db、Redis、user_id。
+    返回：None。
+    """
     daily_default, _, rate = await admin_services.get_effective_limits(db)
     _ = rate
     daily = await quota_mod.get_user_daily_limit(r, user_id, daily_default)
@@ -85,7 +106,13 @@ async def _maybe_quota_alert(db: AsyncSession, r: redis.Redis, user_id: uuid.UUI
 
 
 async def _maybe_system_alert(db: AsyncSession, r: redis.Redis) -> None:
-    """系统日用量超阈值 → 通知全体 admin（当日一次）。"""
+    """系统日 token 用量超阈值时通知全体 admin（当日一次）。
+
+    作用：对比 settings.system_daily_token_alert 与系统当日用量。
+    场景：LLM 调用成功记账后。
+    参数：db、Redis。
+    返回：None。
+    """
     sys_u = await get_system_usage(r)
     used = sys_u.today.input_tokens + sys_u.today.output_tokens
     if used < settings.system_daily_token_alert:
@@ -166,6 +193,13 @@ async def call_llm(
     kind: str = "chat",
     max_tokens: int | None = None,
 ) -> tuple[provider.LLMCompletion, LLMProvider]:
+    """用户 BYOK 非流式 LLM 调用门面。
+
+    作用：限流→取配置→解密→熔断检查→complete→记账→配额告警。
+    场景：Forge 图节点、API 直连等业务补全。
+    参数：db、Redis、user_id、config_id、system、user_msg；可选 game_id、run_id、kind、max_tokens。
+    返回：(LLMCompletion, LLMProvider)。
+    """
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
 

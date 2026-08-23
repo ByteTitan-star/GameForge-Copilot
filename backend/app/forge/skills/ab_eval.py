@@ -65,9 +65,7 @@ async def run_quality_lift_ab(
     llm_calls = 0
     for node, hints in cases or _DEFAULT_CASES:
         if use_llm:
-            routed = await resolve_skills_for_node_async(
-                node, hints=hints, complete=complete
-            )
+            routed = await resolve_skills_for_node_async(node, hints=hints, complete=complete)
             llm_calls += 1
             results.append(_case_from_routed(node, routed, llm_used=True))
         else:
@@ -77,6 +75,12 @@ async def run_quality_lift_ab(
 
 
 def _case_from_routed(node: str, routed: Any, *, llm_used: bool = False) -> AbCaseResult:
+    """从 ResolvedSkills 计算单 case 的 body 压缩指标。
+
+    场景：run_mocked_quality_lift_ab / run_quality_lift_ab。
+    参数：node、hints 路由结果 routed、llm_used 标记。
+    返回：AbCaseResult。
+    """
     routed_chars = sum(len(s.body) for s in routed.methodology)
     full_meth = [
         m
@@ -97,6 +101,12 @@ def _case_from_routed(node: str, routed: Any, *, llm_used: bool = False) -> AbCa
 
 
 def _report(results: list[AbCaseResult], *, llm_calls: int) -> AbReport:
+    """汇总 A/B case 列表为 AbReport。
+
+    场景：quality lift eval 结束。
+    参数：results、llm_calls 计数。
+    返回：AbReport。
+    """
     avg = sum(r.reduction for r in results) / len(results) if results else 0.0
     return AbReport(
         cases=tuple(results),

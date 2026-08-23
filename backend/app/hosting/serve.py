@@ -24,6 +24,12 @@ def is_project_artifact(game_id: uuid.UUID, version: int) -> bool:
 
 
 def artifact_csp(game_id: uuid.UUID, version: int) -> str:
+    """按产物类型选择单页或 Vite 多文件 CSP 策略。
+
+    场景：试玩响应 Content-Security-Policy 头。
+    参数：game_id、version。
+    返回：CSP 字符串。
+    """
     if is_project_artifact(game_id, version):
         return build_csp_project()
     return build_csp()
@@ -56,6 +62,12 @@ _SUFFIX_MEDIA_TYPES = {
 
 
 def _media_type(rel: str) -> str:
+    """根据相对路径推断 HTTP Content-Type。
+
+    场景：artifact_file_response 设置 media_type。
+    参数：rel - 产物相对路径。
+    返回：MIME 类型字符串。
+    """
     suffix = Path(rel).suffix.lower()
     if suffix in _SUFFIX_MEDIA_TYPES:
         return _SUFFIX_MEDIA_TYPES[suffix]

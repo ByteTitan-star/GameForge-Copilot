@@ -31,7 +31,13 @@ _TITLE_SEP_RE = re.compile(r"[:：]")
 
 
 def bilingual_title_errors(title: str) -> list[str]:
-    """要求 ``English Name: 中文名``；空列表表示格式合格。"""
+    """校验双语标题格式「English Name: 中文名」。
+
+    作用：检查冒号分隔的英文名（含 Latin）与中文名（含 CJK）。
+    场景：validate_design_doc 校验 title 字段时。
+    参数：title - 待校验标题字符串。
+    返回：错误消息列表；空列表表示合格。
+    """
     text = title.strip()
     if not text:
         return ["title 不能为空"]
@@ -49,6 +55,13 @@ def bilingual_title_errors(title: str) -> list[str]:
 
 
 def _text(value: Any, default: str = "") -> str:
+    """将任意值安全转为去首尾空白的字符串。
+
+    作用：统一 None、数值、字符串等类型的文本提取。
+    场景：coerce_design_doc 归一化各字段时。
+    参数：value - 原始值；default - 空值时的默认串。
+    返回：规范化后的 str。
+    """
     if value is None:
         return default
     if isinstance(value, str):
@@ -59,10 +72,24 @@ def _text(value: Any, default: str = "") -> str:
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
+    """若值为 dict 则返回，否则返回空 dict。
+
+    作用：防御性类型收窄。
+    场景：读取 design_doc 嵌套对象时。
+    参数：value - 任意输入。
+    返回：dict 或 {}。
+    """
     return value if isinstance(value, dict) else {}
 
 
 def _text_list(value: Any) -> list[str]:
+    """将输入规范化为非空字符串列表。
+
+    作用：支持单字符串或列表，过滤空白项。
+    场景：coerce 中处理 controls、core_loop 等列表字段。
+    参数：value - 字符串、列表或其他类型。
+    返回：去重空白后的 str 列表。
+    """
     if isinstance(value, str):
         value = [value]
     if not isinstance(value, list):
@@ -76,12 +103,26 @@ def _text_list(value: Any) -> list[str]:
 
 
 def _dict_list(value: Any) -> list[dict[str, Any]]:
+    """从列表中提取 dict 元素并深拷贝。
+
+    作用：过滤非 dict 项，避免污染原始数据。
+    场景：处理 game_states、entities、level_specs 等。
+    参数：value - 任意输入。
+    返回：dict 列表。
+    """
     if not isinstance(value, list):
         return []
     return [copy.deepcopy(item) for item in value if isinstance(item, dict)]
 
 
 def _empty_doc(title: str) -> dict[str, Any]:
+    """构造 v2 设计稿的默认空模板。
+
+    作用：填充 schema_version、默认引擎与 capability 等占位字段。
+    场景：coerce_design_doc 归一化起点。
+    参数：title - 游戏标题。
+    返回：完整默认结构的 design_doc dict。
+    """
     return {
         "schema_version": SCHEMA_VERSION,
         "title": title or "未命名游戏",
@@ -142,6 +183,13 @@ def _empty_doc(title: str) -> dict[str, Any]:
 
 
 def _decode_json(value: str) -> dict[str, Any] | None:
+    """从 LLM 原始输出中解析 JSON 对象。
+
+    作用：剥离 Markdown 围栏，必要时抽取最外层 {…} 再解析。
+    场景：parse_design_doc 处理模型返回的策划稿文本。
+    参数：value - 原始字符串。
+    返回：解析成功的 dict，失败时 None。
+    """
     text = value.strip()
     if text.startswith("```"):
         first_newline = text.find("\n")
@@ -165,6 +213,13 @@ def _decode_json(value: str) -> dict[str, Any] | None:
 
 
 def _legacy_controls(value: Any) -> list[str]:
+    """将旧版或混合格式的 controls 转为字符串列表。
+
+    作用：兼容字符串、dict（含 action/inputs/touch）等历史形态。
+    场景：coerce_design_doc 归一化 controls 字段。
+    参数：value - 原始 controls 值。
+    返回：人类可读的操作说明列表。
+    """
     if not isinstance(value, list):
         return _text_list(value)
     controls: list[str] = []
@@ -186,6 +241,13 @@ def _legacy_controls(value: Any) -> list[str]:
 
 
 def _legacy_levels(value: Any) -> list[str]:
+    """将旧版或混合格式的 levels 转为关卡名称列表。
+
+    作用：兼容字符串列表与含 name/title/id 的 dict 项。
+    场景：coerce_design_doc 归一化 levels 字段。
+    参数：value - 原始 levels 值。
+    返回：关卡名称字符串列表。
+    """
     if not isinstance(value, list):
         return _text_list(value)
     levels: list[str] = []
@@ -200,7 +262,13 @@ def _legacy_levels(value: Any) -> list[str]:
 
 
 def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
-    """把 v2、旧版四字段设计稿或纯文本安全归一化为 v2 字典。"""
+    """把 v2、旧版四字段设计稿或纯文本安全归一化为 v2 字典。
+
+    作用：解析 JSON、补齐缺省字段、同步 levels 与 level_specs。
+    场景：任意 design_doc 读写、校验、prompt 拼装前的统一入口。
+    参数：value - dict、JSON 字符串或纯文本；fallback_title - 标题回退值。
+    返回：完整 v2 schema 的 design_doc dict。
+    """
     if isinstance(value, str):
         parsed = _decode_json(value)
         source: dict[str, Any] = parsed or {"gameplay": value}
@@ -366,11 +434,24 @@ def coerce_design_doc(value: Any, fallback_title: str = "") -> dict[str, Any]:
 
 
 def parse_design_doc(raw: Any, fallback_title: str = "") -> dict[str, Any]:
-    """解析 LLM 输出；无效 JSON 会保留为旧版 gameplay，供校验器触发重试。"""
+    """解析 LLM 输出的策划稿。
+
+    作用：委托 coerce_design_doc；无效 JSON 时保留为 gameplay 文本供校验重试。
+    场景：plan 节点收到模型原始输出后。
+    参数：raw - 模型输出；fallback_title - 标题回退值。
+    返回：归一化后的 design_doc dict。
+    """
     return coerce_design_doc(raw, fallback_title)
 
 
 def design_doc_to_text(value: Any) -> str:
+    """将设计稿序列化为带缩进的 JSON 文本。
+
+    作用：供 prompt、checkpoint 与 API 传输使用。
+    场景：拼入 LLM user message 或持久化设计稿。
+    参数：value - 任意可 coerce 的设计稿输入。
+    返回：ensure_ascii=False 的 JSON 字符串。
+    """
     title = _text(value.get("title")) if isinstance(value, dict) else ""
     return json.dumps(
         coerce_design_doc(value, title),
@@ -380,7 +461,13 @@ def design_doc_to_text(value: Any) -> str:
 
 
 def validate_design_doc(value: Any) -> list[str]:
-    """返回面向模型的具体校验错误；空列表表示结构可进入用户确认。"""
+    """校验设计稿结构是否满足生成与 HITL 确认要求。
+
+    作用：检查双语标题、规则、状态机、引擎、验收标准等完整性与一致性。
+    场景：plan 自修复循环与用户确认前。
+    参数：value - 任意可 coerce 的设计稿输入。
+    返回：面向模型的具体错误列表；空列表表示可进入用户确认。
+    """
     doc = coerce_design_doc(value)
     errors: list[str] = []
 
@@ -475,7 +562,13 @@ def validate_design_doc(value: Any) -> list[str]:
 
 
 def design_doc_to_readable_text(value: Any) -> str:
-    """把 DesignDoc JSON 转成面向用户的 Markdown 方案文案。"""
+    """把 DesignDoc JSON 转成面向用户的 Markdown 方案文案。
+
+    作用：生成可读策划摘要供流式 LLM_DELTA 展示。
+    场景：策划稿校验通过后 _emit_readable_plan_deltas。
+    参数：value - 任意可 coerce 的设计稿输入。
+    返回：Markdown 格式字符串。
+    """
     doc = coerce_design_doc(value)
     lines: list[str] = [f"# {doc['title'] or '未命名游戏'}", ""]
 

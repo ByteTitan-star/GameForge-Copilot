@@ -15,4 +15,8 @@ class FeedbackReq(BaseModel):
 
 
 class FeedbackResp(BaseModel):
+    """FeedbackResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     submitted: bool = True

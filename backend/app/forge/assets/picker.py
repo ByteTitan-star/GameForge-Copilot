@@ -24,11 +24,22 @@ _MANIFEST = Path(__file__).with_name("manifest.json")
 
 @lru_cache(maxsize=1)
 def _load_manifest() -> list[dict[str, Any]]:
+    """加载内置 CC0 素材 manifest.json（lru_cache）。
+
+    场景：asset_pick 关键词匹配选素材。
+    参数：无。
+    返回：素材行 dict 列表。
+    """
     return json.loads(_MANIFEST.read_text(encoding="utf-8"))
 
 
 def asset_pick(design_doc: str) -> list[PickedAsset]:
-    """Pick assets from built-in manifest by keyword overlap with design doc."""
+    """按设计稿关键词从内置 manifest 挑选素材。
+
+    场景：art 子图注入 data URI 素材到 prompt。
+    参数：design_doc - 策划文本（用于 tag 匹配）。
+    返回：最多 6 个 PickedAsset。
+    """
     text = design_doc.lower()
     picked: list[PickedAsset] = []
     for row in _load_manifest():
@@ -60,6 +71,12 @@ def asset_pick(design_doc: str) -> list[PickedAsset]:
 
 
 def format_assets_for_prompt(assets: list[PickedAsset]) -> str:
+    """将选中素材格式化为 LLM prompt 附录文本。
+
+    场景：execute_code_or_repair 拼接 assets_block。
+    参数：assets - PickedAsset 列表。
+    返回：多行说明字符串。
+    """
     lines = ["可用素材（请在 HTML 内联引用 data URI 或注释标注文件名）："]
     for a in assets:
         lines.append(f"- {a.asset_id} ({a.kind}): {a.filename} — {a.description}")

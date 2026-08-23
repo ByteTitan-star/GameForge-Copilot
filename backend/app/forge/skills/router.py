@@ -70,6 +70,12 @@ async def resolve_skills_for_node_async(
 
 
 def _resolve(node: str, hints: dict[str, Any]) -> ResolvedSkills:
+    """按节点解析 Policy + Methodology Skill 并加载正文。
+
+    场景：resolve_skills_for_node 内部。
+    参数：node、hints（可含 methodology_ids 覆盖）。
+    返回：ResolvedSkills。
+    """
     metas = list_skill_metas()
     node_key = _normalize_node(node)
 
@@ -87,6 +93,12 @@ def _resolve(node: str, hints: dict[str, Any]) -> ResolvedSkills:
 
 
 def _normalize_node(node: str) -> str:
+    """将 graph 节点名映射到 skill catalog 的 node 键。
+
+    场景：resolve / _node_allowed。
+    参数：node - 如 art_options、code_or_repair。
+    返回：art、code、plan 等规范名。
+    """
     n = (node or "").strip().lower()
     aliases = {
         "art_options": "art",
@@ -100,6 +112,12 @@ def _normalize_node(node: str) -> str:
 
 
 def _node_allowed(meta: SkillMeta, node: str) -> bool:
+    """判断 Skill 元数据是否允许挂载到该节点。
+
+    场景：筛选 policy/methodology 候选。
+    参数：meta、node - 规范节点名。
+    返回：meta.nodes 为空或含 node 时为 True。
+    """
     if not meta.nodes:
         return True
     return node in meta.nodes
@@ -108,6 +126,12 @@ def _node_allowed(meta: SkillMeta, node: str) -> bool:
 def _choose_methodology(
     node: str, candidates: list[SkillMeta], hints: dict[str, Any]
 ) -> list[SkillMeta]:
+    """按节点与 hints 从候选 Methodology 中选出最多 3 个。
+
+    场景：_resolve 组装 methodology 列表。
+    参数：node、candidates、hints。
+    返回：选中的 SkillMeta 列表。
+    """
     if not candidates:
         return []
     override = hints.get("methodology_ids")
@@ -133,6 +157,12 @@ _ART_STYLE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 def _choose_art(candidates: list[SkillMeta], hints: dict[str, Any]) -> list[SkillMeta]:
+    """按风格关键词为 art 节点选择 Methodology Skill。
+
+    场景：_choose_methodology node==art。
+    参数：candidates、hints（style/requirement 等）。
+    返回：最多 3 个 SkillMeta。
+    """
     text = " ".join(
         str(hints.get(k, "")) for k in ("style", "modify_text", "requirement", "goal")
     ).lower()
@@ -164,6 +194,12 @@ def _choose_art(candidates: list[SkillMeta], hints: dict[str, Any]) -> list[Skil
 def _choose_code_or_repair(
     node: str, candidates: list[SkillMeta], hints: dict[str, Any]
 ) -> list[SkillMeta]:
+    """按引擎与失败类型为 code/repair/qa 节点选择 Skill。
+
+    场景：_choose_methodology code 分支。
+    参数：node、candidates、hints（engine_id、failure_kind）。
+    返回：匹配的 SkillMeta 列表。
+    """
     engine = str(hints.get("engine_id") or "canvas").strip().lower()
     if engine not in {"canvas", "phaser3", "pixijs"}:
         engine = "canvas"
@@ -189,6 +225,12 @@ def _choose_code_or_repair(
 
 
 def _load(meta: SkillMeta) -> LoadedSkill:
+    """从磁盘加载 Skill 正文并包装为 LoadedSkill。
+
+    场景：_resolve 最终组装。
+    参数：meta - Skill 元数据。
+    返回：含 body 的 LoadedSkill。
+    """
     return LoadedSkill(
         id=meta.id,
         name=meta.name,

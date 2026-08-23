@@ -30,6 +30,13 @@ from app.schemas.llm_config import (
 
 
 def _mask(apikey: str) -> str:
+    """将 apikey 掩码为前3+后3 可见形式。
+
+    作用：API 响应展示，不落明文。
+    场景：LLM 配置列表/详情。
+    参数：apikey 明文。
+    返回：掩码字符串。
+    """
     return f"{apikey[:3]}***{apikey[-3:]}" if len(apikey) > 6 else "***"
 
 
@@ -40,6 +47,13 @@ _RESAVE_APIKEY_HINT = (
 
 
 def _masked_apikey(cfg: UserLLMConfig) -> str:
+    """从配置行解密并掩码 apikey。
+
+    作用：解密失败返回固定失效提示文案。
+    场景：_to_resp 组装响应。
+    参数：cfg 用户 LLM 配置行。
+    返回：掩码或失效提示字符串。
+    """
     plain = crypto.try_decrypt_apikey(cfg.apikey_enc)
     if plain is None:
         return _INVALID_APIKEY_MASK
@@ -47,6 +61,13 @@ def _masked_apikey(cfg: UserLLMConfig) -> str:
 
 
 def _to_resp(cfg: UserLLMConfig) -> LLMConfigResp:
+    """将 ORM 配置行转为 API 响应模型。
+
+    作用：组装 LLMConfigResp（含掩码 key）。
+    场景：列表/创建/更新配置返回。
+    参数：cfg UserLLMConfig。
+    返回：LLMConfigResp。
+    """
     return LLMConfigResp(
         config_id=cfg.id,
         provider=LLMProvider(cfg.provider),
@@ -58,6 +79,13 @@ def _to_resp(cfg: UserLLMConfig) -> LLMConfigResp:
 
 
 async def list_configs(db: AsyncSession, user: User) -> list[LLMConfigResp]:
+    """列出用户全部 LLM 配置。
+
+    作用：按 user_id 查询并转响应模型。
+    场景：GET /llm/configs。
+    参数：db、user。
+    返回：LLMConfigResp 列表。
+    """
     stmt = select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
     rows = (await db.scalars(stmt)).all()
     return [_to_resp(r) for r in rows]
@@ -69,7 +97,13 @@ async def list_models_for_user(
     user: User,
     llm_provider: LLMProvider,
 ) -> list[str]:
-    """取用户该 provider 的配置拉 /models；Redis 短期缓存（docs/05）。"""
+    """拉取用户某 provider 的可用模型列表（带 Redis 缓存）。
+
+    作用：调 provider.list_models；缓存 models:{user}:{provider}。
+    场景：前端模型下拉、配置表单。
+    参数：db、Redis、user、llm_provider。
+    返回：模型 id 字符串列表。
+    """
     cache_key = f"models:{user.id}:{llm_provider.value}"
     cached = await r.get(cache_key)
     if cached:
@@ -94,6 +128,13 @@ async def list_models_for_user(
 
 
 async def _get_owned(db: AsyncSession, user: User, config_id: UUID) -> UserLLMConfig:
+    """加载属于当前用户的配置行。
+
+    作用：ownership 校验；非本人抛 LLM_CONFIG_NOT_FOUND。
+    场景：patch/delete/test 配置前。
+    参数：db、user、config_id。
+    返回：UserLLMConfig。
+    """
     stmt = select(UserLLMConfig).where(
         UserLLMConfig.id == config_id, UserLLMConfig.user_id == user.id
     )
@@ -104,6 +145,13 @@ async def _get_owned(db: AsyncSession, user: User, config_id: UUID) -> UserLLMCo
 
 
 async def _unset_default(db: AsyncSession, user: User) -> None:
+    """取消用户当前默认 LLM 配置标记。
+
+    作用：将 is_default=True 的行批量置 False。
+    场景：设置新默认配置前。
+    参数：db、user。
+    返回：None。
+    """
     await db.execute(
         update(UserLLMConfig)
         .where(UserLLMConfig.user_id == user.id, UserLLMConfig.is_default.is_(True))
@@ -112,7 +160,13 @@ async def _unset_default(db: AsyncSession, user: User) -> None:
 
 
 async def create_config(db: AsyncSession, user: User, req: LLMConfigCreate) -> LLMConfigCreateResp:
-    """连通测试通过才保存（docs/05 §连通性测试）。openai_compat 校验 base_url。"""
+    """创建 LLM 配置（连通测试通过才入库）。
+
+    作用：校验 base_url、test_connectivity、加密 apikey 后写入。
+    场景：POST 创建 BYOK 配置。
+    参数：db、user、req 创建请求体。
+    返回：LLMConfigCreateResp（tested_ok=True）。
+    """
     validate_llm_base_url(req.base_url)
     ok, err = await provider.test_connectivity(req.provider, req.apikey, req.model, req.base_url)
     if not ok:
@@ -136,6 +190,13 @@ async def create_config(db: AsyncSession, user: User, req: LLMConfigCreate) -> L
 async def patch_config(
     db: AsyncSession, user: User, config_id: UUID, req: LLMConfigPatch
 ) -> LLMConfigResp:
+    """部分更新用户 LLM 配置。
+
+    作用：可改 model、is_default；默认切换时先 unset 旧默认。
+    场景：PATCH 配置接口。
+    参数：db、user、config_id、req 补丁体。
+    返回：LLMConfigResp。
+    """
     cfg = await _get_owned(db, user, config_id)
     if req.model is not None:
         cfg.model = req.model
@@ -150,6 +211,13 @@ async def patch_config(
 
 
 async def delete_config(db: AsyncSession, user: User, config_id: UUID) -> LLMConfigDeleteResp:
+    """删除用户 LLM 配置。
+
+    作用：默认配置且仍有其他配置时禁止删除。
+    场景：DELETE 配置接口。
+    参数：db、user、config_id。
+    返回：LLMConfigDeleteResp。
+    """
     cfg = await _get_owned(db, user, config_id)
     if cfg.is_default:
         stmt = select(UserLLMConfig).where(UserLLMConfig.user_id == user.id)
@@ -162,13 +230,26 @@ async def delete_config(db: AsyncSession, user: User, config_id: UUID) -> LLMCon
 
 
 async def test_draft_config(req: LLMConfigTestReq) -> LLMConfigDryTestResp:
-    """保存前探测，不写入数据库。"""
+    """保存前探测 LLM 连通性（不写库）。
+
+    作用：validate_llm_base_url + test_connectivity。
+    场景：创建配置前的干跑测试。
+    参数：req 含 provider/apikey/model/base_url。
+    返回：LLMConfigDryTestResp（tested_ok、error）。
+    """
     validate_llm_base_url(req.base_url)
     ok, err = await provider.test_connectivity(req.provider, req.apikey, req.model, req.base_url)
     return LLMConfigDryTestResp(tested_ok=ok, error=err)
 
 
 async def test_config(db: AsyncSession, user: User, config_id: UUID) -> LLMConfigTestResp:
+    """对已保存配置执行连通测试。
+
+    作用：解密 apikey 后调 test_connectivity。
+    场景：配置管理页「测试连接」。
+    参数：db、user、config_id。
+    返回：LLMConfigTestResp。
+    """
     cfg = await _get_owned(db, user, config_id)
     plain = crypto.try_decrypt_apikey(cfg.apikey_enc)
     if plain is None:

@@ -10,6 +10,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class PublishRequest(Base, TimestampMixin):
+    """游戏版本提交广场发布的审核单。
+
+    场景：publish API、admin 审批/驳回。
+    """
+
     __tablename__ = "publish_requests"
 
     # 每个游戏同时只能有一个「待审核」发布申请（submitted/reviewing）。

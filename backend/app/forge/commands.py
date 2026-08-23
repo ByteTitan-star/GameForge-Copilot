@@ -49,6 +49,12 @@ class NormalizedCommand:
 
 
 def legacy_decision_for(command_type: RunCommandType) -> str:
+    """将 RunCommandType 映射为 legacy decision 字符串。
+
+    场景：``enqueue_resume`` 写入 resume_grant 与 RabbitMQ payload。
+    参数：command_type - RunCommandType 枚举值。
+    返回：如 approve/modify/select_a 等 legacy 决策键。
+    """
     return _COMMAND_TO_LEGACY_DECISION.get(command_type, "approve")
 
 
@@ -61,6 +67,18 @@ def normalize_resume_command(
     feedback: str | None = None,
     command: str | None = None,
 ) -> NormalizedCommand:
+    """将 phase + decision/command 规范化为 RunCommandType 与 payload。
+
+    场景：``enqueue_resume`` 统一 resume 入队边界（ADR-10）。
+    参数：
+        phase - 当前 HITL phase；
+        decision - legacy 决策键；
+        pause_reason - 可选暂停原因；
+        source - 命令来源；
+        feedback - 可选用户反馈文本；
+        command - 可选显式 RunCommandType 值。
+    返回：NormalizedCommand（command_type、source、payload）。
+    """
     phase_key = (phase or "").strip()
     decision_key = (decision or "").strip()
     command_key = (command or "").strip()
@@ -87,6 +105,12 @@ def normalize_resume_command(
 async def bump_control_revision(
     db: AsyncSession, run_id: uuid.UUID, *, expected: int | None = None
 ) -> int:
+    """乐观锁递增 GenerationRun.control_revision。
+
+    场景：每次 resume/cancel 前 CAS 防并发决策冲突。
+    参数：db - 异步数据库会话；run_id - 生成任务 ID；expected - 可选期望当前版本。
+    返回：递增后的 control_revision；版本不匹配时抛 STALE_DECISION。
+    """
     stmt = update(GenerationRun).where(GenerationRun.id == run_id)
     if expected is not None:
         stmt = stmt.where(GenerationRun.control_revision == expected)
@@ -111,6 +135,19 @@ async def insert_run_command(
     idempotency_key: str,
     status: RunCommandStatus = RunCommandStatus.PENDING,
 ) -> RunCommand:
+    """插入一条 RunCommand 记录。
+
+    场景：``enqueue_resume`` / ``record_cancel_command`` 写入命令审计。
+    参数：
+        db - 异步数据库会话；
+        run_id - 生成任务 ID；
+        command_type - 命令类型；
+        source - 来源标识；
+        payload - 命令载荷 dict；
+        idempotency_key - 幂等键；
+        status - 初始状态（默认 PENDING）。
+    返回：新建的 RunCommand ORM 行。
+    """
     row = RunCommand(
         run_id=run_id,
         command_type=command_type.value,
@@ -125,6 +162,12 @@ async def insert_run_command(
 
 
 async def record_cancel_command(db: AsyncSession, run_id: uuid.UUID) -> RunCommand:
+    """记录取消命令并直接标记为 SUCCEEDED。
+
+    场景：用户取消 run 时写入审计记录。
+    参数：db - 异步数据库会话；run_id - 生成任务 ID。
+    返回：已完成的 CANCEL_RUN RunCommand 行。
+    """
     revision = await bump_control_revision(db, run_id)
     now = datetime.now(UTC)
     row = await insert_run_command(
@@ -141,6 +184,12 @@ async def record_cancel_command(db: AsyncSession, run_id: uuid.UUID) -> RunComma
 
 
 async def command_already_succeeded(command_id: uuid.UUID) -> bool:
+    """检查 RunCommand 是否已成功执行（幂等跳过）。
+
+    场景：``resume_run`` worker 入口防 at-least-once 重复执行。
+    参数：command_id - RunCommand ID。
+    返回：status 为 SUCCEEDED 时为 True。
+    """
     from app.core import db as dbmod
 
     async with dbmod.SessionLocal() as db:
@@ -149,6 +198,12 @@ async def command_already_succeeded(command_id: uuid.UUID) -> bool:
 
 
 async def _set_command_succeeded(db: AsyncSession, command_id: uuid.UUID) -> None:
+    """将 RunCommand 状态更新为 SUCCEEDED 并记录完成时间。
+
+    场景：``mark_command_succeeded`` 内部实现。
+    参数：db - 异步数据库会话；command_id - RunCommand ID。
+    返回：无。
+    """
     await db.execute(
         update(RunCommand)
         .where(RunCommand.id == command_id)
@@ -160,6 +215,12 @@ async def _set_command_succeeded(db: AsyncSession, command_id: uuid.UUID) -> Non
 
 
 async def mark_command_succeeded(command_id: uuid.UUID, db: AsyncSession | None = None) -> None:
+    """标记 RunCommand 为已成功执行。
+
+    场景：``resume_run`` worker 完成 resume 流程后更新命令状态。
+    参数：command_id - RunCommand ID；db - 可选 DB 会话（无则自建会话并 commit）。
+    返回：无。
+    """
     if db is not None:
         await _set_command_succeeded(db, command_id)
         return

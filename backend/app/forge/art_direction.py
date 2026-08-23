@@ -7,6 +7,7 @@ from typing import Any
 
 
 def _decode_object(raw: Any) -> dict[str, Any]:
+    """将 LLM 美术输出解析为 dict；支持 Markdown 围栏与首尾杂质剥离。"""
     if isinstance(raw, dict):
         return raw
     if not isinstance(raw, str):
@@ -88,9 +89,7 @@ def parse_art_detail(raw: Any, selected_option: str) -> dict[str, Any]:
     )
     missing = [key for key in required_text if not str(value.get(key) or "").strip()]
     missing += [
-        key
-        for key in required_lists
-        if not isinstance(value.get(key), list) or not value[key]
+        key for key in required_lists if not isinstance(value.get(key), list) or not value[key]
     ]
     if not isinstance(value.get("palette"), dict) or not value["palette"]:
         missing.append("palette")

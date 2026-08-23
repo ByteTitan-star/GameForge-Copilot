@@ -131,16 +131,22 @@ _HEX_ESCAPE_RE = re.compile(r"\\x([0-9a-fA-F]{2})")
 
 
 def _decode_unicode_escapes(text: str) -> str:
-    """Decode \\uXXXX / \\xXX without latin-1, so CJK + escapes can mix."""
+    """解码 \\uXXXX / \\xXX 转义序列（支持 CJK 与转义混排）。
+
+    场景：quick_filter 编码绕过检测。
+    参数：text - 原始字符串。
+    返回：解码后的字符串。
+    """
     out = _UNI_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), text)
     return _HEX_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), out)
 
 
 def _decode_encoded_input(text: str) -> list[str]:
-    """Attempt to decode common encoding bypasses; return decoded variants.
+    """尝试常见编码绕过解码，返回与原文不同的变体列表。
 
-    Each variant is checked independently against regex/lexicon. Only
-    non-trivial decodings (different from original) are returned.
+    场景：quick_filter 对每个变体独立跑黑名单/词库。
+    参数：text - 用户输入或 LLM 输出片段。
+    返回：html/base64/rot13 等解码变体。
     """
     import base64
     import codecs
@@ -192,6 +198,12 @@ class ContentAttacked(Exception):
         evidence: str = "",
         side: str = "output",
     ) -> None:
+        """构造内容审核命中异常。
+
+        场景：guard run_streamed_llm 输入/输出侧命中。
+        参数：category、reason、evidence、side（input/output）。
+        返回：无。
+        """
         self.category = category
         self.reason = reason
         self.evidence = evidence
@@ -260,6 +272,12 @@ class AuditVerdict(BaseModel):
 
     @property
     def is_malicious(self) -> bool:
+        """审核模型输出 1 时视为有害。
+
+        场景：_parse_verdict 解析后。
+        参数：无。
+        返回：verdict == \"1\" 时为 True。
+        """
         return self.verdict == "1"
 
 
@@ -295,6 +313,12 @@ class Guard:
         game_id: str | None = None,
         run_id: str | None = None,
     ) -> None:
+        """构造 Guard 实例（平台预设审核模型）。
+
+        场景：build_guard 在审核开启时。
+        参数：provider、model、apikey、base_url 及 trace 用 id。
+        返回：无。
+        """
         self._provider = provider
         self._model = model
         self._apikey = apikey
@@ -424,9 +448,15 @@ class Guard:
 
 
 class NoopGuard:
-    """审核关闭时的空实现：所有 audit_* 返回 None（永不命中）。"""
+    """审核关闭时的空实现：所有 audit 返回 None（永不命中）。"""
 
     async def audit(self, text: str) -> AuditResult | None:  # noqa: ARG002
+        """空审核：始终放行。
+
+        场景：audit_enabled=False 或无可用的审核模型。
+        参数：text - 被忽略。
+        返回：恒为 None。
+        """
         return None
 
 

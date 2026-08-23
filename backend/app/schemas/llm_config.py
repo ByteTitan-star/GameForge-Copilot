@@ -6,6 +6,10 @@ from app.enums import LLMProvider
 
 
 class LLMConfigCreate(BaseModel):
+    """LLMConfigCreate 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     provider: LLMProvider
     model: str
     apikey: str
@@ -23,11 +27,19 @@ class LLMConfigTestReq(BaseModel):
 
 
 class LLMConfigPatch(BaseModel):
+    """LLMConfigPatch 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     model: str | None = None
     is_default: bool | None = None
 
 
 class LLMConfigResp(BaseModel):
+    """LLMConfigResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     config_id: uuid.UUID
     provider: LLMProvider
     model: str
@@ -37,20 +49,36 @@ class LLMConfigResp(BaseModel):
 
 
 class LLMConfigCreateResp(LLMConfigResp):
+    """LLMConfigCreateResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     tested_ok: bool
 
 
 class LLMConfigTestResp(BaseModel):
+    """LLMConfigTestResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     config_id: uuid.UUID
     tested_ok: bool
     error: str | None = None
 
 
 class LLMConfigDryTestResp(BaseModel):
+    """LLMConfigDryTestResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     tested_ok: bool
     error: str | None = None
 
 
 class LLMConfigDeleteResp(BaseModel):
+    """LLMConfigDeleteResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     config_id: uuid.UUID
     deleted: bool = True

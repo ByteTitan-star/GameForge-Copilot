@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # 匹配时剔除的干扰字符（保留 CJK / 字母数字 / 常见连接语义外的噪声）
-_NOISE = frozenset(" \t\r\n　*.-_/\\|~`!@#$%^&+=<>?\"'，。、；：""''【】（）[]{}…·•")
+_NOISE = frozenset(" \t\r\n　*.-_/\\|~`!@#$%^&+=<>?\"'，。、；：''【】（）[]{}…·•")
 
 
 def _to_halfwidth(ch: str) -> str:

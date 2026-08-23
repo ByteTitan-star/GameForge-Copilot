@@ -13,6 +13,13 @@ log = logging.getLogger(__name__)
 
 
 def embedding_configured() -> bool:
+    """检查 Embedding 服务是否已完整配置。
+
+    作用：校验 enabled、apikey、base_url、model 均非空。
+    场景：embed_texts 调用前快速判断。
+    参数：无。
+    返回：已配置为 True，否则 False。
+    """
     return bool(
         settings.embedding_enabled
         and settings.embedding_apikey.strip()
@@ -22,7 +29,13 @@ def embedding_configured() -> bool:
 
 
 async def embed_texts(texts: Sequence[str]) -> list[list[float]] | None:
-    """批量 embed；未配置或失败返回 None（调用方视为 semantic miss）。"""
+    """批量调用 OpenAI 兼容 Embedding API。
+
+    作用：POST /embeddings 并解析向量列表。
+    场景：语义检索、记忆摘要等；未配置或失败时调用方视为 miss。
+    参数：texts 字符串序列（空串会被过滤）。
+    返回：与输入等长的 float 向量列表；失败或未配置返回 None。
+    """
     if not embedding_configured():
         return None
     cleaned = [t.strip() for t in texts if isinstance(t, str) and t.strip()]
@@ -58,6 +71,13 @@ async def embed_texts(texts: Sequence[str]) -> list[list[float]] | None:
 
 
 async def embed_one(text: str) -> list[float] | None:
+    """对单条文本做 Embedding。
+
+    作用：封装 embed_texts([text]) 取首向量。
+    场景：单条查询向量生成。
+    参数：text 待嵌入文本。
+    返回：float 向量或 None。
+    """
     rows = await embed_texts([text])
     if not rows:
         return None

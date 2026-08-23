@@ -28,6 +28,10 @@ class TierSignals:
 
 
 def clear_tier_telemetry_for_tests() -> None:
+    """清空进程内 tier 执行结果环形缓冲。
+
+    场景：pytest teardown 隔离测试间 telemetry。
+    """
     _OUTCOMES.clear()
 
 
@@ -46,7 +50,7 @@ def record_sandbox_outcome(
 
         status = "ok" if ok else "fail"
         SANDBOX_TIER_RUNS.labels(backend or "unknown", tier or "standard", status).inc()
-    except Exception:  # noqa: BLE001 — metrics 不可用时不影响主路径
+    except Exception:  # noqa: BLE001 — metrics 不可用时不影响主路径  # nosec B110
         pass
 
 
@@ -104,6 +108,11 @@ def resolve_create_tier(
 
 
 def _recent_resource_pressure() -> bool:
+    """近期窗口内是否出现 OOM/超时等资源压力信号。
+
+    场景：recommend_tier 决定是否升级到 heavy。
+    返回：最近 16 条失败中含升级标记时为 True。
+    """
     if not _OUTCOMES:
         return False
     window = list(_OUTCOMES)[-16:]
@@ -117,11 +126,22 @@ def _recent_resource_pressure() -> bool:
 
 
 def _source_bytes(source: dict[str, str] | None) -> int:
+    """统计源码字典的 UTF-8 总字节数。
+
+    场景：recommend_tier 按体量选档。
+    参数：source - 相对路径到内容的映射。
+    返回：总字节数，空输入为 0。
+    """
     if not source:
         return 0
     return sum(len(v.encode("utf-8")) for v in source.values())
 
 
 def _normalize(tier: str | None) -> str:
+    """将档位字符串规范为 KNOWN_TIERS 之一。
+
+    参数：tier - 原始档位名。
+    返回：lite/standard/heavy，未知时 standard。
+    """
     key = (tier or "standard").strip().lower()
     return key if key in KNOWN_TIERS else "standard"

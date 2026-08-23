@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class PasswordResetToken(Base, TimestampMixin):
+    """密码重置链接 token（仅存哈希）。
+
+    场景：request_password_reset / confirm_password_reset。
+    """
+
     __tablename__ = "password_reset_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

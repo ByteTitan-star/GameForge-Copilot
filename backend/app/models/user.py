@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class User(Base, TimestampMixin):
+    """平台用户账号（邮箱登录、OAuth、角色与创作者资料）。
+
+    场景：认证、配额、游戏 owner、admin 操作主体。
+    """
+
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

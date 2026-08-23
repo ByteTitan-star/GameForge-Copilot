@@ -48,6 +48,12 @@ def observe_run(
 
 @contextmanager
 def observe_phase(phase: str) -> Iterator[Any]:
+    """Langfuse span 包装 Forge 阶段（plan/code/qa 等）。
+
+    场景：各 graph 节点 with observe_phase(...)。
+    参数：phase - 阶段名。
+    返回：context manager，yield span。
+    """
     with (
         observe_span(f"phase:{phase}") as span,
         propagate_trace_attrs(tags=["forge", f"phase:{phase}"]),

@@ -25,7 +25,13 @@ async def submit_feedback(
     ip: str,
     req: FeedbackReq,
 ) -> FeedbackResp:
-    """提交反馈：代发一封邮件给管理员。run 必须属于当前用户。"""
+    """提交用户反馈并代发邮件给管理员。
+
+    作用：限流 → 校验 run 归属 → 拼装正文 → 入队通知邮件。
+    场景：forge 失败时「联系管理员」入口。
+    参数：db/r — 存储；user — 提交者；ip — 客户端 IP（限流）；req — 反馈体。
+    返回：FeedbackResp(submitted=True)；run 不可见 404，限流 429。
+    """
     # 限流：发邮件是可滥用/烧钱操作，按 user+ip 滑动窗口（与 auth 端点同档）。
     await check_rate_limit(
         r, f"rl:feedback:{user.id}:{ip}", settings.default_rate_limit_per_min, 60
@@ -44,7 +50,13 @@ async def submit_feedback(
 
 
 def _build_body(user: User, run: object, req: FeedbackReq) -> str:
-    """拼纯文本邮件正文：用户标识 + run 上下文 + 可选错误摘要 + 用户留言。"""
+    """拼装反馈邮件纯文本正文。
+
+    作用：组合用户标识、run 上下文、可选错误摘要与用户留言。
+    场景：submit_feedback 入队邮件前调用。
+    参数：user — 提交者；run — 关联 generation_run；req — 反馈请求体。
+    返回：多行纯文本字符串。
+    """
     lines: list[str] = [
         f"用户 ID：{user.id}",
         f"Run ID：{run.id}",

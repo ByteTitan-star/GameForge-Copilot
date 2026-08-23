@@ -25,7 +25,12 @@ _PACKAGE_MANAGER_RE = re.compile(r"^pnpm@\d+(\.\d+)*$")
 
 
 def sanitize_package_manager_version(package_manager: str) -> str | None:
-    """Return pnpm version only when packageManager matches ADR-07 whitelist."""
+    """从 packageManager 字段提取白名单内的 pnpm 版本号。
+
+    场景：manifest 校验 ADR-07 packageManager 约束。
+    参数：package_manager - 如 pnpm@11.21.0。
+    返回：版本字符串或 None（格式不符）。
+    """
     pm = (package_manager or "").strip()
     if not _PACKAGE_MANAGER_RE.fullmatch(pm):
         return None
@@ -41,6 +46,12 @@ class BuilderRunResult:
 
 
 def resolve_store_path(raw: str | None = None) -> Path:
+    """解析并确保 pnpm store 目录存在。
+
+    场景：DockerBuilder/LocalBuilder 初始化 bind mount。
+    参数：raw - 可选路径，默认 settings.pnpm_store_path。
+    返回：绝对路径 Path。
+    """
     path = Path(raw or settings.pnpm_store_path)
     if not path.is_absolute():
         path = Path.cwd() / path
@@ -55,6 +66,12 @@ def _ensure_bind_mount_permissions(path: Path, *, recursive: bool = True) -> Non
     import stat
 
     def _chmod(target: Path) -> None:
+        """为单个路径补全读写权限（保留可执行位）。
+
+        场景：_ensure_bind_mount_permissions 递归 chmod。
+        参数：target — 文件或目录路径。
+        返回：无。
+        """
         try:
             current = target.stat().st_mode
         except OSError:
@@ -103,6 +120,12 @@ def corepack_activate_shell(workspace: Path) -> str:
 
 
 def pnpm_setup_shell(*, store_dir: str = "/pnpm/store", workspace: Path | None = None) -> str:
+    """生成 pnpm registry 与 store-dir 配置 shell 片段。
+
+    场景：builder 容器/本地执行 install 前环境准备。
+    参数：store_dir - store 挂载路径；workspace - 可选，用于设置 cache-dir。
+    返回：可拼入 sh -c 的配置命令串。
+    """
     prefix = corepack_activate_shell(workspace) if workspace else ""
     pnpm = pnpm_cli()
     registry = settings.npm_registry
@@ -141,6 +164,12 @@ def offline_install_shell(setup: str) -> str:
 
 
 def prepare_install_shell(setup: str) -> str:
+    """生成在线 lockfile 校验与 fetch 的 shell 片段。
+
+    场景：Dependency Prepare 阶段（在线环境）。
+    参数：setup - pnpm_setup_shell 等前置配置。
+    返回：含 install --lockfile-only 与 fetch 的命令串。
+    """
     pnpm = pnpm_cli()
     return f"{setup} && {pnpm} install --lockfile-only && {pnpm} fetch"
 
@@ -159,6 +188,12 @@ def pin_docker_pnpm(script: str) -> str:
 
 
 def _shell_script(cmd: Sequence[str]) -> str | None:
+    """从 ``sh -c`` 命令列表提取内联脚本正文。
+
+    场景：DockerBuilder/LocalBuilder 判断是否为 shell 模式。
+    参数：cmd - 命令 argv 序列。
+    返回：脚本字符串，非 sh -c 形式时返回 None。
+    """
     parts = list(cmd)
     if len(parts) >= 3 and parts[0] == "sh" and parts[1] == "-c":
         return parts[2]
@@ -169,6 +204,10 @@ class DockerBuilder:
     """在 gameforge-builder 镜像中执行 pnpm 命令（§9）。"""
 
     def __init__(self, image: str | None = None, store_path: str | None = None) -> None:
+        """初始化 Docker 构建器。
+
+        参数：image - builder 镜像；store_path - pnpm store 宿主路径。
+        """
         self.image = image or settings.builder_image
         self.store_path = resolve_store_path(store_path)
 
@@ -181,6 +220,12 @@ class DockerBuilder:
         store_readonly: bool = True,
         timeout_s: int | None = None,
     ) -> BuilderRunResult:
+        """在 gameforge-builder 容器中执行构建命令。
+
+        场景：Forge 依赖安装与 Vite build。
+        参数：workspace - 工作区；cmd - 命令；network_mode/store_readonly/timeout_s - 容器选项。
+        返回：BuilderRunResult（含日志与退出状态）。
+        """
         timeout = timeout_s or settings.builder_timeout_s
         _ensure_bind_mount_permissions(workspace.resolve())
         # 勿递归 chmod store 内包文件，否则会剥掉 esbuild 等二进制的 +x
@@ -256,6 +301,10 @@ class LocalBuilder:
     """本地 pnpm 构建（§24 开发 fallback，无容器隔离）。"""
 
     def __init__(self, store_path: str | None = None) -> None:
+        """初始化本地 pnpm 构建器（无容器隔离）。
+
+        参数：store_path - pnpm store 路径。
+        """
         self.store_path = resolve_store_path(store_path)
 
     async def run(
@@ -267,6 +316,12 @@ class LocalBuilder:
         store_readonly: bool = True,  # noqa: ARG002
         timeout_s: int | None = None,
     ) -> BuilderRunResult:
+        """在宿主进程执行 pnpm 构建（开发 fallback）。
+
+        场景：settings.builder_backend != docker 时。
+        参数：workspace、cmd、timeout_s 等同 DockerBuilder.run。
+        返回：BuilderRunResult。
+        """
         timeout = timeout_s or settings.builder_timeout_s
         env = os.environ.copy()
         env["npm_config_registry"] = settings.npm_registry
@@ -293,6 +348,11 @@ class LocalBuilder:
 
 
 def get_builder() -> DockerBuilder | LocalBuilder:
+    """按 settings.builder_backend 返回 Docker 或本地 Builder 实例。
+
+    场景：Forge build 入口选择构建后端。
+    返回：DockerBuilder 或 LocalBuilder。
+    """
     if settings.builder_backend == "docker":
         return DockerBuilder()
     return LocalBuilder()
@@ -313,4 +373,9 @@ def prepare_cache_key(workspace: Path, profile: BuildProfile) -> str:
 
 
 def write_build_profile(workspace: Path, profile: BuildProfile) -> None:
+    """将 BuildProfile 序列化写入工作区 build-profile.json。
+
+    场景：构建前落盘 toolchain/catalog 版本供审计与缓存 key。
+    参数：workspace - 目标目录；profile - 构建配置。
+    """
     (workspace / "build-profile.json").write_text(profile.to_json(), encoding="utf-8")

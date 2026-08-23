@@ -70,6 +70,13 @@ ART_REGENERATE = Counter(
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """采集 HTTP 请求延迟与状态码指标。
+
+        作用：对非 /metrics 请求计时并递增 Prometheus 计数器。
+        场景：作为 Starlette 中间件挂载后，每个入站请求自动执行。
+        参数：request - 当前 HTTP 请求；call_next - 下游处理链。
+        返回：下游响应对象。
+        """
         if request.url.path == "/metrics":
             return await call_next(request)
         path = request.url.path
@@ -83,6 +90,13 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
 
 def _normalize_path(path: str) -> str:
+    """将 URL 路径中的动态段替换为占位符以降低指标基数。
+
+    作用：把 UUID 段替换为 {id}、纯数字段替换为 {n}。
+    场景：Prometheus 打点前规范化 request.url.path。
+    参数：path - 原始 URL 路径。
+    返回：用于指标标签的规范化路径字符串。
+    """
     parts = []
     for p in path.split("/"):
         if not p:
@@ -97,8 +111,22 @@ def _normalize_path(path: str) -> str:
 
 
 def register_metrics(app: FastAPI) -> None:
+    """注册 Prometheus 中间件与 /metrics 抓取端点。
+
+    作用：挂载请求指标采集中间件并暴露 metrics 路由。
+    场景：FastAPI 应用启动装配时调用一次。
+    参数：app - FastAPI 应用实例。
+    返回：无。
+    """
     app.add_middleware(PrometheusMiddleware)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics() -> Response:
+        """返回 Prometheus 文本格式的指标快照。
+
+        作用：序列化当前进程内已注册的 Counter/Histogram。
+        场景：运维或 Prometheus 抓取 GET /metrics 时调用。
+        参数：无。
+        返回：content-type 为 Prometheus 标准的 HTTP 响应。
+        """
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

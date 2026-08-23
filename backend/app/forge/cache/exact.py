@@ -47,6 +47,12 @@ POLICY_VERSION = "v1"
 
 
 def is_cacheable_node(node: str) -> bool:
+    """判断 Forge 节点是否允许 exact/semantic 缓存。
+
+    场景：exact_cache_get/set、semantic 入口。
+    参数：node - 节点名。
+    返回：在 ALLOWLIST 且不在 FORBIDDEN 时为 True。
+    """
     n = (node or "").strip()
     if n in FORBIDDEN:
         return False
@@ -63,7 +69,12 @@ def build_exact_cache_key(
     skill_bundle_hash: str = "",
     preference_revision: str | None = None,
 ) -> str:
-    """Cache key：node + input_hash + model + prompt/policy/skill（+ optional pref）。"""
+    """构造 Redis exact cache 键（含 input 哈希与版本维度）。
+
+    场景：exact_cache_get/set。
+    参数：node、input_payload、model、版本与 skill 哈希等。
+    返回：forge:exact:... 格式键名。
+    """
     raw = json.dumps(input_payload, ensure_ascii=False, sort_keys=True, default=str)
     input_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
     parts = [
@@ -89,6 +100,12 @@ async def exact_cache_get(
     skill_bundle_hash: str = "",
     preference_revision: str | None = None,
 ) -> Any | None:
+    """从 Redis 读取 exact cache 命中值。
+
+    场景：routers._lookup_caches。
+    参数：r、node、input_payload 等键维度。
+    返回：反序列化后的缓存值或 None。
+    """
     if not settings.exact_cache_enabled or not is_cacheable_node(node):
         return None
     key = build_exact_cache_key(

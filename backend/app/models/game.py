@@ -10,6 +10,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class Game(Base, TimestampMixin):
+    """用户创建的游戏项目（草稿/发布态、版本与试玩统计）。
+
+    场景：Forge 生成、试玩路由、广场展示与发布审核。
+    """
+
     __tablename__ = "games"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

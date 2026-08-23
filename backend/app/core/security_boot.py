@@ -11,7 +11,13 @@ DEFAULT_JWT_SECRET = "dev-secret-change-me-to-a-32-byte-random-string"  # nosec 
 
 
 def assert_production_secrets(settings: Settings) -> None:
-    """Refuse to boot outside development with a default or short JWT secret."""
+    """校验生产环境 JWT 密钥是否安全。
+
+    作用：非 development 环境下拒绝使用默认或过短的 jwt_secret 启动。
+    场景：应用启动时调用，防止生产环境误用开发默认密钥。
+    参数：settings - 全局配置实例。
+    返回：无；校验失败时抛出 RuntimeError。
+    """
     if settings.env == "development":
         return
     secret = (settings.jwt_secret or "").strip()

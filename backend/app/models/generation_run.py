@@ -10,7 +10,13 @@ from app.models.base import Base, TimestampMixin
 
 
 class GenerationRun(Base, TimestampMixin):
+    """单次 Forge 生成任务（plan→art→code→qa 流水线实例）。
+
+    场景：worker 执行、WS 进度、HITL 暂停与恢复。
+    """
+
     __tablename__ = "generation_runs"
+
     __table_args__ = (
         UniqueConstraint("user_id", "client_request_id", name="uq_generation_run_user_request"),
     )

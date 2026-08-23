@@ -7,9 +7,7 @@ from typing import Any
 from app.sandbox.base import SandboxBackend, SandboxSession
 
 
-async def destroy_for_hitl(
-    backend: SandboxBackend, session: SandboxSession
-) -> dict[str, Any]:
+async def destroy_for_hitl(backend: SandboxBackend, session: SandboxSession) -> dict[str, Any]:
     """暂停前销毁沙箱会话，避免 HITL 期间计费/泄漏。
 
     返回可写入 checkpoint 的元数据（不含可执行 handle）。
@@ -24,9 +22,7 @@ async def destroy_for_hitl(
     return meta
 
 
-async def restore_after_hitl(
-    backend: SandboxBackend, *, tier: str | None = None
-) -> SandboxSession:
+async def restore_after_hitl(backend: SandboxBackend, *, tier: str | None = None) -> SandboxSession:
     """HITL 恢复后新建沙箱会话（本仓库不强制跨等待 snapshot）。"""
     return await backend.create(tier=tier)
 

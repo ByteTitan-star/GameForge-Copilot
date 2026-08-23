@@ -41,6 +41,12 @@ NODE_EXECUTION_POLICIES: dict[str, NodeExecutionPolicy] = {
 
 
 def resolve_node_run_timeout(node: str) -> float:
+    """计算 LangGraph 节点墙钟超时秒数。
+
+    场景：langgraph_timeout_policy。
+    参数：node - 图节点名。
+    返回：run_timeout 秒（含 LLM 与 build 预算）。
+    """
     policy = NODE_EXECUTION_POLICIES[node]
     if policy.fixed_run_timeout_s is not None:
         return float(policy.fixed_run_timeout_s)
@@ -62,6 +68,12 @@ def resolve_node_run_timeout(node: str) -> float:
 
 
 def langgraph_timeout_policy(node: str) -> TimeoutPolicy:
+    """为节点生成 LangGraph TimeoutPolicy。
+
+    场景：graph._build_graph 注册节点时。
+    参数：node。
+    返回：含 run_timeout 与可选 idle_timeout 的策略。
+    """
     policy = NODE_EXECUTION_POLICIES[node]
     run_timeout = resolve_node_run_timeout(node)
     if policy.idle_timeout_s is not None:
@@ -73,13 +85,24 @@ def langgraph_timeout_policy(node: str) -> TimeoutPolicy:
 
 
 def _default_retry_on(exc: Exception) -> bool:
-    """Exclude business-terminal errors from LangGraph node retries (ADR-09)."""
+    """LangGraph 节点重试谓词：业务终态错误不重试。
+
+    场景：langgraph_retry_policy。
+    参数：exc - 节点抛出的异常。
+    返回：可重试时为 True。
+    """
     if isinstance(exc, AppError):
         return False
     return type(exc).__name__ not in {"ContentAttacked", "RunFinalized"}
 
 
 def langgraph_retry_policy(node: str) -> RetryPolicy:
+    """为节点生成 LangGraph RetryPolicy（max_attempts + retry_on）。
+
+    场景：graph._build_graph 注册节点时。
+    参数：node。
+    返回：RetryPolicy 实例。
+    """
     policy = NODE_EXECUTION_POLICIES[node]
     return RetryPolicy(
         max_attempts=max(1, policy.max_attempts),

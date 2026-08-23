@@ -11,7 +11,13 @@ from app.models.base import Base
 
 
 class UserPreference(Base):
+    """用户长期偏好（显式设置，按 category/key 存储）。
+
+    场景：preferences API、Memory 显式偏好注入。
+    """
+
     __tablename__ = "user_preferences"
+
     __table_args__ = (
         UniqueConstraint("user_id", "category", "key", name="uq_user_pref_user_cat_key"),
         Index("ix_user_preferences_user_status", "user_id", "status"),
@@ -27,9 +33,7 @@ class UserPreference(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="explicit")
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

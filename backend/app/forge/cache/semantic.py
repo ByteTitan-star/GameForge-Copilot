@@ -27,6 +27,12 @@ def semantic_direct_hit_allowed() -> bool:
 
 
 def normalize_query_text(query: Any) -> str:
+    """将缓存查询规范为可嵌入的字符串（str strip 或 JSON 序列化）。
+
+    场景：semantic_cache_lookup/store。
+    参数：query - 任意可缓存输入。
+    返回：规范化查询文本。
+    """
     if isinstance(query, str):
         return query.strip()
     return json.dumps(query, ensure_ascii=False, sort_keys=True, default=str)
@@ -138,6 +144,12 @@ async def semantic_shadow_record(
 
 
 def _parse_result_meta(meta: dict[str, Any]) -> Any | None:
+    """从 Pinecone metadata 解析缓存 result 字段。
+
+    场景：semantic_cache_lookup 命中后。
+    参数：meta - 向量元数据。
+    返回：反序列化后的 result 或 None。
+    """
     raw = meta.get("result")
     if raw is None:
         return None
@@ -198,6 +210,12 @@ async def _confirm_soft_hit(
 
 
 def _confirm_llm_cfg() -> tuple[str, str, str, str]:
+    """读取软命中确认用 LLM 的 provider/model/apikey/base_url。
+
+    场景：_confirm_soft_hit。
+    参数：无（读 settings，semantic_confirm 优先于 preference_extract）。
+    返回：四元组配置。
+    """
     if settings.semantic_confirm_model.strip():
         return (
             settings.semantic_confirm_provider,
@@ -215,6 +233,12 @@ def _confirm_llm_cfg() -> tuple[str, str, str, str]:
 
 
 def _parse_confirm_content(content: str) -> Any | None:
+    """解析确认 LLM 返回的 {\"ok\":true,\"result\":...} JSON。
+
+    场景：_confirm_soft_hit 成功后。
+    参数：content - LLM 原始输出。
+    返回：result 字段或 None（未确认）。
+    """
     text = content.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -230,5 +254,11 @@ def _parse_confirm_content(content: str) -> Any | None:
 
 
 def _hash_payload(value: Any) -> str:
+    """对任意 payload 做确定性 SHA256 截断哈希。
+
+    场景：semantic_shadow_record 记录 query/output 指纹。
+    参数：value - 可 JSON 序列化对象。
+    返回：24 字符 hex。
+    """
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]

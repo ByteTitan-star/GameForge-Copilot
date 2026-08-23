@@ -44,6 +44,12 @@ def _evidence_block(
     console_logs: list[str],
     source_excerpt: str,
 ) -> str:
+    """拼装试玩错误、控制台与源码摘录的诊断证据块。
+
+    场景：diagnose_playtest_failure 构造 user prompt。
+    参数：errors、console_logs、source_excerpt。
+    返回：格式化多段文本。
+    """
     return (
         "【自动试玩错误】\n"
         f"{json.dumps(errors, ensure_ascii=False, indent=2)}\n\n"

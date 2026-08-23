@@ -24,11 +24,24 @@ _AUDIT_LLM_KEY = "audit_llm"
 
 
 def _mask_apikey(apikey: str) -> str:
+    """将 API Key 脱敏为前 3 + *** + 后 3 位。
+
+    作用：避免在 admin 设置页回显完整密钥。
+    场景：get_audit_llm_settings_view 构造 AdminAuditLlmSettings 时调用。
+    参数：apikey - 明文 API Key。
+    返回：脱敏后的字符串；长度 ≤6 时返回 "***"。
+    """
     return f"{apikey[:3]}***{apikey[-3:]}" if len(apikey) > 6 else "***"
 
 
 async def get_admin_contact_email(db: AsyncSession) -> str:
-    """禁用账号登录提示中的管理员邮箱：DB 设置 > 环境变量 > 首个可用管理员。"""
+    """解析管理员联系邮箱（多级回退）。
+
+    作用：返回用于禁用账号提示、反馈邮件等场景的管理员邮箱。
+    场景：disabled_user_message、submit_feedback、get_settings 等需要联系管理员时调用。
+    参数：db - 异步数据库会话。
+    返回：邮箱字符串；均无配置时回退 "admin@example.com"。
+    """
     row = await db.get(SystemSetting, _GENERAL_KEY)
     if row is not None:
         contact = (row.value or {}).get("admin_contact_email", "").strip()
@@ -43,15 +56,24 @@ async def get_admin_contact_email(db: AsyncSession) -> str:
 
 
 async def disabled_user_message(db: AsyncSession) -> str:
+    """生成禁用账号登录时的用户提示文案。
+
+    作用：拼接包含管理员邮箱的违规解封说明。
+    场景：auth 登录校验发现 user.disabled 时返回给前端。
+    参数：db - 异步数据库会话。
+    返回：完整提示字符串。
+    """
     contact = await get_admin_contact_email(db)
     return f"当前账号已违规，请联系管理员<{contact}>申请解封"
 
 
 async def get_audit_llm_config(db: AsyncSession) -> dict:
-    """审核模型生效配置（明文 key）：DB 覆盖优先，逐字段回退 env。
+    """读取审核模型生效配置（含明文 apikey）。
 
-    被 guard.build_guard（worker 侧）和 admin 测试端点共用；guard 侧调用若
-    DB 异常需自行 try/except 回退纯 env。
+    作用：合并 DB system_settings 与 env 默认值，解密 apikey_enc。
+    场景：guard.build_guard（worker 侧）与 admin 测试端点共用；DB 异常时 guard 侧需自行回退 env。
+    参数：db - 异步数据库会话。
+    返回：dict，含 enabled、provider、model、apikey、base_url。
     """
     row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
     v = (row.value or {}) if row is not None else {}
@@ -67,7 +89,13 @@ async def get_audit_llm_config(db: AsyncSession) -> dict:
 
 
 async def get_audit_llm_settings_view(db: AsyncSession) -> AdminAuditLlmSettings:
-    """admin 设置页回显：apikey 一律 masked（无 key 返回空串），不泄漏明文/密文。"""
+    """构造 admin 设置页审核模型回显（apikey 脱敏）。
+
+    作用：将生效配置转为 AdminAuditLlmSettings，apikey 一律 masked。
+    场景：get_settings 组装 AdminSettings 时调用。
+    参数：db - 异步数据库会话。
+    返回：AdminAuditLlmSettings 实例；无 key 时 apikey 为空串。
+    """
     cfg = await get_audit_llm_config(db)
     return AdminAuditLlmSettings(
         enabled=cfg["enabled"],
@@ -79,9 +107,18 @@ async def get_audit_llm_settings_view(db: AsyncSession) -> AdminAuditLlmSettings
 
 
 async def _active_admin_count(db: AsyncSession) -> int:
+    """统计未禁用的管理员账号数量。
+
+    作用：防止删除或降级唯一可用管理员。
+    场景：patch_user、delete_user 变更角色或禁用状态前校验。
+    参数：db - 异步数据库会话。
+    返回：可用管理员人数整数。
+    """
     return int(
         await db.scalar(
-            select(func.count()).select_from(User).where(
+            select(func.count())
+            .select_from(User)
+            .where(
                 User.role == Role.ADMIN.value,
                 User.disabled.is_(False),
             )
@@ -90,9 +127,14 @@ async def _active_admin_count(db: AsyncSession) -> int:
     )
 
 
-async def list_users(
-    db: AsyncSession, page: int, size: int
-) -> tuple[list[User], int]:
+async def list_users(db: AsyncSession, page: int, size: int) -> tuple[list[User], int]:
+    """分页列出全部用户。
+
+    作用：admin 用户管理列表数据源。
+    场景：GET /admin/users 路由调用。
+    参数：db - 数据库会话；page - 页码（从 1 起）；size - 每页条数。
+    返回：(用户列表, 总条数) 元组。
+    """
     base = select(User)
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     rows = (
@@ -103,9 +145,14 @@ async def list_users(
     return list(rows), int(total or 0)
 
 
-async def user_daily_limits(
-    r: redis.Redis, users: list[User]
-) -> dict[uuid.UUID, int | None]:
+async def user_daily_limits(r: redis.Redis, users: list[User]) -> dict[uuid.UUID, int | None]:
+    """批量读取用户日 token 限额覆盖值。
+
+    作用：从 Redis quota:user:{uid} 拉取各用户自定义日限额。
+    场景：admin 用户列表展示每人配额覆盖时调用。
+    参数：r - Redis 客户端；users - 待查询用户列表。
+    返回：user_id → 限额整数或 None（无覆盖）的映射。
+    """
     out: dict[uuid.UUID, int | None] = {}
     for u in users:
         raw = await r.get(f"quota:user:{u.id}")
@@ -124,6 +171,14 @@ async def patch_user(
     *,
     set_daily_limit: bool = False,
 ) -> User:
+    """管理员修改用户角色、禁用状态或日 token 限额。
+
+    作用：更新用户字段并写 audit_logs；可选设置 Redis 配额覆盖。
+    场景：PATCH /admin/users/{id} 路由调用。
+    参数：db - 数据库会话；r - Redis；admin - 操作者；user_id - 目标用户；
+        role/disabled/daily_token_limit - 待更新字段；set_daily_limit - 是否写入配额覆盖。
+    返回：更新后的 User；不存在或违反管理员保留规则时抛 AppError。
+    """
     user = await db.get(User, user_id)
     if user is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "用户不存在")
@@ -157,6 +212,13 @@ async def delete_user(
     admin: User,
     user_id: uuid.UUID,
 ) -> None:
+    """管理员删除用户账号。
+
+    作用：物理删除用户行、记审计日志并清除 Redis 配额键。
+    场景：DELETE /admin/users/{id} 路由调用。
+    参数：db - 数据库会话；r - Redis；admin - 操作者；user_id - 目标用户 ID。
+    返回：无；不可删自己或唯一管理员时抛 AppError。
+    """
     user = await db.get(User, user_id)
     if user is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "用户不存在")
@@ -179,6 +241,13 @@ async def delete_user(
 
 
 async def get_settings(db: AsyncSession) -> AdminSettings:
+    """读取全局 admin 设置（限额、联系邮箱、审核模型回显）。
+
+    作用：聚合 DB 与环境变量中的生效配置。
+    场景：GET /admin/settings 路由调用。
+    参数：db - 异步数据库会话。
+    返回：AdminSettings 实例。
+    """
     daily, monthly, rate = await get_effective_limits(db)
     return AdminSettings(
         default_daily_token_limit=daily,
@@ -190,6 +259,13 @@ async def get_settings(db: AsyncSession) -> AdminSettings:
 
 
 async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> AdminSettings:
+    """管理员更新全局设置并记审计日志。
+
+    作用：写入 limits/general/audit_llm 三类 system_settings。
+    场景：PUT /admin/settings 路由调用。
+    参数：db - 数据库会话；admin - 操作者；req - 新设置体。
+    返回：提交后的 AdminSettings（即 req）。
+    """
     row = await db.get(SystemSetting, _LIMITS_KEY)
     value = {
         "default_daily_token_limit": req.default_daily_token_limit,
@@ -205,9 +281,7 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     general = await db.get(SystemSetting, _GENERAL_KEY)
     general_value = {"admin_contact_email": req.admin_contact_email.strip()}
     if general is None:
-        db.add(
-            SystemSetting(key=_GENERAL_KEY, value=general_value, updated_by=admin.id)
-        )
+        db.add(SystemSetting(key=_GENERAL_KEY, value=general_value, updated_by=admin.id))
     else:
         general.value = general_value
         general.updated_by = admin.id
@@ -216,11 +290,7 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
         audit_value = await _merge_audit_llm_value(db, req.audit_llm)
         audit_row = await db.get(SystemSetting, _AUDIT_LLM_KEY)
         if audit_row is None:
-            db.add(
-                SystemSetting(
-                    key=_AUDIT_LLM_KEY, value=audit_value, updated_by=admin.id
-                )
-            )
+            db.add(SystemSetting(key=_AUDIT_LLM_KEY, value=audit_value, updated_by=admin.id))
         else:
             audit_row.value = audit_value
             audit_row.updated_by = admin.id
@@ -241,16 +311,18 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
     return req
 
 
-async def _merge_audit_llm_value(
-    db: AsyncSession, req: AdminAuditLlmSettings
-) -> dict:
-    """合并审核模型配置：apikey 为空或 masked → 保留 DB 旧密文；否则加密新 key。"""
+async def _merge_audit_llm_value(db: AsyncSession, req: AdminAuditLlmSettings) -> dict:
+    """合并审核模型 DB 存储值（处理 apikey 加密与保留）。
+
+    作用：apikey 为空或含 *** 时保留旧密文，否则加密新 key 写入。
+    场景：update_settings 更新 audit_llm 分支时调用。
+    参数：db - 数据库会话；req - 提交的审核模型设置。
+    返回：可写入 SystemSetting.value 的 dict。
+    """
     existing = await db.get(SystemSetting, _AUDIT_LLM_KEY)
     old_enc = (existing.value or {}).get("apikey_enc", "") if existing else ""
     apikey = req.apikey.strip()
-    apikey_enc = (
-        old_enc if not apikey or "***" in apikey else crypto.encrypt_apikey(apikey)
-    )
+    apikey_enc = old_enc if not apikey or "***" in apikey else crypto.encrypt_apikey(apikey)
     return {
         "enabled": req.enabled,
         "provider": req.provider,
@@ -261,7 +333,13 @@ async def _merge_audit_llm_value(
 
 
 def _audit_log_detail(req: AdminAuditLlmSettings) -> dict:
-    """AuditLog detail 里的审核模型快照：仅非敏感字段，绝不记 apikey。"""
+    """构造 audit_log detail 中的审核模型快照（不含敏感字段）。
+
+    作用：记录 enabled/provider/model/base_url 及 apikey 是否变更。
+    场景：update_settings 写 AuditLog 时嵌入 detail。
+    参数：req - 提交的审核模型设置。
+    返回：可序列化的 dict，绝不包含 apikey 明文或密文。
+    """
     return {
         "enabled": req.enabled,
         "provider": req.provider,
@@ -272,7 +350,13 @@ def _audit_log_detail(req: AdminAuditLlmSettings) -> dict:
 
 
 async def get_effective_limits(db: AsyncSession) -> tuple[int, int, int]:
-    """返回 (daily, monthly, rate_per_min)。DB 覆盖优先。"""
+    """解析生效的全局 token 限额与速率限制。
+
+    作用：DB system_settings limits 优先，缺省回退 env 配置。
+    场景：配额校验、get_settings、用户列表默认值等。
+    参数：db - 异步数据库会话。
+    返回：(日 token 限额, 月 token 限额, 每分钟请求数) 三元组。
+    """
     row = await db.get(SystemSetting, _LIMITS_KEY)
     if row is not None:
         v = row.value or {}
@@ -288,9 +372,14 @@ async def get_effective_limits(db: AsyncSession) -> tuple[int, int, int]:
     )
 
 
-async def list_audit_logs(
-    db: AsyncSession, page: int, size: int
-) -> tuple[list[AuditLog], int]:
+async def list_audit_logs(db: AsyncSession, page: int, size: int) -> tuple[list[AuditLog], int]:
+    """分页列出管理员审计日志。
+
+    作用：按创建时间倒序返回 audit_logs 记录。
+    场景：GET /admin/audit-logs 路由调用。
+    参数：db - 数据库会话；page - 页码；size - 每页条数。
+    返回：(AuditLog 列表, 总条数) 元组。
+    """
     base = select(AuditLog)
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     rows = (
@@ -307,7 +396,13 @@ async def list_admin_games(
     page: int,
     size: int,
 ) -> tuple[list[Game], int]:
-    """管理员可见：默认 published；也可查 taken_down 等公开管理态（不含 draft）。"""
+    """分页列出管理员可见的已发布/管理态游戏。
+
+    作用：筛选 published/taken_down/submitted/reviewing，不含 draft。
+    场景：GET /admin/games 路由调用。
+    参数：db - 数据库会话；status - 可选状态过滤；page/size - 分页参数。
+    返回：(Game 列表, 总条数)；非法 status 抛 AppError。
+    """
     allowed = {
         GameStatus.PUBLISHED,
         GameStatus.TAKEN_DOWN,
@@ -329,6 +424,13 @@ async def list_admin_games(
 
 
 async def list_admin_emails(db: AsyncSession) -> list[str]:
+    """列出所有未禁用管理员的邮箱。
+
+    作用：供联系邮箱多级回退的最后一级数据源。
+    场景：get_admin_contact_email 无 DB/env 配置时调用。
+    参数：db - 异步数据库会话。
+    返回：邮箱字符串列表。
+    """
     rows = (
         await db.scalars(
             select(User).where(User.role == Role.ADMIN.value, User.disabled.is_(False))
@@ -344,6 +446,14 @@ async def patch_game_schedule(
     scheduled_take_down_at: datetime | None,
     scheduled_publish_at: datetime | None,
 ) -> Game:
+    """设置游戏的定时下架/上架时间。
+
+    作用：更新 scheduled_take_down_at 与 scheduled_publish_at 并记审计。
+    场景：PATCH /admin/games/{id}/schedule 路由；scheduler 到期扫描执行。
+    参数：db - 数据库会话；admin - 操作者；game_id - 游戏 ID；
+        scheduled_take_down_at/scheduled_publish_at - 计划时间（None 清除）。
+    返回：刷新后的 Game；不存在时抛 AppError。
+    """
     game = await db.get(Game, game_id)
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在")
@@ -375,6 +485,13 @@ async def patch_game_featured(
     game_id: uuid.UUID,
     featured_rank: int | None,
 ) -> Game:
+    """设置或取消游戏的精选排序位。
+
+    作用：更新 featured_rank（None 表示取消精选）并记审计。
+    场景：PATCH /admin/games/{id}/featured 路由调用。
+    参数：db - 数据库会话；admin - 操作者；game_id - 游戏 ID；featured_rank - 排序值或 None。
+    返回：刷新后的 Game；非 published 或不存在时抛 AppError。
+    """
     game = await db.get(Game, game_id)
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在")

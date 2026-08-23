@@ -80,6 +80,12 @@ class ClassificationResult:
 
 
 def sanitize_failure_text(text: str, *, max_chars: int = SUMMARY_MAX_CHARS) -> str:
+    """脱敏并截断失败摘要文本，避免密钥泄露与过长落库。
+
+    场景：``persist_failure_report`` 写入 FailureReport 前。
+    参数：text - 原始错误/诊断文本；max_chars - 最大字符数。
+    返回：脱敏后的摘要字符串。
+    """
     cleaned = text
     for pat, repl in _REDACT:
         cleaned = pat.sub(repl, cleaned)
@@ -107,6 +113,17 @@ def classify_failure(
     design_doc: dict[str, Any] | None = None,
     assistant_raw: str | None = None,
 ) -> ClassificationResult:
+    """三层失败分类：规则 → 能力校验 → LLM 辅助。
+
+    场景：CodeQa 失败或 sandbox 失败时决定 HITL 恢复命令。
+    参数：
+        errors - playtest/构建错误列表；
+        failure_kind - infra/product 等粗分类；
+        error_code - 结构化错误码；
+        design_doc - 用于 capability 冲突检测；
+        assistant_raw - QA 诊断 LLM 原始 JSON。
+    返回：ClassificationResult，含 failure_class 与 suggested_recovery。
+    """
     blob = " ".join(errors or []).strip()
     kind = (failure_kind or "").strip().lower()
     code = (error_code or "").strip().lower()
@@ -128,6 +145,12 @@ def classify_failure(
 
 
 def _classify_hard(*, blob: str, kind: str, code: str) -> FailureClass | None:
+    """用正则与错误码做确定性失败分类（第一层）。
+
+    场景：``classify_failure`` 优先路径。
+    参数：blob - 拼接后的错误文本；kind - failure_kind；code - error_code。
+    返回：匹配到的 FailureClass；无匹配时 None。
+    """
     if code in _POLICY_CODES or (blob and _POLICY_RE.search(blob)):
         return FailureClass.POLICY_SECURITY
     if code in _RESOURCE_CODES or (blob and _RESOURCE_RE.search(blob)):
@@ -140,6 +163,12 @@ def _classify_hard(*, blob: str, kind: str, code: str) -> FailureClass | None:
 
 
 def _llm_confidence(*, error_count: int, has_reason: bool) -> float:
+    """估算 LLM 辅助分类的置信度（上限 0.7）。
+
+    场景：``classify_failure`` 采用 LLM candidate_class 时。
+    参数：error_count - 错误条数；has_reason - 是否解析出有效 candidate。
+    返回：0.4~0.7 的浮点置信度。
+    """
     score = 0.4
     if error_count >= 1:
         score += 0.15
@@ -151,6 +180,12 @@ def _llm_confidence(*, error_count: int, has_reason: bool) -> float:
 def _classified(
     failure_class: FailureClass, source: str, confidence: float
 ) -> ClassificationResult:
+    """构造 ClassificationResult 并附带建议恢复命令。
+
+    场景：各分类分支的统一出口。
+    参数：failure_class - 失败类型；source - 分类来源；confidence - 置信度。
+    返回：完整的 ClassificationResult。
+    """
     return ClassificationResult(
         failure_class=failure_class,
         classification_source=source,
@@ -165,6 +200,12 @@ def record_classification_metrics(
     assistant_raw: str | None = None,
     hitl_phase: str | None = None,
 ) -> None:
+    """记录失败分类 Prometheus 指标（含 override / recovery mismatch）。
+
+    场景：``persist_failure_report`` 分类完成后。
+    参数：classified - 分类结果；assistant_raw - LLM 诊断原文；hitl_phase - 当前 HITL 阶段。
+    返回：无。
+    """
     FAILURE_CLASS_TOTAL.labels(
         classified.failure_class.value, classified.classification_source
     ).inc()
@@ -186,6 +227,12 @@ def record_classification_metrics(
 
 
 def _decode_json_object(raw: str | None) -> dict[str, Any] | None:
+    """从 LLM 输出中解析 JSON 对象（容忍 Markdown 包裹）。
+
+    场景：``parse_assistant_diagnosis`` 解析 QA 诊断。
+    参数：raw - LLM 返回的字符串。
+    返回：dict 或 None。
+    """
     text = (raw or "").strip()
     if not text:
         return None
@@ -217,6 +264,13 @@ async def persist_failure_report(
     design_doc: dict[str, Any] | None = None,
     hitl_phase: str | None = None,
 ) -> FailureReport:
+    """分类失败原因并持久化 FailureReport 行。
+
+    场景：CodeQa 耗尽或 sandbox 失败进入 qa_failed/sandbox_failed HITL。
+    参数：run_id、errors、failure_kind、error_code、attempt_count、failure_stage、
+          qa_diagnosis、candidate_revision_id、design_doc、hitl_phase。
+    返回：已 flush 的 FailureReport ORM 实例。
+    """
     classified = classify_failure(
         errors=errors or [],
         failure_kind=failure_kind,

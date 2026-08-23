@@ -24,7 +24,8 @@ class ArtifactFileMeta:
 class HostingBackend(Protocol):
     async def write_artifact(
         self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
-    ) -> Path: ...
+    ) -> Path:
+        """写入单层产物文件并返回 index.html 路径。"""
 
     async def write_version_layers(
         self,
@@ -34,14 +35,17 @@ class HostingBackend(Protocol):
         source: dict[str, bytes],
         build_snapshot: dict[str, bytes],
         dist: dict[str, bytes],
-    ) -> Path: ...
+    ) -> Path:
+        """写入 source/build/dist 三层产物。"""
 
-    def index_path(self, game_id: uuid.UUID, version: int) -> Path | None: ...
+    def index_path(self, game_id: uuid.UUID, version: int) -> Path | None:
+        """返回本地 index.html 路径（存在时）。"""
 
-    async def read_bytes(self, game_id: uuid.UUID, version: int, rel: str) -> bytes | None: ...
+    async def read_bytes(self, game_id: uuid.UUID, version: int, rel: str) -> bytes | None:
+        """按相对路径读取单个产物文件。"""
 
-    async def write_bytes(
-        self, game_id: uuid.UUID, version: int, rel: str, data: bytes
-    ) -> None: ...
+    async def write_bytes(self, game_id: uuid.UUID, version: int, rel: str, data: bytes) -> None:
+        """写入单个旁路产物文件（如 thumb.png）。"""
 
-    async def list_files(self, game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]: ...
+    async def list_files(self, game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]:
+        """列出某版本下全部产物文件的元数据。"""

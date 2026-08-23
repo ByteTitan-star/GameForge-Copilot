@@ -21,9 +21,14 @@ from app.core.errors import AppError, ErrorCode
 from app.enums import LLMProvider
 
 
-def circuit_key(
-    user_id: uuid.UUID, provider: LLMProvider, base_url: str | None
-) -> str:
+def circuit_key(user_id: uuid.UUID, provider: LLMProvider, base_url: str | None) -> str:
+    """生成熔断器 Redis 键。
+
+    作用：按 user + provider + base_url 主机隔离熔断状态。
+    场景：call_llm 在调用前后读写熔断计数。
+    参数：user_id、provider、base_url（可选）。
+    返回：Redis hash 键字符串。
+    """
     host = "default"
     if base_url:
         host = urlparse(base_url).hostname or "default"
@@ -31,7 +36,13 @@ def circuit_key(
 
 
 async def assert_circuit_closed(r: redis.Redis, key: str) -> None:
-    """熔断打开时拒绝调用。"""
+    """熔断打开时拒绝新 LLM 调用。
+
+    作用：检查 open_until，未过期则抛 LLM_CIRCUIT_OPEN。
+    场景：call_llm 在 provider.complete 之前。
+    参数：Redis 客户端、circuit_key。
+    返回：None；熔断开启时抛 AppError。
+    """
     if not settings.llm_circuit_enabled:
         return
     open_until = await r.hget(key, "open_until")
@@ -50,12 +61,26 @@ async def assert_circuit_closed(r: redis.Redis, key: str) -> None:
 
 
 async def record_success(r: redis.Redis, key: str) -> None:
+    """记录 LLM 调用成功并清零熔断状态。
+
+    作用：删除 Redis 中该键的失败计数与 open_until。
+    场景：provider.complete 成功返回后。
+    参数：Redis、circuit_key。
+    返回：None。
+    """
     if not settings.llm_circuit_enabled:
         return
     await r.delete(key)
 
 
 async def record_failure(r: redis.Redis, key: str) -> None:
+    """记录 LLM 调用失败并可能打开熔断。
+
+    作用：递增 failures；达阈值则写入 open_until。
+    场景：provider.complete 抛异常后（非 CancelledError）。
+    参数：Redis、circuit_key。
+    返回：None。
+    """
     if not settings.llm_circuit_enabled:
         return
     failures = int(await r.hincrby(key, "failures", 1))

@@ -57,6 +57,13 @@ _QUESTION_HINTS = (
 
 
 def _looks_like_question(req: str) -> bool:
+    """判断用户 requirement 是否更像问答而非修改指令。
+
+    作用：检测问号结尾或常见疑问关键词。
+    场景：classify_entry_phase 在已有版本时区分 chat 与 code/plan。
+    参数：req - 用户 requirement 原文。
+    返回：True 表示应走 EntryPhase.CHAT。
+    """
     text = req.strip()
     if not text:
         return False
@@ -67,7 +74,13 @@ def _looks_like_question(req: str) -> bool:
 
 
 def classify_entry_phase(requirement: str | None, *, has_prior_version: bool) -> EntryPhase:
-    """规则路由：有历史版本且命中小改关键词 → code；纯问答 → chat；否则 plan。"""
+    """根据 requirement 与是否有历史版本决定入口阶段。
+
+    作用：规则路由：大改→plan、小改→code、纯问答→chat。
+    场景：games/services.create_run 写入 GenerationRun.entry_phase。
+    参数：requirement - 本轮用户输入；has_prior_version - 是否已有 current_version。
+    返回：EntryPhase（PLAN / CODE / CHAT）。
+    """
     if not has_prior_version:
         return EntryPhase.PLAN
     req = (requirement or "").strip()

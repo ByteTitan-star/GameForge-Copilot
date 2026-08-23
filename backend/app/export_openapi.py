@@ -17,6 +17,13 @@ from app.main import app
 
 
 def export() -> str:
+    """序列化当前 FastAPI 应用的 OpenAPI 规范。
+
+    作用：生成带缩进、保留中文的 OpenAPI JSON 字符串。
+    场景：CLI 导出契约文件或打印到 stdout 时调用。
+    参数：无。
+    返回：以换行符结尾的 OpenAPI JSON 文本。
+    """
     return json.dumps(app.openapi(), indent=2, ensure_ascii=False) + "\n"
 
 

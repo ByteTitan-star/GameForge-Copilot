@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class SystemSetting(Base, TimestampMixin):
+    """系统级 JSON 配置项（admin 后台可改）。
+
+    场景：audit_llm 等全局开关与默认模型配置。
+    """
+
     __tablename__ = "system_settings"
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)

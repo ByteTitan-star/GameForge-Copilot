@@ -20,6 +20,10 @@ RedisScope = Literal[
 
 
 class RedisFlushReq(BaseModel):
+    """RedisFlushReq API 请求体。
+
+    场景：对应端点入参 Pydantic 校验。"""
+
     scopes: list[RedisScope] = Field(min_length=1)
     run_id: UUID | None = None
     pattern: str | None = Field(
@@ -30,10 +34,18 @@ class RedisFlushReq(BaseModel):
 
 
 class RedisFlushResp(BaseModel):
+    """RedisFlushResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     deleted: dict[str, int]
 
 
 class QueueStatsResp(BaseModel):
+    """QueueStatsResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     backend: str
     queue: str
     messages: int
@@ -41,12 +53,20 @@ class QueueStatsResp(BaseModel):
 
 
 class QueuePurgeResp(BaseModel):
+    """QueuePurgeResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     backend: str
     queue: str
     purged: int
 
 
 class RuntimeStatusResp(BaseModel):
+    """RuntimeStatusResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     env: str
     messaging_backend: str
     redis: dict[str, int]
@@ -54,6 +74,10 @@ class RuntimeStatusResp(BaseModel):
 
 
 class DevRequeueResp(BaseModel):
+    """DevRequeueResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     run_id: UUID
     task: str
     status: str
@@ -61,6 +85,10 @@ class DevRequeueResp(BaseModel):
 
 
 class DevResetResp(BaseModel):
+    """DevResetResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     failed_runs: list[UUID]
     failed_count: int
     redis_deleted: dict[str, int]

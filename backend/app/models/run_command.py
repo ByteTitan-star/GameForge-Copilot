@@ -10,7 +10,13 @@ from app.models.base import Base
 
 
 class RunCommand(Base):
+    """Run 控制命令（approve/reject/pause 等）幂等记录。
+
+    场景：HITL 决策入队、resume_run worker 消费。
+    """
+
     __tablename__ = "run_commands"
+
     __table_args__ = (
         UniqueConstraint("run_id", "idempotency_key", name="uq_run_command_idempotency"),
     )

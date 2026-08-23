@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class AuditLog(Base, TimestampMixin):
+    """管理员/系统审计日志（护栏命中、敏感操作等）。
+
+    场景：admin 审计列表、guardrail 持久化。
+    """
+
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

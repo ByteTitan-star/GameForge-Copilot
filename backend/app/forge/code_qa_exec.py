@@ -43,6 +43,13 @@ from app.sandbox.playtest import (
 
 
 def _read_html(path: Any) -> str:
+    """读取磁盘 HTML 文件文本。
+
+    作用：UTF-8 优先解码，失败时 GBK 回退。
+    场景：playtest 前加载 candidate 的 index.html。
+    参数：path - 文件路径对象。
+    返回：HTML 字符串。
+    """
     data = path.read_bytes()
     try:
         return data.decode("utf-8")
@@ -51,9 +58,22 @@ def _read_html(path: Any) -> str:
 
 
 def _mask_data_uris(source: str) -> tuple[str, dict[str, str]]:
+    """将 base64 data URI 替换为占位 token。
+
+    作用：缩短 prompt 长度，保留可逆映射供后续还原。
+    场景：向 LLM 发送含内联图片的 HTML 源码前。
+    参数：source - 原始 HTML 或源码字符串。
+    返回：(掩码后文本, token→原 URI 映射 dict)。
+    """
     replacements: dict[str, str] = {}
 
     def replace(match: re.Match[str]) -> str:
+        """将单个 data URI 替换为占位 token 并记录映射。
+
+        场景：_mask_data_uris 内 re.sub 回调。
+        参数：match - 正则匹配对象。
+        返回：占位 token 字符串。
+        """
         token = f"__FORGE_DATA_URI_{len(replacements):04d}__"
         replacements[token] = match.group(0)
         return token
@@ -75,6 +95,14 @@ async def _code_llm(
     emit_delta: bool = False,
     kind: str | None = None,
 ) -> tuple[str, bool]:
+    """Code 阶段 LLM 调用（含截断续写）。
+
+    作用：委托 generate_code_output 完成高 max_tokens 生成与续写。
+    场景：execute_code_or_repair 内 generate/repair 轮次。
+    参数：ctx - Forge 上下文；system/user_msg - prompt；context_summary - 续写摘要；
+        emit_delta - 是否流式推送；kind - 调用类型。
+    返回：(模型输出, 是否续写轮次耗尽仍截断)。
+    """
     from app.forge.llm_continuation import generate_code_output
 
     return await generate_code_output(
@@ -88,6 +116,13 @@ async def _code_llm(
 
 
 def _continuation_context_summary(design_doc: dict[str, Any], game_title: str) -> str:
+    """生成截断续写用的简短任务摘要。
+
+    作用：提取游戏标题与引擎 id 供续写轮定位上下文。
+    场景：LLM 输出被截断触发续写时。
+    参数：design_doc - 设计稿；game_title - 游戏标题回退值。
+    返回：一行中文摘要字符串。
+    """
     engine = (design_doc.get("engine") or {}).get("id", "canvas")
     title = design_doc.get("title") or game_title
     return f"游戏：{title}；引擎：{engine}"
@@ -101,6 +136,14 @@ def _truncation_failure(
     art_direction: dict[str, Any] | None,
     qa_diagnosis: str,
 ) -> dict[str, Any]:
+    """构造 LLM 输出截断失败的状态增量。
+
+    作用：统一 code_ok=False、failure_kind=truncated 等字段。
+    场景：续写轮次耗尽后无法得到完整产物。
+    参数：attempt - 当前轮次；design_doc/artifacts/art_direction - 上下文；
+        qa_diagnosis - 诊断说明。
+    返回：供 LangGraph 合并的状态 dict。
+    """
     from app.forge.llm_continuation import OUTPUT_TRUNCATED_ERROR
 
     return {
@@ -119,6 +162,13 @@ def _truncation_failure(
 
 
 def _omit_data_uris(html: str) -> str:
+    """截断并省略 HTML 中的 data URI 供 QA 诊断。
+
+    作用：将 base64 内联资源替换为占位符并限制总长度。
+    场景：execute_diagnose 向诊断 LLM 提供源码摘录。
+    参数：html - 完整 HTML 字符串。
+    返回：最长 60000 字符的处理后文本。
+    """
     return re.sub(
         r"data:[^;\"'\s]+;base64,[A-Za-z0-9+/=]+",
         "__DATA_URI_OMITTED_FOR_QA__",
@@ -137,7 +187,13 @@ async def execute_code_or_repair(
     commit_project_build: Any,
     run_finalized_exc: type[BaseException],
 ) -> dict[str, Any]:
-    """单次 CodeQa attempt：generate 或 repair，成功则写入 candidate（不 promote）。"""
+    """执行单次 CodeQa 尝试：生成或修复代码并写入 candidate。
+
+    作用：调用 LLM 生成/修复、构建产物、领取版本号，不 promote current_version。
+    场景：LangGraph code_qa_loop 节点每次 attempt。
+    参数：ctx/state - 上下文与图状态；streamed_llm/set_phase/check_ctrl 等 - 注入依赖。
+    返回：含 candidate_ready、code_ok、playtest_errors 等的状态增量 dict。
+    """
     from app.forge.assets.picker import PickedAsset
     from app.forge.tracing import observe_phase
     from app.games import services as game_services
@@ -357,6 +413,12 @@ async def execute_code_or_repair(
                 async def _repair_project(
                     current: ParsedCodeOutput, build_error: str
                 ) -> ParsedCodeOutput:
+                    """Vite 构建失败后调用 LLM 修复 project 源码。
+
+                    场景：run_project_build_loop 的 repair_fn。
+                    参数：current - 当前解析结果；build_error - 构建日志。
+                    返回：修复后的 ParsedCodeOutput。
+                    """
                     repair_user = format_project_repair_input(base_user_msg, current, build_error)
                     repair_raw, truncated = await _code_llm(
                         ctx,
@@ -569,7 +631,13 @@ async def execute_playtest(
     set_phase: Any,
     save_thumbnail: Any,
 ) -> dict[str, Any]:
-    """对当前 candidate 跑 B 档 playtest；不写 run.status。"""
+    """对当前 candidate 执行 Playwright 试玩。
+
+    作用：B 档自动试玩，可选保存缩略图，发布 QA_REPORT 事件。
+    场景：code 成功后进入 QA 子阶段；不写 run.status。
+    参数：ctx/state - 上下文与图状态；set_phase/save_thumbnail - 注入依赖。
+    返回：含 qa_ok、playtest_errors、failure_kind 等的状态增量 dict。
+    """
     from app.forge.tracing import observe_phase
 
     with observe_phase("qa"):
@@ -693,7 +761,13 @@ async def execute_diagnose(
     *,
     llm: Any,
 ) -> dict[str, Any]:
-    """对 product/build 失败做诊断；infra 不得进入本节点（由子图路由保证）。"""
+    """对试玩失败进行 LLM 诊断并生成修复建议。
+
+    作用：结合控制台日志与源码摘录调用 diagnose_playtest_failure。
+    场景：product/build 类失败且非 infra；由子图路由保证不入本节点。
+    参数：ctx/state - 上下文与图状态；llm - 非流式 LLM 调用函数。
+    返回：含 qa_diagnosis、failure_kind 等的状态增量 dict。
+    """
     from app.forge.tracing import observe_phase
 
     with observe_phase("qa"):
@@ -710,6 +784,12 @@ async def execute_diagnose(
         qa_source = _omit_data_uris(html)
 
         async def _call(system: str, user_msg: str) -> str:
+            """诊断节点 LLM 调用包装（非流式）。
+
+            场景：diagnose_playtest_failure 回调。
+            参数：system、user_msg。
+            返回：模型输出文本。
+            """
             return await llm(ctx, system, user_msg)
 
         from app.forge.memory.loader import build_node_context

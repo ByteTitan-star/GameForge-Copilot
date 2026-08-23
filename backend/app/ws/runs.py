@@ -23,6 +23,12 @@ router = APIRouter(prefix="/ws", tags=["ws"])
 
 
 async def _ws_user(db: AsyncSession, token: str | None) -> User | None:
+    """从 query token 解析并加载当前用户。
+
+    场景：WS 握手鉴权（浏览器无法设 Authorization 头）。
+    参数：db、token - access JWT。
+    返回：User 或 None（无效/过期）。
+    """
     if not token:
         return None
     try:
@@ -39,6 +45,11 @@ async def _ws_user(db: AsyncSession, token: str | None) -> User | None:
 
 
 async def _replay_buffered(ws: WebSocket, run_id: uuid.UUID, after: int | None) -> None:
+    """重放 run 历史事件到 WebSocket（after 游标之后）。
+
+    场景：客户端带 ?after= 重连时补发漏收事件。
+    参数：ws、run_id、after - 事件序号游标。
+    """
     for data in await list_events_auto(run_id, after):
         await ws.send_text(data)
 
@@ -49,6 +60,11 @@ async def _relay_memory(
     ready: asyncio.Event | None = None,
     replayed: asyncio.Event | None = None,
 ) -> None:
+    """memory 模式下将 run 事件从内存队列转发到 WebSocket。
+
+    场景：pytest 或 messaging_backend=memory。
+    参数：ws、run_id、ready/replayed - 与回放握手的 Event。
+    """
     from app.messaging.memory import MemoryWsBus
 
     bus = get_ws_bus()
@@ -71,6 +87,11 @@ async def _relay_rabbit(
     ready: asyncio.Event | None = None,
     replayed: asyncio.Event | None = None,
 ) -> None:
+    """RabbitMQ 模式下订阅 run topic 并转发消息到 WebSocket。
+
+    场景：生产环境 messaging_backend=rabbit。
+    参数：ws、run_id、ready/replayed - 与回放握手的 Event。
+    """
     from app.messaging.rabbit import RabbitWsBus
 
     bus = get_ws_bus()
@@ -94,6 +115,11 @@ async def _relay_rabbit(
 
 
 async def _await_disconnect(ws: WebSocket) -> None:
+    """阻塞直到客户端断开 WebSocket 连接。
+
+    场景：与 relay 协程并行，任一结束即取消另一方。
+    参数：ws - 已 accept 的连接。
+    """
     try:
         while True:
             await ws.receive_text()
@@ -103,7 +129,12 @@ async def _await_disconnect(ws: WebSocket) -> None:
 
 @router.websocket("/runs/{run_id}")
 async def run_ws(websocket: WebSocket, run_id: uuid.UUID) -> None:
-    """握手用短命 DB 会话（鉴权+owner），订阅前释放，避免 WS 长连占用 DB 连接。"""
+    """Run 进度 WebSocket：鉴权、历史回放、实时事件转发。
+
+    场景：GET /ws/runs/{run_id}?token=&after=。
+    参数：websocket、run_id。
+    返回：无（长连接直至断开）。
+    """
     async with db_module.SessionLocal() as s:
         user = await _ws_user(s, websocket.query_params.get("token"))
         if user is None:

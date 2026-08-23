@@ -18,10 +18,18 @@ class WSEvent(BaseModel):
 
 
 class PhaseStartPayload(BaseModel):
+    """PhaseStartPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     phase: RunPhase
 
 
 class LLMCallPayload(BaseModel):
+    """LLMCallPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     phase: RunPhase
     model: str
     provider: LLMProvider
@@ -30,6 +38,10 @@ class LLMCallPayload(BaseModel):
 
 
 class ToolCallPayload(BaseModel):
+    """ToolCallPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     phase: RunPhase
     tool: str
     args: dict[str, Any]
@@ -38,6 +50,10 @@ class ToolCallPayload(BaseModel):
 
 
 class BuildDonePayload(BaseModel):
+    """BuildDonePayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     version: int
     artifact_path: str
     preview_url: str
@@ -49,6 +65,10 @@ class BuildDonePayload(BaseModel):
 
 
 class QaReportPayload(BaseModel):
+    """QaReportPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     passed: bool
     issues: list[str]
     log_excerpt: str
@@ -60,6 +80,10 @@ class QaReportPayload(BaseModel):
 
 
 class DesignDoc(BaseModel):
+    """策划稿摘要结构（HITL 展示用）。
+
+    场景：hitl_wait 事件 payload。"""
+
     title: str
     gameplay: str
     controls: str
@@ -67,18 +91,30 @@ class DesignDoc(BaseModel):
 
 
 class HitlWaitPayload(BaseModel):
+    """HitlWaitPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     node: str
     design_doc: DesignDoc
     action_url: str
 
 
 class UsagePayload(BaseModel):
+    """UsagePayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     today_used: int
     daily_limit: int
     remaining: int
 
 
 class DonePayload(BaseModel):
+    """DonePayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     run_id: uuid.UUID
     game_id: uuid.UUID
     version: int
@@ -90,6 +126,10 @@ class DonePayload(BaseModel):
 
 
 class ErrorPayload(BaseModel):
+    """ErrorPayload WebSocket 事件 payload。
+
+    场景：WSEvent.payload 按 type 解析。"""
+
     code: str
     message: str
     fatal: bool

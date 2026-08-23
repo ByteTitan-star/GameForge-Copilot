@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class GameVersion(Base, TimestampMixin):
+    """游戏某一版本的产物与策划稿快照。
+
+    场景：试玩 URL、版本历史、promote 后 current_version 指向。
+    """
+
     __tablename__ = "game_versions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

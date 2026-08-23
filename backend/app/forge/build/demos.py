@@ -34,7 +34,7 @@ REACT_DEMO_SOURCE: dict[str, str] = {
         'createRoot(document.getElementById("root")!).render(<App />);\n'
     ),
     "src/App.tsx": (
-        'export default function App() {\n'
+        "export default function App() {\n"
         '  return <h1 id="game-root">GameForge React Demo</h1>;\n'
         "}\n"
     ),

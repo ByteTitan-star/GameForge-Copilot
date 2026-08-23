@@ -68,6 +68,13 @@ class LLMCompletion:
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
+    """从 base_url 提取主机名（小写）。
+
+    作用：判断官方 API、直连、thinking 参数等。
+    场景：provider 内部 URL/协议分支。
+    参数：base_url 可选。
+    返回：hostname 或 None。
+    """
     if not base_url:
         return None
     from urllib.parse import urlparse
@@ -76,6 +83,13 @@ def _host_from_base_url(base_url: str | None) -> str | None:
 
 
 def _is_official_base(provider: LLMProvider, base_url: str | None) -> bool:
+    """判断 base_url 是否指向该 provider 官方 API 域名。
+
+    作用：无 base_url 视为官方默认。
+    场景：选择 Anthropic 原生 /messages 或 OpenAI 兼容路径。
+    参数：provider、base_url。
+    返回：官方域为 True。
+    """
     if not base_url:
         return True
     host = _host_from_base_url(base_url)
@@ -85,7 +99,13 @@ def _is_official_base(provider: LLMProvider, base_url: str | None) -> bool:
 
 
 def _uses_anthropic_native_api(provider: LLMProvider, base_url: str | None) -> bool:
-    """Use Anthropic /messages for official hosts and known Anthropic-style proxies."""
+    """是否使用 Anthropic 原生 /messages API。
+
+    作用：官方域名或含 /anthropic 的代理走原生协议。
+    场景：构造请求体与 SSE 解析分支。
+    参数：provider、base_url。
+    返回：使用原生 API 为 True。
+    """
     if provider != LLMProvider.ANTHROPIC:
         return False
     if _is_official_base(provider, base_url):
@@ -98,6 +118,13 @@ def _uses_anthropic_native_api(provider: LLMProvider, base_url: str | None) -> b
 def _auth_headers(
     provider: LLMProvider, apikey: str, base_url: str | None = None
 ) -> dict[str, str]:
+    """构造 LLM HTTP 鉴权头。
+
+    作用：Anthropic 原生用 x-api-key；其余 Bearer。
+    场景：complete/list_models 等 HTTP 请求。
+    参数：provider、apikey、base_url。
+    返回：headers 字典（不含 content-type）。
+    """
     if _uses_anthropic_native_api(provider, base_url):
         return {"x-api-key": apikey, "anthropic-version": "2023-06-01"}
     return {"Authorization": f"Bearer {apikey}"}
@@ -107,7 +134,13 @@ _STRIP_BASE_SUFFIXES = ("/chat/completions", "/messages", "/models")
 
 
 def _normalize_base_url(base_url: str) -> str:
-    """去掉用户误填的 endpoint 后缀，避免拼出双重路径导致 404。"""
+    """去掉用户误填的 endpoint 后缀。
+
+    作用：剥离 /chat/completions、/messages、/models 避免双重路径 404。
+    场景：_api_base 解析前。
+    参数：base_url 原始字符串。
+    返回：规范化后的 API 根路径。
+    """
     base = base_url.strip().rstrip("/")
     for suffix in _STRIP_BASE_SUFFIXES:
         if base.endswith(suffix):
@@ -116,7 +149,13 @@ def _normalize_base_url(base_url: str) -> str:
 
 
 def _ensure_api_version_path(base: str, provider: LLMProvider) -> str:
-    """域名根路径无 /v1 时补上（OpenAI 系常见约定）。"""
+    """域名根路径无 /v1 时补上版本段。
+
+    作用：OpenAI 系常见约定补 /v1。
+    场景：openai_compat 自定义 base_url。
+    参数：base 已 normalize 的根、provider。
+    返回：带版本路径的 base URL。
+    """
     from urllib.parse import urlparse
 
     parsed = urlparse(base)
@@ -130,7 +169,13 @@ def _ensure_api_version_path(base: str, provider: LLMProvider) -> str:
 
 
 def _api_base(provider: LLMProvider, base_url: str | None) -> str:
-    """解析 API 根路径；官方 provider 可省略 base_url，openai_compat 必填。"""
+    """解析 LLM API 根 URL。
+
+    作用：官方 provider 可省略 base_url；openai_compat 必填。
+    场景：拼接 /chat/completions、/models 等。
+    参数：provider、base_url。
+    返回：API 根字符串；openai_compat 无 base_url 抛 ValueError。
+    """
     if provider == LLMProvider.OPENAI_COMPAT:
         if not base_url:
             raise ValueError("openai_compat 需配置 base_url")
@@ -143,6 +188,13 @@ def _api_base(provider: LLMProvider, base_url: str | None) -> str:
 
 
 def _messages_url(provider: LLMProvider, base_url: str | None) -> str:
+    """补全/流式调用的完整 endpoint URL。
+
+    作用：Anthropic 原生 → /messages；其余 → /chat/completions。
+    场景：complete、complete_stream。
+    参数：provider、base_url。
+    返回：完整 URL 字符串。
+    """
     base = _api_base(provider, base_url)
     if _uses_anthropic_native_api(provider, base_url):
         return f"{base}/messages"
@@ -150,21 +202,34 @@ def _messages_url(provider: LLMProvider, base_url: str | None) -> str:
 
 
 def _models_list_url(provider: LLMProvider, base_url: str | None) -> str:
+    """模型列表 endpoint URL。
+
+    作用：在 API 根后拼接 /models。
+    场景：list_models。
+    参数：provider、base_url。
+    返回：完整 URL。
+    """
     return f"{_api_base(provider, base_url)}/models"
 
 
 def _direct_hosts() -> list[str]:
-    """配置的国内直连 host 子串（逗号分隔）。"""
+    """读取配置的国内直连 host 子串列表。
+
+    作用：解析 settings.llm_direct_hosts 逗号分隔项。
+    场景：_build_llm_client 决定是否 trust_env=False。
+    参数：无。
+    返回：非空 host 子串列表。
+    """
     return [h.strip() for h in settings.llm_direct_hosts.split(",") if h.strip()]
 
 
 def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
-    """构造 LLM httpx 客户端，按目标 host 决定是否走系统代理。
+    """构造 LLM 专用 httpx 异步客户端。
 
-    httpx 0.28 在 Windows 上会读注册表代理（即便无 *_PROXY 环境变量），
-    国内 provider（dashscope/deepseek 等）走该代理常因代理无对应出口而超时。
-    命中配置的国内 host → 强制直连（trust_env=False）；其余沿用默认行为
-    （trust_env=True），保留「用代理访问海外 OpenAI/Anthropic」的能力。
+    作用：国内 host 命中配置时强制直连（trust_env=False）。
+    场景：complete、list_models、流式请求。
+    参数：url 目标 URL（用于取 host）、timeout。
+    返回：httpx.AsyncClient。
     """
     host = (_host_from_base_url(url) or "").lower()
     if any(h in host for h in _direct_hosts()):
@@ -173,11 +238,12 @@ def _build_llm_client(url: str, timeout: httpx.Timeout) -> httpx.AsyncClient:
 
 
 def _supports_enable_thinking(base_url: str | None, model: str) -> bool:
-    """Only Qwen models via DashScope-compatible endpoints accept ``enable_thinking``.
+    """目标端点是否支持 enable_thinking 非标准参数。
 
-    Injecting this non-standard parameter into other providers (GLM, DeepSeek,
-    OpenAI, etc.) may trigger 400 or be silently ignored while the thinking
-    tokens still consume the ``max_tokens`` budget — yielding empty responses.
+    作用：仅 Qwen 模型或 DashScope host 注入该参数。
+    场景：_should_disable_thinking 判断。
+    参数：base_url、model。
+    返回：支持为 True。
     """
     name = (model or "").lower()
     host = (_host_from_base_url(base_url) or "").lower()
@@ -187,17 +253,24 @@ def _supports_enable_thinking(base_url: str | None, model: str) -> bool:
 
 
 def _requires_thinking_enabled(model: str) -> bool:
-    """Pure reasoning models that *require* ``enable_thinking=true``."""
+    """模型是否必须使用 enable_thinking=true。
+
+    作用：纯推理模型（如 qwq）不可关闭 thinking。
+    场景：_should_disable_thinking 排除列表。
+    参数：model 模型名。
+    返回：必须开启为 True。
+    """
     name = (model or "").lower()
     return any(tok in name for tok in ("qwq",))
 
 
 def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model: str) -> bool:
-    """Inject ``enable_thinking=false`` only for Qwen/DashScope models that support the param.
+    """是否应在请求体注入 enable_thinking=false。
 
-    plan JSON / audit 0|1 do not need chain-of-thought: thinking tokens eat
-    into ``max_tokens``, and streaming only collects ``content`` — discarding
-    ``reasoning_content`` — which easily produces empty body.
+    作用：小 max_tokens 场景避免思考 token 占满预算导致空正文。
+    场景：_build_body 构造 OpenAI 兼容请求。
+    参数：provider、base_url、model。
+    返回：应关闭为 True。
     """
     if not settings.llm_disable_thinking:
         return False
@@ -209,7 +282,13 @@ def _should_disable_thinking(provider: LLMProvider, base_url: str | None, model:
 
 
 def _should_disable_anthropic_thinking(provider: LLMProvider, base_url: str | None) -> bool:
-    """Anthropic 原生 /messages（含 GLM Anthropic 代理）关闭 thinking 扩展块。"""
+    """是否应在 Anthropic 原生请求关闭 thinking 扩展。
+
+    作用：settings.llm_disable_thinking 且走 /messages 时设 thinking.disabled。
+    场景：_build_body Anthropic 分支。
+    参数：provider、base_url。
+    返回：应关闭为 True。
+    """
     if not settings.llm_disable_thinking:
         return False
     return _uses_anthropic_native_api(provider, base_url)
@@ -221,7 +300,13 @@ async def test_connectivity(
     model: str,
     base_url: str | None = None,
 ) -> tuple[bool, str | None]:
-    """最小 completion 探测 provider + apikey + model + base_url（compat 必填）。"""
+    """最小 completion 探测连通性。
+
+    作用：发极短补全验证 provider/apikey/model/base_url。
+    场景：保存配置前、services.test_*。
+    参数：provider、apikey、model、base_url。
+    返回：(成功, None) 或 (False, 错误文案)。
+    """
     trimmed = model.strip()
     if not trimmed:
         return False, "model 不能为空"
@@ -247,7 +332,13 @@ async def test_connectivity(
 
 
 async def list_models(provider: LLMProvider, apikey: str, base_url: str | None = None) -> list[str]:
-    """按 provider 拉 /models；失败回退白名单（docs/05 §模型列表来源）。"""
+    """拉取可用模型 id 列表。
+
+    作用：GET /models；失败回退内置白名单。
+    场景：配置页模型下拉、list_models_for_user。
+    参数：provider、apikey、base_url。
+    返回：模型 id 字符串列表。
+    """
     try:
         if provider == LLMProvider.OPENAI_COMPAT and not base_url:
             return list(_MODEL_WHITELIST[provider])
@@ -278,10 +369,12 @@ def _build_body(
     max_tokens: int,
     stream: bool,
 ) -> dict:
-    """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
+    """构造 chat/messages 请求 JSON 体。
 
-    Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
-    thinking 默认关闭（见 _should_disable_thinking）。
+    作用：非流式与流式共用；处理 thinking 关闭与 stream_options。
+    场景：complete、complete_stream POST 前。
+    参数：provider、model、system、user_msg、base_url、max_tokens、stream。
+    返回：请求 body 字典。
     """
     if _uses_anthropic_native_api(provider, base_url):
         body = {
@@ -313,7 +406,13 @@ def _build_body(
 
 
 def _llm_timeout() -> httpx.Timeout:
-    """读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败。"""
+    """LLM HTTP 读/连超时配置。
+
+    作用：读超时较长适配长生成；连超时较短快速失败。
+    场景：complete、complete_stream。
+    参数：无。
+    返回：httpx.Timeout 对象。
+    """
     return httpx.Timeout(
         connect=settings.llm_connect_timeout,
         read=settings.llm_request_timeout,
@@ -323,12 +422,25 @@ def _llm_timeout() -> httpx.Timeout:
 
 
 def _retry_delay_s(attempt: int) -> float:
-    """指数退避 + 少量 jitter：attempt 从 0 起（第 1 次失败后的等待）。"""
+    """HTTP 重试指数退避延迟（含 jitter）。
+
+    作用：attempt 从 0 起，基数 settings.llm_http_retry_base_delay_s。
+    场景：_sleep_before_retry。
+    参数：attempt 当前失败次数（0-based）。
+    返回：等待秒数 float。
+    """
     base = settings.llm_http_retry_base_delay_s
     return base * (2**attempt) + random.uniform(0, base)  # nosec B311
 
 
 def _http_error_hint(url: str, status_code: int) -> str:
+    """HTTP 错误时的 base_url 排查提示。
+
+    作用：404 时附加 URL 与 base_url 填写说明。
+    场景：complete 非 200 响应。
+    参数：url 请求 URL、status_code。
+    返回：附加提示字符串（可能为空）。
+    """
     if status_code != 404:
         return ""
     return (
@@ -339,6 +451,13 @@ def _http_error_hint(url: str, status_code: int) -> str:
 
 
 async def _sleep_before_retry(*, attempt: int, model: str, reason: str) -> None:
+    """记录重试日志并按退避策略 sleep。
+
+    作用：传输层可重试错误（429/502-504、网络错误）等待后重试。
+    场景：complete、complete_stream 重试循环内。
+    参数：attempt、model、reason。
+    返回：None（async sleep）。
+    """
     delay = _retry_delay_s(attempt)
     log.warning(
         "llm http retry",
@@ -363,9 +482,12 @@ async def complete(
     *,
     max_tokens: int | None = None,
 ) -> LLMCompletion:
-    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
+    """执行一次非流式 LLM 补全。
 
-    传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
+    作用：POST 补全并解析 content/usage/finish_reason；有限 HTTP 重试。
+    场景：call_llm、test_connectivity、platform_complete。
+    参数：provider、apikey、model、system、user_msg、base_url、max_tokens。
+    返回：LLMCompletion。
     """
     if max_tokens is None:
         max_tokens = settings.llm_max_tokens
@@ -478,6 +600,12 @@ async def _iter_sse(resp: httpx.Response) -> AsyncIterator[tuple[str | None, str
 
 
 def _parse_json(data: str) -> dict:
+    """解析 LLM 返回的 JSON 字符串为 dict。
+
+    场景：provider 解析结构化输出。
+    参数：data - JSON 文本。
+    返回：解析后的 dict。
+    """
     import json
 
     return json.loads(data)

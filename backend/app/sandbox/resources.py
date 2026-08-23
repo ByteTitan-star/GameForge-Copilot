@@ -13,11 +13,23 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
 
 
 def tier_limits(tier: str | None) -> dict[str, Any]:
+    """按档位返回内存、CPU、超时等资源限制。
+
+    场景：Docker/Local sandbox 执行前查询 TIER_LIMITS。
+    参数：tier - lite/standard/heavy，未知档位回退 standard。
+    返回：含 mem_limit、nano_cpus、timeout_s 的 dict 副本。
+    """
     key = (tier or "standard").strip().lower()
     return dict(TIER_LIMITS.get(key, TIER_LIMITS["standard"]))
 
 
 def parse_mem_bytes(spec: str) -> int:
+    """将 Docker 风格内存规格（如 512m、1g）解析为字节数。
+
+    场景：Docker HostConfig.Memory 配置。
+    参数：spec - 内存字符串。
+    返回：字节整数。
+    """
     s = spec.strip().lower()
     if s.endswith("g"):
         return int(float(s[:-1]) * 1024**3)

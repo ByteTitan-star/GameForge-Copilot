@@ -16,6 +16,13 @@ _SALT = b"gameforge-llm-apikey-v1"
 
 
 def _get_fernet() -> Fernet:
+    """获取或初始化 Fernet 加解密器单例。
+
+    作用：从 settings.llm_apikey_encryption_key 或 JWT_SECRET 派生密钥。
+    场景：encrypt/decrypt apikey 内部调用。
+    参数：无。
+    返回：Fernet 实例。
+    """
     global _fernet
     if _fernet is None:
         key: str | bytes = settings.llm_apikey_encryption_key
@@ -28,11 +35,24 @@ def _get_fernet() -> Fernet:
 
 
 def encrypt_apikey(plaintext: str) -> str:
+    """加密 LLM API Key 明文。
+
+    作用：Fernet 加密后存库 apikey_enc。
+    场景：创建/更新用户 LLM 配置。
+    参数：plaintext 明文 key。
+    返回：可入库的密文字符串。
+    """
     return _get_fernet().encrypt(plaintext.encode()).decode()
 
 
 def try_decrypt_apikey(ciphertext: str) -> str | None:
-    """解密失败返回 None（如加密密钥轮换后旧密文不可读），不抛异常。"""
+    """尝试解密 API Key，失败不抛异常。
+
+    作用：密钥轮换后旧密文不可读时返回 None。
+    场景：列表展示掩码、连通测试前探测。
+    参数：ciphertext 库中密文。
+    返回：明文或 None。
+    """
     try:
         return _get_fernet().decrypt(ciphertext.encode()).decode()
     except InvalidToken:
@@ -40,7 +60,13 @@ def try_decrypt_apikey(ciphertext: str) -> str | None:
 
 
 def decrypt_apikey(ciphertext: str) -> str:
-    """解密失败抛 AppError 由调用方处理；正常路径明文不落日志。"""
+    """解密 API Key，失败抛 AppError。
+
+    作用：call_llm 等正常路径必须拿到明文 key。
+    场景：LLM 调用前解密；明文仅内存生命周期。
+    参数：ciphertext 库中密文。
+    返回：明文 apikey；失败抛 LLM_CONFIG_INVALID。
+    """
     from app.core.errors import AppError, ErrorCode
 
     plain = try_decrypt_apikey(ciphertext)

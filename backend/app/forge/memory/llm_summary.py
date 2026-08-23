@@ -32,7 +32,15 @@ async def synthesize_summary_via_llm(
     *,
     complete: LlmComplete,
 ) -> SessionSummary:
-    """调用 LLM 生成 SessionSummary；解析失败则回落确定性 synthesizer。"""
+    """调用 LLM 生成 Session Summary，失败则回落确定性 synthesizer。
+
+    场景：配置 ``memory_session_summary_llm`` 时的增强摘要路径。
+    参数：
+        turns - 近期对话轮次；
+        previous - 上一轮已持久化的摘要；
+        complete - 异步 LLM 补全函数 (system, user) -> str。
+    返回：LLM 解析成功则返回 coerced 摘要，否则回落 synthesize_summary_from_turns。
+    """
     user_msg = _build_user_message(turns, previous)
     try:
         raw = await complete(_SUMMARY_SYSTEM, user_msg)
@@ -40,14 +48,18 @@ async def synthesize_summary_via_llm(
         coerced = coerce_session_summary(parsed)
         if coerced is not None:
             return coerced
-    except Exception:  # noqa: BLE001 摘要增强失败不得阻断 Memory
+    except Exception:  # noqa: BLE001 摘要增强失败不得阻断 Memory  # nosec B110
         pass
     return synthesize_summary_from_turns(turns, previous=previous)
 
 
-def _build_user_message(
-    turns: list[ContextTurn], previous: SessionSummary | None
-) -> str:
+def _build_user_message(turns: list[ContextTurn], previous: SessionSummary | None) -> str:
+    """拼装 LLM 摘要请求的用户消息。
+
+    场景：``synthesize_summary_via_llm`` 调用 LLM 前构造 prompt。
+    参数：turns - 对话轮次；previous - 上一轮摘要或 None。
+    返回：含 Recent Turns、Previous Summary 与指令的多行文本。
+    """
     lines = ["【Recent Turns】"]
     for t in turns[-30:]:
         lines.append(f"{t.role}: {t.content.strip()[:400]}")
@@ -59,6 +71,12 @@ def _build_user_message(
 
 
 def _parse_summary_json(raw: str) -> dict[str, Any]:
+    """解析 LLM 返回的 Session Summary JSON（支持 Markdown 代码块包裹）。
+
+    场景：``synthesize_summary_via_llm`` 解析 LLM 输出。
+    参数：raw - LLM 原始响应文本。
+    返回：解析后的 dict；非 dict 时返回空摘要结构。
+    """
     text = (raw or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)

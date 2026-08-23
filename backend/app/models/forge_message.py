@@ -9,7 +9,13 @@ from app.models.base import Base
 
 
 class ForgeMessage(Base):
+    """Forge 对话消息（用户输入、系统阶段、HITL 等）。
+
+    场景：多轮记忆 loader、前端消息时间线。
+    """
+
     __tablename__ = "forge_messages"
+
     __table_args__ = (
         UniqueConstraint("dedupe_key", name="uq_forge_message_dedupe_key"),
         Index("ix_forge_messages_game_created", "game_id", "created_at"),

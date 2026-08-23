@@ -22,7 +22,13 @@ async def platform_complete(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
 ) -> tuple[str, provider.Usage]:
-    """执行一次平台 key 的非流式补全并上报 Langfuse generation。"""
+    """执行平台 Key 的非流式补全并上报 Langfuse。
+
+    作用：绕过用户配额/熔断，仅做 observe_generation + complete。
+    场景：平台内置任务（审核、系统探测等）。
+    参数：prov、apikey、model、system、user_msg；可选 kind、base_url、max_tokens、metadata、tags。
+    返回：(content 字符串, Usage)。
+    """
     meta = dict(metadata or {})
     tag_list = list(tags or [])
     with (

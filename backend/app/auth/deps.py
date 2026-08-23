@@ -6,7 +6,10 @@ from typing import Annotated
 import jwt
 import redis.asyncio as redis
 from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.services import disabled_user_message
@@ -25,7 +28,13 @@ RedisClient = Annotated[redis.Redis, Depends(get_redis)]
 
 
 async def current_user(creds: Creds, db: DbSession) -> User:
-    """从 access_token 解析 user_id+role，查 DB 取用户；失败统一 401。"""
+    """从 Authorization 凭证解析 access JWT 并加载当前用户。
+
+    作用：解码 JWT、查 DB 取 User、校验未禁用。
+    场景：FastAPI Depends(CurrentUser) 保护需登录路由。
+    参数：creds — Authorization 头凭证；db — 数据库会话。
+    返回：User ORM 实例；缺失/无效 token 或用户禁用则 401/403。
+    """
     if not creds or not creds.credentials:
         raise AppError(ErrorCode.UNAUTHORIZED, "未登录或 token 失效")
     try:
@@ -50,6 +59,13 @@ CurrentUser = Annotated[User, Depends(current_user)]
 
 
 def require_admin(user: CurrentUser) -> User:
+    """校验当前用户为管理员角色。
+
+    作用：role 非 ADMIN 时拒绝访问。
+    场景：Depends(AdminUser) 保护 /admin 路由。
+    参数：user — 已通过 current_user 校验的用户。
+    返回：同一 User 实例；非管理员 403。
+    """
     if user.role != Role.ADMIN.value:
         raise AppError(ErrorCode.FORBIDDEN, "无权限")
     return user

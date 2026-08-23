@@ -8,7 +8,13 @@ from app.models.base import Base, TimestampMixin
 
 
 class GameReaction(Base, TimestampMixin):
+    """用户对已发布游戏的点赞/收藏等反应。
+
+    场景：reactions API、广场互动统计。
+    """
+
     __tablename__ = "game_reactions"
+
     __table_args__ = (UniqueConstraint("user_id", "game_id", "type", name="uq_game_reaction"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

@@ -14,6 +14,12 @@ from app.forge.build.routing import BuildRouting
 
 
 def parse_llm_code_output(raw: str, *, engine_id: str) -> ParsedCodeOutput:
+    """解析 LLM 代码输出为 ParsedCodeOutput（单 HTML 或 project JSON）。
+
+    场景：code_qa_exec、build 集成。
+    参数：raw - 模型输出；engine_id - 默认引擎。
+    返回：ParsedCodeOutput。
+    """
     return parse_code_output(raw, default_engine=engine_id)
 
 
@@ -37,6 +43,12 @@ async def load_stored_project_source(game_id: uuid.UUID, version: int) -> dict[s
 async def run_project_pipeline(
     parsed: ParsedCodeOutput,
 ) -> BuildPipelineResult | None:
+    """对 project 格式输出执行 Vite 构建流水线。
+
+    场景：非 loop 的一次性 project 构建。
+    参数：parsed - 含 files 与 routing 的解析结果。
+    返回：BuildPipelineResult 或 None（非 project 时）。
+    """
     if parsed.format != "project" or parsed.routing is None or parsed.errors:
         return None
     return await BuildPipeline().run_project(parsed.files, parsed.routing)
@@ -150,6 +162,12 @@ def merge_routing(design_routing: BuildRouting, parsed: ParsedCodeOutput) -> Bui
 
 
 def with_design_routing(parsed: ParsedCodeOutput, design_routing: BuildRouting) -> ParsedCodeOutput:
+    """将 design_doc routing 合并进 LLM project 解析结果。
+
+    场景：parse 后统一 routing 基线。
+    参数：parsed、design_routing。
+    返回：routing 已 merge 的新 ParsedCodeOutput。
+    """
     if parsed.routing is None:
         return parsed
     return ParsedCodeOutput(

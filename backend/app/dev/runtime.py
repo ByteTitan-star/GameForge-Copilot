@@ -58,7 +58,12 @@ _RETRY_PHASES = frozenset({"sandbox_failed", "qa_failed"})
 def _expand_scopes(
     scopes: Iterable[RedisScope], *, run_id: uuid.UUID | None, pattern: str | None
 ) -> list[str]:
-    """Map logical scopes to Redis SCAN match patterns."""
+    """将逻辑 Redis scope 展开为 SCAN 匹配模式列表。
+
+    场景：flush_redis 批量清理。
+    参数：scopes、可选 run_id（forge 单 run）、pattern（自定义）。
+    返回：去重后的 match pattern 列表。
+    """
     patterns: list[str] = []
     for scope in scopes:
         if scope == "all_ephemeral":
@@ -79,6 +84,12 @@ def _expand_scopes(
 def _patterns_for_scope(
     scope: RedisScope, *, run_id: uuid.UUID | None, pattern: str | None
 ) -> list[str]:
+    """单个 scope 对应的 Redis key 匹配模式。
+
+    场景：_expand_scopes / count_redis_prefixes。
+    参数：scope、run_id、pattern。
+    返回：如 run:events:{id}* 或 rl:* 等模式列表。
+    """
     if scope == "pattern":
         if not pattern:
             raise AppError(ErrorCode.VALIDATION_ERROR, "pattern scope requires pattern field")
@@ -98,7 +109,12 @@ def _patterns_for_scope(
 
 
 async def count_redis_prefixes(r: redis.Redis) -> dict[str, int]:
-    """Count keys per dev scope (approximate via SCAN)."""
+    """按 dev scope 统计 Redis 键数量（SCAN 近似计数）。
+
+    场景：GET /dev/runtime/status。
+    参数：r - Redis 客户端。
+    返回：scope 名到键数量的映射。
+    """
     counts: dict[str, int] = {}
     for scope in (*_ALL_EPHEMERAL, "refresh_tokens"):
         n = 0
@@ -116,6 +132,12 @@ async def flush_redis(
     run_id: uuid.UUID | None,
     pattern: str | None,
 ) -> dict[str, int]:
+    """按 scope 删除 Redis 键（dev 调试用）。
+
+    场景：POST /dev/redis/flush、reset_dev_state。
+    参数：r、scopes、run_id、pattern。
+    返回：各 match pattern 删除的键数量。
+    """
     deleted: dict[str, int] = {}
     for pat in _expand_scopes(scopes, run_id=run_id, pattern=pattern):
         n = 0
@@ -127,6 +149,12 @@ async def flush_redis(
 
 
 async def get_queue_stats() -> dict[str, int | str | None]:
+    """返回任务队列状态（memory 或 RabbitMQ）。
+
+    场景：dev runtime 面板。
+    参数：无。
+    返回：backend、queue、messages、consumers 等字段。
+    """
     if use_memory():
         return {
             "backend": "memory",
@@ -139,6 +167,12 @@ async def get_queue_stats() -> dict[str, int | str | None]:
 
 
 async def purge_queue() -> dict[str, int | str]:
+    """清空任务队列（memory captured 或 RabbitMQ purge）。
+
+    场景：reset_dev_state、dev 调试。
+    参数：无。
+    返回：backend、queue、purged 数量。
+    """
     if use_memory():
         n = len(MemoryTaskPublisher.captured)
         MemoryTaskPublisher.reset()
@@ -148,6 +182,12 @@ async def purge_queue() -> dict[str, int | str]:
 
 
 async def get_runtime_status(r: redis.Redis) -> dict:
+    """聚合 dev 运行时快照：环境、Redis 计数、队列状态。
+
+    场景：GET /dev/runtime/status。
+    参数：r - Redis 客户端。
+    返回：env、messaging_backend、redis、queue 字典。
+    """
     redis_counts = await count_redis_prefixes(r)
     queue = await get_queue_stats()
     return {
@@ -159,7 +199,12 @@ async def get_runtime_status(r: redis.Redis) -> dict:
 
 
 async def dev_requeue_run(db: AsyncSession, r: redis.Redis, run_id: uuid.UUID) -> dict:
-    """Re-enqueue a stuck run after worker restart (dev only)."""
+    """开发环境将卡住 run 重新入队（worker 重启后恢复）。
+
+    场景：POST /dev/runs/{id}/requeue。
+    参数：db、r、run_id。
+    返回：run_id、task 类型、status、phase 等信息 dict。
+    """
     run = await db.get(GenerationRun, run_id)
     if run is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "run 不存在")

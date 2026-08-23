@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 
 
 class PreferenceItem(BaseModel):
+    """PreferenceItem 列表项 DTO。
+
+    场景：分页/列表 API 的单条记录结构。"""
+
     id: uuid.UUID
     category: str
     key: str
@@ -21,6 +25,10 @@ class PreferenceItem(BaseModel):
 
 
 class PreferenceUpsert(BaseModel):
+    """PreferenceUpsert 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     category: str = Field(min_length=1, max_length=64)
     key: str = Field(min_length=1, max_length=64)
     value_json: dict[str, Any]
@@ -28,4 +36,8 @@ class PreferenceUpsert(BaseModel):
 
 
 class PreferenceList(BaseModel):
+    """PreferenceList 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     items: list[PreferenceItem]

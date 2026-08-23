@@ -10,6 +10,11 @@ from app.models.base import Base
 
 
 class FailureReport(Base):
+    """Run 失败结构化报告（分类、诊断、证据链）。
+
+    场景：QA/构建失败后归档、离线分析。
+    """
+
     __tablename__ = "failure_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

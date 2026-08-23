@@ -29,10 +29,12 @@ class OutputTruncatedError(Exception):
     """Code/Vite 生成在续写轮次耗尽后仍被截断。"""
 
     def __init__(self, message: str = OUTPUT_TRUNCATED_ERROR) -> None:
+        """用默认或自定义消息构造截断异常。"""
         super().__init__(message)
 
 
 def is_output_truncated_error(errors: list[str] | None) -> bool:
+    """判断错误列表是否包含 OUTPUT_TRUNCATED 前缀（LLM 续写耗尽）。"""
     if not errors:
         return False
     prefix = "OUTPUT_TRUNCATED:"
@@ -55,6 +57,7 @@ def is_likely_truncated(
 
 
 def has_incomplete_structure(content: str) -> bool:
+    """启发式检测 HTML/JSON 是否结构不完整（缺闭合标签或括号）。"""
     text = content.strip()
     if not text:
         return False
@@ -78,6 +81,7 @@ def has_incomplete_structure(content: str) -> bool:
 
 
 def _looks_like_full_rewrite(suffix: str) -> bool:
+    """续写片段若从头重写（DOCTYPE/format JSON）则不应与 prefix 拼接。"""
     stripped = suffix.lstrip()
     if not stripped:
         return False
@@ -179,6 +183,7 @@ async def generate_code_output(
     llm_kind = kind or phase
 
     async def llm_once(sys: str, usr: str) -> LLMCompletion:
+        """单轮 LLM 调用封装（流式或非流式，统一 max_tokens）。"""
         if settings.stream_enabled:
             return await run_streamed_llm_result(
                 ctx,

@@ -2,11 +2,15 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
+    """用户角色：普通用户与管理员。"""
+
     USER = "user"
     ADMIN = "admin"
 
 
 class GameStatus(StrEnum):
+    """游戏生命周期状态（草稿至上下架）。"""
+
     DRAFT = "draft"
     SUBMITTED = "submitted"
     REVIEWING = "reviewing"
@@ -16,6 +20,8 @@ class GameStatus(StrEnum):
 
 
 class RunStatus(StrEnum):
+    """Forge 运行会话的顶层状态。"""
+
     RUNNING = "running"
     PAUSED = "paused"
     DONE = "done"
@@ -23,7 +29,7 @@ class RunStatus(StrEnum):
 
 
 class PauseReason(StrEnum):
-    """paused 细分原因（ADR-05：不新增 RunStatus）。"""
+    """Run 处于 paused 时的细分原因（ADR-05：不新增 RunStatus）。"""
 
     WAITING_USER = "waiting_user"
     RECOVERABLE_ERROR = "recoverable_error"
@@ -32,6 +38,8 @@ class PauseReason(StrEnum):
 
 
 class RunPhase(StrEnum):
+    """Forge 流水线当前阶段。"""
+
     PLAN = "plan"
     ART = "art"
     CODE = "code"
@@ -40,6 +48,8 @@ class RunPhase(StrEnum):
 
 
 class RunCommandType(StrEnum):
+    """用户对运行会话下发的 HITL 指令类型。"""
+
     APPROVE_PLAN = "approve_plan"
     REVISE_PLAN = "revise_plan"
     SELECT_ART_A = "select_art_a"
@@ -51,6 +61,8 @@ class RunCommandType(StrEnum):
 
 
 class RunCommandStatus(StrEnum):
+    """单条运行指令的执行状态。"""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -59,6 +71,8 @@ class RunCommandStatus(StrEnum):
 
 
 class FailureClass(StrEnum):
+    """失败报告的分类，用于恢复策略与指标。"""
+
     INFRA_TRANSIENT = "infra_transient"
     IMPLEMENTATION_DEFECT = "implementation_defect"
     CAPABILITY_MISMATCH = "capability_mismatch"
@@ -69,28 +83,38 @@ class FailureClass(StrEnum):
 
 
 class ArtifactKind(StrEnum):
+    """运行产物的种类。"""
+
     PLAN = "plan"
     ART = "art"
     CANDIDATE = "candidate"
 
 
 class ArtifactStatus(StrEnum):
+    """产物是否仍为当前有效版本。"""
+
     ACTIVE = "active"
     STALE = "stale"
 
 
 class EntryPhase(StrEnum):
+    """用户进入 Forge 时的起始阶段。"""
+
     PLAN = "plan"
     CODE = "code"
     CHAT = "chat"
 
 
 class ReactionType(StrEnum):
+    """用户对游戏的互动类型。"""
+
     LIKE = "like"
     FAVORITE = "favorite"
 
 
 class PublishStatus(StrEnum):
+    """游戏提审与发布审核状态。"""
+
     SUBMITTED = "submitted"
     REVIEWING = "reviewing"
     APPROVED = "approved"
@@ -99,12 +123,16 @@ class PublishStatus(StrEnum):
 
 
 class LLMProvider(StrEnum):
+    """平台支持的 LLM 供应商标识。"""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OPENAI_COMPAT = "openai_compat"
 
 
 class WSEventType(StrEnum):
+    """Forge 运行 WebSocket 推送的事件类型。"""
+
     PHASE_START = "phase_start"
     LLM_CALL = "llm_call"
     # LLM 流式微批增量：payload 含 phase + delta（攒 3-5 字一批的打字机文本）

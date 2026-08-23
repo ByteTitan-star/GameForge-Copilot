@@ -37,10 +37,21 @@ class DockerSandbox:
     backend_id = "docker"
 
     def __init__(self, image: str | None = None, tier: str | None = None) -> None:
+        """配置沙箱镜像与默认资源档位。
+
+        场景：DockerSandbox 实例化。
+        参数：image - 容器镜像；tier - 默认 lite/standard/heavy。
+        """
         self.image = image or settings.sandbox_image
         self.default_tier = tier or settings.sandbox_default_tier
 
     async def create(self, *, tier: str | None = None) -> SandboxSession:
+        """创建临时工作区目录并返回沙箱会话。
+
+        场景：execute 前准备工作区 bind mount。
+        参数：tier - 资源档位。
+        返回：handle 为工作区路径的 SandboxSession。
+        """
         workspace = Path(tempfile.mkdtemp(prefix="gf-docker-sandbox-"))
         return SandboxSession.new(
             self.backend_id,
@@ -56,6 +67,12 @@ class DockerSandbox:
         *,
         collect_root: str = ".",
     ) -> BuildResult:
+        """写入源码并在隔离容器中执行构建、采集产物。
+
+        场景：Forge Code QA 生产沙箱路径。
+        参数：session、source、build_cmd、collect_root。
+        返回：BuildResult。
+        """
         if session.closed or not session.handle:
             return BuildResult(ok=False, error="sandbox session closed", failure_kind="infra")
         limits = tier_limits(session.tier)
@@ -79,6 +96,11 @@ class DockerSandbox:
             return BuildResult(ok=False, error=str(e), failure_kind="infra")
 
     async def destroy(self, session: SandboxSession) -> None:
+        """删除工作区目录并标记会话已关闭。
+
+        场景：构建结束或 HITL 暂停销毁。
+        参数：session - 待清理会话。
+        """
         if session.closed:
             return
         if session.handle:
@@ -94,6 +116,12 @@ class DockerSandbox:
         collect_root: str = ".",
         tier: str | None = None,
     ) -> BuildResult:
+        """一次性 create → execute → destroy（兼容旧调用方）。
+
+        场景：无需长会话的 oneshot 构建。
+        参数：source、build_cmd、collect_root、tier。
+        返回：BuildResult。
+        """
         from app.sandbox.tiers import record_sandbox_outcome, resolve_create_tier
 
         chosen = resolve_create_tier(source=source, explicit=tier)
@@ -117,6 +145,12 @@ class DockerSandbox:
         limits: dict,
         collect_root: str = ".",
     ) -> BuildResult:
+        """拉起无网络 Docker 容器执行命令并采集 workspace 产物。
+
+        场景：DockerSandbox.execute 内部。
+        参数：workspace、build_cmd、limits、tier 限制、collect_root。
+        返回：BuildResult（含超时/OOM/构建错误分类）。
+        """
         cmd = list(build_cmd) if build_cmd else ["sh", "-c", "test -f /workspace/index.html"]
         host_config = {
             "Binds": [f"{workspace.resolve()}:/workspace:rw"],
@@ -182,5 +216,11 @@ class DockerSandbox:
 
 
 def _looks_like_oom(logs: str) -> bool:
+    """根据容器日志启发式判断是否为 OOM 杀进程。
+
+    场景：_run_container 构建失败时区分 failure_kind。
+    参数：logs - 容器 stdout/stderr 合并文本。
+    返回：疑似 OOM 时为 True。
+    """
     low = logs.lower()
     return "out of memory" in low or "oom" in low

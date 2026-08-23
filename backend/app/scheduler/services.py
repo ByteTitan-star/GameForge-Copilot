@@ -21,6 +21,12 @@ from app.publish import services as publish_services
 
 
 async def _pick_admin(db: AsyncSession) -> User | None:
+    """查询一名 ADMIN 用户用于定时上下架操作。
+
+    场景：scan_scheduled 需要 admin 身份调用 publish API。
+    参数：db。
+    返回：User 或 None。
+    """
     return await db.scalar(select(User).where(User.role == Role.ADMIN.value).limit(1))
 
 
@@ -118,6 +124,12 @@ async def _fail_stale_run(
     code: str,
     message: str,
 ) -> None:
+    """将超时/租约丢失的 run 置 FAILED 并清理任务与 checkpoint。
+
+    场景：expire_stale_paused_runs / expire_stale_running_runs。
+    参数：db、r、run、now、code、message。
+    返回：无。
+    """
     run.status = RunStatus.FAILED.value
     run.ended_at = now
     await add_message(

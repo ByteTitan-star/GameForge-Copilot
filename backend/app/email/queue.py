@@ -13,9 +13,14 @@ from app.messaging.tasks import (
 
 
 async def enqueue_verification(email: str, code: str) -> None:
-    await get_task_publisher().publish(
-        TASK_SEND_VERIFICATION, {"email": email, "code": code}
-    )
+    """将邮箱验证码发送任务入队。
+
+    作用：发布 TASK_SEND_VERIFICATION；dev 环境额外写入 Redis dev:verify 键。
+    场景：用户注册或重发验证码流程。
+    参数：email — 目标邮箱；code — 6 位验证码。
+    返回：无。
+    """
+    await get_task_publisher().publish(TASK_SEND_VERIFICATION, {"email": email, "code": code})
     if settings.env == "development":
         import redis.asyncio as redis
 
@@ -31,11 +36,24 @@ async def enqueue_verification(email: str, code: str) -> None:
 
 
 async def enqueue_reset(email: str, token: str) -> None:
+    """将密码重置邮件任务入队。
+
+    作用：发布 TASK_SEND_RESET 到消息队列。
+    场景：用户申请重置密码流程。
+    参数：email — 目标邮箱；token — 重置令牌。
+    返回：无。
+    """
     await get_task_publisher().publish(TASK_SEND_RESET, {"email": email, "token": token})
 
 
 async def enqueue_notification(email: str, subject: str, body: str) -> None:
-    """审批/下架/配额告警等通知邮件（docs/04 §通知）。"""
+    """将通用通知邮件任务入队。
+
+    作用：发布 TASK_SEND_NOTIFICATION（审批/下架/配额告警等）。
+    场景：notify_user、submit_feedback 等业务侧发信。
+    参数：email — 收件人；subject — 主题；body — 正文。
+    返回：无。
+    """
     await get_task_publisher().publish(
         TASK_SEND_NOTIFICATION, {"email": email, "subject": subject, "body": body}
     )

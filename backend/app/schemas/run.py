@@ -7,6 +7,10 @@ from app.enums import EntryPhase, RunPhase, RunStatus
 
 
 class RunCreate(BaseModel):
+    """RunCreate 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     # max_length 既是输入校验，也是 prompt injection 的防线之一：拒绝超长 jailbreak payload。
     # 非空校验由 services 层 .strip() 兜底，这里不强制 min_length 以兼容最小 input 的测试。
     requirement: str = Field(..., max_length=2000)
@@ -14,6 +18,10 @@ class RunCreate(BaseModel):
 
 
 class RunResp(BaseModel):
+    """RunResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     run_id: uuid.UUID
     game_id: uuid.UUID
     status: RunStatus
@@ -23,6 +31,10 @@ class RunResp(BaseModel):
 
 
 class RunListItem(BaseModel):
+    """RunListItem 列表项 DTO。
+
+    场景：分页/列表 API 的单条记录结构。"""
+
     run_id: uuid.UUID
     status: RunStatus
     phase: RunPhase
@@ -31,10 +43,18 @@ class RunListItem(BaseModel):
 
 
 class HitlState(BaseModel):
+    """HitlState 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     node: str
 
 
 class HitlWaitDetail(BaseModel):
+    """HitlWaitDetail 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     node: str
     design_doc: dict | str | None = None
     action_url: str | None = None
@@ -45,6 +65,10 @@ class HitlWaitDetail(BaseModel):
 
 
 class RecoveryDetail(BaseModel):
+    """RecoveryDetail 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     node: str
     error_code: str
     attempts: int
@@ -52,6 +76,10 @@ class RecoveryDetail(BaseModel):
 
 
 class ArtifactGateDetail(BaseModel):
+    """ArtifactGateDetail 数据传输对象。
+
+    场景：API 或内部序列化契约。"""
+
     """ADR-01：previewable ≠ publishable，build_ok ≠ qa_ok。"""
 
     generation_success: bool = False
@@ -61,6 +89,10 @@ class ArtifactGateDetail(BaseModel):
 
 
 class RunStatusResp(BaseModel):
+    """RunStatusResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     run_id: uuid.UUID
     game_id: uuid.UUID
     status: RunStatus
@@ -75,6 +107,10 @@ class RunStatusResp(BaseModel):
 
 
 class HitlResolveReq(BaseModel):
+    """HitlResolveReq API 请求体。
+
+    场景：对应端点入参 Pydantic 校验。"""
+
     node: str
     # 兼容旧客户端：decision；P2 起优先使用 command（RunCommandType）。
     decision: str | None = None
@@ -84,12 +120,20 @@ class HitlResolveReq(BaseModel):
 
 
 class HitlResolveResp(BaseModel):
+    """HitlResolveResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     run_id: uuid.UUID
     status: RunStatus
     phase: RunPhase
 
 
 class RunControlResp(BaseModel):
+    """RunControlResp API 响应体。
+
+    场景：对应端点成功响应 data 字段。"""
+
     run_id: uuid.UUID
     status: RunStatus
     phase: RunPhase

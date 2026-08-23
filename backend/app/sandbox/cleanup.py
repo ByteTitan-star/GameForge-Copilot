@@ -23,6 +23,11 @@ async def cleanup_orphan_sandbox_resources() -> dict[str, int]:
 
 
 async def _cleanup_daytona_orphans() -> int:
+    """调用 Daytona 孤儿对账并返回删除数量。
+
+    场景：worker 启动时 cleanup_orphan_sandbox_resources。
+    返回：成功回收的远端 sandbox 数；失败时记日志并返回 0。
+    """
     try:
         from app.sandbox.daytona import reconcile_daytona_orphans
 
@@ -33,6 +38,11 @@ async def _cleanup_daytona_orphans() -> int:
 
 
 async def _cleanup_orphan_containers() -> int:
+    """删除 gf-sandbox-/gf-builder- 前缀的孤儿 Docker 容器。
+
+    场景：worker 启动清扫（ADR-11）。
+    返回：删除的容器数量。
+    """
     try:
         import aiodocker
     except ImportError:
@@ -66,6 +76,11 @@ async def _cleanup_orphan_containers() -> int:
 
 
 def _cleanup_temp_dirs() -> int:
+    """删除 tempfile 下 gf-*-sandbox-/gf-builder- 前缀孤儿目录。
+
+    场景：worker 启动清扫本地沙箱临时工作区。
+    返回：删除的目录数量。
+    """
     root = Path(tempfile.gettempdir())
     removed = 0
     try:

@@ -13,6 +13,11 @@ CodeFormat = Literal["single-html", "project"]
 
 @dataclass(frozen=True)
 class ParsedCodeOutput:
+    """LLM 代码输出的结构化解析结果。
+
+    场景：code/repair 节点解析 single-html 或 project JSON。
+    """
+
     format: CodeFormat
     files: dict[str, str]
     routing: BuildRouting | None = None
@@ -20,6 +25,12 @@ class ParsedCodeOutput:
 
 
 def _decode_json(raw: str) -> dict[str, Any] | None:
+    """从 LLM 原始文本中提取 JSON 对象。
+
+    场景：解析 project/single-html 结构化输出；支持 Markdown 围栏与首尾截取。
+    参数：raw — LLM 返回的完整字符串。
+    返回：解析成功的 dict；失败时 None。
+    """
     text = raw.strip()
     if text.startswith("```"):
         first = text.find("\n")
@@ -42,6 +53,12 @@ def _decode_json(raw: str) -> dict[str, Any] | None:
 
 
 def _normalize_files(raw: object) -> dict[str, str]:
+    """归一化 files 字段为安全的相对路径映射。
+
+    场景：project JSON 入库前清洗路径，拒绝 ``..`` 与非法键。
+    参数：raw — JSON 中的 files 字段。
+    返回：``{相对路径: 源码文本}``；非法输入返回空 dict。
+    """
     if not isinstance(raw, dict):
         return {}
     out: dict[str, str] = {}
@@ -58,7 +75,12 @@ def _normalize_files(raw: object) -> dict[str, str]:
 
 
 def parse_code_output(raw: str, *, default_engine: str = "canvas") -> ParsedCodeOutput:
-    """解析 LLM 输出；非 JSON 则按 legacy single-html 处理。"""
+    """解析 LLM 代码输出为 single-html 或 project 结构。
+
+    场景：code/repair 节点落盘前；非 JSON 或裸 HTML 按 legacy single-html 处理。
+    参数：raw — LLM 完整输出；default_engine — project 缺省 renderer。
+    返回：ParsedCodeOutput（含 routing 与校验 errors）。
+    """
     stripped = raw.strip()
     if stripped.lower().startswith("<!doctype") or stripped.startswith("<html"):
         return ParsedCodeOutput(format="single-html", files={"index.html": stripped})

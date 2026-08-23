@@ -12,23 +12,53 @@ from app.models.game import Game
 
 
 def _day() -> str:
+    """当前 UTC 日期字符串（YYYY-MM-DD）。
+
+    场景：Redis PV/UV 键分区。
+    参数：无。
+    返回：日期字符串。
+    """
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def _pv_key(slug: str) -> str:
+    """某游戏 slug 当日 PV 计数 Redis 键。
+
+    场景：record_play incr。
+    参数：slug - 游戏公开标识。
+    返回：play:pv:{slug}:{day}。
+    """
     return f"play:pv:{slug}:{_day()}"
 
 
 def _uv_key(slug: str) -> str:
+    """某游戏 slug 当日 UV HyperLogLog Redis 键。
+
+    场景：record_play pfadd。
+    参数：slug。
+    返回：play:uv:{slug}:{day}。
+    """
     return f"play:uv:{slug}:{_day()}"
 
 
 # 全站聚合 rollup（独立命名空间，避免与某个真实 slug 冲突）
 def _site_pv_key(day: str | None = None) -> str:
+    """全站当日 PV 聚合 Redis 键。
+
+    场景：admin 访问分析 site_trend。
+    参数：day - 可选指定日期，默认今天。
+    返回：analytics:site:pv:{day}。
+    """
     return f"analytics:site:pv:{day or _day()}"
 
 
 def _site_uv_key(day: str | None = None) -> str:
+    """全站当日 UV 聚合 HyperLogLog Redis 键。
+
+    场景：admin 访问分析 site_trend。
+    参数：day - 可选指定日期。
+    返回：analytics:site:uv:{day}。
+    """
     return f"analytics:site:uv:{day or _day()}"
 
 

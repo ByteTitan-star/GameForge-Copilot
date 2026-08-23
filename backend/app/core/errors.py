@@ -11,6 +11,8 @@ CODE_TO_STATUS: dict[str, int] = {}
 
 
 class ErrorCode(StrEnum):
+    """API 统一错误码枚举，与 HTTP 状态码映射。"""
+
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
     EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED"
@@ -59,6 +61,13 @@ class AppError(Exception):
         message: str,
         detail: dict | None = None,
     ) -> None:
+        """构造业务异常。
+
+        作用：携带错误码、用户可见消息与可选结构化 detail。
+        场景：业务层校验失败或状态冲突时 raise AppError。
+        参数：code - 错误码枚举；message - 对外提示；detail - 附加字段（可选）。
+        返回：无。
+        """
         self.code = code
         self.message = message
         self.detail = detail
@@ -66,19 +75,47 @@ class AppError(Exception):
 
     @property
     def status_code(self) -> int:
+        """将错误码映射为 HTTP 状态码。
+
+        作用：根据 code 查表返回对应 status。
+        场景：异常处理器构造 JSONResponse 时读取。
+        参数：无。
+        返回：HTTP 状态码整数。
+        """
         return _CODE_STATUS[self.code]
 
 
 def _json(code: ErrorCode, message: str, detail: dict | None, status: int) -> JSONResponse:
+    """组装统一错误 JSON 响应。
+
+    作用：将错误码、消息与 detail 封装为 ErrorResponse 并返回 JSONResponse。
+    场景：各异常处理器内部复用。
+    参数：code - 错误码；message - 提示文案；detail - 附加信息；status - HTTP 状态码。
+    返回：FastAPI JSONResponse 实例。
+    """
     body = ErrorResponse(error=ErrorDetail(code=code.value, message=message, detail=detail))
     return JSONResponse(status_code=status, content=body.model_dump())
 
 
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
+    """处理 AppError 并返回统一错误体。
+
+    作用：把业务异常转为标准 ErrorResponse JSON。
+    场景：FastAPI 捕获到 AppError 时自动调用。
+    参数：_ - 请求对象（未使用）；exc - 抛出的 AppError。
+    返回：带正确状态码的 JSONResponse。
+    """
     return _json(exc.code, exc.message, exc.detail, exc.status_code)
 
 
 async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    """处理 Pydantic/FastAPI 入参校验失败。
+
+    作用：将校验错误列表包装为 VALIDATION_ERROR 响应。
+    场景：请求体或查询参数校验不通过时由框架调用。
+    参数：_ - 请求对象（未使用）；exc - RequestValidationError。
+    返回：HTTP 400 的 JSONResponse。
+    """
     return _json(
         ErrorCode.VALIDATION_ERROR,
         "入参校验失败",
@@ -88,5 +125,12 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    """向 FastAPI 注册全局异常处理器。
+
+    作用：绑定 AppError 与 RequestValidationError 的处理函数。
+    场景：应用启动装配时调用一次。
+    参数：app - FastAPI 应用实例。
+    返回：无。
+    """
     app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_error_handler)  # type: ignore[arg-type]

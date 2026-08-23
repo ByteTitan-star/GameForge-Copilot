@@ -11,6 +11,11 @@ from app.models.base import Base
 
 
 class ArtifactRevision(Base):
+    """Forge 产物谱系 revision（plan/art/candidate 链路）。
+
+    场景：lineage 登记、promote 门禁、STALE 作废。
+    """
+
     __tablename__ = "artifact_revisions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

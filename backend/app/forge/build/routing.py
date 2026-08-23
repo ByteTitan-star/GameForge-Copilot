@@ -29,6 +29,12 @@ class BuildRouting:
     dependencies: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
+        """序列化为 design_doc / checkpoint 可存的 dict。
+
+        场景：持久化 build_routing。
+        参数：无。
+        返回：含 build/renderer/ui/dependencies 的字典。
+        """
         return {
             "build": self.build,
             "renderer": self.renderer,
@@ -38,18 +44,36 @@ class BuildRouting:
 
 
 def _as_build(value: object) -> BuildKind:
+    """将任意输入规范为 BuildKind（仅 vite 或 none）。
+
+    场景：coerce_build_routing。
+    参数：value - 原始 build 字段。
+    返回：\"vite\" 或 \"none\"。
+    """
     if value == "vite":
         return "vite"
     return "none"
 
 
 def _as_ui(value: object) -> UiKind:
+    """将任意输入规范为 UiKind（仅 react 或 none）。
+
+    场景：coerce_build_routing。
+    参数：value - 原始 ui 字段。
+    返回：\"react\" 或 \"none\"。
+    """
     if value == "react":
         return "react"
     return "none"
 
 
 def _as_deps(value: object) -> tuple[str, ...]:
+    """将 dependencies 列表规范为非空包名元组。
+
+    场景：coerce_build_routing。
+    参数：value - 原始 dependencies（通常为 list）。
+    返回：去重前的有序包名元组。
+    """
     if not isinstance(value, list):
         return ()
     out: list[str] = []
@@ -74,6 +98,12 @@ def coerce_build_routing(raw: Any, *, engine_id: str = "canvas") -> BuildRouting
 
 
 def routing_from_design_doc(design_doc: dict[str, Any]) -> BuildRouting:
+    """从策划稿 design_doc 提取并归一化 BuildRouting。
+
+    场景：Code 阶段选择 Vite 流水线或单文件 HTML。
+    参数：design_doc - 含 engine 与 build_routing 的 dict。
+    返回：BuildRouting 实例。
+    """
     engine_id = design_doc.get("engine", {}).get("id", "canvas")
     raw = design_doc.get("build_routing")
     routing = coerce_build_routing(raw, engine_id=engine_id)
@@ -109,6 +139,12 @@ def resolve_package_versions(routing: BuildRouting) -> dict[str, str]:
 
 
 def validate_routing(routing: BuildRouting) -> list[str]:
+    """校验 BuildRouting 字段合法性与依赖白名单。
+
+    场景：写入 checkpoint 前门禁。
+    参数：routing - 待校验路由。
+    返回：错误文案列表（空表示通过）。
+    """
     errors: list[str] = []
     if routing.build not in ("none", "vite"):
         errors.append(f"build 必须是 none 或 vite，当前: {routing.build}")
@@ -123,4 +159,10 @@ def validate_routing(routing: BuildRouting) -> list[str]:
 
 
 def should_use_vite_pipeline(routing: BuildRouting, *, enabled: bool) -> bool:
+    """判断是否走 Vite+TS 构建流水线。
+
+    场景：code_or_repair_node 分支。
+    参数：routing、enabled - 功能开关。
+    返回：开关开启且 routing.build==vite 时为 True。
+    """
     return enabled and routing.build == "vite"

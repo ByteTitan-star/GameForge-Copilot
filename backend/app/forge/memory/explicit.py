@@ -21,13 +21,21 @@ _CATEGORY_HINTS: list[tuple[re.Pattern[str], str, str]] = [
 
 
 def looks_like_explicit_preference(text: str) -> bool:
+    """判断文本是否含显式长期偏好触发词。
+
+    场景：``extract_explicit_preferences`` 前置过滤；inferred 路径避让。
+    参数：text - 用户消息文本。
+    返回：命中「以后/我喜欢/默认」等触发词时为 True。
+    """
     return bool(_EXPLICIT_MARKERS.search(text or ""))
 
 
 def extract_explicit_preferences(text: str) -> list[dict[str, Any]]:
-    """从用户文本抽取 Explicit 偏好；无触发词则返回空。
+    """从用户文本抽取 Explicit 偏好（关键词 + schema）。
 
-    返回结构对齐 user_preferences 写入字段（category/key/value_json）。
+    场景：规则引擎遗留路径；无触发词则返回空，避免把单次需求当长期偏好。
+    参数：text - 用户消息文本。
+    返回：对齐 user_preferences 写入字段的 dict 列表（category/key/value_json 等）。
     """
     raw = (text or "").strip()
     if not raw or not looks_like_explicit_preference(raw):
@@ -62,6 +70,12 @@ def extract_explicit_preferences(text: str) -> list[dict[str, Any]]:
 
 
 def _value_for(category: str, key: str, text: str) -> dict[str, Any]:
+    """根据类别与键从文本推断偏好值 dict。
+
+    场景：``extract_explicit_preferences`` 命中类别提示后构造 value_json。
+    参数：category - 偏好类别；key - 偏好键；text - 原始用户文本。
+    返回：value_json dict（如 style/difficulty/muted）。
+    """
     if category == "visual" and key == "style":
         if re.search(r"像素|pixel", text, re.I):
             return {"style": "pixel"}

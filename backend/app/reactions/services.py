@@ -24,6 +24,13 @@ from app.schemas.reactions import (
 
 
 async def _get_published_game(db: AsyncSession, game_id: UUID) -> Game:
+    """获取已发布游戏，不存在或未发布则抛错。
+
+    作用：reaction 操作前的游戏可见性校验。
+    场景：toggle_reaction、get_reaction_state 等入口。
+    参数：db — 数据库会话；game_id — 游戏 ID。
+    返回：Game 实例；不存在或未 published 时抛 GAME_NOT_FOUND。
+    """
     game = await db.scalar(
         select(Game).where(Game.id == game_id, Game.status == GameStatus.PUBLISHED.value)
     )
@@ -33,6 +40,13 @@ async def _get_published_game(db: AsyncSession, game_id: UUID) -> Game:
 
 
 async def reaction_counts(db: AsyncSession, game_id: UUID) -> tuple[int, int]:
+    """统计游戏的点赞数与收藏数。
+
+    作用：分别 count LIKE 与 FAVORITE 类型的 GameReaction。
+    场景：toggle/remove 后返回最新计数、公开元数据组装。
+    参数：db — 数据库会话；game_id — 游戏 ID。
+    返回：(like_count, favorite_count) 元组。
+    """
     likes = await db.scalar(
         select(func.count())
         .select_from(GameReaction)
@@ -55,6 +69,13 @@ async def reaction_counts(db: AsyncSession, game_id: UUID) -> tuple[int, int]:
 async def toggle_reaction(
     db: AsyncSession, user: User, game_id: UUID, reaction_type: ReactionType
 ) -> ReactionToggleResp:
+    """切换用户对游戏的点赞或收藏状态。
+
+    作用：已存在则删除（取消），不存在则创建；试用账号只读。
+    场景：公开试玩页点赞/收藏按钮。
+    参数：db — 数据库会话；user — 当前用户；game_id — 游戏 ID；reaction_type — LIKE 或 FAVORITE。
+    返回：ReactionToggleResp，含 active 状态与最新计数。
+    """
     reject_trial_mutation(user)
     await _get_published_game(db, game_id)
     row = await db.scalar(
@@ -68,9 +89,7 @@ async def toggle_reaction(
         await db.delete(row)
         active = False
     else:
-        db.add(
-            GameReaction(user_id=user.id, game_id=game_id, type=reaction_type.value)
-        )
+        db.add(GameReaction(user_id=user.id, game_id=game_id, type=reaction_type.value))
         active = True
     await db.commit()
     like_count, favorite_count = await reaction_counts(db, game_id)
@@ -82,10 +101,14 @@ async def toggle_reaction(
     )
 
 
-async def get_reaction_state(
-    db: AsyncSession, user: User, game_id: UUID
-) -> ReactionStateResp:
-    """当前用户对该游戏的点赞/收藏态 + 公开计数（游戏须 published）。"""
+async def get_reaction_state(db: AsyncSession, user: User, game_id: UUID) -> ReactionStateResp:
+    """查询当前用户对该游戏的点赞/收藏态及公开计数。
+
+    作用：返回 liked/favorited 布尔值与全站 like/favorite 计数。
+    场景：试玩页加载 reaction 状态。
+    参数：db — 数据库会话；user — 当前用户；game_id — 游戏 ID。
+    返回：ReactionStateResp；游戏须 published。
+    """
     await _get_published_game(db, game_id)
     reacted = {
         t
@@ -109,7 +132,13 @@ async def get_reaction_state(
 async def remove_reaction(
     db: AsyncSession, user: User, game_id: UUID, reaction_type: ReactionType
 ) -> ReactionToggleResp:
-    """幂等删除当前用户的指定 reaction（不存在则 noop），返回最新计数。"""
+    """幂等删除当前用户的指定 reaction。
+
+    作用：不存在则 noop；存在则删除并返回最新计数。
+    场景：取消点赞/收藏 API。
+    参数：db — 数据库会话；user — 当前用户；game_id — 游戏 ID；reaction_type — 类型。
+    返回：ReactionToggleResp，active=False 与最新计数。
+    """
     reject_trial_mutation(user)
     await _get_published_game(db, game_id)
     row = await db.scalar(
@@ -132,7 +161,13 @@ async def remove_reaction(
 
 
 async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
-    """收藏列表与公开广场共用同一公开元数据形状（无 owner PII）。"""
+    """组装公开游戏元数据（收藏列表与广场共用）。
+
+    作用：合并标题、slug、封面、播放数、creator 摘要与 reaction 计数。
+    场景：list_favorites、公开广场列表项。
+    参数：db — 数据库会话；game — 已发布 Game 行。
+    返回：PublicGameMeta 实例（不含 owner PII）。
+    """
     handle, display_name = await profile_services.get_owner_brief(db, game.owner_id)
     like_count, favorite_count = await reaction_counts(db, game.id)
     title = official_svc.localized_game_title(game)
@@ -140,9 +175,7 @@ async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
         game_id=game.id,
         title=title,
         slug=game.slug or "",
-        cover_url=(
-            f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None
-        ),
+        cover_url=(f"/play/{game.slug}/thumb.png" if game.cover_path and game.slug else None),
         published_at=game.published_at,
         play_count=game.play_count,
         featured=game.featured_rank is not None,
@@ -155,6 +188,13 @@ async def _public_game_meta(db: AsyncSession, game: Game) -> PublicGameMeta:
 async def list_favorites(
     db: AsyncSession, user: User, page: int, size: int
 ) -> tuple[list[PublicGameMeta], int]:
+    """分页列出用户收藏的游戏公开元数据。
+
+    作用：join GameReaction 与 Game，按收藏时间倒序。
+    场景：list_favorites API 与 GET /me/favorites 路由。
+    参数：db — 数据库会话；user — 当前用户；page/size — 分页。
+    返回：(PublicGameMeta 列表, 总条数) 元组。
+    """
     base = (
         select(GameReaction, Game)
         .join(Game, Game.id == GameReaction.game_id)
@@ -166,9 +206,7 @@ async def list_favorites(
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
     rows = (
         await db.execute(
-            base.order_by(GameReaction.created_at.desc())
-            .limit(size)
-            .offset((page - 1) * size)
+            base.order_by(GameReaction.created_at.desc()).limit(size).offset((page - 1) * size)
         )
     ).all()
     items = [await _public_game_meta(db, game) for _reaction, game in rows]

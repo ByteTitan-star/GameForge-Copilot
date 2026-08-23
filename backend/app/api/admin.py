@@ -37,6 +37,13 @@ async def list_users(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> PaginatedData[AdminUserItem]:
+    """分页列出全部用户（含日 token 限额覆盖）。
+
+    作用：返回用户列表及每人 Redis 配额覆盖值。
+    场景：管理后台用户管理页。
+    参数：admin — 管理员；db/r — 数据库与 Redis；page/size — 分页。
+    返回：PaginatedData，data 为 AdminUserItem 列表。
+    """
     _ = admin
     rows, total = await services.list_users(db, page, size)
     limits = await services.user_daily_limits(r, rows)
@@ -53,7 +60,9 @@ async def list_users(
             )
             for u in rows
         ],
-        total=total, page=page, size=size,
+        total=total,
+        page=page,
+        size=size,
     )
 
 
@@ -65,6 +74,13 @@ async def patch_user(
     db: DbSession,
     r: RedisClient,
 ) -> ApiResponse[AdminUserItem]:
+    """管理员修改用户角色、禁用状态或日 token 限额。
+
+    作用：更新用户字段；daily_token_limit 仅在 body 含该字段时写入（null 清除覆盖）。
+    场景：PATCH /admin/users/{id}。
+    参数：user_id — 目标用户；req — 待更新字段；admin/db/r — 操作者与存储。
+    返回：ApiResponse，data 为更新后的 AdminUserItem；不存在 404。
+    """
     # daily_token_limit：字段出现在 body 才更新（含显式 null 清覆盖）
     set_limit = "daily_token_limit" in req.model_fields_set
     u = await services.patch_user(
@@ -98,11 +114,25 @@ async def delete_user(
     db: DbSession,
     r: RedisClient,
 ) -> None:
+    """管理员删除用户账号。
+
+    作用：物理删除用户并清除 Redis 配额键，记审计日志。
+    场景：DELETE /admin/users/{id}。
+    参数：user_id — 目标用户；admin/db/r — 操作者与存储。
+    返回：204 无 body；不可删自己或唯一管理员时 400。
+    """
     await services.delete_user(db, r, admin, user_id)
 
 
 @router.get("/settings", response_model=ApiResponse[AdminSettings])
 async def get_settings(admin: AdminUser, db: DbSession) -> ApiResponse[AdminSettings]:
+    """读取全局 admin 设置。
+
+    作用：返回限额默认值、联系邮箱、审核模型回显（apikey 脱敏）。
+    场景：管理后台全局设置页。
+    参数：admin — 管理员；db — 数据库会话。
+    返回：ApiResponse，data 为 AdminSettings。
+    """
     _ = admin
     return ApiResponse(data=await services.get_settings(db))
 
@@ -111,6 +141,13 @@ async def get_settings(admin: AdminUser, db: DbSession) -> ApiResponse[AdminSett
 async def update_settings(
     admin: AdminUser, db: DbSession, req: AdminSettings
 ) -> ApiResponse[AdminSettings]:
+    """更新全局 admin 设置。
+
+    作用：写入限额、联系邮箱、审核模型配置并记审计。
+    场景：PUT /admin/settings。
+    参数：admin — 操作者；db — 数据库会话；req — 新设置体。
+    返回：ApiResponse，data 为提交后的 AdminSettings。
+    """
     return ApiResponse(data=await services.update_settings(db, admin, req))
 
 
@@ -127,8 +164,10 @@ async def test_audit_llm(
 ) -> ApiResponse[AdminAuditLlmTestResp]:
     """审核模型连通测试（表单当前值 dry-test，不落库）。
 
-    apikey 为空/masked 时回退 DB 已存密钥（只改 model 不重填 key 也能测）。
-    纯付费 LLM 调用，按 admin 限流防成本放大（同用户 LLM 配置探测限流）。
+    作用：用最小 completion 验证 provider/model/apikey/base_url。
+    场景：管理后台保存前测试审核 LLM；apikey 为空或含 *** 时回退 DB 已存密钥。
+    参数：admin/db/r — 操作者与存储；req — 审核模型表单值。
+    返回：ApiResponse，data.tested_ok 与可选 error；限流 429。
     """
     await check_rate_limit(
         r,
@@ -160,6 +199,13 @@ async def list_audit_logs(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> PaginatedData[AuditLogItem]:
+    """分页列出管理员审计日志。
+
+    作用：按时间倒序返回 audit_logs 记录。
+    场景：管理后台审计日志页。
+    参数：admin — 管理员；db — 数据库会话；page/size — 分页。
+    返回：PaginatedData，data 为 AuditLogItem 列表。
+    """
     _ = admin
     rows, total = await services.list_audit_logs(db, page, size)
     return PaginatedData(
@@ -188,7 +234,13 @@ async def list_admin_games(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> PaginatedData[AdminGameItem]:
-    """管理员游戏列表（不含草稿），默认含 published/submitted/reviewing/taken_down。"""
+    """管理员游戏列表（不含草稿）。
+
+    作用：筛选 published/taken_down/submitted/reviewing 态游戏。
+    场景：管理后台游戏管理页；可选 status 过滤。
+    参数：admin — 管理员；db — 数据库会话；status — 可选状态；page/size — 分页。
+    返回：PaginatedData，data 为 AdminGameItem 列表。
+    """
     _ = admin
     rows, total = await services.list_admin_games(db, status, page, size)
     return PaginatedData(
@@ -222,6 +274,13 @@ async def patch_game_schedule(
     admin: AdminUser,
     db: DbSession,
 ) -> ApiResponse[AdminGameItem]:
+    """设置游戏定时下架/上架时间。
+
+    作用：更新 scheduled_take_down_at 与 scheduled_publish_at。
+    场景：管理后台定时上下架配置；scheduler 到期自动执行。
+    参数：game_id — 游戏 ID；req — 计划时间；admin/db — 操作者与存储。
+    返回：ApiResponse，data 为 AdminGameItem；不存在 404。
+    """
     g = await services.patch_game_schedule(
         db,
         admin,
@@ -254,6 +313,13 @@ async def patch_game_featured(
     admin: AdminUser,
     db: DbSession,
 ) -> ApiResponse[AdminGameItem]:
+    """设置或取消游戏精选排序位。
+
+    作用：更新 featured_rank（None 表示取消精选）。
+    场景：管理后台精选游戏配置。
+    参数：game_id — 游戏 ID；req.featured_rank — 排序值或 None；admin/db — 操作者与存储。
+    返回：ApiResponse，data 为 AdminGameItem；非 published 或不存在时报错。
+    """
     g = await services.patch_game_featured(db, admin, game_id, req.featured_rank)
     return ApiResponse(
         data=AdminGameItem(

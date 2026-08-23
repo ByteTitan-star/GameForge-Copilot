@@ -56,9 +56,7 @@ async def claim_candidate_version(
 
     返回 (version, is_new)。重放同一 attempt 时复用已领取版本，避免重复抬号。
     """
-    key = side_effect_key(
-        run_id, "code_or_repair", f"attempt-{int(attempt)}", "save_candidate"
-    )
+    key = side_effect_key(run_id, "code_or_repair", f"attempt-{int(attempt)}", "save_candidate")
     existing = await get_side_effect_value(r, key)
     if existing is not None and str(existing).isdigit():
         return int(existing), False

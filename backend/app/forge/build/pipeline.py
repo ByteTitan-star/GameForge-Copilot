@@ -42,6 +42,12 @@ class BuildPipelineResult:
 
 
 def _collect_build_snapshot(workspace: Path) -> dict[str, bytes]:
+    """收集工作区内平台 manifest 快照文件为 bytes dict。
+
+    场景：_run_workspace 构建成功后审计。
+    参数：workspace - 临时构建根目录。
+    返回：BUILD_SNAPSHOT_FILES 中存在的文件内容。
+    """
     out: dict[str, bytes] = {}
     for name in BUILD_SNAPSHOT_FILES:
         path = workspace / name
@@ -51,6 +57,12 @@ def _collect_build_snapshot(workspace: Path) -> dict[str, bytes]:
 
 
 def _write_workspace(root: Path, files: dict[str, str]) -> None:
+    """将多文件工作区写入临时目录。
+
+    场景：run_project / run_vite_ts_demo 初始化 workspace。
+    参数：root - 根路径；files - 相对路径到文本内容。
+    返回：无。
+    """
     for rel, content in files.items():
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,10 +77,22 @@ class BuildPipeline:
         preparer: DependencyPreparer | None = None,
         builder: DockerBuilder | LocalBuilder | None = None,
     ) -> None:
+        """初始化构建流水线（可注入 preparer 与 builder 便于测试）。
+
+        场景：Forge code 阶段 Vite 构建。
+        参数：preparer、builder - 可选依赖。
+        返回：无。
+        """
         self._preparer = preparer or DependencyPreparer()
         self._builder = builder or get_builder()
 
     async def run_vite_ts_demo(self, profile: BuildProfile | None = None) -> BuildPipelineResult:
+        """运行固定 Vite+TS 模板 demo 构建（无 LLM 源码）。
+
+        场景：离线评测、构建链路冒烟。
+        参数：profile - 可选 BuildProfile。
+        返回：BuildPipelineResult（含 dist 与 snapshot）。
+        """
         prof = profile or default_build_profile()
         with tempfile.TemporaryDirectory() as ws:
             workspace = Path(ws)
@@ -87,21 +111,15 @@ class BuildPipeline:
             workspace = Path(ws)
             workspace_files = merge_workspace(routing, source_files, prof)
             _write_workspace(workspace, workspace_files)
-            source_bytes = {
-                rel: content.encode("utf-8") for rel, content in source_files.items()
-            }
+            source_bytes = {rel: content.encode("utf-8") for rel, content in source_files.items()}
             result = await self._run_workspace(workspace, prof)
             if result.ok:
                 result.source = source_bytes
             return result
 
-    async def run_react_demo(
-        self, profile: BuildProfile | None = None
-    ) -> BuildPipelineResult:
+    async def run_react_demo(self, profile: BuildProfile | None = None) -> BuildPipelineResult:
         """§26.6：固定 React Demo → dist/。"""
-        return await self.run_project(
-            REACT_DEMO_SOURCE, REACT_DEMO_ROUTING, profile
-        )
+        return await self.run_project(REACT_DEMO_SOURCE, REACT_DEMO_ROUTING, profile)
 
     async def run_phaser_matter_demo(
         self, profile: BuildProfile | None = None
@@ -111,9 +129,13 @@ class BuildPipeline:
             PHASER_MATTER_DEMO_SOURCE, PHASER_MATTER_DEMO_ROUTING, profile
         )
 
-    async def _run_workspace(
-        self, workspace: Path, profile: BuildProfile
-    ) -> BuildPipelineResult:
+    async def _run_workspace(self, workspace: Path, profile: BuildProfile) -> BuildPipelineResult:
+        """prepare 依赖 → offline build → 收集 dist 与 snapshot。
+
+        场景：run_project / run_vite_ts_demo 内部共用。
+        参数：workspace、profile。
+        返回：BuildPipelineResult。
+        """
         prep = await self._preparer.prepare(workspace, profile)
         if not prep.ok:
             return BuildPipelineResult(ok=False, prepare=prep, logs=prep.logs, error=prep.error)
@@ -151,6 +173,12 @@ class BuildPipeline:
         )
 
     async def _offline_build(self, workspace: Path) -> BuilderRunResult:
+        """在无网络模式下执行 pnpm install + vite build。
+
+        场景：_run_workspace prepare 成功后。
+        参数：workspace - 已含 lockfile 的目录。
+        返回：BuilderRunResult。
+        """
         store = "/pnpm/store"
         if isinstance(self._builder, LocalBuilder):
             store = str(self._builder.store_path.resolve())

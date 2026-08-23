@@ -19,7 +19,12 @@ _INFERRED_HINTS: list[tuple[re.Pattern[str], str, str, dict[str, Any]]] = [
 
 
 def extract_inferred_preferences(text: str) -> list[dict[str, Any]]:
-    """从单次需求推断弱偏好；已含 Explicit 触发词则返回空（交给 explicit 路径）。"""
+    """从单次需求推断弱偏好（不得覆盖 Explicit）。
+
+    场景：规则引擎遗留路径；已含 Explicit 触发词则返回空交给 explicit 路径。
+    参数：text - 用户消息文本。
+    返回：含 source=inferred、confidence=0.4 的偏好 dict 列表。
+    """
     raw = (text or "").strip()
     if not raw or looks_like_explicit_preference(raw):
         return []

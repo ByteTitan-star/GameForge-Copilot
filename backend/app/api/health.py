@@ -22,13 +22,25 @@ class Ready(BaseModel):
 
 @router.get("/healthz", response_model=ApiResponse[Health])
 async def health() -> ApiResponse[Health]:
-    """存活检查（进程在），无需鉴权。"""
+    """进程存活探针。
+
+    作用：确认 API 进程可响应请求。
+    场景：K8s liveness / 负载均衡健康检查，无需鉴权。
+    参数：无。
+    返回：ApiResponse，data.status 为 "ok"。
+    """
     return ApiResponse(data=Health())
 
 
 @router.get("/ready", response_model=ApiResponse[Ready])
 async def ready(db: DbSession, r: RedisClient) -> ApiResponse[Ready]:
-    """就绪检查：DB + Redis + RabbitMQ（memory 后端时 rabbitmq=true）。"""
+    """依赖就绪探针。
+
+    作用：探测 DB、Redis、RabbitMQ（memory 后端时 rabbitmq 恒为 true）是否可用。
+    场景：K8s readiness / 部署后冒烟，无需鉴权。
+    参数：db — 数据库会话；r — Redis 客户端。
+    返回：ApiResponse，data 含 db/redis/rabbitmq 布尔就绪态。
+    """
     db_ok = True
     try:
         await db.execute(text("SELECT 1"))

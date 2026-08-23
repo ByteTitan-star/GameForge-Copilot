@@ -25,7 +25,13 @@ async def submit_feedback(
     db: DbSession,
     r: RedisClient,
 ) -> ApiResponse[FeedbackResp]:
-    """代发一封反馈邮件给管理员；run 必须属于当前用户。"""
+    """代发用户反馈邮件给管理员。
+
+    作用：校验 run 归属后，将反馈内容通过邮件队列发送给管理员。
+    场景：forge 失败时「联系管理员」入口。
+    参数：req — 反馈内容与关联 run_id；request — 取客户端 IP 限流；user/db/r — 鉴权与存储。
+    返回：ApiResponse，data 为 FeedbackResp；run 不可见 404，限流 429。
+    """
     ip = request.client.host if request.client else "na"
     resp = await services.submit_feedback(db, r, user, ip, req)
     return ApiResponse(data=resp)

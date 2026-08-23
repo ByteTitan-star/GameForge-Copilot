@@ -31,6 +31,12 @@ from app.messaging.tasks import (
 
 
 async def enqueue_run(run_id: uuid.UUID) -> None:
+    """将首次执行任务发布到 RabbitMQ。
+
+    场景：创建 GenerationRun 后触发异步生成。
+    参数：run_id - 生成任务 ID。
+    返回：无。
+    """
     await get_task_publisher().publish(TASK_EXECUTE_RUN, run_id_payload(run_id))
 
 
@@ -47,8 +53,17 @@ async def enqueue_resume(
 ) -> uuid.UUID:
     """写 RunCommand + resume_grant + 入队 resume_run，同一 db 事务。
 
-    必须由所有合法的 resume_run 入队点调用（resolve_hitl / resume_run_control /
-    retry_run / dev_requeue）。
+    场景：所有合法 resume 入队点（resolve_hitl / resume_run_control / retry_run 等）。
+    参数：
+        db - 异步数据库会话；
+        r - Redis 客户端；
+        run_id - 生成任务 ID；
+        decision - 用户决策；
+        modify_text - 可选修改意见；
+        source - 命令来源（默认 hitl）；
+        expected_control_revision - 乐观锁期望版本；
+        command - 可选显式 RunCommandType 值。
+    返回：新建的 RunCommand ID。
     """
     st = await ckpt.load_state(r, run_id, db) or {}
     phase = str(st.get("phase") or "")

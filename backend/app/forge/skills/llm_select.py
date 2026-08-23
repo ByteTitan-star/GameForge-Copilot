@@ -54,6 +54,12 @@ async def select_methodology_ids_via_llm(
 
 
 def _parse_skill_ids(raw: str) -> list[str]:
+    """解析 LLM 返回的 skill_ids JSON 为 id 列表。
+
+    场景：select_methodology_ids_via_llm。
+    参数：raw - 模型输出（可含 markdown 代码块）。
+    返回：去重前的 skill id 字符串列表。
+    """
     text = (raw or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)

@@ -31,6 +31,13 @@ ERR_429 = {429: {"model": ErrorResponse, "description": "限流"}}
 
 @router.get("", response_model=ApiResponse[list[LLMConfigResp]])
 async def list_configs(user: CurrentUser, db: DbSession) -> ApiResponse[list[LLMConfigResp]]:
+    """列出当前用户全部 LLM 配置。
+
+    作用：返回已保存的 provider/model/base_url 等（apikey 脱敏）。
+    场景：设置页 LLM 配置列表。
+    参数：user — 当前用户；db — 数据库会话。
+    返回：ApiResponse，data 为 LLMConfigResp 列表。
+    """
     return ApiResponse(data=await services.list_configs(db, user))
 
 
@@ -41,7 +48,13 @@ async def list_models(
     r: RedisClient,
     provider: LLMProvider = LLMProvider.ANTHROPIC,
 ) -> ApiResponse[list[str]]:
-    """按 provider 拉可选模型（用户配置 key；失败回退白名单，docs/05）。"""
+    """按 provider 拉取可选模型列表。
+
+    作用：调用用户配置的 key 请求 /models；失败回退内置白名单。
+    场景：LLM 配置页模型下拉（docs/05）。
+    参数：user — 当前用户；db/r — 存储；provider — LLM 提供商枚举。
+    返回：ApiResponse，data 为模型 id 字符串列表。
+    """
     return ApiResponse(data=await services.list_models_for_user(db, r, user, provider))
 
 
@@ -58,6 +71,13 @@ async def create_config(
     request: Request,
     req: LLMConfigCreate,
 ) -> ApiResponse[LLMConfigCreateResp]:
+    """创建 LLM 配置（含连通性探测）。
+
+    作用：保存前发最小 completion 验证配置，成功则落库。
+    场景：设置页新增 LLM 配置；按用户限流防成本放大。
+    参数：user/db/r — 用户与存储；req — 配置创建体。
+    返回：ApiResponse，data 为 LLMConfigCreateResp；探测失败 400，限流 429。
+    """
     # create 内含一次真实 LLM 连通探测，按用户限流防成本放大
     await check_rate_limit(
         r,
@@ -79,9 +99,12 @@ async def test_draft_config(
     request: Request,
     req: LLMConfigTestReq,
 ) -> ApiResponse[LLMConfigDryTestResp]:
-    """保存前连通测试（provider + model + apikey + base_url），不落库。
+    """保存前连通测试（不落库）。
 
-    纯付费 LLM 调用，按用户限流防成本放大。
+    作用：用 provider + model + apikey + base_url 发最小 completion。
+    场景：LLM 配置表单保存前验证；按用户限流防成本放大。
+    参数：user/r — 用户与 Redis；req — 待测配置体。
+    返回：ApiResponse，data 为 LLMConfigDryTestResp；限流 429。
     """
     await check_rate_limit(
         r,
@@ -96,6 +119,13 @@ async def test_draft_config(
 async def patch_config(
     user: CurrentUser, db: DbSession, config_id: UUID, req: LLMConfigPatch
 ) -> ApiResponse[LLMConfigResp]:
+    """部分更新 LLM 配置。
+
+    作用：修改 provider/model/base_url/默认标记等字段。
+    场景：设置页编辑已有 LLM 配置。
+    参数：user/db — 用户与存储；config_id — 配置 ID；req — 待更新字段。
+    返回：ApiResponse，data 为 LLMConfigResp；不存在 404。
+    """
     return ApiResponse(data=await services.patch_config(db, user, config_id, req))
 
 
@@ -107,6 +137,13 @@ async def patch_config(
 async def delete_config(
     user: CurrentUser, db: DbSession, config_id: UUID
 ) -> ApiResponse[LLMConfigDeleteResp]:
+    """删除 LLM 配置。
+
+    作用：删除指定配置；默认配置须先指定新默认。
+    场景：设置页移除 LLM 配置。
+    参数：user/db — 用户与存储；config_id — 配置 ID。
+    返回：ApiResponse，data 为 LLMConfigDeleteResp；删默认且无替代 409。
+    """
     return ApiResponse(data=await services.delete_config(db, user, config_id))
 
 
@@ -122,6 +159,13 @@ async def test_config(
     request: Request,
     config_id: UUID,
 ) -> ApiResponse[LLMConfigTestResp]:
+    """对已存 LLM 配置执行连通测试。
+
+    作用：用库中 apikey 发最小 completion 验证连通性。
+    场景：设置页「测试」按钮；按用户限流防成本放大。
+    参数：user/db/r — 用户与存储；config_id — 配置 ID。
+    返回：ApiResponse，data 为 LLMConfigTestResp；不存在 404，限流 429。
+    """
     # 已存配置连通测试：真实付费 LLM 调用，按用户限流防成本放大
     await check_rate_limit(
         r,

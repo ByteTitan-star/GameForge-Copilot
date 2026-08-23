@@ -28,9 +28,13 @@ def _cache_control(prod: str) -> str:
     return "no-store" if settings.env == "development" else prod
 
 
-def _artifact_headers(
-    game_id: uuid.UUID, version: int, *, cache: str
-) -> dict[str, str]:
+def _artifact_headers(game_id: uuid.UUID, version: int, *, cache: str) -> dict[str, str]:
+    """组装产物响应头（CSP + Cache-Control）。
+
+    场景：试玩/draft/preview 路由返回静态文件前。
+    参数：game_id、version、cache - Cache-Control 值。
+    返回：HTTP 响应头 dict。
+    """
     return {
         "Content-Security-Policy": serve.artifact_csp(game_id, version),
         "Cache-Control": _cache_control(cache),
@@ -44,6 +48,12 @@ async def _serve_artifact(
     *,
     cache: str,
 ) -> Response:
+    """规范化路径并返回产物文件响应（含 CSP 头）。
+
+    场景：play/draft/preview 各路由内部复用。
+    参数：game_id、version、path、cache。
+    返回：FileResponse 或 bytes Response。
+    """
     rel = serve.normalize_public_rel(path)
     return await serve.artifact_file_response(
         game_id,
@@ -56,21 +66,29 @@ async def _serve_artifact(
 async def _owned_version(
     db: DbSession, user: CurrentUser, game_id: uuid.UUID, version: int
 ) -> None:
-    game = await db.scalar(
-        select(Game).where(Game.id == game_id, Game.owner_id == user.id)
-    )
+    """校验当前用户为游戏 owner 且版本存在。
+
+    场景：draft 路由鉴权。
+    参数：db、user、game_id、version。
+    返回：无；失败抛 GAME_NOT_FOUND。
+    """
+    game = await db.scalar(select(Game).where(Game.id == game_id, Game.owner_id == user.id))
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或不可见")
     gv = await db.scalar(
-        select(GameVersion).where(
-            GameVersion.game_id == game_id, GameVersion.version == version
-        )
+        select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
     )
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
 
 
 async def _published_game(db: DbSession, slug: str) -> Game:
+    """按 slug 查询已发布游戏。
+
+    场景：/play/{slug} 公开试玩路由。
+    参数：db、slug。
+    返回：Game 实体；未发布或不存在时抛 GAME_NOT_FOUND。
+    """
     game = await db.scalar(
         select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
     )
@@ -154,14 +172,10 @@ async def play_asset(slug: str, path: str, db: DbSession) -> Response:
 
 
 @router.get("/draft/{game_id}/{version}")
-async def draft(
-    game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSession
-) -> Response:
+async def draft(game_id: uuid.UUID, version: int, user: CurrentUser, db: DbSession) -> Response:
     """草稿试玩 index.html，仅 owner。非 owner/不存在 → 404 不泄露。"""
     await _owned_version(db, user, game_id, version)
-    return await _serve_artifact(
-        game_id, version, None, cache="private, max-age=60"
-    )
+    return await _serve_artifact(game_id, version, None, cache="private, max-age=60")
 
 
 @router.get("/draft/{game_id}/{version}/{path:path}")
@@ -174,9 +188,7 @@ async def draft_asset(
 ) -> Response:
     """草稿 dist 子资源，仅 owner。"""
     await _owned_version(db, user, game_id, version)
-    return await _serve_artifact(
-        game_id, version, path, cache="private, max-age=60"
-    )
+    return await _serve_artifact(game_id, version, path, cache="private, max-age=60")
 
 
 @router.get("/preview/{token}/{game_id}/{version}")
@@ -189,20 +201,14 @@ async def preview_index(
     db: DbSession,
 ) -> Response:
     """Draft 多文件 preview 入口（短期 token，§19.2）。"""
-    if not await preview_token.validate_preview_token(
-        r, token, game_id=game_id, version=version
-    ):
+    if not await preview_token.validate_preview_token(r, token, game_id=game_id, version=version):
         raise AppError(ErrorCode.FORBIDDEN, "预览链接无效或已过期")
     gv = await db.scalar(
-        select(GameVersion).where(
-            GameVersion.game_id == game_id, GameVersion.version == version
-        )
+        select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
     )
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
-    return await _serve_artifact(
-        game_id, version, None, cache="private, max-age=60"
-    )
+    return await _serve_artifact(game_id, version, None, cache="private, max-age=60")
 
 
 @router.get("/preview/{token}/{game_id}/{version}/{path:path}")
@@ -215,17 +221,11 @@ async def preview_asset(
     db: DbSession,
 ) -> Response:
     """Draft 多文件 preview 子资源（与 index 共享 token 授权）。"""
-    if not await preview_token.validate_preview_token(
-        r, token, game_id=game_id, version=version
-    ):
+    if not await preview_token.validate_preview_token(r, token, game_id=game_id, version=version):
         raise AppError(ErrorCode.FORBIDDEN, "预览链接无效或已过期")
     gv = await db.scalar(
-        select(GameVersion).where(
-            GameVersion.game_id == game_id, GameVersion.version == version
-        )
+        select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
     )
     if gv is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "版本不存在")
-    return await _serve_artifact(
-        game_id, version, path, cache="private, max-age=60"
-    )
+    return await _serve_artifact(game_id, version, path, cache="private, max-age=60")

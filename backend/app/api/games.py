@@ -51,6 +51,13 @@ ERR_409 = {409: {"model": ErrorResponse, "description": "状态冲突"}}
 
 
 def _to_resp(game: Game) -> GameResp:
+    """将 Game ORM 转为 API 响应模型。
+
+    作用：字段映射与枚举转换。
+    场景：各游戏写操作端点返回体。
+    参数：game — Game ORM 实例。
+    返回：GameResp。
+    """
     return GameResp(
         game_id=game.id,
         owner_id=game.owner_id,
@@ -62,6 +69,13 @@ def _to_resp(game: Game) -> GameResp:
 
 
 def _to_item(game: Game) -> GameListItem:
+    """将 Game ORM 转为列表项。
+
+    作用：拼装封面 URL（仅已发布且含 slug）。
+    场景：GET /games 分页列表。
+    参数：game — Game ORM 实例。
+    返回：GameListItem。
+    """
     # 仅已发布游戏拼封面：走公开 /play/{slug}/thumb.png，<img> 可直连。
     # 草稿走 /draft/{id}/{ver}/thumb.png 需 owner 鉴权，<img> 带不了 Bearer → 不拼，
     # 草稿卡片回退渐变（点进预览即可见实际画面）。
@@ -80,6 +94,13 @@ def _to_item(game: Game) -> GameListItem:
 
 
 def _to_version(v: GameVersion) -> VersionItem:
+    """将 GameVersion ORM 转为版本列表项。
+
+    作用：提取版本号、产物路径与时间戳。
+    场景：版本列表与详情响应。
+    参数：v — GameVersion ORM 实例。
+    返回：VersionItem。
+    """
     return VersionItem(
         version=v.version,
         artifact_path=v.artifact_path,
@@ -89,6 +110,13 @@ def _to_version(v: GameVersion) -> VersionItem:
 
 
 def _download_headers(title: str, version: int) -> dict[str, str]:
+    """构造 HTML 下载响应头。
+
+    作用：生成 Content-Disposition 与 Cache-Control。
+    场景：版本 HTML 文件下载端点。
+    参数：title — 游戏标题；version — 版本号。
+    返回：HTTP 响应头字典。
+    """
     safe_title = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "-", title).strip(" .-") or "game"
     filename = f"{safe_title}-v{version}.html"
     fallback = filename if filename.isascii() else f"game-v{version}.html"
@@ -101,6 +129,13 @@ def _download_headers(title: str, version: int) -> dict[str, str]:
 
 
 async def _public_item(db: DbSession, game: Game, locale: str | None = None) -> PublicGameMeta:
+    """组装公开游戏元数据（含创作者与互动计数）。
+
+    作用：联查 owner 简介、点赞/收藏数并本地化标题。
+    场景：公开发现页与精选列表。
+    参数：db — 会话；game — Game ORM；locale — 可选语言。
+    返回：PublicGameMeta。
+    """
     handle, display_name = await profile_services.get_owner_brief(db, game.owner_id)
     like_count, favorite_count = await reaction_services.reaction_counts(db, game.id)
     title = official_svc.localized_game_title(game, locale)
@@ -122,6 +157,13 @@ async def _public_item(db: DbSession, game: Game, locale: str | None = None) -> 
 async def create_game(
     req: GameCreate, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[GameResp]:
+    """创建草稿游戏。
+
+    作用：委托 services.create_game 并包装响应。
+    场景：POST /games。
+    参数：req — 创建请求；user/db/r — 依赖注入。
+    返回：ApiResponse[GameResp]。
+    """
     return ApiResponse(data=_to_resp(await services.create_game(db, user, req, r)))
 
 
@@ -158,6 +200,13 @@ async def get_public_game_meta(
     db: DbSession,
     locale: str | None = Query(None, description="zh | en，官方样例标题随 locale 切换"),
 ) -> ApiResponse[PublicGameMeta]:
+    """获取公开游戏元数据。
+
+    作用：按 slug 查已发布游戏并组装 PublicGameMeta。
+    场景：GET /games/public/{slug}。
+    参数：slug — 游戏 slug；db — 会话；locale — 可选语言。
+    返回：ApiResponse[PublicGameMeta]。
+    """
     game = await services.get_public_game_by_slug(db, slug)
     return ApiResponse(data=await _public_item(db, game, locale))
 
@@ -168,9 +217,7 @@ async def get_public_game_meta(
     status_code=201,
     responses={**ERR_403, **ERR_404, **ERR_409},
 )
-async def fork_official_game(
-    slug: str, user: CurrentUser, db: DbSession
-) -> ApiResponse[GameResp]:
+async def fork_official_game(slug: str, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
     """Fork 官方预置游戏为当前用户 draft（Batch A · R1）。"""
     return ApiResponse(data=_to_resp(await official_svc.fork_official_game(db, user, slug)))
 
@@ -183,6 +230,13 @@ async def list_games(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> PaginatedData[GameListItem]:
+    """分页列出当前用户的游戏。
+
+    作用：owner 仓库视图，可按状态筛选。
+    场景：GET /games。
+    参数：user/db — 依赖；status — 可选状态；page/size — 分页。
+    返回：PaginatedData[GameListItem]。
+    """
     rows, total = await services.list_games(db, user, status, page, size)
     return PaginatedData(data=[_to_item(g) for g in rows], total=total, page=page, size=size)
 
@@ -215,6 +269,13 @@ async def patch_game(
 
 @router.get("/{game_id}", response_model=ApiResponse[GameDetailResp], responses=ERR_404)
 async def get_game(game_id: UUID, user: CurrentUser, db: DbSession) -> ApiResponse[GameDetailResp]:
+    """获取游戏详情（含版本列表）。
+
+    作用：owner 校验后返回完整详情。
+    场景：GET /games/{game_id}。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[GameDetailResp]。
+    """
     game, versions = await services.get_game_detail(db, user, game_id)
     return ApiResponse(
         data=GameDetailResp(
@@ -239,6 +300,13 @@ async def get_game(game_id: UUID, user: CurrentUser, db: DbSession) -> ApiRespon
 async def delete_game(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[GameDeleteResp]:
+    """删除可删状态的游戏。
+
+    作用：委托 services.delete_game。
+    场景：DELETE /games/{game_id}。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[GameDeleteResp]。
+    """
     game = await services.delete_game(db, user, game_id)
     return ApiResponse(data=GameDeleteResp(game_id=game.id))
 
@@ -248,9 +316,7 @@ async def delete_game(
     response_model=ApiResponse[GameResp],
     responses={**ERR_404, **ERR_409},
 )
-async def unpublish_game(
-    game_id: UUID, user: CurrentUser, db: DbSession
-) -> ApiResponse[GameResp]:
+async def unpublish_game(game_id: UUID, user: CurrentUser, db: DbSession) -> ApiResponse[GameResp]:
     """owner 自助下架已发布游戏（published → taken_down）。
 
     与 admin 的 take-down 区分：owner 自助操作，无需原因。
@@ -286,6 +352,13 @@ async def withdraw_publish(
 async def list_versions(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[list[VersionItem]]:
+    """列出游戏全部版本。
+
+    作用：owner 校验后返回版本列表。
+    场景：GET /games/{game_id}/versions。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[list[VersionItem]]。
+    """
     rows = await services.list_versions(db, user, game_id)
     return ApiResponse(data=[_to_version(v) for v in rows])
 
@@ -310,7 +383,13 @@ async def list_versions(
 async def download_version(
     game_id: UUID, version: int, user: CurrentUser, db: DbSession
 ) -> Response:
-    """Download an owned version as a standalone HTML file."""
+    """下载指定版本的独立 HTML 文件。
+
+    作用：读取 index.html 并以附件形式返回。
+    场景：GET /games/{game_id}/versions/{version}/download。
+    参数：game_id — 游戏 ID；version — 版本号；user/db — 依赖。
+    返回：text/html Response。
+    """
     game, _ = await services.get_owned_version(db, user, game_id, version)
     content = await hosting_store.read_bytes(game_id, version, "index.html")
     if content is None:
@@ -325,6 +404,13 @@ async def download_version(
 def _artifact_file_items(
     metas: list[ArtifactFileMeta],
 ) -> list[ArtifactFileItem]:
+    """将产物文件元数据转为 API 列表项。
+
+    作用：path/size/mime 字段映射。
+    场景：list_version_files 响应组装。
+    参数：metas — 产物文件元数据列表。
+    返回：ArtifactFileItem 列表。
+    """
     return [ArtifactFileItem(path=m.path, size=m.size, mime=m.mime) for m in metas]
 
 
@@ -417,9 +503,7 @@ async def activate_version(
     game_id: UUID, version: int, user: CurrentUser, db: DbSession
 ) -> ApiResponse[GameResp]:
     """切换 current_version（Batch A · R4）。"""
-    return ApiResponse(
-        data=_to_resp(await services.activate_version(db, user, game_id, version))
-    )
+    return ApiResponse(data=_to_resp(await services.activate_version(db, user, game_id, version)))
 
 
 @router.get(
@@ -431,9 +515,7 @@ async def get_reaction_state(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[ReactionStateResp]:
     """读取当前用户对该游戏的点赞/收藏态 + 公开计数（Batch C · R7）。"""
-    return ApiResponse(
-        data=await reaction_services.get_reaction_state(db, user, game_id)
-    )
+    return ApiResponse(data=await reaction_services.get_reaction_state(db, user, game_id))
 
 
 @router.post(
@@ -444,6 +526,13 @@ async def get_reaction_state(
 async def toggle_like(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[ReactionToggleResp]:
+    """切换点赞状态（有则取消、无则添加）。
+
+    作用：委托 reaction_services.toggle_reaction。
+    场景：POST /games/{game_id}/like。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[ReactionToggleResp]。
+    """
     return ApiResponse(
         data=await reaction_services.toggle_reaction(db, user, game_id, ReactionType.LIKE)
     )
@@ -471,6 +560,13 @@ async def unlike(
 async def toggle_favorite(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[ReactionToggleResp]:
+    """切换收藏状态（有则取消、无则添加）。
+
+    作用：委托 reaction_services.toggle_reaction。
+    场景：POST /games/{game_id}/favorite。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[ReactionToggleResp]。
+    """
     return ApiResponse(
         data=await reaction_services.toggle_reaction(db, user, game_id, ReactionType.FAVORITE)
     )

@@ -33,6 +33,12 @@ def build_pause_checkpoint(
     recovery: RecoveryInfo | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """组装可恢复暂停的 checkpoint 字段。
+
+    场景：sandbox_failed / HITL 暂停写 Redis。
+    参数：phase、pause_reason、design_doc、recovery、extra。
+    返回：可 merge 进 state 的 dict。
+    """
     state: dict[str, Any] = {
         "phase": phase,
         "pause_reason": pause_reason.value,
@@ -75,6 +81,12 @@ def merge_pause_checkpoint(
 
 
 def pause_reason_from_state(state: dict[str, Any] | None) -> PauseReason | None:
+    """从 checkpoint 解析 PauseReason 枚举。
+
+    场景：resume / UI 展示暂停原因。
+    参数：state - Redis checkpoint。
+    返回：PauseReason 或 None。
+    """
     if not state:
         return None
     raw = state.get("pause_reason")
@@ -84,6 +96,12 @@ def pause_reason_from_state(state: dict[str, Any] | None) -> PauseReason | None:
 
 
 def recovery_from_state(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    """从 checkpoint 提取 recovery 信息 dict。
+
+    场景：dev_requeue、恢复重试 UI。
+    参数：state。
+    返回：recovery dict 或 None。
+    """
     if not state:
         return None
     recovery = state.get("recovery")

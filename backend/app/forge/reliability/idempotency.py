@@ -17,6 +17,12 @@ def side_effect_key(
     execution_id: str,
     operation: str,
 ) -> str:
+    """构造副作用幂等 Redis 键。
+
+    场景：promote、billing 等写操作前。
+    参数：run_id、node、execution_id、operation 名。
+    返回：forge:side:... 键字符串。
+    """
     return _KEY.format(
         run_id=run_id,
         node=node,
@@ -41,6 +47,12 @@ async def try_begin_side_effect(
 
 
 async def get_side_effect_value(r: redis.Redis, key: str) -> str | None:
+    """读取副作用键当前值（pending/done）。
+
+    场景：already_applied、状态查询。
+    参数：r、key。
+    返回：字符串值或 None；关 flag 时恒 None。
+    """
     if not settings.reliability_idempotent_side_effects:
         return None
     raw = await r.get(key)
@@ -66,6 +78,12 @@ async def commit_side_effect(
 
 
 async def already_applied(r: redis.Redis, key: str) -> bool:
+    """判断副作用是否已成功提交过。
+
+    场景：重复执行节点前跳过写操作。
+    参数：r、key。
+    返回：status 为 done/1 时为 True。
+    """
     if not settings.reliability_idempotent_side_effects:
         return False
     status = await side_effect_status(r, key)

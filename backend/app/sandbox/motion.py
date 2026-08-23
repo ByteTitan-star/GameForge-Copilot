@@ -29,11 +29,14 @@ _CANVAS_DIFF_MIN_HITS = 8
 
 
 class _PageLike(Protocol):
-    async def evaluate(self, expression: str) -> Any: ...
+    async def evaluate(self, expression: str) -> Any:
+        """在页面上下文执行 JavaScript 表达式。"""
 
-    async def wait_for_timeout(self, timeout: float) -> None: ...
+    async def wait_for_timeout(self, timeout: float) -> None:
+        """等待指定毫秒（Playwright page.wait_for_timeout）。"""
 
-    def locator(self, selector: str) -> Any: ...
+    def locator(self, selector: str) -> Any:
+        """按 CSS 选择器定位元素。"""
 
 
 def png_frames_differ(a: bytes, b: bytes) -> bool:
@@ -53,6 +56,12 @@ def png_frames_differ(a: bytes, b: bytes) -> bool:
 
 
 async def probe_raf_activity(page: _PageLike, *, window_ms: int = 400) -> bool:
+    """检测窗口期内页面业务代码触发的 rAF 回调是否足够活跃。
+
+    场景：B 档 motion 弱信号探测。
+    参数：page - Playwright Page；window_ms - 观测窗口毫秒数。
+    返回：增量 ≥ _RAF_MIN_DELTA 时为 True。
+    """
     before = int(await page.evaluate("() => window.__gfRafCount || 0") or 0)
     await page.wait_for_timeout(window_ms)
     after = int(await page.evaluate("() => window.__gfRafCount || 0") or 0)
@@ -60,6 +69,12 @@ async def probe_raf_activity(page: _PageLike, *, window_ms: int = 400) -> bool:
 
 
 async def probe_canvas_frame_diff(page: _PageLike, *, window_ms: int = 400) -> bool:
+    """对首个可见 canvas 间隔截图并比较帧差。
+
+    场景：无 rAF 但有 canvas 动画的游戏。
+    参数：page、window_ms。
+    返回：两帧 PNG 有可观测差异时为 True。
+    """
     canvases = page.locator("canvas")
     if await canvases.count() <= 0:
         return False

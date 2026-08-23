@@ -42,6 +42,12 @@ class PlaytestResult:
     motion_signal: MotionSignal | None = None
 
     def __post_init__(self) -> None:
+        """校验 PlaytestResult 不变量：ok 时 errors 为空且必须有 motion_signal。
+
+        场景：make_playtest_result 构造后自动校验。
+        参数：无（dataclass 钩子）。
+        返回：无；违反不变量时抛 ValueError。
+        """
         if self.ok and self.errors:
             raise ValueError("PlaytestResult invariant: ok=True requires errors==[]")
         if self.ok and self.failure_kind is not None:
@@ -73,6 +79,12 @@ def make_playtest_result(
 
 
 def _infra_result(code: str, detail: str, logs: list[str] | None = None) -> PlaytestResult:
+    """构造基础设施类失败结果（Playwright/Chromium 不可用等）。
+
+    场景：_check_playwright_available、浏览器启动失败。
+    参数：code - 错误码；detail - 说明；logs - 可选控制台日志。
+    返回：failure_kind=infra 的 PlaytestResult。
+    """
     return make_playtest_result(
         errors=[f"{code}: {detail}"],
         console_logs=logs or ["playtest: infra failure"],
@@ -88,6 +100,12 @@ PERMANENT_INFRA_MARKERS = (
 
 
 def is_permanent_infra_error(errors: list[str] | None) -> bool:
+    """判断是否为永久性 infra 错误（重试 playtest 无意义）。
+
+    场景：code_qa_loop 决定是否立即耗尽重试次数。
+    参数：errors - 试玩错误列表。
+    返回：含 PLAYWRIGHT_UNAVAILABLE / CHROMIUM_UNAVAILABLE 时为 True。
+    """
     text = " ".join(str(e) for e in (errors or []))
     return any(marker in text for marker in PERMANENT_INFRA_MARKERS)
 
@@ -115,6 +133,12 @@ def illegal_engine_api_errors(html: str) -> list[str]:
 
 
 def playwright_import_available() -> bool:
+    """检测 playwright 包是否已安装。
+
+    场景：_check_playwright_available 前置探测。
+    参数：无。
+    返回：可 import playwright 时为 True。
+    """
     try:
         import playwright  # noqa: F401
     except ImportError:
@@ -123,6 +147,12 @@ def playwright_import_available() -> bool:
 
 
 def _check_playwright_available() -> PlaytestResult | None:
+    """同步探测 Playwright + Chromium 是否可用。
+
+    场景：run_playtest / run_playtest_dist 开浏览器前。
+    参数：无。
+    返回：不可用时返回 infra PlaytestResult，否则 None。
+    """
     if not playwright_import_available():
         return _infra_result(
             "PLAYWRIGHT_UNAVAILABLE",
@@ -145,12 +175,26 @@ def _check_playwright_available() -> PlaytestResult | None:
 
 
 class _DomScanner(HTMLParser):
+    """静态 HTML 扫描器：检测 canvas 与可交互元素。
+
+    场景：static_playtest_diagnostic。
+    参数：无（继承 HTMLParser）。
+    返回：通过 has_canvas / has_interactive 属性暴露结果。
+    """
+
     def __init__(self) -> None:
+        """初始化扫描状态（has_canvas / has_interactive 均为 False）。"""
         super().__init__()
         self.has_canvas = False
         self.has_interactive = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """记录 canvas、表单控件与 onclick/onkeydown 等可交互标记。
+
+        场景：feed HTML 时逐标签回调。
+        参数：tag - 标签名；attrs - 属性列表。
+        返回：无（更新实例状态）。
+        """
         t = tag.lower()
         if t == "canvas":
             self.has_canvas = True
@@ -161,17 +205,41 @@ class _DomScanner(HTMLParser):
             self.has_interactive = True
 
     def handle_data(self, data: str) -> None:
+        """HTMLParser 文本节点回调（本扫描器不处理文本）。
+
+        场景：feed 时占位以满足 Parser 接口。
+        参数：data - 文本内容。
+        返回：无。
+        """
         _ = data
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """自闭合标签回调，复用 handle_starttag 逻辑。
+
+        场景：如 <input /> 等标签。
+        参数：tag、attrs。
+        返回：无。
+        """
         self.handle_starttag(tag, attrs)
 
 
 def _extract_scripts(html: str) -> list[str]:
+    """从 HTML 提取内联 <script> 块正文。
+
+    场景：static_playtest_diagnostic、_screen_target_errors。
+    参数：html - 完整 HTML 字符串。
+    返回：各 script 块内容列表。
+    """
     return re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.I | re.S)
 
 
 def _declares_engine(html: str) -> bool:
+    """判断 HTML 是否引用受支持的游戏引擎 CDN。
+
+    场景：静态诊断时豁免「无 canvas 但有引擎脚本」。
+    参数：html - 页面 HTML。
+    返回：含推荐引擎 CDN URL 时为 True。
+    """
     from app.forge.engine_router import SUPPORTED_ENGINES, recommended_cdn_url
 
     engine_urls = {url for eid in SUPPORTED_ENGINES if (url := recommended_cdn_url(eid))}
@@ -179,6 +247,12 @@ def _declares_engine(html: str) -> bool:
 
 
 def _screen_target_errors(html: str, scripts: list[str]) -> list[str]:
+    """检测 setScreen 目标与 #screen-* DOM id 是否一致。
+
+    场景：static_playtest_diagnostic。
+    参数：html、内联 scripts 列表。
+    返回：缺失 screen DOM 的错误文案列表。
+    """
     source = "\n".join(scripts)
     if not re.search(r"screen-\$\{[^}]+\}", source):
         return []
@@ -244,6 +318,12 @@ _STACKED_SCREEN_JS = """() => {
 
 
 def classify_stacked_screens(ids: list[str] | None) -> str | None:
+    """多个全屏 screen 同时接收 pointer-events 时生成产品错误文案。
+
+    场景：_fail_if_stacked_screens。
+    参数：ids - 可见全屏层 id 列表。
+    返回：错误字符串或 None（少于 2 层）。
+    """
     names = [str(item) for item in (ids or []) if item]
     if len(names) < 2:
         return None
@@ -266,6 +346,12 @@ def classify_click_failures(click_errors: list[str], attempted: int) -> str | No
 
 
 async def _fail_if_stacked_screens(page: Any, errors: list[str]) -> None:
+    """在页面执行 JS 检测叠层 screen，有则追加 OVERLAY 错误。
+
+    场景：_inject_inputs 点击按钮前。
+    参数：page - Playwright Page；errors - 可变错误列表。
+    返回：无。
+    """
     try:
         ids = await page.evaluate(_STACKED_SCREEN_JS)
     except Exception:  # noqa: BLE001
@@ -276,6 +362,12 @@ async def _fail_if_stacked_screens(page: Any, errors: list[str]) -> None:
 
 
 async def _click_unobstructed_buttons(page: Any, logs: list[str], errors: list[str]) -> None:
+    """尝试点击第一个可见可用按钮，验证基础交互。
+
+    场景：_inject_inputs。
+    参数：page、logs、errors。
+    返回：无；失败时写入 errors。
+    """
     btn = page.locator(_BTN_SELECTOR)
     try:
         count = await btn.count()
@@ -299,6 +391,12 @@ async def _click_unobstructed_buttons(page: Any, logs: list[str], errors: list[s
 
 
 async def _inject_inputs(page: Any, logs: list[str], errors: list[str]) -> None:
+    """试玩输入注入：叠层检查 → 按钮点击 → 键盘按键。
+
+    场景：_session_playtest 加载页面后。
+    参数：page、logs、errors。
+    返回：无。
+    """
     # 先查叠层，再点按钮。暂停层盖住 START 时，Resume 可点也不能当 qa_ok。
     await _fail_if_stacked_screens(page, errors)
     if errors:
@@ -322,10 +420,22 @@ async def _session_playtest(
     mode_label: str,
     goto_timeout_ms: int,
 ) -> PlaytestResult:
+    """单页 Playwright 会话：加载、注入输入、检测运动信号、可选截图。
+
+    场景：_with_browser 内核心试玩逻辑。
+    参数：page、url、want_thumb、mode_label、goto_timeout_ms。
+    返回：PlaytestResult（含 motion_signal 或产品/infra 错误）。
+    """
     errors: list[str] = []
     logs: list[str] = [f"playtest: {mode_label}"]
 
     def _on_page_error(exc: Exception) -> None:
+        """Playwright pageerror 回调：记录页面 JS 异常。
+
+        场景：_session_playtest 监听运行时错误。
+        参数：exc — 页面抛出的异常。
+        返回：无。
+        """
         errors.append(f"PAGE_ERROR: {exc}")
 
     page.on("pageerror", _on_page_error)
@@ -384,6 +494,12 @@ async def _session_playtest(
 
 
 async def _close_browser_quietly(browser: Any) -> None:
+    """关闭浏览器，失败仅打 warning 不抛异常。
+
+    场景：_with_browser finally 清理。
+    参数：browser - Playwright Browser。
+    返回：无。
+    """
     try:
         await browser.close()
     except Exception as exc:  # noqa: BLE001
@@ -393,6 +509,12 @@ async def _close_browser_quietly(browser: Any) -> None:
 async def _with_browser(
     url: str, want_thumb: bool, mode_label: str, timeout: int
 ) -> PlaytestResult:
+    """启动 headless Chromium 并执行 _session_playtest。
+
+    场景：run_playtest / run_playtest_dist。
+    参数：url、want_thumb、mode_label、页面 goto 超时毫秒。
+    返回：PlaytestResult。
+    """
     from playwright.async_api import async_playwright
 
     session_result: PlaytestResult | None = None
@@ -425,6 +547,12 @@ async def _with_browser(
 
 
 def _dist_asset_errors(dist_dir: Path) -> list[str]:
+    """校验 dist/index.html 引用的本地资源文件是否存在。
+
+    场景：run_playtest_dist 构建产物检查。
+    参数：dist_dir - Vite 输出目录。
+    返回：缺失资源错误列表。
+    """
     index = dist_dir / "index.html"
     if not index.is_file():
         return ["dist/index.html 不存在"]
@@ -441,12 +569,24 @@ def _dist_asset_errors(dist_dir: Path) -> list[str]:
 
 
 def _free_port() -> int:
+    """绑定 127.0.0.1:0 获取系统分配的临时端口。
+
+    场景：_serve 本地静态文件服务。
+    参数：无。
+    返回：可用端口号。
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
 
 
 def _serve(directory: Path) -> tuple[ThreadingHTTPServer, threading.Thread, str]:
+    """在后台线程启动 ThreadingHTTPServer 托管目录。
+
+    场景：run_playtest / run_playtest_dist 临时 HTTP 服务。
+    参数：directory - 静态根目录。
+    返回：(server, thread, base_url)。
+    """
     port = _free_port()
     handler = lambda *args, **kwargs: SimpleHTTPRequestHandler(  # noqa: E731
         *args, directory=str(directory.resolve()), **kwargs
@@ -458,12 +598,24 @@ def _serve(directory: Path) -> tuple[ThreadingHTTPServer, threading.Thread, str]
 
 
 def _stop_server(server: ThreadingHTTPServer, thread: threading.Thread) -> None:
+    """优雅关闭临时 HTTP 服务与守护线程。
+
+    场景：run_playtest finally 块。
+    参数：server、thread。
+    返回：无。
+    """
     server.shutdown()
     thread.join(timeout=2)
     server.server_close()
 
 
 async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> PlaytestResult:
+    """对 Vite dist 目录做自包含检查 + Playwright 冒烟试玩。
+
+    场景：Code QA 构建产物门禁（生产路径）。
+    参数：dist_dir、want_thumb - 是否截缩略图。
+    返回：PlaytestResult。
+    """
     refs = scan_dist_external_refs(dist_dir)
     ok, violations = validate_dist_self_contained(refs)
     if not ok:
@@ -493,6 +645,12 @@ async def run_playtest_dist(dist_dir: Path, want_thumb: bool = False) -> Playtes
 
 
 async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
+    """对单文件 HTML 做引擎 API 预检 + Playwright 冒烟试玩。
+
+    场景：Forge code_qa_loop、CLI main。
+    参数：html - 完整页面；want_thumb。
+    返回：附带 CDN 白名单校验的 PlaytestResult。
+    """
     api_errors = illegal_engine_api_errors(html)
     if api_errors:
         return _with_cdn_check(
@@ -523,6 +681,12 @@ async def run_playtest(html: str, want_thumb: bool = False) -> PlaytestResult:
 
 
 def _with_cdn_check(html: str, result: PlaytestResult) -> PlaytestResult:
+    """合并 CDN 白名单违规与既有试玩结果。
+
+    场景：run_playtest 返回前。
+    参数：html、已有 PlaytestResult。
+    返回：可能追加 CSP 相关错误的 PlaytestResult。
+    """
     ok, violations = validate_refs(extract_external_refs(html))
     if ok:
         return result
@@ -535,6 +699,12 @@ def _with_cdn_check(html: str, result: PlaytestResult) -> PlaytestResult:
 
 
 def main() -> None:
+    """CLI 入口：对指定 HTML 文件运行 run_playtest 并打印结果。
+
+    场景：``python -m app.sandbox.playtest <file>``。
+    参数：sys.argv[1] 为 HTML 路径。
+    返回：无；进程 exit 0/1/2。
+    """
     if len(sys.argv) < 2:
         print("usage: playtest <html-file>", file=sys.stderr)
         sys.exit(2)

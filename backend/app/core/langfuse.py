@@ -20,7 +20,13 @@ _registered = False
 
 
 def init_langfuse() -> None:
-    """启动期按 settings 注册 Langfuse 单例；幂等。"""
+    """启动期按 settings 注册 Langfuse 单例。
+
+    作用：用 pydantic 配置构造 Langfuse 客户端并注册全局单例；未配置 key 时禁用并压低 SDK 日志级别。
+    场景：应用或 worker 进程启动时调用；幂等，重复调用无副作用。
+    参数：无。
+    返回：无。
+    """
     global _registered
     if _registered:
         return
@@ -42,7 +48,13 @@ def init_langfuse() -> None:
 
 
 def flush_langfuse() -> None:
-    """停机前 flush 缓冲 trace；未注册/失败均不抛（停机路径不能阻塞）。"""
+    """停机前将缓冲的 trace 刷送到 Langfuse。
+
+    作用：调用已注册客户端的 flush；未注册或失败均不抛异常。
+    场景：进程优雅退出、worker 任务结束等停机路径。
+    参数：无。
+    返回：无。
+    """
     if not _registered:
         return
     try:
@@ -54,10 +66,12 @@ def flush_langfuse() -> None:
 
 
 def _client() -> Any:
-    """返回已注册的 langfuse client；未配置 key 时返回 None。
+    """获取已注册的 Langfuse 客户端实例。
 
-    调用前先确保单例已注册（init 幂等），避免 get_client() 落到读 os.environ 的兜底路径，
-    也避免把 .env 里的 key 误判为未配置而静默禁用。
+    作用：在 key 已配置时先 init_langfuse 再 get_client；避免 SDK 回退读 os.environ。
+    场景：observe_span、propagate_trace_attrs 等内部助手调用。
+    参数：无。
+    返回：Langfuse 客户端；未配置 key 时返回 None。
     """
     if not (settings.langfuse_public_key and settings.langfuse_secret_key):
         return None
@@ -69,7 +83,13 @@ def _client() -> Any:
 
 @contextmanager
 def observe_span(name: str, metadata: dict[str, Any] | None = None) -> Iterator[Any]:
-    """包一层 span；未配置 key 时 yield None，调用方据此跳过后续 update。"""
+    """在上下文管理器中创建 Langfuse span 观测。
+
+    作用：包装 client.start_as_current_observation(as_type=span)；无 key 时 yield None。
+    场景：非 LLM 的业务步骤（如沙箱执行、缓存命中）需要 trace 分段时。
+    参数：name - span 名称；metadata - 可选附加元数据。
+    返回：上下文管理器，yield span 对象或 None。
+    """
     client = _client()
     if client is None:
         yield None
@@ -86,7 +106,13 @@ def propagate_trace_attrs(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Iterator[None]:
-    """在作用域内传播 user_id / session_id / tags；无 key 时为空操作。"""
+    """在作用域内传播 Langfuse trace 属性。
+
+    作用：通过 propagate_attributes 绑定 user_id、session_id、tags、metadata；无 key 时空操作。
+    场景：一次 run 或请求入口包裹后续所有 observation。
+    参数：user_id - 用户标识；session_id - 会话/run 标识；tags - 标签列表；metadata - 元数据。
+    返回：上下文管理器，无 yield 值。
+    """
     if _client() is None:
         yield
         return
@@ -119,11 +145,13 @@ def observe_generation(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
 ) -> Iterator[Any]:
-    """包一层 LLM generation；未配置 key 时 yield None，调用方据此跳过 output/usage update。
+    """在上下文管理器中创建 Langfuse LLM generation 观测。
 
-    name 固定为 llm:{kind}，便于 UI 区分 plan/guardrail/preference_extract 等业务场景。
-    tags 若传入则写入 metadata["_tags"] 供排查；真正的 Langfuse tags 应由外层
-    propagate_trace_attrs 传播（generation 构造期 SDK 未必接受 tags 入参）。
+    作用：记录 model、provider、system/user 输入；name 固定为 ``llm:{kind}``；无 key 时 yield None。
+    场景：每次 LLM complete 调用前后包裹，便于 UI 区分 plan/guardrail 等场景。
+    参数：model - 模型名；provider - 提供方；system/user_msg - 提示词；
+    kind - 业务类型；metadata/tags - 附加信息。
+    返回：上下文管理器，yield generation 对象或 None。
     """
     client = _client()
     if client is None:

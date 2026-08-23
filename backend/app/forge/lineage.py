@@ -27,6 +27,12 @@ def check_promotion_guard(
     active_plan_revision_id: str | None,
     active_art_revision_id: str | None,
 ) -> None:
+    """Promote 前校验候选产物仍为 ACTIVE 且与当前 plan/art revision 一致。
+
+    场景：``assert_candidate_promotable``、版本提升前门禁。
+    参数：status 与各 revision_id（候选 vs 当前 active）。
+    返回：无；不一致时抛 PROMOTION_REJECTED_STALE_ARTIFACT。
+    """
     if status is None and plan_revision_id is None:
         return
     if status != ArtifactStatus.ACTIVE.value:
@@ -38,6 +44,12 @@ def check_promotion_guard(
 
 
 def payload_hash(payload: dict[str, Any]) -> str:
+    """对产物 payload 做确定性 SHA256 哈希。
+
+    场景：判断 plan/art revision 内容是否变化。
+    参数：payload - 可 JSON 序列化的 dict。
+    返回：hex 摘要字符串。
+    """
     blob = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -45,6 +57,12 @@ def payload_hash(payload: dict[str, Any]) -> str:
 async def _active_of_kind(
     db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind
 ) -> ArtifactRevision | None:
+    """查询某 run 指定 kind 的 ACTIVE revision。
+
+    场景：ensure_plan_revision / ensure_art_revision 去重判断。
+    参数：db - 会话；run_id - Run ID；kind - PLAN/ART/CANDIDATE。
+    返回：ArtifactRevision 或 None。
+    """
     return await db.scalar(
         select(ArtifactRevision).where(
             ArtifactRevision.run_id == run_id,
@@ -55,6 +73,12 @@ async def _active_of_kind(
 
 
 async def _next_revision(db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind) -> int:
+    """计算某 run+kind 的下一条 revision 序号（单调递增）。
+
+    场景：新建 ArtifactRevision 行时。
+    参数：db、run_id、kind。
+    返回：下一个 revision 整数。
+    """
     current = await db.scalar(
         select(func.max(ArtifactRevision.revision)).where(
             ArtifactRevision.run_id == run_id,
@@ -65,6 +89,12 @@ async def _next_revision(db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind
 
 
 async def _stale_kind(db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind, reason: str) -> None:
+    """将某 kind 下所有 ACTIVE revision 标记为 STALE。
+
+    场景：策划稿变更后作废下游 art/candidate。
+    参数：db、run_id、kind、stale_reason 文案。
+    返回：无（原地更新 ORM 行）。
+    """
     rows = list(
         (
             await db.scalars(
@@ -82,6 +112,12 @@ async def _stale_kind(db: AsyncSession, run_id: uuid.UUID, kind: ArtifactKind, r
 
 
 async def stale_downstream(db: AsyncSession, run_id: uuid.UUID) -> None:
+    """策划变更后作废 ART 与 CANDIDATE 的 ACTIVE revision。
+
+    场景：plan revision 内容变化且 art 不可复用时。
+    参数：db、run_id。
+    返回：无。
+    """
     await _stale_kind(db, run_id, ArtifactKind.ART, STALE_PLAN_SUPERSEDED)
     await _stale_kind(db, run_id, ArtifactKind.CANDIDATE, STALE_PLAN_SUPERSEDED)
 
@@ -93,6 +129,12 @@ async def ensure_plan_revision(
     *,
     force_new: bool = False,
 ) -> tuple[ArtifactRevision, bool, bool]:
+    """确保存在与 design_doc 匹配的 ACTIVE plan revision。
+
+    场景：plan_node / revise_plan_node 确认策划稿后。
+    参数：db、run_id、design_doc、force_new - 是否强制新建 revision。
+    返回：(revision 行, 是否新建, art 是否复用未重生成)。
+    """
     digest = payload_hash(design_doc)
     current = await _active_of_kind(db, run_id, ArtifactKind.PLAN)
     if current is not None and not force_new and payload_hash(current.payload) == digest:
@@ -119,6 +161,12 @@ async def ensure_plan_revision(
 async def _reuse_or_stale_art(
     db: AsyncSession, run_id: uuid.UUID, design_doc: dict[str, Any]
 ) -> bool:
+    """策划变更后判断现有 art revision 是否可复用。
+
+    场景：ensure_plan_revision 在 supersede 旧 plan 时。
+    参数：db、run_id、新 design_doc。
+    返回：True 表示 art 可复用（仅 stale candidate）；False 表示 art 也需重做。
+    """
     art = await _active_of_kind(db, run_id, ArtifactKind.ART)
     new_fp, new_ver = art_dependency_fingerprint(design_doc)
     reusable = art is not None and can_reuse_art(
@@ -144,6 +192,12 @@ async def ensure_art_revision(
     plan_revision_id: uuid.UUID | None,
     design_doc: dict[str, Any] | None = None,
 ) -> ArtifactRevision:
+    """确保存在与 art_direction 匹配的 ACTIVE art revision。
+
+    场景：art_detail_node 生成美术实现设计后。
+    参数：db、run_id、art_direction、plan_revision_id、design_doc（算指纹）。
+    返回：ACTIVE 的 ArtifactRevision。
+    """
     current = await _active_of_kind(db, run_id, ArtifactKind.ART)
     if current is not None and payload_hash(current.payload) == payload_hash(art_direction):
         return current
@@ -173,6 +227,12 @@ async def record_candidate_revision(
     plan_revision_id: uuid.UUID | None,
     art_revision_id: uuid.UUID | None,
 ) -> ArtifactRevision:
+    """记录或返回已存在的 CANDIDATE revision（幂等按 version）。
+
+    场景：Code 阶段 commit candidate 后登记谱系。
+    参数：db、run_id、version、plan/art revision 外键。
+    返回：CANDIDATE ArtifactRevision。
+    """
     existing = await db.scalar(
         select(ArtifactRevision).where(
             ArtifactRevision.run_id == run_id,
@@ -203,6 +263,12 @@ async def assert_candidate_promotable(
     version: int,
     checkpoint: dict[str, Any],
 ) -> None:
+    """Promote 前断言候选版本 revision 链路与 checkpoint 一致。
+
+    场景：code_qa_loop promote_candidate 之前。
+    参数：db、run_id、候选 version、checkpoint 中的 active_*_revision_id。
+    返回：无；不可 promote 时抛 AppError。
+    """
     row = await db.scalar(
         select(ArtifactRevision).where(
             ArtifactRevision.run_id == run_id,
@@ -234,6 +300,12 @@ async def persist_candidate_revision(
     run_id: uuid.UUID,
     version: int,
 ) -> ArtifactRevision:
+    """写入 candidate revision 并更新 checkpoint 的 active_candidate_revision_id。
+
+    场景：QA 通过后 promote 流程。
+    参数：db、redis、run_id、game_version 号。
+    返回：新或已有的 CANDIDATE ArtifactRevision。
+    """
     from app.forge import state as ckpt
 
     st = await ckpt.load_state(redis, run_id, db) or {}
@@ -250,11 +322,23 @@ async def persist_candidate_revision(
 
 
 def _id(raw: object) -> str | None:
+    """把 checkpoint 中的 revision id 规范为非空字符串或 None。
+
+    场景：check_promotion_guard / assert_candidate_promotable。
+    参数：raw - 任意对象。
+    返回：strip 后的字符串或 None。
+    """
     text = str(raw or "").strip()
     return text or None
 
 
 def parse_revision_id(raw: object) -> uuid.UUID | None:
+    """从 checkpoint 字符串解析 UUID revision id。
+
+    场景：persist_candidate_revision 读取 active_plan/art revision。
+    参数：raw - 字符串或 None。
+    返回：uuid.UUID 或 None（非法格式）。
+    """
     text = str(raw or "").strip()
     if not text:
         return None

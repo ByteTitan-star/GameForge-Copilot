@@ -49,12 +49,24 @@ class LexiconMatcher:
         suspect: ahocorasick.Automaton | None,
         allow_words: list[str],
     ) -> None:
+        """构造已构建的 block/suspect 自动机与白名单词表。
+
+        场景：LexiconMatcher._build / empty。
+        参数：block、suspect 自动机、allow_words。
+        返回：无。
+        """
         self._block = block
         self._suspect = suspect
         self._allow_words = allow_words
 
     @classmethod
     def empty(cls) -> LexiconMatcher:
+        """返回空匹配器（审核词库关闭或目录缺失时）。
+
+        场景：audit_lexicon_enabled=False。
+        参数：无。
+        返回：无 block/suspect 的 LexiconMatcher。
+        """
         return cls(block=None, suspect=None, allow_words=[])
 
     @classmethod
@@ -67,11 +79,7 @@ class LexiconMatcher:
         root = _lexicon_root()
         mtime = _dir_mtime(root)
         root_key = str(root)
-        if (
-            _cached is not None
-            and _cached_mtime == mtime
-            and _cached_dir == root_key
-        ):
+        if _cached is not None and _cached_mtime == mtime and _cached_dir == root_key:
             return _cached
 
         matcher = cls._build(root)
@@ -80,6 +88,12 @@ class LexiconMatcher:
 
     @classmethod
     def _build(cls, root: Path) -> LexiconMatcher:
+        """从词库目录构建 block/suspect 自动机与白名单。
+
+        场景：LexiconMatcher.load 缓存未命中时。
+        参数：root - lexicons 根目录。
+        返回：LexiconMatcher 实例。
+        """
         if not root.is_dir():
             log.warning("lexicon dir missing: %s", root)
             return cls.empty()
@@ -119,6 +133,12 @@ def reset_lexicon_cache() -> None:
 
 
 def _lexicon_root() -> Path:
+    """解析词库根目录（settings 或默认 lexicons/）。
+
+    场景：LexiconMatcher.load。
+    参数：无。
+    返回：Path。
+    """
     if settings.audit_lexicon_dir:
         return Path(settings.audit_lexicon_dir)
     return _DEFAULT_LEXICON_DIR
@@ -141,6 +161,12 @@ def _dir_mtime(root: Path) -> float:
 def _build_automaton(
     directory: Path, category_by_file: dict[str, str]
 ) -> tuple[ahocorasick.Automaton | None, int]:
+    """从目录下 txt 文件构建 Aho-Corasick 自动机。
+
+    场景：LexiconMatcher._build。
+    参数：directory、category_by_file 文件名到 category 映射。
+    返回：(自动机或 None, 词条数)。
+    """
     if not directory.is_dir():
         return None, 0
     auto = ahocorasick.Automaton()
@@ -164,6 +190,12 @@ def _first_hit(
     masked: str,
     level: Literal["block", "suspect"],
 ) -> LexiconHit | None:
+    """在掩码后文本上找第一个未被白名单遮住的词库命中。
+
+    场景：LexiconMatcher.scan。
+    参数：auto、masked 文本、level。
+    返回：LexiconHit 或 None。
+    """
     if auto is None:
         return None
     for end, (category, word) in auto.iter(masked):
@@ -175,6 +207,12 @@ def _first_hit(
 
 
 def _read_words(path: Path) -> list[str]:
+    """读取词库 txt 文件并归一化去重。
+
+    场景：_build_automaton、allow.txt 加载。
+    参数：path - 词库文件路径。
+    返回：归一化后的词列表。
+    """
     if not path.is_file():
         return []
     try:

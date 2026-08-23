@@ -20,6 +20,12 @@ _SYSTEM = (
 
 
 def preference_extract_configured() -> bool:
+    """判断偏好 LLM 抽取是否已完整配置。
+
+    场景：``extract_preferences_via_llm`` 调用前检查开关与凭据。
+    参数：无。
+    返回：enabled、model、apikey 均非空时为 True。
+    """
     return bool(
         settings.preference_extract_enabled
         and settings.preference_extract_model.strip()
@@ -28,7 +34,12 @@ def preference_extract_configured() -> bool:
 
 
 async def extract_preferences_via_llm(text: str) -> list[dict[str, Any]]:
-    """调用轻量 chat；未配置或失败返回 []（不写偏好）。"""
+    """调用轻量 chat 从用户消息抽取长期偏好。
+
+    场景：``upsert_preferences_from_text`` 正式抽取路径（ADR-06）。
+    参数：text - 用户消息文本。
+    返回：偏好 dict 列表；未配置或失败时返回 []（不写偏好）。
+    """
     raw = (text or "").strip()
     if not raw or not preference_extract_configured():
         return []
@@ -54,6 +65,12 @@ async def extract_preferences_via_llm(text: str) -> list[dict[str, Any]]:
 
 
 def _parse_preferences(content: str) -> list[dict[str, Any]]:
+    """解析 LLM 返回的偏好 JSON 并校验字段。
+
+    场景：``extract_preferences_via_llm`` 解析 LLM 响应。
+    参数：content - LLM 原始响应文本。
+    返回：校验通过的偏好 dict 列表；解析失败返回 []。
+    """
     text = content.strip()
     if text.startswith("```"):
         text = text.strip("`")

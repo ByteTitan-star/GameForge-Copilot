@@ -44,11 +44,25 @@ _RENAMEABLE = {GameStatus.DRAFT, GameStatus.REJECTED, GameStatus.TAKEN_DOWN}
 
 
 def _require_verified(user: User) -> None:
+    """校验用户邮箱已验证。
+
+    作用：未验证邮箱时拒绝创建游戏或发起 run。
+    场景：create_game、create_run 等写操作入口。
+    参数：user — 当前用户 ORM 行。
+    返回：无；未验证抛 EMAIL_NOT_VERIFIED。
+    """
     if not user.email_verified:
         raise AppError(ErrorCode.EMAIL_NOT_VERIFIED, "邮箱未验证，无法创建游戏或发起 run")
 
 
 async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    """按 owner 查询游戏，不存在则 404。
+
+    作用：统一 owner 可见性校验。
+    场景：内部 CRUD 与版本操作。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：Game ORM 实例。
+    """
     game = await db.scalar(select(Game).where(Game.id == game_id, Game.owner_id == user.id))
     if game is None:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "游戏不存在或不可见")
@@ -56,10 +70,24 @@ async def _get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
 
 
 async def get_owned_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    """对外暴露的 owner 游戏查询。
+
+    作用：校验归属后返回游戏行。
+    场景：API 层需确认游戏归属时。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：Game ORM 实例。
+    """
     return await _get_owned_game(db, user, game_id)
 
 
 async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> int:
+    """统计用户指定状态的游戏数量。
+
+    作用：配额校验（草稿/已发布上限）。
+    场景：create_game、assert_can_publish 等。
+    参数：db — 会话；user_id — 用户 ID；status — 目标状态。
+    返回：匹配行数。
+    """
     n = await db.scalar(
         select(func.count())
         .select_from(Game)
@@ -71,6 +99,13 @@ async def _count_games(db: AsyncSession, user_id: UUID, status: GameStatus) -> i
 async def create_game(
     db: AsyncSession, user: User, req: GameCreate, r: redis.Redis | None = None
 ) -> Game:
+    """创建草稿游戏。
+
+    作用：校验邮箱与草稿配额，支持模板填充 title/requirement。
+    场景：POST /games。
+    参数：db — 会话；user — 当前用户；req — 创建请求；r — 可选 Redis（模板缓存）。
+    返回：新建 Game ORM 实例。
+    """
     _require_verified(user)
     title = (req.title or "").strip()
     requirement = (req.requirement or "").strip()
@@ -114,6 +149,13 @@ async def create_game(
 async def list_games(
     db: AsyncSession, user: User, status: GameStatus | None, page: int, size: int
 ) -> tuple[list[Game], int]:
+    """分页列出当前用户的游戏。
+
+    作用：owner 过滤，可按状态筛选。
+    场景：GET /games 仓库视图。
+    参数：db — 会话；user — 当前用户；status — 可选状态过滤；page/size — 分页。
+    返回：(游戏列表, 总数)。
+    """
     base = select(Game).where(Game.owner_id == user.id)
     if status is not None:
         base = base.where(Game.status == status.value)
@@ -160,6 +202,13 @@ async def list_featured_games(
 
 
 async def get_public_game_by_slug(db: AsyncSession, slug: str) -> Game:
+    """按 slug 获取已发布公开游戏。
+
+    作用：仅返回 published 状态游戏。
+    场景：公开发现页详情、试玩入口。
+    参数：db — 会话；slug — 游戏 slug。
+    返回：Game ORM 实例。
+    """
     game = await db.scalar(
         select(Game).where(Game.slug == slug, Game.status == GameStatus.PUBLISHED.value)
     )
@@ -171,6 +220,13 @@ async def get_public_game_by_slug(db: AsyncSession, slug: str) -> Game:
 async def get_game_detail(
     db: AsyncSession, user: User, game_id: UUID
 ) -> tuple[Game, list[GameVersion]]:
+    """获取游戏详情及全部版本列表。
+
+    作用：owner 校验后联查版本。
+    场景：GET /games/{game_id}。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：(Game, 版本列表)。
+    """
     game = await _get_owned_game(db, user, game_id)
     versions = (
         await db.scalars(
@@ -196,6 +252,13 @@ async def patch_game(db: AsyncSession, user: User, game_id: UUID, req: GamePatch
 
 
 async def delete_game(db: AsyncSession, user: User, game_id: UUID) -> Game:
+    """删除单个可删状态的游戏。
+
+    作用：仅 draft/rejected/taken_down 可删。
+    场景：DELETE /games/{game_id}。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：已删除的 Game 快照。
+    """
     game = await _get_owned_game(db, user, game_id)
     if GameStatus(game.status) not in _DELETABLE:
         raise AppError(ErrorCode.INVALID_STATE, "当前状态不可删除")
@@ -249,6 +312,13 @@ async def unpublish_own_game(db: AsyncSession, user: User, game_id: UUID) -> Gam
 
 
 async def list_versions(db: AsyncSession, user: User, game_id: UUID) -> list[GameVersion]:
+    """列出游戏全部版本。
+
+    作用：owner 校验后按 version 升序返回。
+    场景：GET /games/{game_id}/versions。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：GameVersion 列表。
+    """
     await _get_owned_game(db, user, game_id)
     rows = (
         await db.scalars(
@@ -261,7 +331,13 @@ async def list_versions(db: AsyncSession, user: User, game_id: UUID) -> list[Gam
 async def get_owned_version(
     db: AsyncSession, user: User, game_id: UUID, version: int
 ) -> tuple[Game, GameVersion]:
-    """Return one version only after verifying ownership to avoid leaking its existence."""
+    """校验归属后返回指定版本，避免泄漏存在性。
+
+    作用：owner 过滤 + 版本存在性校验。
+    场景：下载、预览、产物文件读取等。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID；version — 版本号。
+    返回：(Game, GameVersion)。
+    """
     game = await _get_owned_game(db, user, game_id)
     row = await db.scalar(
         select(GameVersion).where(GameVersion.game_id == game_id, GameVersion.version == version)
@@ -301,6 +377,14 @@ async def create_run(
     req: RunCreate,
     client_request_id: str | None = None,
 ) -> GenerationRun:
+    """创建并入队一次生成 run。
+
+    作用：配额/并发/LLM 配置校验，支持幂等 client_request_id。
+    场景：POST /games/{game_id}/runs。
+    参数：db — 会话；r — Redis；user — 当前用户；game_id — 游戏 ID；
+          req — run 请求；client_request_id — 可选幂等键。
+    返回：GenerationRun ORM 实例。
+    """
     _require_verified(user)
     game = await _get_owned_game(db, user, game_id)
 
@@ -404,6 +488,13 @@ async def create_run(
 
 
 async def list_runs(db: AsyncSession, user: User, game_id: UUID) -> list[GenerationRun]:
+    """列出某游戏下的全部 run。
+
+    作用：owner 校验后按 started_at 降序。
+    场景：GET /games/{game_id}/runs。
+    参数：db — 会话；user — 当前用户；game_id — 游戏 ID。
+    返回：GenerationRun 列表。
+    """
     await _get_owned_game(db, user, game_id)
     rows = (
         await db.scalars(
@@ -435,6 +526,13 @@ async def list_user_active_runs(
 
 
 async def get_run(db: AsyncSession, user: User, run_id: UUID) -> GenerationRun:
+    """按 ID 获取当前用户的 run。
+
+    作用：user_id 过滤，不存在则 404。
+    场景：run 状态查询、控制操作前置校验。
+    参数：db — 会话；user — 当前用户；run_id — run ID。
+    返回：GenerationRun ORM 实例。
+    """
     run = await db.scalar(
         select(GenerationRun).where(GenerationRun.id == run_id, GenerationRun.user_id == user.id)
     )
@@ -444,6 +542,13 @@ async def get_run(db: AsyncSession, user: User, run_id: UUID) -> GenerationRun:
 
 
 async def pause_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
+    """暂停进行中的 run。
+
+    作用：请求 runner 暂停并写入 pause 检查点。
+    场景：POST /runs/{run_id}/pause。
+    参数：db — 会话；r — Redis；user — 当前用户；run_id — run ID。
+    返回：更新后的 GenerationRun。
+    """
     run = await get_run(db, user, run_id)
     if run.status != RunStatus.RUNNING.value:
         raise AppError(ErrorCode.INVALID_STATE, "仅 running 可暂停")
@@ -484,6 +589,13 @@ async def resume_run_control(
 
 
 async def cancel_run(db: AsyncSession, r: redis.Redis, user: User, run_id: UUID) -> GenerationRun:
+    """取消进行中的 run。
+
+    作用：请求取消、标记失败、清理任务与检查点。
+    场景：POST /runs/{run_id}/cancel 或 HITL 取消。
+    参数：db — 会话；r — Redis；user — 当前用户；run_id — run ID。
+    返回：更新后的 GenerationRun。
+    """
     run = await get_run(db, user, run_id)
     if run.status not in (RunStatus.RUNNING.value, RunStatus.PAUSED.value):
         raise AppError(ErrorCode.INVALID_STATE, "仅进行中的 run 可取消")

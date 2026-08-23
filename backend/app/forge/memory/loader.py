@@ -22,10 +22,11 @@ from app.models.game import Game
 
 
 def use_context_builder() -> bool:
-    """正式 Node 一律经 ContextBuilder；保留函数供测试/兼容，恒为 True。
+    """判断是否经 ContextBuilder 拼装节点上下文（恒为 True）。
 
-    回滚粒度改为关闭单项 Memory 能力（summary / preferences / recent turns），
-    不再回退到节点内手写 concat。
+    场景：测试/兼容旧调用点；正式 Node 一律走 ContextBuilder。
+    参数：无。
+    返回：恒为 True；回滚粒度改为关闭单项 Memory 能力而非回退手写 concat。
     """
     return True
 
@@ -40,7 +41,19 @@ async def build_node_context(
     design_doc: dict | None = None,
     recent_limit: int = 12,
 ) -> BuiltContext:
-    """规范路径：正式节点必须经此入口拼装，禁止自行拼历史/偏好。"""
+    """从 DB 加载摘要/偏好/消息并调用 ContextBuilder 拼装上下文。
+
+    场景：正式节点唯一拼装入口，禁止节点内自行拼历史/偏好。
+    参数：
+        db - 异步数据库会话；
+        node - 当前节点名；
+        game - 游戏实体；
+        user_id - 用户 ID；
+        current_input - 本轮用户输入；
+        design_doc - 可选设计稿 dict；
+        recent_limit - 近期消息条数上限。
+    返回：BuiltContext，含 user_message 与各 section。
+    """
     summary = coerce_session_summary(game.session_summary_json)
     prefs: list[dict] = []
     if settings.memory_preferences:
@@ -57,10 +70,7 @@ async def build_node_context(
                 .limit(recent_limit)
             )
         ).all()
-        turns = [
-            ContextTurn(role=m.role, content=m.content)
-            for m in reversed(list(msg_rows))
-        ]
+        turns = [ContextTurn(role=m.role, content=m.content) for m in reversed(list(msg_rows))]
 
     artifacts = ContextArtifacts(design_doc=design_doc) if design_doc else ContextArtifacts()
     from app.forge.tracing import observe_context_build, observe_subsystem
@@ -87,10 +97,18 @@ async def build_node_context(
 
 
 async def maybe_touch_session_summary_flag(db: AsyncSession, game_id: uuid.UUID) -> bool:
-    """若消息量超阈返回 True（兼容旧调用点）。"""
-    count = await db.scalar(
-        select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game_id)
-    ) or 0
+    """判断该游戏是否应刷新 Session Summary（兼容旧调用点）。
+
+    场景：消息写入后由 graph/loader 触发摘要刷新判断。
+    参数：db - 异步数据库会话；game_id - 游戏 ID。
+    返回：True 表示消息量或 token 超阈，应刷新摘要。
+    """
+    count = (
+        await db.scalar(
+            select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game_id)
+        )
+        or 0
+    )
     rows = (
         await db.scalars(
             select(ForgeMessage.content)

@@ -8,6 +8,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class UserLLMConfig(Base, TimestampMixin):
+    """用户自备 LLM 配置（provider/model/加密 apikey）。
+
+    场景：Forge 生成时 call_llm 选用、llm_config API。
+    """
+
     __tablename__ = "user_llm_config"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

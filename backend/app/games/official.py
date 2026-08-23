@@ -85,17 +85,38 @@ _CATALOG_BY_SLUG = {s.slug: s for s in OFFICIAL_CATALOG}
 
 
 def normalize_locale(locale: str | None) -> str:
+    """归一化 locale 为 zh 或 en。
+
+    作用：将任意 locale 字符串映射为 "zh"/"en"。
+    场景：官方游戏标题/描述本地化。
+    参数：locale — 请求 locale，缺省 zh。
+    返回："zh" 或 "en"。
+    """
     raw = (locale or "zh").strip().lower()
     return "en" if raw.startswith("en") else "zh"
 
 
 def catalog_for_slug(slug: str | None) -> OfficialGameSpec | None:
+    """按 slug 查找官方游戏规格。
+
+    作用：从内置目录返回 OfficialGameSpec。
+    场景：本地化标题、Fork 前校验。
+    参数：slug — 官方游戏 slug。
+    返回：规格对象；非官方 slug 返回 None。
+    """
     if not slug:
         return None
     return _CATALOG_BY_SLUG.get(slug)
 
 
 def localized_game_title(game: Game, locale: str | None = None) -> str:
+    """返回本地化游戏标题。
+
+    作用：官方游戏按 locale 取 catalog 标题，其余用 DB title。
+    场景：公开列表、详情 API。
+    参数：game — Game ORM；locale — 可选语言。
+    返回：展示用标题字符串。
+    """
     spec = catalog_for_slug(game.slug)
     if spec is None:
         return game.title
@@ -104,15 +125,36 @@ def localized_game_title(game: Game, locale: str | None = None) -> str:
 
 
 def localized_description(spec: OfficialGameSpec, locale: str | None = None) -> str:
+    """返回官方游戏本地化描述。
+
+    作用：按 locale 选择中/英描述字段。
+    场景：官方游戏列表展示。
+    参数：spec — 官方游戏规格；locale — 可选语言。
+    返回：描述字符串。
+    """
     loc = normalize_locale(locale)
     return spec.description_en if loc == "en" else spec.description
 
 
 def assets_dir() -> Path:
+    """返回官方 HTML 资产目录路径。
+
+    作用：定位 scripts/official_assets 目录。
+    场景：load_html、seed 写产物。
+    参数：无。
+    返回：资产目录 Path。
+    """
     return Path(__file__).resolve().parents[2] / "scripts" / "official_assets"
 
 
 def load_html(spec: OfficialGameSpec, locale: str | None = None) -> str:
+    """读取官方游戏 HTML 源码。
+
+    作用：按 locale 加载对应 html 文件，缺失时回退中文源。
+    场景：seed_official_games 写产物。
+    参数：spec — 官方游戏规格；locale — 可选语言。
+    返回：HTML 文件 UTF-8 文本。
+    """
     loc = normalize_locale(locale)
     filename = spec.html_filename_en if loc == "en" else spec.html_filename
     path = assets_dir() / filename
@@ -124,6 +166,13 @@ def load_html(spec: OfficialGameSpec, locale: str | None = None) -> str:
 
 
 async def ensure_official_user(db: AsyncSession) -> User:
+    """幂等创建或返回官方账号用户。
+
+    作用：按固定 OFFICIAL_OWNER_ID 确保官方 owner 存在。
+    场景：seed_official_games 前置。
+    参数：db — 数据库会话。
+    返回：官方 User ORM 实例。
+    """
     user = await db.get(User, OFFICIAL_OWNER_ID)
     if user is not None:
         return user
@@ -196,9 +245,7 @@ async def seed_official_games(db: AsyncSession) -> SeedResult:
             "levels": [],
         }
         version = await db.scalar(
-            select(GameVersion).where(
-                GameVersion.game_id == spec.game_id, GameVersion.version == 1
-            )
+            select(GameVersion).where(GameVersion.game_id == spec.game_id, GameVersion.version == 1)
         )
         if version is None:
             db.add(
@@ -225,7 +272,8 @@ async def seed_official_games(db: AsyncSession) -> SeedResult:
 
 
 async def list_official_games(
-    db: AsyncSession, locale: str | None = None,
+    db: AsyncSession,
+    locale: str | None = None,
 ) -> list[dict[str, str | None]]:
     """GET /official-games 数据。"""
     loc = normalize_locale(locale)
@@ -243,9 +291,9 @@ async def list_official_games(
         {
             "slug": g.slug or "",
             "title": localized_game_title(g, loc),
-            "description": localized_description(
-                _CATALOG_BY_SLUG[g.slug or ""], loc
-            ) if g.slug in _CATALOG_BY_SLUG else (g.requirement[:120]),
+            "description": localized_description(_CATALOG_BY_SLUG[g.slug or ""], loc)
+            if g.slug in _CATALOG_BY_SLUG
+            else (g.requirement[:120]),
             "play_url": f"/play/{g.slug}",
             "thumbnail_url": None,
         }
@@ -254,6 +302,13 @@ async def list_official_games(
 
 
 async def get_official_game(db: AsyncSession, slug: str) -> Game:
+    """获取已发布的官方预置游戏。
+
+    作用：校验 slug 属于官方目录且 owner 为官方账号。
+    场景：Fork、公开试玩。
+    参数：db — 会话；slug — 官方游戏 slug。
+    返回：Game ORM 实例。
+    """
     if slug not in OFFICIAL_SLUGS:
         raise AppError(ErrorCode.GAME_NOT_FOUND, "官方游戏不存在")
     game = await db.scalar(
@@ -269,6 +324,13 @@ async def get_official_game(db: AsyncSession, slug: str) -> Game:
 
 
 async def _count_drafts(db: AsyncSession, user_id: uuid.UUID) -> int:
+    """统计用户草稿游戏数量。
+
+    作用：Fork 前草稿配额校验。
+    场景：fork_official_game。
+    参数：db — 会话；user_id — 用户 ID。
+    返回：draft 状态游戏数。
+    """
     from sqlalchemy import func
 
     n = await db.scalar(
@@ -280,6 +342,13 @@ async def _count_drafts(db: AsyncSession, user_id: uuid.UUID) -> int:
 
 
 def _copy_artifact(src_game_id: uuid.UUID, dst_game_id: uuid.UUID, version: int) -> None:
+    """复制产物目录到新游戏。
+
+    作用：将源游戏版本产物整目录复制到目标路径。
+    场景：Fork 官方游戏时复制 HTML 产物。
+    参数：src_game_id — 源游戏 ID；dst_game_id — 目标游戏 ID；version — 版本号。
+    返回：无；源目录不存在则跳过。
+    """
     src = artifact_dir(src_game_id, version)
     dst = artifact_dir(dst_game_id, version)
     if not src.exists():
@@ -291,6 +360,13 @@ def _copy_artifact(src_game_id: uuid.UUID, dst_game_id: uuid.UUID, version: int)
 
 
 async def fork_official_game(db: AsyncSession, user: User, slug: str) -> Game:
+    """将官方游戏 Fork 为当前用户草稿。
+
+    作用：复制 requirement、版本与产物到新 draft 游戏。
+    场景：POST /games/fork/{slug}。
+    参数：db — 会话；user — 当前用户；slug — 官方游戏 slug。
+    返回：新建 draft Game ORM 实例。
+    """
     from app.games.services import _require_verified
 
     _require_verified(user)

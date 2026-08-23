@@ -13,6 +13,11 @@ _PHASE_META: dict[str, tuple[str, int]] = {
 
 
 def phase_start_payload(phase: str) -> dict[str, str | int]:
-    """WS phase_start 附加字段。"""
+    """为 WS phase_start 事件生成人话标签与 ETA 附加字段。
+
+    场景：graph 阶段切换时 ``publish_event`` 的 payload 补充。
+    参数：phase - RunPhase 值字符串。
+    返回：含 phase、human_label、eta_seconds 的 dict。
+    """
     label, eta = _PHASE_META.get(phase, ("处理中", 60))
     return {"phase": phase, "human_label": label, "eta_seconds": eta}

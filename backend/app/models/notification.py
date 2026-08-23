@@ -10,6 +10,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class Notification(Base, TimestampMixin):
+    """站内通知（审批、下架、配额告警等）。
+
+    场景：notifications API、与邮件并行触达。
+    """
+
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

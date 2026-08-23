@@ -37,6 +37,19 @@ def _aware(dt: datetime) -> datetime:
 
 
 def _utcnow() -> datetime:
+    """返回当前 UTC 时间（timezone-aware）。
+
+    场景：验证码/ token 过期判断。
+    参数：无。
+    返回：datetime 对象。
+    """
+    """返回当前 UTC 时间（aware）。
+
+    作用：统一业务层时间戳来源。
+    场景：验证码/ token 过期判断。
+    参数：无。
+    返回：timezone-aware datetime。
+    """
     return datetime.now(UTC)
 
 
@@ -51,6 +64,19 @@ def _gen_token() -> str:
 
 
 async def _invalidate_pending_verifications(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """作废用户所有未使用的邮箱验证码记录。
+
+    场景：重发验证码前、爆破达限后。
+    参数：db、user_id。
+    返回：无；有记录时 commit。
+    """
+    """作废用户全部未使用的邮箱验证码。
+
+    作用：将 pending 验证码标记为已用。
+    场景：重发验证码前清理旧记录。
+    参数：db — 会话；user_id — 用户 ID。
+    返回：无。
+    """
     rows = (
         await db.scalars(
             select(EmailVerification).where(
@@ -67,6 +93,19 @@ async def _invalidate_pending_verifications(db: AsyncSession, user_id: uuid.UUID
 
 
 async def _issue_verification_code(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """生成并持久化 6 位邮箱验证码。
+
+    场景：register_user、resend_verification。
+    参数：db、user_id。
+    返回：明文验证码（由调用方发邮件）。
+    """
+    """生成并持久化新的邮箱验证码。
+
+    作用：写入 EmailVerification 行并提交。
+    场景：注册、重发验证邮件。
+    参数：db — 会话；user_id — 用户 ID。
+    返回：6 位验证码明文（供发邮件）。
+    """
     code = _gen_verification_code()
     db.add(
         EmailVerification(
@@ -115,6 +154,19 @@ async def invalidate_pending_verifications_for_email(db: AsyncSession, email: st
 
 
 async def verify_email(db: AsyncSession, email: str, code: str) -> User:
+    """校验邮箱验证码并标记 email_verified。
+
+    场景：POST /auth/verify-email。
+    参数：db、email、6 位 code。
+    返回：已验证 User；无效/过期抛 VALIDATION_ERROR。
+    """
+    """校验邮箱验证码并标记用户已验证。
+
+    作用：匹配未过期、未使用的验证码后更新 user.email_verified。
+    场景：POST /auth/verify-email。
+    参数：db — 会话；email — 邮箱；code — 6 位验证码。
+    返回：已验证的 User ORM 实例。
+    """
     user = await db.scalar(select(User).where(User.email == email))
     if user is None:
         raise AppError(ErrorCode.VALIDATION_ERROR, "验证码无效或已过期")
@@ -139,6 +191,19 @@ async def verify_email(db: AsyncSession, email: str, code: str) -> User:
 async def login_user(
     db: AsyncSession, r: redis.Redis, email: str, password: str
 ) -> tuple[User, str, str]:
+    """邮箱密码登录并签发 access/refresh token。
+
+    场景：POST /auth/login。
+    参数：db、redis、email、password。
+    返回：(user, access_token, refresh_token)。
+    """
+    """邮箱密码登录并签发会话。
+
+    作用：校验凭据后调用 issue_session。
+    场景：POST /auth/login。
+    参数：db — 会话；r — Redis；email/password — 登录凭据。
+    返回：(User, access_token, refresh_token)。
+    """
     user = await db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(password, user.password_hash):
         raise AppError(ErrorCode.UNAUTHORIZED, "邮箱或密码错误")
@@ -146,6 +211,19 @@ async def login_user(
 
 
 async def issue_session(db: AsyncSession, r: redis.Redis, user: User) -> tuple[User, str, str]:
+    """为已认证用户签发会话 token（禁用账号抛 FORBIDDEN）。
+
+    场景：login_user、OAuth callback。
+    参数：db、redis、user。
+    返回：(user, access, refresh)。
+    """
+    """为已认证用户签发 access 与 refresh token。
+
+    作用：检查账号未禁用后生成 JWT 与 Redis refresh。
+    场景：登录、OAuth 回调成功后。
+    参数：db — 会话；r — Redis；user — 用户 ORM。
+    返回：(User, access_token, refresh_token)。
+    """
     if user.disabled:
         raise AppError(ErrorCode.FORBIDDEN, await disabled_user_message(db))
     access = create_access_token(user_id=user.id, role=user.role)
@@ -154,6 +232,19 @@ async def issue_session(db: AsyncSession, r: redis.Redis, user: User) -> tuple[U
 
 
 async def refresh_tokens(db: AsyncSession, r: redis.Redis, refresh_token: str) -> tuple[str, str]:
+    """旋转 refresh token 并签发新 access token。
+
+    场景：POST /auth/refresh。
+    参数：db、redis、旧 refresh_token。
+    返回：(新 access, 新 refresh)。
+    """
+    """轮换 refresh token 并签发新 access token。
+
+    作用：rotate_refresh 后重新生成 JWT。
+    场景：POST /auth/refresh。
+    参数：db — 会话；r — Redis；refresh_token — 旧 refresh 字符串。
+    返回：(new_access_token, new_refresh_token)。
+    """
     rotated = await rotate_refresh(r, refresh_token)
     if rotated is None:
         raise AppError(ErrorCode.UNAUTHORIZED, "refresh token 无效")
@@ -168,6 +259,19 @@ async def refresh_tokens(db: AsyncSession, r: redis.Redis, refresh_token: str) -
 
 
 async def logout(r: redis.Redis, refresh_token: str) -> None:
+    """撤销 refresh token（登出）。
+
+    场景：POST /auth/logout。
+    参数：redis、refresh_token。
+    返回：无。
+    """
+    """登出：撤销 refresh token。
+
+    作用：从 Redis 删除 refresh:{token}。
+    场景：POST /auth/logout。
+    参数：r — Redis；refresh_token — 待撤销 token。
+    返回：无。
+    """
     await revoke_refresh(r, refresh_token)
 
 
@@ -189,6 +293,13 @@ async def request_password_reset(db: AsyncSession, email: str) -> tuple[str, str
 
 
 async def confirm_password_reset(db: AsyncSession, token: str, new_password: str) -> User:
+    """消费重置 token 并设置新密码。
+
+    作用：校验 token 后更新 password_hash。
+    场景：POST /auth/password/reset/confirm。
+    参数：db — 会话；token — 重置链接 token；new_password — 新密码。
+    返回：更新后的 User ORM 实例。
+    """
     row = await _consume_token(db, PasswordResetToken, token)
     user = await db.get(User, row.user_id)
     if user is None:

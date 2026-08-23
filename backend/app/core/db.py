@@ -21,6 +21,12 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """请求级 DB 会话依赖；失败由调用方显式处理，不静默吞。"""
+    """请求级数据库会话依赖注入。
+
+    作用：为每个 HTTP 请求创建并 yield 一个 AsyncSession，请求结束后自动关闭。
+    场景：FastAPI 路由通过 Depends(get_db) 获取数据库会话。
+    参数：无。
+    返回：异步生成器，产出 AsyncSession 实例。
+    """
     async with SessionLocal() as session:
         yield session

@@ -44,7 +44,13 @@ API_V1 = "/api/v1"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """启动：init langfuse + dev 自动 seed 官方游戏；停机 flush 缓冲 trace（docs/02 §可观测）。"""
+    """应用生命周期钩子：启动时初始化观测与开发数据，停机时刷写 trace。
+
+    作用：校验生产密钥、注册 Langfuse、开发环境自动 seed 官方游戏，退出时 flush trace。
+    场景：由 FastAPI lifespan 参数在进程启动/关闭时自动调用。
+    参数：_app - FastAPI 应用实例（未使用，仅占位）。
+    返回：异步上下文管理器，yield 期间服务处于运行态。
+    """
     assert_production_secrets(settings)
     init_langfuse()
     if settings.env == "development":
@@ -56,11 +62,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 async def _dev_seed_official_games() -> None:
-    """dev 启动自动幂等 seed 官方游戏，避免重建库后忘跑 seed 导致前端 404。
+    """开发环境启动时幂等写入官方游戏种子数据。
 
-    生产/预发不自动 seed（由部署流程显式跑 scripts/seed_official_games.py）。
-    seed 失败仅 log.exception、不阻断启动：dev 起服务调试其他接口不应被 seed 拖死，
-    失败时日志提示手动跑 `uv run python -m scripts.seed_official_games`。
+    作用：向数据库插入或刷新内置官方游戏，避免重建库后前端 404。
+    场景：lifespan 在 env=development 时调用；生产/预发由部署脚本显式 seed。
+    参数：无。
+    返回：无；失败仅记录异常日志，不阻断服务启动。
     """
     try:
         async with db.SessionLocal() as session:

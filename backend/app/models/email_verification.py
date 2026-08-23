@@ -9,6 +9,11 @@ from app.models.base import Base, TimestampMixin
 
 
 class EmailVerification(Base, TimestampMixin):
+    """邮箱验证码记录（仅存 token 哈希）。
+
+    场景：注册/重发验证、verify_email 消费。
+    """
+
     __tablename__ = "email_verification"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

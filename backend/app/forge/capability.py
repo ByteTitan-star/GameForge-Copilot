@@ -30,6 +30,12 @@ _BOOL_KEYS = ("physics_2d", "realtime_multiplayer", "backend_server", "webgl_3d"
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
+    """将 JSON/配置中的布尔字段规范为 bool。
+
+    场景：coerce_required_capabilities。
+    参数：value - 原始值；default - 无法解析时的默认。
+    返回：布尔结果。
+    """
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -44,6 +50,12 @@ def _as_bool(value: Any, default: bool = False) -> bool:
 
 
 def coerce_required_capabilities(raw: Any, *, engine_id: str = "canvas") -> dict[str, Any]:
+    """从 design_doc 片段归一化 required_capabilities 结构。
+
+    场景：capability_conflicts / developability_precheck。
+    参数：raw - 原始 dict；engine_id - 默认 renderer 映射。
+    返回：含 renderer 与 physics_2d 等字段的 dict。
+    """
     src = raw if isinstance(raw, dict) else {}
     renderer = str(src.get("renderer") or "").strip() or _ENGINE_RENDERER.get(engine_id, "canvas2d")
     caps: dict[str, Any] = {"renderer": renderer}

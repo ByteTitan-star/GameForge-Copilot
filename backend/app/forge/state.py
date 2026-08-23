@@ -20,6 +20,12 @@ log = logging.getLogger(__name__)
 
 
 def _cache_payload(revision: int, state: dict[str, Any]) -> str:
+    """将 revision 与 state 序列化为 Redis 缓存 JSON。
+
+    场景：``save_state`` / ``load_state`` 写入 Redis 缓存。
+    参数：revision - checkpoint 版本号；state - checkpoint dict。
+    返回：JSON 字符串。
+    """
     return json.dumps(
         {"revision": int(revision), "state": state},
         ensure_ascii=False,
@@ -27,6 +33,12 @@ def _cache_payload(revision: int, state: dict[str, Any]) -> str:
 
 
 def _parse_cache(raw: str | bytes) -> tuple[int | None, dict[str, Any] | None]:
+    """解析 Redis 缓存中的 checkpoint 数据。
+
+    场景：``load_state`` 读取 Redis 并与 DB revision 对齐。
+    参数：raw - Redis 返回的 JSON 字节或字符串。
+    返回：(revision, state) 元组；legacy 裸 dict 时 revision 为 None。
+    """
     try:
         data = json.loads(raw)
     except (TypeError, json.JSONDecodeError):
@@ -47,6 +59,12 @@ def _parse_cache(raw: str | bytes) -> tuple[int | None, dict[str, Any] | None]:
 async def save_state(
     r: redis.Redis, run_id: uuid.UUID, state: dict, db: AsyncSession | None = None
 ) -> None:
+    """持久化 run checkpoint 到 PostgreSQL 并 best-effort 写 Redis 缓存。
+
+    场景：graph 节点间保存 HITL 中断状态；``enqueue_resume`` 写入 resume_grant。
+    参数：r - Redis 客户端；run_id - 生成任务 ID；state - checkpoint dict；db - 可选 DB 会话。
+    返回：无；run 已结束时跳过写入。
+    """
     revision = 1
     if db is not None:
         from app.models.generation_run import GenerationRun
@@ -76,6 +94,12 @@ async def save_state(
 async def load_state(
     r: redis.Redis, run_id: uuid.UUID, db: AsyncSession | None = None
 ) -> dict | None:
+    """加载 run checkpoint，PostgreSQL 为权威源，Redis 为 best-effort 缓存。
+
+    场景：resume 前恢复 HITL 状态；``enqueue_resume`` 读取 phase/replan_count。
+    参数：r - Redis 客户端；run_id - 生成任务 ID；db - 可选 DB 会话。
+    返回：checkpoint dict；不存在时返回 None。revision 不一致时以 DB 为准并回填缓存。
+    """
     try:
         raw = await r.get(_KEY.format(run_id=run_id))
     except Exception:
@@ -110,6 +134,12 @@ async def load_state(
 
 
 async def clear_state(r: redis.Redis, run_id: uuid.UUID, db: AsyncSession | None = None) -> None:
+    """删除 run checkpoint（DB 行 + Redis 缓存）。
+
+    场景：run 完成或取消后清理；测试 teardown。
+    参数：r - Redis 客户端；run_id - 生成任务 ID；db - 可选 DB 会话。
+    返回：无。
+    """
     if db is not None:
         row = await db.get(RunCheckpoint, run_id)
         if row is not None:

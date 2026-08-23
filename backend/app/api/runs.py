@@ -59,6 +59,13 @@ _WS = "/ws/runs/{run_id}"
 
 
 def _to_resp(run: GenerationRun) -> RunResp:
+    """将 GenerationRun ORM 转为 API 响应模型。
+
+    作用：字段映射、枚举转换并附带 ws_url。
+    场景：create_run 等端点返回体。
+    参数：run — GenerationRun ORM 实例。
+    返回：RunResp。
+    """
     return RunResp(
         run_id=run.id,
         game_id=run.game_id,
@@ -83,6 +90,13 @@ async def create_run(
     db: DbSession,
     r: RedisClient,
 ) -> ApiResponse[RunResp]:
+    """为游戏创建并入队生成 run。
+
+    作用：支持 Idempotency-Key 防重复提交。
+    场景：POST /games/{game_id}/runs。
+    参数：game_id — 游戏 ID；req — 创建请求；request/user/db/r — 依赖。
+    返回：ApiResponse[RunResp]。
+    """
     # Idempotency-Key（可选）：同一 key 在 TTL 窗口内复用首次创建的 run，
     # 吸收客户端网络重试/双击，避免重复入队烧 LLM token。
     idem_key = (request.headers.get("Idempotency-Key") or "").strip()
@@ -109,6 +123,13 @@ async def create_run(
 async def list_runs(
     game_id: UUID, user: CurrentUser, db: DbSession
 ) -> ApiResponse[list[RunListItem]]:
+    """列出某游戏下的全部 run。
+
+    作用：owner 校验后返回 run 摘要列表。
+    场景：GET /games/{game_id}/runs。
+    参数：game_id — 游戏 ID；user/db — 依赖。
+    返回：ApiResponse[list[RunListItem]]。
+    """
     rows = await services.list_runs(db, user, game_id)
     return ApiResponse(
         data=[
@@ -136,6 +157,13 @@ async def get_forge_messages(
     limit: int = Query(50, ge=1, le=100),
     before: UUID | None = None,
 ) -> ApiResponse[list[ForgeMessageItem]]:
+    """分页获取 Forge 对话消息历史。
+
+    作用：owner 校验后拉取游戏消息流。
+    场景：GET /games/{game_id}/messages。
+    参数：game_id — 游戏 ID；limit/before — 分页；user/db — 依赖。
+    返回：ApiResponse[list[ForgeMessageItem]]。
+    """
     await services.get_owned_game(db, user, game_id)
     rows = await list_messages(db, game_id, limit=limit, before=before)
     return ApiResponse(
@@ -158,6 +186,13 @@ async def get_forge_messages(
 def _hitl_from_state(
     run: GenerationRun, state: dict | None
 ) -> tuple[HitlState | None, HitlWaitDetail | None]:
+    """从检查点解析 HITL 等待态。
+
+    作用：仅在 run 为 paused 且 phase 为 HITL 节点时返回交互信息。
+    场景：get_run 组装 hitl_wait 字段。
+    参数：run — GenerationRun；state — Redis 检查点字典。
+    返回：(HitlState | None, HitlWaitDetail | None)。
+    """
     # checkpoint 只描述“曾停在哪里”；run.status=paused 才表示当前仍可交互。
     # 任务已推进/结束时即使缓存残留，也不能向前端暴露可点击的 HITL 卡。
     if not state or run.status != RunStatus.PAUSED.value:
@@ -205,6 +240,13 @@ async def list_active_runs(user: CurrentUser, db: DbSession) -> ApiResponse[list
 async def get_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunStatusResp]:
+    """获取 run 完整状态（含 HITL、暂停与产物门禁）。
+
+    作用：联查 DB 行与 Redis 检查点组装 RunStatusResp。
+    场景：GET /runs/{run_id}。
+    参数：run_id — run ID；user/db/r — 依赖。
+    返回：ApiResponse[RunStatusResp]。
+    """
     run = await services.get_run(db, user, run_id)
     state = await ckpt.load_state(r, run_id, db)
     current_hitl, hitl_wait = _hitl_from_state(run, state)
@@ -270,6 +312,13 @@ async def get_run_events(
 async def pause_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunControlResp]:
+    """暂停进行中的 run。
+
+    作用：委托 services.pause_run 并返回控制态。
+    场景：POST /runs/{run_id}/pause。
+    参数：run_id — run ID；user/db/r — 依赖。
+    返回：ApiResponse[RunControlResp]。
+    """
     run = await services.pause_run(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
@@ -288,6 +337,13 @@ async def pause_run(
 async def resume_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunControlResp]:
+    """从暂停态续跑 run。
+
+    作用：委托 services.resume_run_control。
+    场景：POST /runs/{run_id}/resume。
+    参数：run_id — run ID；user/db/r — 依赖。
+    返回：ApiResponse[RunControlResp]。
+    """
     run = await services.resume_run_control(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(
@@ -306,6 +362,13 @@ async def resume_run(
 async def cancel_run(
     run_id: UUID, user: CurrentUser, db: DbSession, r: RedisClient
 ) -> ApiResponse[RunControlResp]:
+    """取消进行中的 run。
+
+    作用：委托 services.cancel_run。
+    场景：POST /runs/{run_id}/cancel。
+    参数：run_id — run ID；user/db/r — 依赖。
+    返回：ApiResponse[RunControlResp]。
+    """
     run = await services.cancel_run(db, r, user, run_id)
     return ApiResponse(
         data=RunControlResp(

@@ -30,6 +30,11 @@ _sandbox: Sandbox | None = None
 
 
 def get_sandbox_backend() -> SandboxBackend:
+    """获取或创建全局 SandboxBackend 单例。
+
+    场景：Forge 构建、QA 等需要沙箱后端的入口。
+    返回：已按 settings 解析并实例化的 SandboxBackend。
+    """
     global _backend
     if _backend is None:
         from app.forge.tracing import observe_subsystem
@@ -59,10 +64,21 @@ def reset_sandbox_for_tests() -> None:
 
 
 def _daytona_sdk_available() -> bool:
+    """检测 daytona Python SDK 是否已安装。
+
+    场景：解析 sandbox_backend=daytona 时决定能否启用云沙箱。
+    返回：find_spec 成功为 True，否则 False。
+    """
     return importlib.util.find_spec("daytona") is not None
 
 
 def _resolve_backend_name(name: str) -> str:
+    """将配置名解析为实际可用的后端标识。
+
+    场景：get_sandbox_backend 选择实现前做 daytona 降级链。
+    参数：name — settings.sandbox_backend 原始值。
+    返回：local、docker 或 daytona（仅当 SDK 与 key 均可用）。
+    """
     key = (name or "local").strip().lower()
     if key != "daytona":
         return key
@@ -80,6 +96,12 @@ def _resolve_backend_name(name: str) -> str:
 
 
 def _build_backend(name: str) -> SandboxBackend:
+    """按名称实例化具体沙箱后端。
+
+    场景：单例首次初始化或测试 reset 后重建。
+    参数：name — 已解析的后端名。
+    返回：LocalSandbox、DockerSandbox 或 DaytonaSandbox 实例。
+    """
     key = (name or "local").strip().lower()
     if key == "local":
         return LocalSandbox()

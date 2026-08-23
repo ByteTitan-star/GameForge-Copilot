@@ -59,6 +59,13 @@ ERR_429: dict[int | str, dict[str, Any]] = {429: {"model": ErrorResponse, "descr
 async def register(
     req: RegisterReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[RegisterResp]:
+    """注册新用户并发送邮箱验证码。
+
+    作用：限流后创建用户并入队验证邮件。
+    场景：POST /auth/register。
+    参数：req — 注册请求；request/db/r — 依赖。
+    返回：ApiResponse[RegisterResp]。
+    """
     await check_rate_limit(
         r,
         f"rl:register:{request.client.host if request.client else 'na'}",
@@ -74,6 +81,13 @@ async def register(
 async def login(
     req: LoginReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[LoginResp]:
+    """邮箱密码登录并签发 token。
+
+    作用：限流后校验凭据，返回 access/refresh 与用户信息。
+    场景：POST /auth/login。
+    参数：req — 登录请求；request/db/r — 依赖。
+    返回：ApiResponse[LoginResp]。
+    """
     await check_rate_limit(
         r,
         f"rl:login:{request.client.host if request.client else 'na'}",
@@ -98,6 +112,13 @@ async def login(
 
 @router.post("/refresh", response_model=ApiResponse[TokenResp], responses=ERR_401)
 async def refresh(req: RefreshReq, db: DbSession, r: RedisClient) -> ApiResponse[TokenResp]:
+    """轮换 refresh token 并签发新 access token。
+
+    作用：委托 services.refresh_tokens。
+    场景：POST /auth/refresh。
+    参数：req — 含 refresh_token；db/r — 依赖。
+    返回：ApiResponse[TokenResp]。
+    """
     access, new_refresh = await services.refresh_tokens(db, r, req.refresh_token)
     return ApiResponse(
         data=TokenResp(
@@ -114,6 +135,13 @@ async def refresh(req: RefreshReq, db: DbSession, r: RedisClient) -> ApiResponse
 async def verify_email(
     req: VerifyEmailReq, request: Request, db: DbSession, r: RedisClient
 ) -> ApiResponse[VerifyEmailResp]:
+    """校验邮箱验证码并标记已验证。
+
+    作用：限流与失败计数，超限作废待验证记录。
+    场景：POST /auth/verify-email。
+    参数：req — 邮箱与验证码；request/db/r — 依赖。
+    返回：ApiResponse[VerifyEmailResp]。
+    """
     host = request.client.host if request.client else "na"
     email_key = req.email.strip().lower()
     await check_rate_limit(
@@ -200,6 +228,13 @@ async def password_reset(
 async def password_reset_confirm(
     req: PasswordResetConfirmReq, db: DbSession
 ) -> ApiResponse[PasswordResetConfirmResp]:
+    """凭重置 token 设置新密码。
+
+    作用：委托 services.confirm_password_reset。
+    场景：POST /auth/password/reset/confirm。
+    参数：req — token 与新密码；db — 依赖。
+    返回：ApiResponse[PasswordResetConfirmResp]。
+    """
     user = await services.confirm_password_reset(db, req.token, req.new_password)
     return ApiResponse(data=PasswordResetConfirmResp(user_id=user.id, email=user.email))
 
@@ -226,6 +261,13 @@ async def logout(req: RefreshReq, r: RedisClient) -> None:
 
 @router.get("/oauth/{provider}/start")
 async def oauth_start(provider: str, r: RedisClient) -> ApiResponse[dict]:
+    """发起 OAuth 授权跳转。
+
+    作用：生成 state 并返回第三方授权 URL。
+    场景：GET /auth/oauth/{provider}/start。
+    参数：provider — github/google；r — Redis。
+    返回：ApiResponse 含 redirect_url 与 state。
+    """
     from app.auth import oauth as oauth_mod
 
     return ApiResponse(data=await oauth_mod.oauth_start(r, provider))
@@ -239,6 +281,13 @@ async def oauth_callback(
     db: DbSession,
     r: RedisClient,
 ) -> ApiResponse[LoginResp]:
+    """OAuth 回调：关联或创建用户并登录。
+
+    作用：校验 state、交换 code、签发会话 token。
+    场景：GET /auth/oauth/{provider}/callback。
+    参数：provider — 提供商；code/state — OAuth 回调参数；db/r — 依赖。
+    返回：ApiResponse[LoginResp]。
+    """
     from app.auth import oauth as oauth_mod
 
     user, access, refresh = await oauth_mod.oauth_callback(db, r, provider, code, state)

@@ -9,6 +9,11 @@ from app.models.base import Base
 
 
 class RunCheckpoint(Base):
+    """LangGraph checkpoint 持久化（PostgreSQL 侧镜像）。
+
+    场景：state 冷启动、跨 worker 恢复图状态。
+    """
+
     __tablename__ = "run_checkpoints"
 
     run_id: Mapped[uuid.UUID] = mapped_column(

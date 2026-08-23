@@ -10,7 +10,13 @@ from app.models.base import Base, TimestampMixin
 
 
 class OAuthAccount(Base, TimestampMixin):
+    """第三方 OAuth 账号与本地用户的绑定关系。
+
+    场景：GitHub/Google 登录回调、账号关联。
+    """
+
     __tablename__ = "oauth_accounts"
+
     __table_args__ = (UniqueConstraint("provider", "provider_sub", name="uq_oauth_provider_sub"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

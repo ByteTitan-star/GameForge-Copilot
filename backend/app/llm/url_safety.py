@@ -11,6 +11,13 @@ from app.core.errors import AppError, ErrorCode
 
 
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """判断 IP 是否为内网/保留/环回等应拒绝的地址。
+
+    作用：SSRF 防护辅助判断。
+    场景：validate_llm_base_url 解析主机名或字面 IP 时。
+    参数：ip IPv4/IPv6 地址对象。
+    返回：应拒绝为 True。
+    """
     return bool(
         ip.is_private
         or ip.is_loopback
@@ -22,13 +29,23 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
 
 
 def _host_allowed_in_development(host: str) -> bool:
+    """development 环境是否允许本机 HTTP 主机名。
+
+    作用：放行 localhost / 127.0.0.1 / ::1。
+    场景：dev 下 base_url 使用 http://localhost。
+    参数：host 主机名（小写）。
+    返回：允许为 True。
+    """
     return host in {"localhost", "127.0.0.1", "::1"}
 
 
 def validate_llm_base_url(base_url: str | None, *, env: str | None = None) -> None:
-    """Raise AppError if base_url is missing scheme/host or targets private/metadata nets.
+    """校验用户填写的 LLM base_url，防 SSRF。
 
-    Empty base_url is allowed (provider defaults). Development may use http://localhost.
+    作用：检查 scheme、主机、内网/元数据地址；空 base_url 允许。
+    场景：创建/测试 LLM 配置前。
+    参数：base_url、可选 env（默认 settings.env）。
+    返回：None；非法时抛 LLM_CONFIG_INVALID。
     """
     if base_url is None or not str(base_url).strip():
         return
