@@ -1,4 +1,7 @@
-"""Checkpoint 瘦身：有 revision 引用时不持久化大 payload；恢复时再 hydrate。"""
+"""Checkpoint 瘦身：有 revision 引用时不持久化大 payload；恢复时再 hydrate。
+
+持久化入口见 ``app.forge.state``。
+"""
 
 from __future__ import annotations
 
