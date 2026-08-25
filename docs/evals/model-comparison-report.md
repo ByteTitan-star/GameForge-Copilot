@@ -10,8 +10,8 @@ Comparison registry with **3** models and **10** fixed generation prompts.
 - **Runner**: `eval/runners/model_comparison_eval.py`
 - **Mode**: `offline_registry`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `cce0db2`
-- **Date**: 2026-08-21
+- **Git SHA**: `fb547ea`
+- **Date**: 2026-08-25
 
 ## 3. Results
 

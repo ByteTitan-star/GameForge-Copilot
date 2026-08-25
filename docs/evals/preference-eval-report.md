@@ -2,16 +2,16 @@
 
 ## 1. Summary
 
-Preference eval on **8** scenarios (mode=live_api).
+Preference eval on **17** scenarios (mode=context_builder_baseline).
 
 ## 2. Methodology
 
-- **Dataset**: `eval/datasets/preference_scenarios.json` (8 entries)
+- **Dataset**: `eval/datasets/preference_scenarios.json` (17 entries)
 - **Runner**: `eval/runners/preference_eval.py`
-- **Mode**: `live_api`
+- **Mode**: `context_builder_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `571648f`
-- **Date**: 2026-08-21
+- **Git SHA**: `fb547ea`
+- **Date**: 2026-08-25
 
 ## 3. Results
 
@@ -19,13 +19,12 @@ Preference eval on **8** scenarios (mode=live_api).
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| db_match_rate | 100.0% | >= 95% | ✅ |
 | cross_session_injection_rate | 100.0% | 100% | ✅ |
-| preference_conflict_resolution | 100.0% | 100% | ✅ |
+| explicit_extraction_accuracy | 100.0% | >= 95% | ✅ |
 
 ## 7. Conclusion
 
-Live API preference persistence against running backend + PostgreSQL.
+Baseline validates ContextBuilder injection formatting. Use --live for API/DB persistence checks.
 
 ## 6. Below-Target Items
 

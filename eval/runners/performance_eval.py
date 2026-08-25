@@ -26,6 +26,7 @@ if str(_REPO_ROOT / "backend") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "backend"))
 
 from eval.runners._common import (
+    DATASETS_DIR,
     DOCS_EVALS_DIR,
     base_report_meta,
     load_dataset,
@@ -54,6 +55,75 @@ def throughput_per_hour(*, successes: int, wall_clock_s: float) -> float:
     if wall_clock_s <= 0:
         return 0.0
     return round(successes / wall_clock_s * 3600.0, 4)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def select_performance_subset(
+    generation: list[dict[str, Any]],
+    *,
+    subset_ids: list[str],
+    limit: int,
+) -> list[dict[str, Any]]:
+    by_id = {str(row.get("id")): row for row in generation}
+    selected = [by_id[i] for i in subset_ids if i in by_id]
+    if limit > 0:
+        return selected[:limit]
+    return selected
+
+
+def load_performance_subset_ids() -> list[str]:
+    raw = json.loads((DATASETS_DIR / "performance_subset.json").read_text(encoding="utf-8"))
+    return [str(x) for x in (raw.get("subset_ids") or [])]
+
+
+def summarize_concurrency_batch(
+    per_run: list[dict[str, Any]],
+    *,
+    n: int,
+    batch_wall_clock_s: float,
+) -> dict[str, Any]:
+    successes = sum(1 for row in per_run if row.get("success"))
+    n_runs = max(1, len(per_run))
+    phase = summarize_phase_latencies(per_run)
+    return {
+        "n": n,
+        "prompts_run": len(per_run),
+        "successes": successes,
+        "success_rate": round(successes / n_runs, 4),
+        "e2e_p50_s": phase["e2e_p50_s"],
+        "e2e_p95_s": phase["e2e_p95_s"],
+        "plan_latency_p50_s": phase["plan_latency_p50_s"],
+        "code_gen_latency_p50_s": phase["code_gen_latency_p50_s"],
+        "batch_wall_clock_s": round(batch_wall_clock_s, 3),
+        "throughput_per_hour": throughput_per_hour(
+            successes=successes, wall_clock_s=batch_wall_clock_s
+        ),
+    }
+
+
+def summarize_concurrency_levels(levels: list[dict[str, Any]]) -> dict[str, Any]:
+    by_n = {int(row["n"]): row for row in levels if row.get("n") is not None}
+    p95_n1 = by_n.get(1, {}).get("e2e_p95_s")
+    p95_n3 = by_n.get(3, {}).get("e2e_p95_s")
+    degradation = None
+    if p95_n1 is not None and p95_n3 is not None:
+        degradation = latency_degradation_pct(
+            p95_n1=float(p95_n1), p95_n3=float(p95_n3)
+        )
+    return {
+        "enabled": True,
+        "levels": levels,
+        "latency_degradation_pct": degradation,
+    }
 
 
 def summarize_phase_latencies(per_run: list[dict[str, Any]]) -> dict[str, Any]:
@@ -114,14 +184,42 @@ def _run_sandbox_benchmark() -> dict[str, Any] | None:
 
 
 def _concurrency_bench_note() -> dict[str, Any]:
-    """Document how to run concurrency bench; live runs are opt-in."""
     return {
         "enabled": False,
         "instructions": (
-            "Set EVAL_PERF_CONCURRENCY_BENCH=1 with EVAL_LIVE credentials to measure "
-            "N=1,2,3 throughput via generation_eval (subset from performance_subset.json)."
+            "Set EVAL_PERF_CONCURRENCY_BENCH=1 (or --concurrency-bench) with "
+            "EVAL_API_BASE_URL and EVAL_ACCESS_TOKEN. Optional: EVAL_PERF_SUBSET_LIMIT."
         ),
     }
+
+
+def _run_concurrency_bench(subset: list[dict[str, Any]]) -> dict[str, Any]:
+    from eval.runners.generation_eval import _run_live
+
+    levels: list[dict[str, Any]] = []
+    for n in (1, 2, 3):
+        started = time.perf_counter()
+        per_run = asyncio.run(_run_live(subset, limit=len(subset), concurrency=n))
+        batch = summarize_concurrency_batch(
+            per_run, n=n, batch_wall_clock_s=time.perf_counter() - started
+        )
+        levels.append(batch)
+        print(
+            f"[perf] N={n} success_rate={batch['success_rate']} "
+            f"e2e_p95_s={batch['e2e_p95_s']} "
+            f"throughput_per_hour={batch['throughput_per_hour']}",
+            flush=True,
+        )
+    return summarize_concurrency_levels(levels)
+
+
+def _require_live_credentials() -> None:
+    base = os.environ.get("EVAL_API_BASE_URL", "").strip()
+    token = os.environ.get("EVAL_ACCESS_TOKEN", "").strip()
+    if not base or not token:
+        raise RuntimeError(
+            "Concurrency bench requires EVAL_API_BASE_URL and EVAL_ACCESS_TOKEN"
+        )
 
 
 def run_eval(*, concurrency_bench: bool = False) -> dict[str, Any]:
@@ -153,25 +251,30 @@ def run_eval(*, concurrency_bench: bool = False) -> dict[str, Any]:
 
     concurrency = _concurrency_bench_note()
     if concurrency_bench:
-        concurrency = {
-            "enabled": True,
-            "note": (
-                "Live concurrency harness not auto-executed in this runner revision; "
-                "use EVAL_CONCURRENCY with generation_eval --live --limit 10 for N=1,2,3 "
-                "and compute latency_degradation_pct / throughput_per_hour offline."
-            ),
-            "helpers": {
-                "latency_degradation_pct": latency_degradation_pct(
-                    p95_n1=100.0, p95_n3=150.0
-                ),
-                "example_throughput_per_hour": throughput_per_hour(
-                    successes=10, wall_clock_s=1800.0
-                ),
-            },
-        }
+        _require_live_credentials()
+        subset_limit = _env_int("EVAL_PERF_SUBSET_LIMIT", 10)
+        subset = select_performance_subset(
+            generation,
+            subset_ids=load_performance_subset_ids(),
+            limit=subset_limit,
+        )
+        if not subset:
+            raise RuntimeError("performance_subset.json produced an empty prompt list")
+        concurrency = _run_concurrency_bench(subset)
+        n1 = next((row for row in concurrency["levels"] if row["n"] == 1), None)
+        if n1 is not None:
+            phase_stats = {
+                "runs": n1["prompts_run"],
+                "e2e_p50_s": n1["e2e_p50_s"],
+                "e2e_p95_s": n1["e2e_p95_s"],
+                "plan_latency_p50_s": n1.get("plan_latency_p50_s"),
+                "code_gen_latency_p50_s": n1.get("code_gen_latency_p50_s"),
+                "source_report": "live_concurrency_n1",
+            }
 
+    mode = "live_concurrency" if concurrency.get("enabled") else "offline_guard_baseline"
     summary = {
-        "mode": "offline_guard_baseline",
+        "mode": mode,
         **guard_stats,
         "sandbox_exec_p95_ms": sandbox_p95,
         "e2e_p50_s": phase_stats.get("e2e_p50_s") if phase_stats else None,
@@ -180,6 +283,7 @@ def run_eval(*, concurrency_bench: bool = False) -> dict[str, Any]:
         "code_gen_latency_p50_s": (
             phase_stats.get("code_gen_latency_p50_s") if phase_stats else None
         ),
+        "latency_degradation_pct": concurrency.get("latency_degradation_pct"),
     }
 
     report = base_report_meta(
@@ -192,8 +296,9 @@ def run_eval(*, concurrency_bench: bool = False) -> dict[str, Any]:
     report["sandbox_benchmark"] = sandbox
     report["concurrency"] = concurrency
     report["note"] = (
-        "Guard latency always measured. Phase/e2e stats require enriched generation_eval "
-        "JSON. Sandbox p95 from local dry-run benchmark. Concurrency N=1,2,3 is opt-in."
+        "Guard latency always measured. Phase/e2e stats come from generation_eval JSON "
+        "or live concurrency N=1. Sandbox p95 from local dry-run. "
+        "Concurrency N=1,2,3 runs only with --concurrency-bench and live credentials."
     )
     return report
 
@@ -224,7 +329,25 @@ def write_markdown_report(report: dict[str, Any]) -> Path:
         f"| plan_latency_p50_s | {s.get('plan_latency_p50_s') or 'n/a'} | tracked | - |",
         f"| code_gen_latency_p50_s | {s.get('code_gen_latency_p50_s') or 'n/a'} | tracked | - |",
         f"| sandbox_exec_p95_ms | {s.get('sandbox_exec_p95_ms') or 'n/a'} | <= 30000 | - |",
+        f"| latency_degradation_pct | {s.get('latency_degradation_pct') if s.get('latency_degradation_pct') is not None else 'n/a'} | tracked | - |",
         "",
+    ]
+    concurrency = report.get("concurrency") or {}
+    if concurrency.get("enabled") and concurrency.get("levels"):
+        lines += [
+            "### 3.2 Concurrent throughput (N=1,2,3)",
+            "",
+            "| N | prompts | success_rate | e2e_p95_s | throughput/h | wall_s |",
+            "|---|--------:|-------------:|----------:|-------------:|-------:|",
+        ]
+        for row in concurrency["levels"]:
+            lines.append(
+                f"| {row['n']} | {row.get('prompts_run')} | {row.get('success_rate')} | "
+                f"{row.get('e2e_p95_s')} | {row.get('throughput_per_hour')} | "
+                f"{row.get('batch_wall_clock_s')} |"
+            )
+        lines.append("")
+    lines += [
         "## 7. Conclusion",
         "",
         report["note"],
@@ -238,7 +361,7 @@ def main() -> None:
     parser.add_argument(
         "--concurrency-bench",
         action="store_true",
-        help="Document/enable concurrency bench helpers",
+        help="Run live concurrency bench at N=1,2,3 (needs API credentials)",
     )
     args = parser.parse_args()
     concurrency = args.concurrency_bench or os.environ.get(
