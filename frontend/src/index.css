@@ -847,13 +847,18 @@ body.gf-forge-resizing * {
 /* 底部横跨执行日志带：标题栏常驻；body 展开时固定高度，事件流内部滚动 */
 .gf-forge-log-dock {
   position: relative;
-  z-index: 1;
+  z-index: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--gf-border);
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
+}
+
+/* HITL 共存：限制日志带 body 上限，给聊天底部确认卡留出空间 */
+.gf-forge-log-dock--hitl-safe .gf-forge-log-dock-body {
+  max-height: min(24vh, 12rem);
 }
 
 .gf-forge-log-dock-header {

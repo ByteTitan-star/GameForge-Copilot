@@ -1461,6 +1461,7 @@ export function ForgePage() {
           runPhase={phase}
           stages={stagePipeline}
           items={items}
+          reserveForHitl={Boolean(hitl)}
           failureRecovery={
             showFailureRecovery && runId
               ? {
