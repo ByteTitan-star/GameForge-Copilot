@@ -757,8 +757,6 @@ body {
   position: relative;
   z-index: 1;
   flex: 1 1 0;
-  flex-direction: column;
-  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   padding: 0.75rem 1rem;
 }
@@ -769,10 +767,19 @@ body {
   }
 }
 
+/* 桌面：试玩区打开时固定左右 grid，避免 Tailwind flex/grid 混用把右栏挤到下方或 6px 中轨 */
 .gf-forge-split--stage-open {
-  flex-direction: row;
-  align-items: stretch;
-  gap: 0;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .gf-forge-split--stage-open {
+    display: grid;
+    grid-template-columns: var(--gf-forge-left-col, 36%) 6px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0;
+  }
 }
 
 /* 拖拽手柄：6px 宽，hover/focus 高亮。面板间距由此 + gridTemplateColumns 共同决定 */
@@ -805,29 +812,10 @@ body.gf-forge-resizing * {
   user-select: none !important;
 }
 
-/* 移动端：双栏降级为纵向堆叠，handle 转横向 */
+/* 移动端：仍用 flex 列 + 顶栏 tab 互斥显示；勿强制双栏同屏堆叠（会像「试玩区在聊天下方」） */
 @media (max-width: 1023px) {
-  .gf-forge-split--stage-open {
-    flex-direction: column;
-  }
-
-  .gf-forge-split--stage-open .gf-forge-panel-left {
-    min-height: 42vh;
-    max-height: 52vh;
-  }
-
   .gf-forge-split-handle {
-    width: auto;
-    height: 6px;
-    cursor: row-resize;
-  }
-
-  .gf-forge-split-handle::before {
-    inset: 2px 0.5rem;
-  }
-
-  .gf-forge-split--stage-open .gf-forge-panel-right {
-    min-height: 36vh;
+    display: none !important;
   }
 }
 

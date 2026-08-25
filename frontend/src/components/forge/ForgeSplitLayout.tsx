@@ -113,19 +113,19 @@ export function ForgeSplitLayout({
     <div
       ref={containerRef}
       className={cn(
-        "gf-forge-split flex h-full min-h-0 flex-col gap-3 lg:grid lg:gap-0",
+        // 关闭：单列 flex。打开：由 CSS --stage-open 在 lg+ 切 grid 左右分栏。
+        // 勿在此叠 lg:grid + flex-col：handle 若晚于 lg 才显示，右栏会被塞进 6px 中轨。
+        "gf-forge-split flex h-full min-h-0 flex-col gap-3",
         stageOpen && "gf-forge-split--stage-open",
         className,
       )}
       style={
         stageOpen
           ? ({
-              gridTemplateColumns: `${leftRatio} 6px 1fr`,
+              ["--gf-forge-left-col" as string]: leftRatio,
+              gridTemplateColumns: `${leftRatio} 6px minmax(0, 1fr)`,
             } as CSSProperties)
-          : // 关闭预览时显式单列填满，避免 grid 退到 auto 隐式列导致面板宽度不确定/溢出
-            ({
-              gridTemplateColumns: "minmax(0, 1fr)",
-            } as CSSProperties)
+          : undefined
       }
     >
       {onMobileViewChange ? (
@@ -185,7 +185,7 @@ export function ForgeSplitLayout({
             tabIndex={0}
             aria-label={t("forgeDragToResize")}
             title={t("forgeDragToResize")}
-            className="gf-forge-split-handle group relative hidden cursor-col-resize touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.4)] focus-visible:ring-offset-2 xl:grid"
+            className="gf-forge-split-handle group relative hidden cursor-col-resize touch-none place-items-center outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--gf-primary-rgb),0.4)] focus-visible:ring-offset-2 lg:grid"
             onPointerDown={(event) => {
               event.preventDefault();
               draggingRef.current = true;

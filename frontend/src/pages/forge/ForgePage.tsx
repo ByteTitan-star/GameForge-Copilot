@@ -1125,7 +1125,12 @@ export function ForgePage() {
               className="!min-h-10 !rounded-xl !px-3 text-xs !text-[var(--gf-text)]"
               onClick={() => {
                 userToggledStageRef.current = true;
-                setStageOpen((open) => !open);
+                setStageOpen((open) => {
+                  const next = !open;
+                  // 窄屏靠 tab 互斥；打开试玩时切到 play，避免右栏被 max-lg:hidden 藏住却又占文档流
+                  setMobileView(next ? "play" : "chat");
+                  return next;
+                });
               }}
               aria-pressed={stageOpen}
               title={stageOpen ? t("forgeHidePreview") : t("forgeShowPreview")}
@@ -1368,6 +1373,7 @@ export function ForgePage() {
                   onClick={() => {
                     userToggledStageRef.current = true;
                     setStageOpen(false);
+                    setMobileView("chat");
                   }}
                   className="ml-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#94A3B8] transition-colors hover:bg-black/[0.04] hover:text-[#0F172A] focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.3)]"
                 >
@@ -1398,7 +1404,7 @@ export function ForgePage() {
                     accessToken={token}
                   />
                 ) : (
-                  <div className="grid h-full min-h-[320px] place-items-center rounded-xl border border-white/[0.06] bg-[radial-gradient(circle_at_center,rgba(var(--gf-primary-rgb),0.10),transparent_60%)] px-6 text-center">
+                  <div className="grid h-full min-h-0 place-items-center rounded-xl border border-white/[0.06] bg-[radial-gradient(circle_at_center,rgba(var(--gf-primary-rgb),0.10),transparent_60%)] px-6 text-center">
                     <div className="max-w-sm">
                       <div className="gf-forge-stage-empty-icon mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.05] shadow-[0_0_36px_rgba(var(--gf-primary-rgb),0.14)]">
                         <Box
