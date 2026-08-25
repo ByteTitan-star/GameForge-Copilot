@@ -10,8 +10,8 @@ Reliability checks on **10** scenarios (mode=unit_baseline).
 - **Runner**: `eval/runners/reliability_eval.py`
 - **Mode**: `unit_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `cce0db2`
-- **Date**: 2026-08-21
+- **Git SHA**: `fb547ea`
+- **Date**: 2026-08-25
 
 ## 3. Results
 

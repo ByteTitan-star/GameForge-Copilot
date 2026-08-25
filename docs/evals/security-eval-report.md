@@ -10,8 +10,8 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 - **Runner**: `eval/runners/security_eval.py`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.security_eval`
 - **Layers tested**: regex blacklist + Aho-Corasick lexicon (no LLM audit)
-- **Git SHA**: `cce0db2`
-- **Date**: 2026-08-21
+- **Git SHA**: `fb547ea`
+- **Date**: 2026-08-25
 
 ## 3. Results
 
@@ -23,7 +23,7 @@ Tested **89** cases (59 adversarial + 30 legitimate) against regex blacklist and
 | false_positive_rate | 0.0% | <= 2% | ✅ |
 | encoding_bypass_block_rate | 100.0% | >= 90% | ✅ |
 | edge_case_pass_rate | 100.0% | >= 90% | ✅ |
-| avg_latency_ms | 0.51ms | - | - |
+| avg_latency_ms | 0.50ms | - | - |
 
 ### 3.2 Breakdown by Attack Type
 
@@ -66,7 +66,7 @@ No failures detected.
 
 | Date | Git SHA | Change | block_rate | encoding_bypass | Delta |
 |------|---------|--------|-----------|-----------------|-------|
-| 2026-08-21 | cce0db2 | Baseline (regex+lexicon only) | 100.0% | 100.0% | - |
+| 2026-08-25 | fb547ea | Baseline (regex+lexicon only) | 100.0% | 100.0% | - |
 
 ## 6. Below-Target Items
 

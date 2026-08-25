@@ -495,7 +495,12 @@ async def _run_one_case(
     }
 
 
-async def _run_live(dataset: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+async def _run_live(
+    dataset: list[dict[str, Any]],
+    *,
+    limit: int,
+    concurrency: int | None = None,
+) -> list[dict[str, Any]]:
     import httpx
 
     base = os.environ.get("EVAL_API_BASE_URL", "").rstrip("/")
@@ -507,7 +512,10 @@ async def _run_live(dataset: list[dict[str, Any]], *, limit: int) -> list[dict[s
     poll_interval_s = _env_float("EVAL_POLL_INTERVAL_S", 5.0)
     max_hitl = _env_int("EVAL_MAX_HITL", 8)
     # Cap to platform per-user MAX_CONCURRENT_RUNS (default 3); higher → RATE_LIMITED.
-    concurrency = max(1, _env_int("EVAL_CONCURRENCY", 3))
+    if concurrency is None:
+        concurrency = max(1, _env_int("EVAL_CONCURRENCY", 3))
+    else:
+        concurrency = max(1, int(concurrency))
     headers = {"Authorization": f"Bearer {token}"}
     cases = dataset[:limit]
     per_run: list[dict[str, Any] | None] = [None] * len(cases)
