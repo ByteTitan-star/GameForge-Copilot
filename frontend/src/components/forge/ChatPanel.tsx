@@ -282,7 +282,8 @@ export function ChatPanel({
       {composerCover ? (
         <div
           className={cn(
-            "min-h-0 max-h-[min(58vh,32rem)] shrink-0 overflow-y-auto",
+            // 相对聊天面板高度封顶，避免日志带展开后仍按 58vh 抢高把确认卡裁切/盖住
+            "min-h-0 max-h-[min(42%,22rem)] shrink-0 overflow-y-auto",
             hero
               ? "border-t border-[var(--gf-border)] bg-[var(--gf-surface)] p-3 md:p-3.5"
               : "gf-border-subtle border-t p-3",
