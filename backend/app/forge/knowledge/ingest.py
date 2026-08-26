@@ -177,6 +177,17 @@ async def ingest_corpus(
             errors=(),
         )
 
+    if get_knowledge_pinecone_store() is None:
+        return IngestResult(
+            total=len(chunks),
+            upserted=0,
+            skipped=len(chunks),
+            errors=(
+                "knowledge pinecone not configured: set PINECONE_KNOWLEDGE_HOST "
+                "(independent from PINECONE_HOST)",
+            ),
+        )
+
     upserted = 0
     skipped = 0
     errors: list[str] = []

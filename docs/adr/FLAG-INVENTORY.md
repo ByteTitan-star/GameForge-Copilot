@@ -28,6 +28,7 @@
 | `preference_extract_enabled` | `true` | 无 `PREFERENCE_EXTRACT_MODEL` → 不自动抽取 |
 | `knowledge_rag_enabled` | `false` | ADR-14；需 `PINECONE_KNOWLEDGE_HOST`（**禁止** fallback 到 `PINECONE_HOST`） |
 | `pinecone_knowledge_namespace` | `global` | R0/R1 单 namespace；域内用 metadata `domain`/`category` |
+| Knowledge ops CLI | — | `probe_knowledge_pinecone` → `ingest_knowledge --verify` → `eval_knowledge_rag` |
 | `native_engine_enabled` | `false` | ADR-13 Godot P0；关时不暴露 `godot4` engine |
 | `native_engine_godot_bin` | `` | 本地 Godot 4 CLI；与 docker_image 二选一 |
 | `native_engine_godot_docker_image` | `` | 如 `gameforge-godot-builder:v1`；Worker 需 docker.sock |
