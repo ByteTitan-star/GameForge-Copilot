@@ -9,7 +9,7 @@
 
 FROM ubuntu:22.04
 
-ARG GODOT_VERSION=4.3.3
+ARG GODOT_VERSION=4.3
 ENV GODOT_VERSION=${GODOT_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     GODOT_BIN=/opt/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
