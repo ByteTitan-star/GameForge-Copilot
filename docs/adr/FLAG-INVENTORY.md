@@ -26,6 +26,9 @@
 | `embedding_model` | `bge-small-zh-v1.5` | 轻量默认；可换 `bge-m3` |
 | `pinecone_enabled` | `true` | 需 `PINECONE_API_KEY` + `PINECONE_HOST` |
 | `preference_extract_enabled` | `true` | 无 `PREFERENCE_EXTRACT_MODEL` → 不自动抽取 |
+| `knowledge_rag_enabled` | `false` | ADR-14；需 `PINECONE_KNOWLEDGE_HOST`（**禁止** fallback 到 `PINECONE_HOST`） |
+| `pinecone_knowledge_namespace` | `global` | R0/R1 单 namespace；域内用 metadata `domain`/`category` |
+| `native_engine_enabled` | `false` | ADR-13 Godot P0；关时不暴露 `godot4` engine |
 
 ## 明确禁止
 

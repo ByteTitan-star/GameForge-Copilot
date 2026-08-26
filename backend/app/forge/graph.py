@@ -390,7 +390,7 @@ async def _compose_plan_input(
         game=ctx.game,
         user_id=ctx.game.owner_id,
         current_input=wrapped,
-        design_doc=None,
+        design_doc=design_doc,
     )
     if design_doc is None:
         return built.user_message
