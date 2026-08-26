@@ -65,12 +65,18 @@ async def build_node_context(
     knowledge_cap = 0
     if settings.knowledge_rag_enabled:
         from app.forge.knowledge.retriever import retrieve_knowledge_for_node
+        from app.forge.tracing import observe_subsystem
 
-        retrieved = await retrieve_knowledge_for_node(
-            node=node,
-            current_input=current_input,
-            design_doc=design_doc,
-        )
+        with observe_subsystem(
+            "knowledge",
+            "retrieve",
+            metadata={"node": node, "enabled": True},
+        ):
+            retrieved = await retrieve_knowledge_for_node(
+                node=node,
+                current_input=current_input,
+                design_doc=design_doc,
+            )
         knowledge_cap = settings.knowledge_token_budget
 
     from app.forge.tracing import observe_context_build, observe_subsystem
@@ -88,6 +94,8 @@ async def build_node_context(
             knowledge_token_cap=knowledge_cap,
         )
         section_lens = {k: len(v or "") for k, v in built.sections.items()}
+        if retrieved:
+            section_lens["retrieved_knowledge_count"] = len(retrieved)
         with observe_context_build(
             node=built.node,
             token_estimate=built.token_estimate,
