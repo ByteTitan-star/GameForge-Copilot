@@ -22,4 +22,5 @@ class RetrievedKnowledge:
     retrieval_score: float
     source_id: str
     trust_level: str = "curated"
+    quality_tier: str = "silver"
     rerank_score: float | None = None

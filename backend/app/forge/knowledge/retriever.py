@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 from app.core.config import settings
+from app.forge.knowledge.metrics import record_knowledge_retrieve
 from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
 from app.forge.knowledge.policy import policy_for_node
 from app.forge.knowledge.query_builder import build_retrieval_query
+from app.forge.knowledge.rerank import apply_semantic_rerank, quality_tie_break
 from app.forge.knowledge.types import RetrievedKnowledge
 from app.llm.embeddings import embed_one
 
 log = logging.getLogger(__name__)
-
-_QUALITY_RANK = {"gold": 3, "silver": 2, "bronze": 1}
 
 
 def knowledge_rag_enabled_for_node(node: str) -> bool:
@@ -60,7 +61,7 @@ def _parse_chunk(meta: dict[str, Any], *, score: float, chunk_id: str) -> Retrie
     source_id = str(meta.get("source_id") or "")
     trust = str(meta.get("trust_level") or meta.get("source_kind") or "curated")
     tier = str(meta.get("quality_tier") or "silver")
-    rerank = score + _QUALITY_RANK.get(tier, 1) * 0.001
+    tie = quality_tie_break(quality_tier=tier, trust_level=trust)
     return RetrievedKnowledge(
         chunk_id=chunk_id,
         domain=domain,
@@ -70,7 +71,8 @@ def _parse_chunk(meta: dict[str, Any], *, score: float, chunk_id: str) -> Retrie
         retrieval_score=score,
         source_id=source_id,
         trust_level=trust,
-        rerank_score=rerank,
+        quality_tier=tier,
+        rerank_score=score + tie,
     )
 
 
@@ -106,12 +108,35 @@ async def retrieve_knowledge_for_node(
     query = build_retrieval_query(node=node, current_input=current_input, design_doc=design_doc)
     if query is None:
         return []
+
+    started = time.perf_counter()
+    rerank_latency_s = 0.0
+    degraded = False
+
     store = get_knowledge_pinecone_store()
     if store is None:
+        record_knowledge_retrieve(
+            node,
+            ok=False,
+            retrieved_count=0,
+            injected_count=0,
+            latency_s=time.perf_counter() - started,
+            degraded=True,
+        )
         return []
+
     vector = await embed_one(query.query_text)
     if vector is None:
+        record_knowledge_retrieve(
+            node,
+            ok=False,
+            retrieved_count=0,
+            injected_count=0,
+            latency_s=time.perf_counter() - started,
+            degraded=True,
+        )
         return []
+
     top_k = max(1, int(settings.knowledge_retrieve_k))
     try:
         matches = await store.query(
@@ -121,11 +146,40 @@ async def retrieve_knowledge_for_node(
         )
     except Exception as exc:  # noqa: BLE001 — RAG 失败降级，不阻断主流程
         log.warning("knowledge retrieve failed: %s", type(exc).__name__)
+        record_knowledge_retrieve(
+            node,
+            ok=False,
+            retrieved_count=0,
+            injected_count=0,
+            latency_s=time.perf_counter() - started,
+            degraded=True,
+        )
         return []
+
     chunks: list[RetrievedKnowledge] = []
     for match in matches:
         parsed = _parse_chunk(match.metadata, score=match.score, chunk_id=match.id)
         if parsed is not None:
             chunks.append(parsed)
+
+    if settings.knowledge_semantic_rerank_enabled and chunks:
+        rerank_started = time.perf_counter()
+        reranked = await apply_semantic_rerank(vector, chunks)
+        rerank_latency_s = time.perf_counter() - rerank_started
+        if reranked is not chunks:
+            chunks = reranked
+        elif len(chunks) > 1:
+            degraded = True
+
     top_n = max(1, int(settings.knowledge_rerank_top_n))
-    return _dedupe_and_trim(chunks, top_n=top_n)
+    result = _dedupe_and_trim(chunks, top_n=top_n)
+    record_knowledge_retrieve(
+        node,
+        ok=True,
+        retrieved_count=len(chunks),
+        injected_count=len(result),
+        latency_s=time.perf_counter() - started,
+        rerank_latency_s=rerank_latency_s,
+        degraded=degraded,
+    )
+    return result

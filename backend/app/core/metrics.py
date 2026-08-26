@@ -104,6 +104,29 @@ NATIVE_ENGINE_REPAIR_ROUND = Histogram(
     ["engine"],
     buckets=(2, 3, 4, 5, 6, 8, 10),
 )
+KNOWLEDGE_RETRIEVE_TOTAL = Counter(
+    "gameforge_knowledge_retrieve_total",
+    "Knowledge RAG retrieval outcomes",
+    ["node", "status"],
+)
+KNOWLEDGE_RETRIEVE_LATENCY = Histogram(
+    "gameforge_knowledge_retrieve_duration_seconds",
+    "Knowledge RAG retrieve+rerank latency",
+    ["node"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+)
+KNOWLEDGE_RERANK_LATENCY = Histogram(
+    "gameforge_knowledge_rerank_duration_seconds",
+    "Knowledge RAG semantic rerank latency",
+    ["node"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
+KNOWLEDGE_RETRIEVE_COUNT = Histogram(
+    "gameforge_knowledge_retrieved_chunks",
+    "Knowledge chunks retrieved or injected per node",
+    ["node"],
+    buckets=(0, 1, 2, 3, 4, 5, 8, 12, 20),
+)
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):

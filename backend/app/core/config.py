@@ -185,6 +185,7 @@ class Settings(BaseSettings):
     knowledge_rag_inject_code: bool = False
     knowledge_retrieve_k: int = 12
     knowledge_rerank_top_n: int = 4
+    knowledge_semantic_rerank_enabled: bool = True
     knowledge_token_budget: int = 800
 
     # ADR-13 Native Engine（Godot-first；默认关，不影响 Web 管线）
