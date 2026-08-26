@@ -13,7 +13,7 @@ from typing import Any
 
 from app.forge.build.routing import coerce_build_routing, validate_routing
 from app.forge.capability import coerce_required_capabilities
-from app.forge.engine_router import DEFAULT_ENGINE, SUPPORTED_ENGINES, normalize_engine_id
+from app.forge.engine_router import DEFAULT_ENGINE, normalize_engine_id, supported_engine_ids
 
 SCHEMA_VERSION = "2.0"
 REQUIRED_STATE_IDS = {
@@ -449,8 +449,8 @@ def validate_design_doc(value: Any) -> list[str]:
         errors.append("technical_constraints 至少需要一项")
 
     engine = doc["engine"]
-    if engine["id"] not in SUPPORTED_ENGINES:
-        errors.append(f"engine.id 必须是受控枚举之一：{', '.join(sorted(SUPPORTED_ENGINES))}")
+    if engine["id"] not in supported_engine_ids():
+        errors.append(f"engine.id 必须是受控枚举之一：{', '.join(sorted(supported_engine_ids()))}")
     if not engine["rationale"]:
         errors.append("engine.rationale 必须说明引擎选择理由")
     # canvas 无外部 CDN，不要求 version；phaser3/pixijs 必须钉死版本号防 CDN 404。

@@ -15,9 +15,10 @@ from pathlib import Path
 
 from app.forge.skills import load_skill
 
-# 受控引擎集合；新增引擎在此一处登记，coerce/validate/prompt 自动同步。
+# Web 受控引擎集合；Native 引擎（如 godot4）由 feature flag 动态并入 supported_engine_ids()。
 SUPPORTED_ENGINES: frozenset[str] = frozenset({"canvas", "phaser3", "pixijs"})
 DEFAULT_ENGINE = "canvas"
+NATIVE_ENGINE_GODOT4 = "godot4"
 
 _ENGINES_DIR = Path(__file__).with_name("skills") / "engines"
 _TEMPLATES_DIR = Path(__file__).with_name("templates")
@@ -37,15 +38,34 @@ _SCAFFOLD: dict[str, str] = {
 }
 
 
+def supported_engine_ids() -> frozenset[str]:
+    """当前进程可用的全部引擎 id（Web + 已开启的 Native）。"""
+    from app.forge.native.engine_spec import native_engine_enabled
+
+    engines = set(SUPPORTED_ENGINES)
+    if native_engine_enabled():
+        engines.add(NATIVE_ENGINE_GODOT4)
+    return frozenset(engines)
+
+
+def is_native_engine_id(engine_id: object) -> bool:
+    return isinstance(engine_id, str) and engine_id.strip() == NATIVE_ENGINE_GODOT4
+
+
 def normalize_engine_id(value: object) -> str:
     """非法/缺失/未知一律回退 canvas，保证老设计稿与异常输入向后兼容。"""
-    if isinstance(value, str) and value.strip() in SUPPORTED_ENGINES:
+    allowed = supported_engine_ids()
+    if isinstance(value, str) and value.strip() in allowed:
         return value.strip()
     return DEFAULT_ENGINE
 
 
 def engine_methodology(engine_id: object) -> str:
     """读取 skills/engines/{engine_id}.md；缺失时回退 canvas 方法论。"""
+    if is_native_engine_id(engine_id):
+        text = load_skill("engines/godot4.md")
+        if text:
+            return text
     eid = normalize_engine_id(engine_id)
     text = load_skill(f"engines/{eid}.md")
     if text:
@@ -83,10 +103,13 @@ def engine_scaffold(engine_id: object) -> str:
 
 __all__ = [
     "DEFAULT_ENGINE",
+    "NATIVE_ENGINE_GODOT4",
     "SUPPORTED_ENGINES",
     "engine_methodology",
     "engine_routing_guide",
     "engine_scaffold",
+    "is_native_engine_id",
     "normalize_engine_id",
     "recommended_cdn_url",
+    "supported_engine_ids",
 ]

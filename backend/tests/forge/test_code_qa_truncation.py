@@ -172,6 +172,7 @@ async def test_execute_code_or_repair_returns_truncation_failure(
         check_ctrl=check_ctrl_ok,
         normalize_html=lambda x: x,
         commit_project_build=noop,
+        commit_native_build=noop,
         run_finalized_exc=RuntimeError,
     )
     assert result.get("candidate_ready") is False

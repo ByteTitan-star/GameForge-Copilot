@@ -135,6 +135,7 @@ async def execute_code_or_repair(
     check_ctrl: Any,
     normalize_html: Any,
     commit_project_build: Any,
+    commit_native_build: Any,
     run_finalized_exc: type[BaseException],
 ) -> dict[str, Any]:
     """单次 CodeQa attempt：generate 或 repair，成功则写入 candidate（不 promote）。"""
@@ -235,6 +236,34 @@ async def execute_code_or_repair(
                 "candidate_ready": False,
                 "code_ok": False,
             }
+
+        from app.forge.native.engine_spec import EngineFamily, get_engine_spec
+
+        native_spec = get_engine_spec(engine_id)
+        if native_spec is not None and native_spec.family is EngineFamily.NATIVE:
+            from app.forge.native.code_qa import execute_native_code_or_repair
+
+            return await execute_native_code_or_repair(
+                ctx,
+                state,
+                engine_id=engine_id,
+                design_doc=design_doc,
+                streamed_llm=streamed_llm,
+                set_phase=set_phase,
+                commit_native_build=commit_native_build,
+                run_finalized_exc=run_finalized_exc,
+                code_llm=_code_llm,
+                truncation_failure=_truncation_failure,
+                base_user_msg=base_user_msg,
+                ctx_summary=ctx_summary,
+                attempt=attempt,
+                artifacts=artifacts,
+                art_direction=art_direction,
+                qa_errors=qa_errors,
+                qa_diagnosis=qa_diagnosis,
+                baseline_version=baseline_version,
+                entry_req=entry_req,
+            )
 
         stored_project: dict[str, str] | None = None
         if use_vite and previous_html and baseline_version:
