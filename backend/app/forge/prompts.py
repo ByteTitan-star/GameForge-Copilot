@@ -762,6 +762,62 @@ QA_PROMPT = f"""
 """.strip()
 
 
+def build_godot_code_prompt() -> str:
+    """Godot template-first 代码生成契约（ADR-13 §3.4）。"""
+    methodology = engine_methodology("godot4")
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 Godot 4 GDScript 游戏工程师。平台已提供固定工程模板，"
+                "你只输出需要覆盖的场景脚本文件。"
+            ),
+            (
+                "硬性约束：\n"
+                "1. 只输出合法 JSON，不要 Markdown 围栏或解释。\n"
+                "2. 不得修改 project.godot、导出预设或引擎配置。\n"
+                "3. files 仅允许 scenes/main.gd（必须）与 scenes/main.tscn（可选）。\n"
+                '4. scenes/main.gd 的 _ready() 末尾必须 print("GAMEFORGE_READY")。\n'
+                "5. 使用 Godot 4.x GDScript 语法；2D 玩法优先。"
+            ),
+            f"【Godot 4 方法论】\n{methodology}" if methodology else "",
+            (
+                "输出 JSON 结构：\n"
+                "{\n"
+                '  "format": "godot-project",\n'
+                '  "files": {\n'
+                '    "scenes/main.gd": "extends Node2D\\n..."\n'
+                "  }\n"
+                "}"
+            ),
+        )
+        if part
+    )
+
+
+def build_godot_repair_prompt() -> str:
+    """Godot 构建/运行失败后的 Repair Agent prompt。"""
+    methodology = engine_methodology("godot4")
+    return "\n\n".join(
+        part
+        for part in (
+            (
+                "你是一名资深 Godot 4 GDScript 工程师。根据试玩/构建错误修复场景脚本，"
+                "保持平台模板契约不变。"
+            ),
+            (
+                "硬性约束：\n"
+                "1. 只输出合法 JSON（format=godot-project），不要 Markdown 或解释。\n"
+                "2. 仅可修改 scenes/main.gd / scenes/main.tscn。\n"
+                '3. 必须保留 print("GAMEFORGE_READY") 探针。\n'
+                "4. 不要输出 project.godot。"
+            ),
+            f"【Godot 4 方法论】\n{methodology}" if methodology else "",
+        )
+        if part
+    )
+
+
 __all__ = [
     "CODE_PROMPT",
     "CODE_REPAIR_PROMPT",
@@ -780,6 +836,8 @@ __all__ = [
     "build_art_options_revise_prompt_async",
     "build_code_prompt",
     "build_code_prompt_async",
+    "build_godot_code_prompt",
+    "build_godot_repair_prompt",
     "build_project_prompt",
     "build_project_repair_prompt",
     "build_qa_prompt",

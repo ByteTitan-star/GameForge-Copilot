@@ -66,6 +66,67 @@ ART_REGENERATE = Counter(
     "forge_art_regenerate_total",
     "Art revisions regenerated because dependency fingerprint changed or version differed",
 )
+NATIVE_ENGINE_PHASE_TOTAL = Counter(
+    "gameforge_native_engine_phase_total",
+    "Native engine validate/build/run phase outcomes",
+    ["engine", "phase", "status"],
+)
+NATIVE_ENGINE_PHASE_LATENCY = Histogram(
+    "gameforge_native_engine_phase_duration_seconds",
+    "Native engine phase duration",
+    ["engine", "phase"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
+)
+NATIVE_ENGINE_ERRORS = Counter(
+    "gameforge_native_engine_error_total",
+    "Native engine failures by error taxonomy",
+    ["engine", "phase", "error_type"],
+)
+NATIVE_ENGINE_LOOP_TOTAL = Counter(
+    "gameforge_native_engine_loop_total",
+    "Native engine full P0 loop outcomes",
+    ["engine", "status"],
+)
+NATIVE_ENGINE_LOOP_LATENCY = Histogram(
+    "gameforge_native_engine_loop_duration_seconds",
+    "Native engine full P0 loop duration",
+    ["engine"],
+    buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600),
+)
+NATIVE_ENGINE_REPAIR = Counter(
+    "gameforge_native_engine_repair_total",
+    "Native engine CodeQa repair events (ADR-13 §3.9)",
+    ["engine", "event"],
+)
+NATIVE_ENGINE_REPAIR_ROUND = Histogram(
+    "gameforge_native_engine_repair_round",
+    "CodeQa attempt index when native repair runs",
+    ["engine"],
+    buckets=(2, 3, 4, 5, 6, 8, 10),
+)
+KNOWLEDGE_RETRIEVE_TOTAL = Counter(
+    "gameforge_knowledge_retrieve_total",
+    "Knowledge RAG retrieval outcomes",
+    ["node", "status"],
+)
+KNOWLEDGE_RETRIEVE_LATENCY = Histogram(
+    "gameforge_knowledge_retrieve_duration_seconds",
+    "Knowledge RAG retrieve+rerank latency",
+    ["node"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+)
+KNOWLEDGE_RERANK_LATENCY = Histogram(
+    "gameforge_knowledge_rerank_duration_seconds",
+    "Knowledge RAG semantic rerank latency",
+    ["node"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
+KNOWLEDGE_RETRIEVE_COUNT = Histogram(
+    "gameforge_knowledge_retrieved_chunks",
+    "Knowledge chunks retrieved or injected per node",
+    ["node"],
+    buckets=(0, 1, 2, 3, 4, 5, 8, 12, 20),
+)
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):

@@ -1,0 +1,18 @@
+{
+  "cases": [
+    {
+      "id": "plan-roguelike-td",
+      "node": "plan",
+      "input": "设计一个肉鸽塔防游戏，强调随机成长和塔协同",
+      "design_doc": {"title": "随机塔防", "genre": "roguelike"},
+      "expect_domains": ["design", "example"]
+    },
+    {
+      "id": "plan-platformer",
+      "node": "plan",
+      "input": "做一个平台跳跃小游戏，节奏要快",
+      "design_doc": {"title": "跳跃方块", "genre": "platformer"},
+      "expect_domains": ["design", "example"]
+    }
+  ]
+}

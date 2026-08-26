@@ -57,12 +57,28 @@ async def build_node_context(
                 .limit(recent_limit)
             )
         ).all()
-        turns = [
-            ContextTurn(role=m.role, content=m.content)
-            for m in reversed(list(msg_rows))
-        ]
+        turns = [ContextTurn(role=m.role, content=m.content) for m in reversed(list(msg_rows))]
 
     artifacts = ContextArtifacts(design_doc=design_doc) if design_doc else ContextArtifacts()
+
+    retrieved: list = []
+    knowledge_cap = 0
+    if settings.knowledge_rag_enabled:
+        from app.forge.knowledge.retriever import retrieve_knowledge_for_node
+        from app.forge.tracing import observe_subsystem
+
+        with observe_subsystem(
+            "knowledge",
+            "retrieve",
+            metadata={"node": node, "enabled": True},
+        ):
+            retrieved = await retrieve_knowledge_for_node(
+                node=node,
+                current_input=current_input,
+                design_doc=design_doc,
+            )
+        knowledge_cap = settings.knowledge_token_budget
+
     from app.forge.tracing import observe_context_build, observe_subsystem
 
     with observe_subsystem("memory", "build_node_context", metadata={"node": node}):
@@ -74,8 +90,12 @@ async def build_node_context(
             preferences=prefs,
             artifacts=artifacts,
             budget_tokens=settings.memory_context_budget_tokens,
+            retrieved_knowledge=retrieved or None,
+            knowledge_token_cap=knowledge_cap,
         )
         section_lens = {k: len(v or "") for k, v in built.sections.items()}
+        if retrieved:
+            section_lens["retrieved_knowledge_count"] = len(retrieved)
         with observe_context_build(
             node=built.node,
             token_estimate=built.token_estimate,
@@ -88,9 +108,12 @@ async def build_node_context(
 
 async def maybe_touch_session_summary_flag(db: AsyncSession, game_id: uuid.UUID) -> bool:
     """若消息量超阈返回 True（兼容旧调用点）。"""
-    count = await db.scalar(
-        select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game_id)
-    ) or 0
+    count = (
+        await db.scalar(
+            select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game_id)
+        )
+        or 0
+    )
     rows = (
         await db.scalars(
             select(ForgeMessage.content)

@@ -11,6 +11,12 @@ async def write_artifact(game_id: uuid.UUID, version: int, files: dict[str, str 
     return await get_hosting_backend().write_artifact(game_id, version, files)
 
 
+async def write_native_artifact(
+    game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
+) -> Path:
+    return await get_hosting_backend().write_native_artifact(game_id, version, files)
+
+
 async def write_version_layers(
     game_id: uuid.UUID,
     version: int,

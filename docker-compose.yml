@@ -90,6 +90,9 @@ services:
       BUILDER_IMAGE: gameforge-builder:v1
       PNPM_STORE_PATH: /var/cache/gameforge/pnpm-store
       HOSTING_ROOT: /data/hosting
+      # ADR-13 Native Godot（默认关；启用时需 GODOT_BIN 或 GODOT_DOCKER_IMAGE + docker.sock）
+      # NATIVE_ENGINE_ENABLED: "true"
+      # NATIVE_ENGINE_GODOT_DOCKER_IMAGE: gameforge-godot-builder:v1
     ports:
       - "8000:8000"
     volumes:
@@ -128,6 +131,8 @@ services:
       BUILDER_IMAGE: gameforge-builder:v1
       PNPM_STORE_PATH: /var/cache/gameforge/pnpm-store
       HOSTING_ROOT: /data/hosting
+      # NATIVE_ENGINE_ENABLED: "true"
+      # NATIVE_ENGINE_GODOT_DOCKER_IMAGE: gameforge-godot-builder:v1
     volumes:
       - hosting:/data/hosting
       - pnpm_store:/var/cache/gameforge/pnpm-store
@@ -153,6 +158,15 @@ services:
       context: .
       dockerfile: docker/Dockerfile.builder
     profiles: ["build-sandbox"]
+
+  # Godot 4 headless（ADR-13 P0）：Validate / Import / Run 共用镜像
+  #   docker compose --profile build-godot build godot-builder
+  godot-builder:
+    image: gameforge-godot-builder:v1
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.godot-builder
+    profiles: ["build-godot"]
 
 volumes:
   pgdata:       # 数据库数据

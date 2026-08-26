@@ -81,4 +81,11 @@ def capability_conflicts(
 
 def developability_precheck(design_doc: dict[str, Any]) -> list[str]:
     """Plan Confirm 前的可实现性预检；空列表表示可通过。"""
+    engine_id = str((design_doc.get("engine") or {}).get("id") or "canvas")
+    if engine_id == "godot4":
+        from app.forge.native.engine_spec import native_engine_enabled
+
+        if not native_engine_enabled():
+            return ["engine.id=godot4 需要启用 NATIVE_ENGINE_ENABLED"]
+        return []
     return capability_conflicts(design_doc)

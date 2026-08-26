@@ -1,0 +1,32 @@
+# gameforge-godot-builder — Godot 4 headless P0 镜像（ADR-13 §3.8）
+#
+# 职责：Validate / Import(Build) / Headless Run 共用基础镜像。
+# 平台钉死 Godot 版本；Agent 不得自选引擎版本。
+# build context = 仓库根目录
+#
+# 用法（示例）：
+#   docker build -f docker/Dockerfile.godot-builder -t gameforge-godot-builder:v1 .
+
+FROM ubuntu:22.04
+
+ARG GODOT_VERSION=4.3
+ENV GODOT_VERSION=${GODOT_VERSION} \
+    DEBIAN_FRONTEND=noninteractive \
+    GODOT_BIN=/opt/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /opt/godot \
+    && curl -fsSL \
+      "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
+      -o /tmp/godot.zip \
+    && unzip -q /tmp/godot.zip -d /opt/godot \
+    && chmod +x "${GODOT_BIN}" \
+    && rm -f /tmp/godot.zip \
+    && ln -sf "${GODOT_BIN}" /usr/local/bin/godot
+
+WORKDIR /workspace
+
+# 默认仅打印版本；实际命令由 GodotRunner 传入
+CMD ["godot", "--version"]

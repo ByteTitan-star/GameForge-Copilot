@@ -232,6 +232,79 @@ async def _commit_project_build(
     }
 
 
+async def _commit_native_candidate(
+    ctx: _Ctx,
+    *,
+    files: dict[str, str],
+    design_doc: dict[str, Any],
+    artifacts: list[Any],
+    art_direction: dict[str, Any] | None,
+    attempt: int = 1,
+    engine_id: str = "godot4",
+) -> dict[str, Any]:
+    """Native 引擎 template-first 产物落盘为 candidate（不 promote current_version）。"""
+    from app.games import services as game_services
+
+    await ctx.s.refresh(ctx.run)
+    if ctx.run.status != RunStatus.RUNNING.value or ctx.run.ended_at is not None:
+        raise RunFinalized
+
+    version, _is_new = await claim_candidate_version(
+        ctx.r,
+        ctx.s,
+        ctx.game,
+        run_id=ctx.run.id,
+        attempt=int(attempt),
+    )
+    artifact = f"{ctx.game.id}/{version}/project.godot"
+    await store.write_native_artifact(ctx.game.id, version, dict(files))
+    existing_gv = await ctx.s.scalar(
+        select(GameVersion).where(
+            GameVersion.game_id == ctx.game.id,
+            GameVersion.version == version,
+        )
+    )
+    if existing_gv is None:
+        ctx.s.add(
+            GameVersion(
+                game_id=ctx.game.id,
+                version=version,
+                artifact_path=artifact,
+                design_doc=design_doc,
+            )
+        )
+    else:
+        existing_gv.artifact_path = artifact
+        existing_gv.design_doc = design_doc
+    await ctx.s.commit()
+    await game_services.prune_old_versions(ctx.s, ctx.game)
+    await persist_candidate_revision(ctx.s, ctx.r, ctx.run.id, version)
+    await ctx.s.commit()
+    await publish_event(
+        ctx.run.id,
+        WSEventType.BUILD_DONE,
+        {
+            "version": version,
+            "artifact_path": artifact,
+            "build": engine_id,
+            **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
+        },
+    )
+    return {
+        "design_doc": design_doc,
+        "artifacts": artifacts,
+        "art_direction": art_direction,
+        "code_ok": True,
+        "candidate_ready": True,
+        "candidate_version": version,
+        "candidate_kind": "native-godot",
+        "failure_kind": None,
+        "playtest_errors": [],
+        "qa_diagnosis": "",
+        **derive_artifact_gate(build_ok=True, qa_ok=False).as_dict(),
+    }
+
+
 def normalize_html(raw: str) -> str:
     """规整 LLM 输出的 HTML：剥离 Markdown 围栏、按 DOCTYPE/</html> 裁剪。
 
@@ -390,7 +463,7 @@ async def _compose_plan_input(
         game=ctx.game,
         user_id=ctx.game.owner_id,
         current_input=wrapped,
-        design_doc=None,
+        design_doc=design_doc,
     )
     if design_doc is None:
         return built.user_message
@@ -1438,6 +1511,7 @@ def _build_graph(ctx: _Ctx) -> Any:
             check_ctrl=_check_ctrl,
             normalize_html=normalize_html,
             commit_project_build=_commit_project_build,
+            commit_native_build=_commit_native_candidate,
             run_finalized_exc=RunFinalized,
         )
 

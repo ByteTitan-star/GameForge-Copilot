@@ -95,6 +95,25 @@ class S3HostingBackend:
         # 保留本地缓存供当前实例快速直出；缓存丢失时由 read_bytes 从 OSS 回源。
         return await local_store.write_artifact(game_id, version, files)
 
+    async def write_native_artifact(
+        self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
+    ) -> Path:
+        if "project.godot" not in files:
+            raise AppError(ErrorCode.SANDBOX_FAILED, "产物缺少 project.godot")
+
+        def _upload() -> None:
+            for rel, content in files.items():
+                body = content.encode() if isinstance(content, str) else content
+                self._client.put_object(
+                    Bucket=self._bucket, Key=self._key(game_id, version, rel), Body=body
+                )
+
+        try:
+            await asyncio.to_thread(_upload)
+        except Exception as exc:
+            raise AppError(ErrorCode.SANDBOX_FAILED, "对象存储上传失败") from exc
+        return await local_store.write_native_artifact(game_id, version, files)
+
     def index_path(self, game_id: uuid.UUID, version: int) -> Path | None:
         return local_store.index_path(game_id, version)
 

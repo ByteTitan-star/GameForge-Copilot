@@ -26,6 +26,10 @@ class HostingBackend(Protocol):
         self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
     ) -> Path: ...
 
+    async def write_native_artifact(
+        self, game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
+    ) -> Path: ...
+
     async def write_version_layers(
         self,
         game_id: uuid.UUID,

@@ -204,7 +204,17 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def _meta_matches(meta: dict[str, Any], filt: dict[str, Any]) -> bool:
-    return all(meta.get(k) == v for k, v in filt.items())
+    for key, expected in filt.items():
+        if isinstance(expected, dict):
+            if "$in" in expected:
+                allowed = expected["$in"]
+                if not isinstance(allowed, list) or meta.get(key) not in allowed:
+                    return False
+                continue
+            return False
+        if meta.get(key) != expected:
+            return False
+    return True
 
 
 def _json_safe_meta(meta: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,37 @@
+{
+  "chunks": [
+    {
+      "chunk_id": "design-mechanic-risk-reward",
+      "domain": "design",
+      "category": "gameplay_mechanic",
+      "title": "风险回报循环",
+      "source_id": "curated-design-v1",
+      "quality_tier": "gold",
+      "acl": "internal",
+      "tags": ["core-loop", "arcade"],
+      "text": "风险回报循环：玩家在高风险动作与可预期收益之间做短期决策。设计要点：失败惩罚可感知但不劝退；成功反馈即时且可累积；每轮决策窗口短于 3 秒以保持街机节奏。"
+    },
+    {
+      "chunk_id": "design-genre-roguelike",
+      "domain": "design",
+      "category": "game_genre",
+      "title": "Roguelike 品类特征",
+      "source_id": "curated-design-v1",
+      "quality_tier": "gold",
+      "acl": "internal",
+      "tags": ["roguelike", "genre"],
+      "text": "Roguelike 核心：单局失败可接受、每局构建不同、随机性与玩家选择共同塑造体验。策划应明确 meta-progression 边界，避免永久成长破坏单局决策权重。"
+    },
+    {
+      "chunk_id": "example-gameplay-tower-defense",
+      "domain": "example",
+      "category": "gameplay_case",
+      "title": "塔防协同案例",
+      "source_id": "curated-examples-v1",
+      "quality_tier": "silver",
+      "acl": "internal",
+      "tags": ["tower-defense", "synergy"],
+      "text": "塔防协同案例：塔类型按功能分工（减速/范围/单体爆发），敌人波次引入克制关系，迫使玩家在有限格点做组合而非堆数值。UI 需展示下一波威胁类型。"
+    }
+  ]
+}

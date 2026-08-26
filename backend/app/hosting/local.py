@@ -3,6 +3,7 @@
 import asyncio
 import mimetypes
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 from app.core.config import settings
@@ -53,9 +54,7 @@ def _write_sync(base: Path, files: dict[str, str | bytes], limit: int) -> None:
         target.write_bytes(data)
 
 
-async def write_artifact(
-    game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
-) -> Path:
+async def write_artifact(game_id: uuid.UUID, version: int, files: dict[str, str | bytes]) -> Path:
     if "index.html" not in files:
         raise AppError(ErrorCode.SANDBOX_FAILED, "产物缺少 index.html")
     base = artifact_dir(game_id, version)
@@ -64,7 +63,19 @@ async def write_artifact(
     return base / "index.html"
 
 
-def _prefix_files(prefix: str, files: dict[str, str | bytes]) -> dict[str, str | bytes]:
+async def write_native_artifact(
+    game_id: uuid.UUID, version: int, files: dict[str, str | bytes]
+) -> Path:
+    """Native 引擎产物（Godot project.godot 为根标记）。"""
+    if "project.godot" not in files:
+        raise AppError(ErrorCode.SANDBOX_FAILED, "产物缺少 project.godot")
+    base = artifact_dir(game_id, version)
+    limit = settings.artifact_max_size_mb * 1024 * 1024
+    await asyncio.to_thread(_write_sync, base, files, limit)
+    return base / "project.godot"
+
+
+def _prefix_files(prefix: str, files: Mapping[str, str | bytes]) -> dict[str, str | bytes]:
     return {f"{prefix}/{rel}": content for rel, content in files.items()}
 
 
@@ -90,7 +101,7 @@ async def write_version_layers(
             ErrorCode.QUOTA_EXCEEDED,
             f"source 产物超出大小上限（{source_bytes} > {source_limit}）",
         )
-    combined: dict[str, bytes] = dict(dist)
+    combined: dict[str, str | bytes] = dict(dist)
     combined.update(_prefix_files("source", source))
     combined.update(_prefix_files("build", build_snapshot))
     return await write_artifact(game_id, version, combined)
@@ -121,9 +132,7 @@ def _write_bytes_sync(base: Path, rel: str, data: bytes) -> None:
     target.write_bytes(data)
 
 
-async def write_bytes(
-    game_id: uuid.UUID, version: int, rel: str, data: bytes
-) -> None:
+async def write_bytes(game_id: uuid.UUID, version: int, rel: str, data: bytes) -> None:
     """写入单个旁路产物文件（如 thumb.png），复用 _check_path 防穿越，不强制 index.html。"""
     await asyncio.to_thread(_write_bytes_sync, artifact_dir(game_id, version), rel, data)
 
@@ -148,9 +157,7 @@ def _list_files_sync(base: Path) -> list[ArtifactFileMeta]:
     return metas
 
 
-async def list_files(
-    game_id: uuid.UUID, version: int
-) -> list[ArtifactFileMeta]:
+async def list_files(game_id: uuid.UUID, version: int) -> list[ArtifactFileMeta]:
     """列出某版本产物下所有文件（扁平，含相对路径/大小/mime）。
 
     仅供 owner 端点消费；防御性过滤越界文件。目录不存在返回 []。

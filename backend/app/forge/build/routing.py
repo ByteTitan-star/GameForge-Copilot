@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.forge.build.catalog import DEPENDENCY_CATALOG, validate_catalog_packages
-from app.forge.engine_router import SUPPORTED_ENGINES, normalize_engine_id
+from app.forge.engine_router import normalize_engine_id, supported_engine_ids
 
 BuildKind = Literal["none", "vite"]
 UiKind = Literal["none", "react"]
@@ -112,7 +112,7 @@ def validate_routing(routing: BuildRouting) -> list[str]:
     errors: list[str] = []
     if routing.build not in ("none", "vite"):
         errors.append(f"build 必须是 none 或 vite，当前: {routing.build}")
-    if routing.renderer not in SUPPORTED_ENGINES:
+    if routing.renderer not in supported_engine_ids():
         errors.append(f"renderer 不受支持: {routing.renderer}")
     if routing.ui not in ("none", "react"):
         errors.append(f"ui 必须是 none 或 react，当前: {routing.ui}")

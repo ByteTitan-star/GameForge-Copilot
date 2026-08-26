@@ -1,5 +1,8 @@
 """engine_router 单元测试：受控枚举、CDN 钉死、方法论/骨架/指南读取。"""
 
+import pytest
+
+from app.core.config import settings
 from app.forge.engine_router import (
     DEFAULT_ENGINE,
     SUPPORTED_ENGINES,
@@ -8,6 +11,7 @@ from app.forge.engine_router import (
     engine_scaffold,
     normalize_engine_id,
     recommended_cdn_url,
+    supported_engine_ids,
 )
 
 
@@ -62,3 +66,12 @@ def test_engine_routing_guide_nonempty() -> None:
     assert guide
     assert "canvas" in guide and "phaser3" in guide
     assert "内置 Matter" in guide or "matter.add.group" in guide
+
+
+def test_godot4_in_supported_when_native_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "native_engine_enabled", True)
+    assert "godot4" in supported_engine_ids()
+    assert normalize_engine_id("godot4") == "godot4"
+    assert "Godot" in engine_methodology("godot4") or "GAMEFORGE_READY" in engine_methodology(
+        "godot4"
+    )

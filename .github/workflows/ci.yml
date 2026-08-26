@@ -30,6 +30,17 @@ jobs:
       - name: Pytest
         run: uv run pytest -q -m "not integration and not load"
 
+  godot-builder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Godot builder image
+        run: docker build -f docker/Dockerfile.godot-builder -t gameforge-godot-builder:v1 .
+
+      - name: Verify Godot CLI
+        run: docker run --rm gameforge-godot-builder:v1 godot --version
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
