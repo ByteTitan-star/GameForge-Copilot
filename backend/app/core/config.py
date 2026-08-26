@@ -190,6 +190,9 @@ class Settings(BaseSettings):
     # ADR-13 Native Engine（Godot-first；默认关，不影响 Web 管线）
     native_engine_enabled: bool = False
     native_engine_godot_version: str = "4.3"
+    native_engine_godot_bin: str = ""
+    native_engine_godot_build_timeout_s: int = 120
+    native_engine_godot_run_timeout_s: int = 30
 
     # 偏好抽取：仅轻量 chat；未配置 model 则不自动写偏好（禁止规则正式路径）
     preference_extract_enabled: bool = True

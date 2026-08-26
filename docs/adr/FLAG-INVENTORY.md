@@ -29,6 +29,7 @@
 | `knowledge_rag_enabled` | `false` | ADR-14；需 `PINECONE_KNOWLEDGE_HOST`（**禁止** fallback 到 `PINECONE_HOST`） |
 | `pinecone_knowledge_namespace` | `global` | R0/R1 单 namespace；域内用 metadata `domain`/`category` |
 | `native_engine_enabled` | `false` | ADR-13 Godot P0；关时不暴露 `godot4` engine |
+| `native_engine_godot_bin` | `` | Godot 4 CLI；空则 build/run 返回 INTERNAL_ERROR |
 
 ## 明确禁止
 
