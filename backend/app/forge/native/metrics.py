@@ -38,3 +38,20 @@ def record_native_loop(engine: str, *, ok: bool, total_s: float) -> None:
         NATIVE_ENGINE_LOOP_LATENCY.labels(engine).observe(max(total_s, 0.0))
     except Exception:  # noqa: BLE001
         return
+
+
+def is_native_repair_round(*, attempt: int, entry_req: object) -> bool:
+    """CodeQa attempt>1 或定向修订视为 repair 轮次。"""
+    return attempt > 1 or bool(entry_req)
+
+
+def record_native_repair(engine: str, *, event: str, round: int) -> None:
+    """event: attempted | codegen_ok | codegen_fail | qa_ok | qa_fail"""
+    try:
+        from app.core.metrics import NATIVE_ENGINE_REPAIR, NATIVE_ENGINE_REPAIR_ROUND
+
+        NATIVE_ENGINE_REPAIR.labels(engine, event).inc()
+        if event == "attempted":
+            NATIVE_ENGINE_REPAIR_ROUND.labels(engine).observe(max(round, 1))
+    except Exception:  # noqa: BLE001
+        return

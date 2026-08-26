@@ -13,6 +13,7 @@ from app.forge.native.codegen import (
     parse_godot_code_output,
 )
 from app.forge.native.engine_spec import EngineFamily, get_engine_spec
+from app.forge.native.metrics import is_native_repair_round, record_native_repair
 from app.forge.prompts import build_godot_code_prompt, build_godot_repair_prompt
 
 
@@ -56,6 +57,9 @@ async def execute_native_code_or_repair(
     with observe_phase("code"):
         await set_phase(ctx, RunPhase.CODE)
         last_error = "; ".join(qa_errors)
+        repair_round = is_native_repair_round(attempt=attempt, entry_req=entry_req)
+        if repair_round:
+            record_native_repair(engine_id, event="attempted", round=attempt)
         use_baseline = attempt > 1 or bool(entry_req)
         stored_overlay: dict[str, str] = {}
         if use_baseline and baseline_version and int(baseline_version) > 0:
@@ -79,6 +83,8 @@ async def execute_native_code_or_repair(
             ctx, system_prompt, user_msg, context_summary=ctx_summary
         )
         if truncated:
+            if repair_round:
+                record_native_repair(engine_id, event="codegen_fail", round=attempt)
             return truncation_failure(
                 attempt=attempt,
                 design_doc=design_doc,
@@ -100,6 +106,8 @@ async def execute_native_code_or_repair(
                     "summary": "godot-project JSON 校验失败",
                 },
             )
+            if repair_round:
+                record_native_repair(engine_id, event="codegen_fail", round=attempt)
             return {
                 "attempt": attempt,
                 "candidate_ready": False,
@@ -128,6 +136,8 @@ async def execute_native_code_or_repair(
             attempt=int(attempt),
             engine_id=engine_id,
         )
+        if repair_round:
+            record_native_repair(engine_id, event="codegen_ok", round=attempt)
         return {
             **committed,
             "attempt": attempt,

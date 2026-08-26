@@ -674,6 +674,10 @@ async def execute_playtest(
                     },
                 )
                 if result_ok:
+                    if attempt > 1:
+                        from app.forge.native.metrics import record_native_repair
+
+                        record_native_repair(engine_id, event="qa_ok", round=attempt)
                     return {
                         "qa_ok": True,
                         "playtest_errors": [],
@@ -687,6 +691,10 @@ async def execute_playtest(
                         "candidate_version": version,
                         "candidate_ready": True,
                     }
+                if attempt > 1:
+                    from app.forge.native.metrics import record_native_repair
+
+                    record_native_repair(engine_id, event="qa_fail", round=attempt)
                 return {
                     "qa_ok": False,
                     "playtest_errors": errors,

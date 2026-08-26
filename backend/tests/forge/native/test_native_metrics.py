@@ -5,8 +5,14 @@ from __future__ import annotations
 from app.core.metrics import (
     NATIVE_ENGINE_LOOP_TOTAL,
     NATIVE_ENGINE_PHASE_TOTAL,
+    NATIVE_ENGINE_REPAIR,
 )
-from app.forge.native.metrics import record_native_loop, record_native_phase
+from app.forge.native.metrics import (
+    is_native_repair_round,
+    record_native_loop,
+    record_native_phase,
+    record_native_repair,
+)
 
 
 def test_record_native_phase_increments_ok_counter() -> None:
@@ -34,3 +40,17 @@ def test_record_native_loop_increments_counter() -> None:
     record_native_loop("godot4", ok=True, total_s=2.5)
     after = NATIVE_ENGINE_LOOP_TOTAL.labels("godot4", "ok")._value.get()
     assert after == before + 1
+
+
+def test_is_native_repair_round() -> None:
+    assert is_native_repair_round(attempt=1, entry_req=None) is False
+    assert is_native_repair_round(attempt=2, entry_req=None) is True
+    assert is_native_repair_round(attempt=1, entry_req="fix jump") is True
+
+
+def test_record_native_repair_events() -> None:
+    before = NATIVE_ENGINE_REPAIR.labels("godot4", "attempted")._value.get()
+    record_native_repair("godot4", event="attempted", round=2)
+    after = NATIVE_ENGINE_REPAIR.labels("godot4", "attempted")._value.get()
+    assert after == before + 1
+    record_native_repair("godot4", event="qa_ok", round=2)

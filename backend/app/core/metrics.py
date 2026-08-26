@@ -93,6 +93,17 @@ NATIVE_ENGINE_LOOP_LATENCY = Histogram(
     ["engine"],
     buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600),
 )
+NATIVE_ENGINE_REPAIR = Counter(
+    "gameforge_native_engine_repair_total",
+    "Native engine CodeQa repair events (ADR-13 §3.9)",
+    ["engine", "event"],
+)
+NATIVE_ENGINE_REPAIR_ROUND = Histogram(
+    "gameforge_native_engine_repair_round",
+    "CodeQa attempt index when native repair runs",
+    ["engine"],
+    buckets=(2, 3, 4, 5, 6, 8, 10),
+)
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
