@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GameForge-Copilot",
-    "version": "2.0.1"
+    "version": "2.1.1"
   },
   "paths": {
     "/healthz": {
