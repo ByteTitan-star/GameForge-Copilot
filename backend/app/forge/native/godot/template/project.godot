@@ -1,0 +1,12 @@
+; GameForge Godot P0 template (ADR-13). Platform pins engine version; Agent fills scenes/scripts.
+
+config_version=5
+
+[application]
+
+config/name="GameForge Template"
+run/main_scene="res://scenes/main.tscn"
+
+[gameforge]
+
+ready_signal="GAMEFORGE_READY"
