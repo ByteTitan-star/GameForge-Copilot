@@ -579,13 +579,13 @@ async def execute_playtest(
         await set_phase(ctx, RunPhase.QA)
 
         if not state.get("candidate_ready") or not candidate_version:
-            errors = ["无可用 candidate，跳过试玩"]
+            skip_errors = ["无可用 candidate，跳过试玩"]
             await publish_event(
                 ctx.run.id,
                 WSEventType.QA_REPORT,
                 {
                     "passed": False,
-                    "issues": errors,
+                    "issues": skip_errors,
                     "log_excerpt": "",
                     "console_logs": [],
                     "playtest_mode": "playwright",
@@ -598,7 +598,7 @@ async def execute_playtest(
                 "qa_ok": False,
                 "candidate_ready": False,
                 "failure_kind": "build",
-                "playtest_errors": errors,
+                "playtest_errors": skip_errors,
                 "console_logs": [],
                 "motion_signal": None,
                 "design_doc": design_doc,
@@ -606,17 +606,82 @@ async def execute_playtest(
             }
 
         version = int(candidate_version)
+        engine_id = (design_doc.get("engine") or {}).get("id", "canvas")
+        artifact_dir = store.artifact_dir(ctx.game.id, version)
         html_path = store.index_path(ctx.game.id, version)
         html = ""
         pt = None
+        result_ok = False
+        errors: list[str] = []
+        console_logs: list[str] = []
+        failure_kind: str | None = None
+        motion_signal = None
+
+        if artifact_dir.is_dir():
+            from app.forge.native.playtest import run_native_playtest, should_run_native_playtest
+
+            if should_run_native_playtest(engine_id, artifact_dir):
+                native_pt = await run_native_playtest(engine_id, artifact_dir)
+                result_ok = native_pt.ok
+                errors = native_pt.errors
+                console_logs = native_pt.console_logs
+                failure_kind = native_pt.failure_kind
+                motion_signal = "engine_runtime" if native_pt.ok else None
+                playtest_mode = native_pt.playtest_mode
+                native_diag = native_pt.structured.to_dict() if native_pt.structured else None
+                log_excerpt = "\n".join(console_logs[:5]) if console_logs else ""
+                await publish_event(
+                    ctx.run.id,
+                    WSEventType.QA_REPORT,
+                    {
+                        "passed": result_ok,
+                        "issues": [] if result_ok else errors,
+                        "log_excerpt": log_excerpt,
+                        "console_logs": console_logs,
+                        "playtest_mode": playtest_mode,
+                        "attempt": attempt,
+                        "failure_kind": None if result_ok else failure_kind,
+                        "motion_signal": motion_signal,
+                    },
+                )
+                if result_ok:
+                    return {
+                        "qa_ok": True,
+                        "playtest_errors": [],
+                        "console_logs": console_logs,
+                        "failure_kind": None,
+                        "motion_signal": motion_signal,
+                        "qa_diagnosis": "",
+                        "failed": False,
+                        "design_doc": design_doc,
+                        "attempt": attempt,
+                        "candidate_version": version,
+                        "candidate_ready": True,
+                    }
+                return {
+                    "qa_ok": False,
+                    "playtest_errors": errors,
+                    "console_logs": console_logs,
+                    "failure_kind": failure_kind,
+                    "motion_signal": motion_signal,
+                    "failed": False,
+                    "design_doc": design_doc,
+                    "attempt": attempt,
+                    "candidate_version": version,
+                    "candidate_ready": True,
+                    "artifacts": state.get("artifacts") or [],
+                    "art_direction": state.get("art_direction") or {},
+                    "native_structured_diagnostic": native_diag,
+                    "_qa_html": "",
+                }
+
         gate_doc = design_doc if settings.forge_acceptance_gate else None
         runtime_doc = design_doc if settings.forge_acceptance_runtime else None
         if html_path is None or not html_path.exists():
             errors = ["产物 index.html 不存在，无法试玩"]
             result_ok = False
-            console_logs: list[str] = []
-            failure_kind: str | None = "build"
-            motion_signal = None
+            console_logs = []
+            failure_kind = "build"
         elif serve.is_project_artifact(ctx.game.id, version):
             artifact_dir = store.artifact_dir(ctx.game.id, version)
             pt = await run_playtest_dist(
@@ -712,6 +777,38 @@ async def execute_diagnose(
         design_doc = coerce_design_doc(state.get("design_doc") or {}, ctx.game.title)
         errors = list(state.get("playtest_errors") or [])
         console_logs = list(state.get("console_logs") or [])
+
+        native_raw = state.get("native_structured_diagnostic")
+        if isinstance(native_raw, dict):
+            from app.forge.native.godot.diagnostics import (
+                NativeStructuredDiagnostic,
+                build_native_repair_context,
+            )
+
+            diag = NativeStructuredDiagnostic(
+                engine=str(native_raw.get("engine") or "godot"),
+                phase=str(native_raw.get("phase") or "run"),
+                error_type=str(native_raw.get("error_type") or "RUN_FAILED"),
+                exit_code=native_raw.get("exit_code"),
+                summary=str(native_raw.get("summary") or ""),
+                stderr_excerpt=str(native_raw.get("stderr_excerpt") or ""),
+                affected_files=tuple(native_raw.get("affected_files") or ()),
+                retryable=bool(native_raw.get("retryable")),
+                engine_version=str(native_raw.get("engine_version") or ""),
+            )
+            diagnosis = build_native_repair_context(diag)
+            return {
+                "qa_ok": False,
+                "qa_diagnosis": diagnosis,
+                "playtest_errors": errors,
+                "console_logs": console_logs,
+                "failure_kind": state.get("failure_kind") or "product",
+                "design_doc": design_doc,
+                "artifacts": state.get("artifacts") or [],
+                "art_direction": state.get("art_direction") or {},
+                "native_structured_diagnostic": native_raw,
+            }
+
         html = state.get("_qa_html") or ""
         if not html:
             version = state.get("candidate_version")
