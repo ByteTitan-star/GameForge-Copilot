@@ -3,7 +3,7 @@
 * Status: **Accepted**
 * Date: 2026-08-16
 * Accepted-by: ByteTitan-star
-* Related: ADR-02、ADR-04、P4 Exact / P4.5 Semantic
+* Related: ADR-02、ADR-04、ADR-14（Knowledge RAG / Dual Index）、P4 Exact / P4.5 Semantic
 
 ---
 
@@ -17,6 +17,7 @@
 | 偏好表 | Postgres；索引点查；**≤50 物理删除最早** |
 | 偏好抽取 | **只用轻量 chat 模型**（禁止规则抽取作为正式路径）；配置项对齐审核模型体系，**本阶段以 `.env` 配置为准** |
 | 会话向量 | 仍不做 |
+| Pinecone 拓扑 | **`gameforge-semantic` 专用于本 ADR**；Knowledge RAG 使用独立 Index `gameforge-knowledge`（ADR-14 §3.1.1，**互不影响**） |
 
 ---
 
@@ -33,7 +34,7 @@ Semantic / Exact 缓存的是 **白名单「低熵节点」的结构化结果**�
 | `template_selection` | template dict / list | 同左 |
 | `intent_classification` / `deterministic_metadata` | 既有 JSON 结果 | 同左 |
 
-Pinecone **vector** = `embed(规范化 query 文本)`  
+Pinecone **vector** = `embed(规范化 query 文本)`
 Pinecone **metadata**（最少）=
 
 ```json
@@ -46,7 +47,7 @@ Pinecone **metadata**（最少）=
 }
 ```
 
-Redis Exact 仍存同一 `result`（精确 key）。  
+Redis Exact 仍存同一 `result`（精确 key）。
 Redis Shadow 仍只记 hash 指纹（标定用）。
 
 **不存**：完整 LLM 聊天消息流、plan/art/code 正文、用户隐私长文。
@@ -84,9 +85,9 @@ else:
 
 * 检索：`user_id + status=active` + 索引 → ≤50 行，快。
 * 超额：**物理删除最早**（先 inferred，再 explicit）。
-* 抽取：**禁止规则作为正式路径**；仅轻量 chat 模型抽取 JSON 偏好。  
-  - 未配置 `PREFERENCE_EXTRACT_MODEL` → **不自动抽取**（不写偏好）。  
-  - Explicit / Inferred 由模型输出 `source` 字段区分；服务端仍强制：不得用 inferred 覆盖已有 explicit。
+* 抽取：**禁止规则作为正式路径**；仅轻量 chat 模型抽取 JSON 偏好。
+  * 未配置 `PREFERENCE_EXTRACT_MODEL` → **不自动抽取**（不写偏好）。
+  * Explicit / Inferred 由模型输出 `source` 字段区分；服务端仍强制：不得用 inferred 覆盖已有 explicit。
 * 配置：与审核模型同体系字段风格；**本阶段只保证 `.env.example` 完整**，管理后台 UI 可随后补。
 
 ---
@@ -103,5 +104,61 @@ Phase 0 配置与偏好删除策略 → 1 Embedding 客户端 → 2 Pinecone + �
 
 ## 7. 回滚
 
-* `SEMANTIC_CACHE_DIRECT_HIT_ENABLED=false` 或无 Pinecone key → 仅 Exact + shadow  
+* `SEMANTIC_CACHE_DIRECT_HIT_ENABLED=false` 或无 Pinecone key → 仅 Exact + shadow
 * 无偏好抽取模型 → 不写自动偏好
+
+---
+
+## Revision 2026-08-26（Dual Index 拓扑；与 ADR-14 对齐）
+
+* Status: **Accepted**（本修订待 Owner 与 ADR-14 一并审批后生效；**正文决策不变**，仅补充 Pinecone 组织方式）
+* Related: [ADR-14](./ADR-14-pinecone-rag-knowledge-base.md)
+
+### 8.1 决策：Account 内双 Index
+
+GameForge Pinecone 采用 **两个独立 Index**，按 **业务 workload** 拆分，而非按「知识子类型」拆 Index：
+
+```text
+Pinecone Account
+│
+├── Index: gameforge-semantic     ← 本 ADR Semantic Cache（已有）
+│   └── namespace: default          ← 单 namespace；节点隔离靠 metadata filter
+│
+└── Index: gameforge-knowledge    ← ADR-14 Knowledge RAG（新建）
+    └── namespace: global           ← R0/R1；租户私有知识未来另开 namespace
+```
+
+| Index | 用途 | 配置入口（实现） |
+| --- | --- | --- |
+| `gameforge-semantic` | ADR-06 语义缓存 | `PINECONE_HOST` + `PINECONE_NAMESPACE` |
+| `gameforge-knowledge` | ADR-14 知识 RAG | `PINECONE_KNOWLEDGE_HOST`（独立 host，见 ADR-14） |
+
+**Semantic Cache 自身不需要多个 namespace**：可缓存节点仅 4 类，隔离由 metadata `node` + `skill_bundle_hash` 完成（§2.2 不变）。
+
+### 8.2 为何 Knowledge 不并入 `gameforge-semantic`
+
+| 维度 | Semantic Cache | Knowledge RAG |
+| --- | --- | --- |
+| 写入 | Runtime 自动 upsert | Ingestion / Curation 管道 |
+| 读取 | top-1 + 阈值 + 可选确认 LLM | Retrieve + Rerank + 注入 |
+| 生命周期 | 短、可淘汰 | 长、版本化 |
+| Metadata | `node` / `result` / `skill_bundle_hash` | `domain` / `category` / `source_id` … |
+
+二者 **embedding 模型可相同**，但 workload 与治理模型不同，**合并同一 Index 会增加误查、误删与运维耦合风险**。
+
+### 8.3 缓存不受影响（Non-Regression，硬约束）
+
+引入 ADR-14 **不得**改变 ADR-06 语义缓存行为。实现须满足：
+
+1. **专用客户端**：`get_pinecone_store()`（及 `semantic_cache_*`）**仅**连接 `gameforge-semantic`；Knowledge Retriever **禁止**复用该 store 或 `PINECONE_HOST`。
+2. **配置隔离**：现有 `PINECONE_*`（除将来文档化的 knowledge 专用项）语义不变；Knowledge 仅读 `PINECONE_KNOWLEDGE_*`。
+3. **开关独立**：`knowledge_rag_enabled=false` 时，缓存路径零改动；关闭 RAG 不得触发 semantic 配置迁移或 re-index。
+4. **无交叉 query**：Knowledge 检索不得 query `gameforge-semantic`；Cache lookup 不得 query `gameforge-knowledge`。
+5. **无交叉 upsert**：Ingestion 不得向 `gameforge-semantic` 写入；Runtime cache store 不得向 `gameforge-knowledge` 写入。
+6. **回滚独立**：删除 / 停用 `gameforge-knowledge` Index 不影响 Semantic Cache 命中与 Exact Redis 路径。
+
+### 8.4 修订后后果
+
+* ADR-06 验收与阈值逻辑 **不变**；仅 Pinecone 拓扑在文档层与 ADR-14 对齐。
+* 实现 ADR-14 时须新增独立 Knowledge Pinecone 适配层，**不得**在 `pinecone_store.py` 内用 namespace 切换混跑两种 workload（除非拆成两个 factory，且 cache 路径行为与今完全一致）。
+* `PINECONE_INDEX=gameforge-semantic` 继续只描述缓存 Index 名称；Knowledge Index 名由 ADR-14 配置项描述。
