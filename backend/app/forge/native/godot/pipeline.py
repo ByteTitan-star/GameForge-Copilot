@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.forge.native.godot.adapter import GodotDiagnostics
+from app.forge.native.godot.adapter import GodotAdapter, GodotDiagnostics
 from app.forge.native.godot.factory import create_godot_adapter
 
 
@@ -16,8 +16,12 @@ class NativeLoopResult:
     diagnostics: GodotDiagnostics
 
 
-async def run_godot_p0_loop(workspace: Path) -> NativeLoopResult:
-    adapter = create_godot_adapter()
+async def run_godot_p0_loop(
+    workspace: Path,
+    *,
+    adapter: GodotAdapter | None = None,
+) -> NativeLoopResult:
+    adapter = adapter or create_godot_adapter()
     validate = await adapter.validate_project(workspace)
     if not validate.ok:
         return NativeLoopResult(ok=False, phase="validate", diagnostics=validate)

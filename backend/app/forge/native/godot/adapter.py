@@ -43,6 +43,7 @@ class GodotAdapter:
             return self._runner
         return GodotRunner(
             godot_bin=settings.native_engine_godot_bin,
+            docker_image=settings.native_engine_godot_docker_image,
             build_timeout_s=float(settings.native_engine_godot_build_timeout_s),
             run_timeout_s=float(settings.native_engine_godot_run_timeout_s),
             ready_signal=self.READY_SIGNAL,
@@ -116,7 +117,10 @@ class GodotAdapter:
             return GodotDiagnostics(
                 phase="build",
                 ok=False,
-                messages=("INTERNAL_ERROR: NATIVE_ENGINE_GODOT_BIN not configured",),
+                messages=(
+                    "INTERNAL_ERROR: configure NATIVE_ENGINE_GODOT_BIN "
+                    "or NATIVE_ENGINE_GODOT_DOCKER_IMAGE",
+                ),
                 error_code="INTERNAL_ERROR",
             )
         result = await runner.import_project(workspace)
@@ -128,7 +132,10 @@ class GodotAdapter:
             return GodotDiagnostics(
                 phase="run",
                 ok=False,
-                messages=("INTERNAL_ERROR: NATIVE_ENGINE_GODOT_BIN not configured",),
+                messages=(
+                    "INTERNAL_ERROR: configure NATIVE_ENGINE_GODOT_BIN "
+                    "or NATIVE_ENGINE_GODOT_DOCKER_IMAGE",
+                ),
                 error_code="INTERNAL_ERROR",
             )
         result = await runner.run_until_ready(workspace)

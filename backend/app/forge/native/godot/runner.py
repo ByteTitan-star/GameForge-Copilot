@@ -9,6 +9,7 @@ import signal
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.forge.native.godot.docker_exec import build_docker_godot_cmd
 from app.sandbox.procutil import run_local_process
 
 
@@ -41,28 +42,37 @@ async def _kill_process(proc: asyncio.subprocess.Process) -> None:
 
 
 class GodotRunner:
-    """封装 Godot 4 headless 命令；binary 由平台配置。"""
+    """封装 Godot 4 headless 命令；本地 binary 或 Docker 镜像二选一。"""
 
     def __init__(
         self,
         *,
         godot_bin: str,
+        docker_image: str = "",
         build_timeout_s: float,
         run_timeout_s: float,
         ready_signal: str = "GAMEFORGE_READY",
         log_tail_chars: int = 4000,
     ) -> None:
         self.godot_bin = godot_bin.strip()
+        self.docker_image = docker_image.strip()
         self.build_timeout_s = build_timeout_s
         self.run_timeout_s = run_timeout_s
         self.ready_signal = ready_signal
         self.log_tail_chars = log_tail_chars
 
     def configured(self) -> bool:
-        return bool(self.godot_bin)
+        return bool(self.godot_bin) or bool(self.docker_image)
 
-    def _base_cmd(self, workspace: Path) -> list[str]:
-        return [self.godot_bin, "--headless", "--path", str(workspace)]
+    def _godot_args(self, workspace: Path, extra: list[str] | None = None) -> list[str]:
+        args = ["--headless", "--path", str(workspace), *(extra or [])]
+        if self.docker_image:
+            return build_docker_godot_cmd(
+                workspace,
+                image=self.docker_image,
+                godot_args=args,
+            )
+        return [self.godot_bin, *args]
 
     async def import_project(self, workspace: Path) -> GodotProcessResult:
         if not self.configured():
@@ -73,7 +83,7 @@ class GodotRunner:
                 error_code="INTERNAL_ERROR",
             )
         code, logs = await run_local_process(
-            [*self._base_cmd(workspace), "--import"],
+            self._godot_args(workspace, ["--import"]),
             cwd=workspace,
             timeout_s=self.build_timeout_s,
         )
@@ -95,7 +105,7 @@ class GodotRunner:
                 logs="",
                 error_code="INTERNAL_ERROR",
             )
-        cmd = self._base_cmd(workspace)
+        cmd = self._godot_args(workspace)
         kwargs: dict = {
             "cwd": str(workspace),
             "stdout": asyncio.subprocess.PIPE,

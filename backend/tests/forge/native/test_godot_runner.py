@@ -101,3 +101,37 @@ async def test_import_project_delegates_to_run_local_process(
     result = await runner.import_project(tmp_path)
     assert result.ok is True
     assert "import ok" in result.logs
+
+
+def test_runner_configured_with_docker_image_only() -> None:
+    runner = GodotRunner(
+        godot_bin="",
+        docker_image="gameforge-godot-builder:v1",
+        build_timeout_s=10,
+        run_timeout_s=5,
+    )
+    assert runner.configured() is True
+
+
+@pytest.mark.asyncio
+async def test_import_project_uses_docker_cmd(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    captured: list[list[str]] = []
+
+    async def _fake_run(cmd, **_kwargs) -> tuple[int, str]:
+        captured.append(list(cmd))
+        return 0, "docker import ok"
+
+    monkeypatch.setattr("app.forge.native.godot.runner.run_local_process", _fake_run)
+    runner = GodotRunner(
+        godot_bin="",
+        docker_image="gameforge-godot-builder:v1",
+        build_timeout_s=10,
+        run_timeout_s=5,
+    )
+    result = await runner.import_project(tmp_path)
+    assert result.ok is True
+    assert captured
+    assert captured[0][0:3] == ["docker", "run", "--rm"]
