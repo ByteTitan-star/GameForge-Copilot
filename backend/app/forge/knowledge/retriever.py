@@ -11,7 +11,9 @@ from typing import Any
 from app.core.config import settings
 from app.forge.knowledge.guards import (
     filter_by_min_relevance,
+    metadata_embedding_version_matches,
     validate_embedding_dim,
+    validate_embedding_model_configured,
 )
 from app.forge.knowledge.metrics import record_knowledge_retrieve
 from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
@@ -117,6 +119,14 @@ async def _retrieve_knowledge_inner(
         log.warning("knowledge retrieve skipped: pinecone not configured")
         return [], "fail", 0, 0.0
 
+    if not validate_embedding_model_configured():
+        log.warning(
+            "knowledge retrieve failed: embedding model %r != expected %r",
+            settings.embedding_model.strip(),
+            settings.knowledge_embedding_expected_model.strip(),
+        )
+        return [], "fail", 0, 0.0
+
     vector = await embed_one(query.query_text)
     if vector is None:
         log.warning("knowledge retrieve failed: embedding unavailable")
@@ -142,6 +152,8 @@ async def _retrieve_knowledge_inner(
 
     chunks: list[RetrievedKnowledge] = []
     for match in matches:
+        if not metadata_embedding_version_matches(match.metadata):
+            continue
         parsed = _parse_chunk(match.metadata, score=match.score, chunk_id=match.id)
         if parsed is not None:
             chunks.append(parsed)

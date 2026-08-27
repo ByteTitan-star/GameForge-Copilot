@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.forge.knowledge.guards import (
+    current_embedding_version_tag,
+    validate_embedding_model_configured,
+)
 from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
+from app.forge.knowledge.schema import metadata_validation_error
 from app.llm.embeddings import embed_one
 
 _REQUIRED_CHUNK_KEYS = frozenset({"chunk_id", "text", "domain", "category", "title", "source_id"})
@@ -77,17 +82,30 @@ def parse_corpus_document(data: object) -> list[KnowledgeChunkSpec]:
             tags = tuple(t.strip() for t in tags_raw.split(",") if t.strip())
         else:
             tags = ()
+        domain = str(item["domain"]).strip()
+        category = str(item["category"]).strip()
+        quality_tier = str(item.get("quality_tier") or "silver")
+        acl = str(item.get("acl") or "internal")
+        if settings.knowledge_metadata_validation_enabled:
+            err = metadata_validation_error(
+                domain=domain,
+                category=category,
+                acl=acl,
+                quality_tier=quality_tier,
+            )
+            if err:
+                raise ValueError(f"chunk[{idx}] {err}")
         specs.append(
             KnowledgeChunkSpec(
                 chunk_id=str(item["chunk_id"]).strip(),
                 text=str(item["text"]).strip(),
-                domain=str(item["domain"]).strip(),
-                category=str(item["category"]).strip(),
+                domain=domain,
+                category=category,
                 title=str(item["title"]).strip(),
                 source_id=str(item["source_id"]).strip(),
                 tags=tags,
-                quality_tier=str(item.get("quality_tier") or "silver"),
-                acl=str(item.get("acl") or "internal"),
+                quality_tier=quality_tier,
+                acl=acl,
                 source_kind=str(item.get("source_kind") or "curated"),
                 locale=str(item.get("locale") or "zh-CN"),
             )
@@ -120,6 +138,17 @@ async def upsert_knowledge_chunk(
     body = text.strip()
     if not body:
         return False
+    if settings.knowledge_metadata_validation_enabled:
+        err = metadata_validation_error(
+            domain=domain,
+            category=category,
+            acl=acl,
+            quality_tier=quality_tier,
+        )
+        if err:
+            return False
+    if not validate_embedding_model_configured():
+        return False
     vector = await embed_one(body)
     if vector is None:
         return False
@@ -127,6 +156,7 @@ async def upsert_knowledge_chunk(
     if expected_dim > 0 and len(vector) != expected_dim:
         return False
     content_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    embedding_version = current_embedding_version_tag()
     meta: dict[str, Any] = {
         "domain": domain,
         "category": category,
@@ -143,6 +173,8 @@ async def upsert_knowledge_chunk(
         "content_hash": content_hash,
         "created_at": int(time.time()),
     }
+    if embedding_version:
+        meta["embedding_version"] = embedding_version
     await store.upsert(
         vector_id=chunk_id,
         values=vector,

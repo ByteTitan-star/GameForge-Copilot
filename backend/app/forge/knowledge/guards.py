@@ -41,3 +41,28 @@ def validate_embedding_dim(vector: list[float]) -> bool:
     if expected <= 0:
         return True
     return len(vector) == expected
+
+
+def validate_embedding_model_configured() -> bool:
+    expected = settings.knowledge_embedding_expected_model.strip()
+    if not expected:
+        return True
+    return settings.embedding_model.strip() == expected
+
+
+def current_embedding_version_tag() -> str:
+    configured = settings.knowledge_embedding_version.strip()
+    if configured:
+        return configured
+    model = settings.embedding_model.strip()
+    return f"{model}:v1" if model else ""
+
+
+def metadata_embedding_version_matches(meta: dict[str, object]) -> bool:
+    expected = settings.knowledge_embedding_version.strip()
+    if not expected:
+        return True
+    stored = meta.get("embedding_version")
+    if not isinstance(stored, str) or not stored.strip():
+        return False
+    return stored.strip() == expected
