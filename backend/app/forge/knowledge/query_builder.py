@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from app.core.config import settings
+from app.forge.knowledge.guards import clip_query_text
 from app.forge.knowledge.policy import policy_for_node
 from app.forge.knowledge.types import RetrievalQuery
 
@@ -54,6 +56,10 @@ def build_retrieval_query(
     req = _strip_fences(current_input)
     hints = _design_doc_hints(design_doc)
     query_text = " ".join(p for p in (req, hints) if p).strip()
+    if not query_text:
+        return None
+    max_tokens = max(0, int(settings.knowledge_query_max_tokens))
+    query_text = clip_query_text(query_text, max_tokens=max_tokens)
     if not query_text:
         return None
     return RetrievalQuery(

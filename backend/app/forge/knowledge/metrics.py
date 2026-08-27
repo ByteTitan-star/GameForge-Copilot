@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+# ok=注入成功；no_hit=后端正常但无命中；fail=配置/传输/embed 失败；
+# degraded=部分降级（如 rerank 失败仍返回结果）；timeout=超时
+KnowledgeRetrieveStatus = str
+
 
 def record_knowledge_retrieve(
     node: str,
     *,
-    ok: bool,
+    status: KnowledgeRetrieveStatus,
     retrieved_count: int,
     injected_count: int,
     latency_s: float,
     rerank_latency_s: float = 0.0,
-    degraded: bool = False,
 ) -> None:
     try:
         from app.core.metrics import (
@@ -21,7 +24,6 @@ def record_knowledge_retrieve(
             KNOWLEDGE_RETRIEVE_TOTAL,
         )
 
-        status = "ok" if ok and not degraded else "degraded" if degraded else "fail"
         KNOWLEDGE_RETRIEVE_TOTAL.labels(node, status).inc()
         KNOWLEDGE_RETRIEVE_LATENCY.labels(node).observe(max(latency_s, 0.0))
         if retrieved_count > 0:

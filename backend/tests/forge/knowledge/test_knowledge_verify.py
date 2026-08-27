@@ -51,8 +51,12 @@ async def test_verify_knowledge_retrieval_after_upsert(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_ingest_fails_fast_without_pinecone() -> None:
+async def test_ingest_fails_fast_without_pinecone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.forge.knowledge.ingest import ingest_corpus
+
+    monkeypatch.setattr(settings, "pinecone_knowledge_host", "")
 
     spec = KnowledgeChunkSpec(
         chunk_id="x",

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.core.config import settings
 from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
 from app.llm.embeddings import embed_one
 
@@ -121,6 +122,9 @@ async def upsert_knowledge_chunk(
         return False
     vector = await embed_one(body)
     if vector is None:
+        return False
+    expected_dim = int(settings.knowledge_embedding_expected_dim)
+    if expected_dim > 0 and len(vector) != expected_dim:
         return False
     content_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
     meta: dict[str, Any] = {
