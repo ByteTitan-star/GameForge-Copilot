@@ -26,6 +26,12 @@ Design-review follow-up (verify + modification guide):
 Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)
 Feature flag defaults: [FLAG-INVENTORY.md](./FLAG-INVENTORY.md)
 
+## ADR-14 附录（实施 / 评审）
+
+| 文档 | 说明 |
+| --- | --- |
+| [ADR-14-implementation-status-brief.md](./ADR-14-implementation-status-brief.md) | ADR-14 **实施状态与生产就绪评审**（Living；Production NO-GO；Gap Matrix / Readiness Gate） |
+
 ## Proposed（未来规划，待 Owner 审批）
 
 * **任务 1 / ADR-13**：原生引擎 Agent 闭环（生成→编译→运行→日志→修复），Godot 优先，Unity 后期。

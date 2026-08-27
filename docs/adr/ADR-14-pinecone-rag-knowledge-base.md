@@ -457,38 +457,136 @@ User Preference 入库
 
 ---
 
-## 3.6 Chunking
+## 3.6 Chunking（生产级策略）
 
-不同知识类型允许不同 Chunk Policy。
+> **R0 / R1 现状**：仅支持**人工策展 JSON**（一条 record = 一个语义单元）；**无**运行时自动分块。
+> 本节定义生产目标与 R2 实现约束；差距跟踪见 GitHub Issue（Knowledge Chunking Production Gap）。
 
-例如：
+### 3.6.1 设计原则
 
-### Design Principle
+1. **语义优先，字符兜底**：先按知识类型模板切分；超长且无结构边界时，才启用带 overlap 的滑动窗口。
+2. **Index 存检索，不存档案**：Pinecone 只保留检索所需短文本 + 指针；完整原文在 Object Storage / PostgreSQL。
+3. **可复现、可评测**：同一 `source_version` + `content_hash` 必须幂等 upsert；分块结果可离线回放对比。
+4. **Embedding 感知**：当前模型 `BAAI/bge-small-zh-v1.5` **最大 512 token**；TEI 开启 `auto_truncate` 时会**静默截断**，必须在 ingest 阶段控长，禁止依赖运行时截断补救。
 
-以完整原则 / 方法为语义单元：
-
-```text
-Concept
-Problem
-Principle
-Example
-Constraints
-```
-
-### Historical Game Case
-
-以案例机制为语义单元：
+禁止：
 
 ```text
-Game
-Genre
-Mechanic
-Why It Works
-Tradeoff
-Applicable Scenario
+仅按固定字符数机械切割（破坏设计语义）
+把 Conversation / Preference 自动切块入库
+Runtime Agent 写入 Knowledge Index
 ```
 
-禁止仅通过固定字符数机械切割破坏游戏设计语义。
+### 3.6.2 两级存储
+
+| 层 | 职责 | 存储 |
+| --- | --- | --- |
+| **Source** | 原始文档、版本、审批记录 | PostgreSQL `knowledge_source` + S3 `knowledge-sources/` |
+| **Chunk Index** | 向量检索 + 注入用短文本 | Pinecone `gameforge-knowledge` / `global` |
+
+Pinecone Metadata **最低字段**（在 §3.3 基础上补齐分块字段）：
+
+```json
+{
+  "document_id": "doc_xxx",
+  "chunk_id": "doc_xxx#0003",
+  "chunk_index": 3,
+  "chunk_total": 12,
+  "parent_chunk_id": "doc_xxx#0002",
+  "source_id": "source_xxx",
+  "source_version": "v1",
+  "content_hash": "sha256...",
+  "char_count": 420,
+  "token_estimate": 180,
+  "chunk_policy": "design_principle",
+  "text": "...(inject 用，见 §3.6.4 上限)...",
+  "content_ptr": "s3://bucket/knowledge/doc_xxx.md"
+}
+```
+
+`content_ptr`：当原文超出 Pinecone 内联上限时必填；Runtime **默认只注入 `text`**，R2 可选 small-to-big 扩展。
+
+### 3.6.3 Chunk Policy Registry（按 domain × category）
+
+每种 Policy 定义：**语义单元模板**、**目标 token 区间**、**overlap**、**是否允许二次切分**。
+
+| `chunk_policy` | 适用 category | 语义单元 | target tokens | max tokens | overlap |
+| --- | --- | --- | --- | --- | --- |
+| `design_principle` | `design_principle`, `gameplay_mechanic` | Concept / Problem / Principle / Example / Constraints | 120–280 | 400 | 0 |
+| `gameplay_case` | `gameplay_case`, `game_genre` | Game / Genre / Mechanic / Why It Works / Tradeoff / Scenario | 150–320 | 400 | 0 |
+| `art_direction` | `art_direction`, `ui_case` | Style / Palette / Mood / Reference / Anti-patterns | 100–260 | 380 | 0 |
+| `platform_rule` | `engine_constraint`, `coding_rule`, `output_contract` | Rule / Rationale / Example / Violation | 80–220 | 350 | 0 |
+| `narrative_doc` | 长文 Markdown / 策划案 | 标题层级 → 段落 | 200–380 | 450 | 10–15% tokens |
+
+规则：
+
+* **结构化条目**（原则、案例、规则）：一条语义单元 = 一个 chunk；**overlap = 0**。
+* **长叙事文档**：按 Markdown `##` / `###` 切；单节仍超 max → 句边界滑动窗口 + overlap。
+* **禁止**把多个无关原则合并为一个 chunk 以“凑长度”。
+
+### 3.6.4 长度与 Metadata 内联上限
+
+| 参数 | 生产建议 | R0 代码现状（待修复） |
+| --- | --- | --- |
+| Embed 输入 | ≤ **480 token**（留 512 模型余量） | 无 ingest 校验；TEI 可静默截断 |
+| Metadata `text` | ≤ **2 000 字符**（可注入 Context 的摘要） | 硬编码 `text[:4000]` |
+| 单 document max chunks | 默认 200；超限需人工复核或升 tier | 无 |
+| 单 source 并发 upsert | 批大小 32；失败单条隔离 | 顺序 upsert |
+
+Context 注入阶段（§3.11）：在 **Rerank → Top-N** 之后，对每条 chunk 做 **per-chunk truncate**（按 `KNOWLEDGE_TOKEN_BUDGET` 均分 + 最低保底），仍超限则 **drop 最低 rerank 分**——与 ingest 分块职责分离。
+
+### 3.6.5 Ingestion 分块流水线（R2 目标）
+
+```text
+Source (file / API / curated JSON)
+  ↓
+Parser          ← markdown / json / yaml；提取 title、headings、locale
+  ↓
+Normalize       ← unicode NFC、空白、术语表、PII 扫描
+  ↓
+ChunkPlanner    ← 查 Chunk Policy Registry；输出 ChunkDraft[]
+  ↓
+EnrichMetadata  ← document_id, chunk_index, content_hash, quality_tier
+  ↓
+SafetyCheck     ← 指令注入模式、ACL、重复检测（content_hash）
+  ↓
+Embed + Upsert  ← 批处理；vector_id = chunk_id
+  ↓
+Verify          ← 抽样 query 命中 + eval set 回归
+```
+
+**幂等键**：`chunk_id = {source_id}#{document_id}#{index:04d}`；同 `content_hash` 已存在则 skip 或 version bump。
+
+**去重**：
+
+* 文档级：`document_id` + `source_version` + `content_hash`
+* 检索级：Runtime dedupe by `chunk_id`；可选 MMR 降低同文档相邻 chunk 重复注入
+
+### 3.6.6 离线评测（分块质量）
+
+除 retrieval eval 外，R2 增加 **Chunking Eval**：
+
+| 指标 | 说明 |
+| --- | --- |
+| `boundary_precision` | 人工标注边界与自动切分的一致率 |
+| `avg_chunk_tokens` | 按 policy 落在 target 区间比例 |
+| `truncation_rate` | embed 时触发 TEI truncate 的比例（目标 0%） |
+| `duplicate_chunk_rate` | 同 source 近重复 chunk 占比 |
+| `retrieval_recall@k` | 分块策略变更后 eval set 召回不降 |
+
+### 3.6.7 R0 / R1 过渡（当前允许）
+
+R0 / R1 **仅**接受：
+
+```text
+人工策展 JSON（sample_seed.json）
+→ 每条已是完整语义单元
+→ ingest_corpus_file 直接 upsert
+```
+
+Curator 手写的 `text` 应自觉控制在 **≤400 汉字 / ~300 token**；更大内容应预先拆成多条 `chunk_id`，而不是依赖 ingest 自动切。
+
+R2 实现 `ChunkPlanner` 后，JSON corpus 仍可作“预分块 fast path”，与自动 pipeline 共用同一 Metadata 契约。
 
 ---
 
@@ -1036,13 +1134,16 @@ Tracing
 Token Budget
 ```
 
-### R2 — Domain Expansion
+### R2 — Domain Expansion + Chunking Pipeline
 
 增加：
 
 ```text
 domain = art
 domain = platform
+ChunkPlanner + Parser/Normalize（§3.6.5）
+Source 两级存储（PostgreSQL + S3 content_ptr）
+Chunking offline eval（§3.6.6）
 ```
 
 接入：
@@ -1064,11 +1165,11 @@ LLM Knowledge Router
 增加：
 
 ```text
-Curation Workflow
-Quality Tier
-Source Version
-Historical Run Approval
-Tenant Private Knowledge
+Curation Workflow（审批 → 发布 source_version）
+Quality Tier 治理与降权
+Historical Run Approval → 受控入库
+Tenant Private Knowledge（tenant namespace）
+LLM-assisted chunk boundary review（可选，人工确认后发布）
 ```
 
 ---
@@ -1235,6 +1336,10 @@ Existing Agent Workflow
 * [ ] Node Retrieval Policy 可配置
 * [ ] Retrieved Knowledge 统一经过 ContextBuilder
 * [ ] Node 不直接调用 Pinecone
+* [ ] Chunk Policy Registry 落地（§3.6.3）且 ingest 校验 token ≤480
+* [ ] Metadata 含 `document_id` / `chunk_index` / `content_hash` / `chunk_policy`
+* [ ] 长文档走 `content_ptr`，Pinecone 不存唯一原文
+* [ ] Chunking offline eval（truncation_rate = 0）
 * [ ] Rerank 后再进入 Token Budget
 * [ ] Retrieved Knowledge 被视为 Reference，而非 Instruction
 * [ ] Pinecone / Embedding / Rerank 故障可降级
