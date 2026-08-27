@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from typing import Any
 
 from app.core.config import settings
+from app.forge.knowledge.guards import (
+    filter_by_min_relevance,
+    validate_embedding_dim,
+)
 from app.forge.knowledge.metrics import record_knowledge_retrieve
 from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
 from app.forge.knowledge.policy import policy_for_node
@@ -95,47 +100,34 @@ def _dedupe_and_trim(chunks: list[RetrievedKnowledge], *, top_n: int) -> list[Re
     return out
 
 
-async def retrieve_knowledge_for_node(
+async def _retrieve_knowledge_inner(
     *,
     node: str,
     current_input: str,
-    design_doc: dict[str, Any] | None = None,
-) -> list[RetrievedKnowledge]:
-    if not knowledge_rag_enabled_for_node(node):
-        return []
-    if policy_for_node(node) is None:
-        return []
+    design_doc: dict[str, Any] | None,
+) -> tuple[list[RetrievedKnowledge], str, int, float]:
+    """执行检索；返回 (注入结果, metrics_status, retrieved_count, rerank_latency_s)。"""
+    _ = node
     query = build_retrieval_query(node=node, current_input=current_input, design_doc=design_doc)
     if query is None:
-        return []
-
-    started = time.perf_counter()
-    rerank_latency_s = 0.0
-    degraded = False
+        return [], "no_hit", 0, 0.0
 
     store = get_knowledge_pinecone_store()
     if store is None:
-        record_knowledge_retrieve(
-            node,
-            ok=False,
-            retrieved_count=0,
-            injected_count=0,
-            latency_s=time.perf_counter() - started,
-            degraded=True,
-        )
-        return []
+        log.warning("knowledge retrieve skipped: pinecone not configured")
+        return [], "fail", 0, 0.0
 
     vector = await embed_one(query.query_text)
     if vector is None:
-        record_knowledge_retrieve(
-            node,
-            ok=False,
-            retrieved_count=0,
-            injected_count=0,
-            latency_s=time.perf_counter() - started,
-            degraded=True,
+        log.warning("knowledge retrieve failed: embedding unavailable")
+        return [], "fail", 0, 0.0
+    if not validate_embedding_dim(vector):
+        log.warning(
+            "knowledge retrieve failed: embedding dim %s != expected %s",
+            len(vector),
+            settings.knowledge_embedding_expected_dim,
         )
-        return []
+        return [], "fail", 0, 0.0
 
     top_k = max(1, int(settings.knowledge_retrieve_k))
     try:
@@ -146,15 +138,7 @@ async def retrieve_knowledge_for_node(
         )
     except Exception as exc:  # noqa: BLE001 — RAG 失败降级，不阻断主流程
         log.warning("knowledge retrieve failed: %s", type(exc).__name__)
-        record_knowledge_retrieve(
-            node,
-            ok=False,
-            retrieved_count=0,
-            injected_count=0,
-            latency_s=time.perf_counter() - started,
-            degraded=True,
-        )
-        return []
+        return [], "fail", 0, 0.0
 
     chunks: list[RetrievedKnowledge] = []
     for match in matches:
@@ -162,6 +146,8 @@ async def retrieve_knowledge_for_node(
         if parsed is not None:
             chunks.append(parsed)
 
+    status = "ok"
+    rerank_latency_s = 0.0
     if settings.knowledge_semantic_rerank_enabled and chunks:
         rerank_started = time.perf_counter()
         reranked = await apply_semantic_rerank(vector, chunks)
@@ -169,17 +155,66 @@ async def retrieve_knowledge_for_node(
         if reranked is not chunks:
             chunks = reranked
         elif len(chunks) > 1:
-            degraded = True
+            status = "degraded"
+
+    retrieved_count = len(chunks)
+    min_score = float(settings.knowledge_min_relevance_score)
+    chunks = filter_by_min_relevance(chunks, min_score=min_score)
 
     top_n = max(1, int(settings.knowledge_rerank_top_n))
     result = _dedupe_and_trim(chunks, top_n=top_n)
+    if not result:
+        return [], "no_hit", retrieved_count, rerank_latency_s
+    return result, status, retrieved_count, rerank_latency_s
+
+
+async def retrieve_knowledge_for_node(
+    *,
+    node: str,
+    current_input: str,
+    design_doc: dict[str, Any] | None = None,
+) -> list[RetrievedKnowledge]:
+    if not knowledge_rag_enabled_for_node(node):
+        return []
+    if policy_for_node(node) is None:
+        return []
+
+    started = time.perf_counter()
+    timeout_s = max(0.0, float(settings.knowledge_retrieve_timeout_s))
+
+    try:
+        if timeout_s > 0:
+            result, status, retrieved_count, rerank_latency_s = await asyncio.wait_for(
+                _retrieve_knowledge_inner(
+                    node=node,
+                    current_input=current_input,
+                    design_doc=design_doc,
+                ),
+                timeout=timeout_s,
+            )
+        else:
+            result, status, retrieved_count, rerank_latency_s = await _retrieve_knowledge_inner(
+                node=node,
+                current_input=current_input,
+                design_doc=design_doc,
+            )
+    except TimeoutError:
+        log.warning("knowledge retrieve timed out after %.1fs", timeout_s)
+        record_knowledge_retrieve(
+            node,
+            status="timeout",
+            retrieved_count=0,
+            injected_count=0,
+            latency_s=time.perf_counter() - started,
+        )
+        return []
+
     record_knowledge_retrieve(
         node,
-        ok=True,
-        retrieved_count=len(chunks),
+        status=status,
+        retrieved_count=retrieved_count,
         injected_count=len(result),
         latency_s=time.perf_counter() - started,
         rerank_latency_s=rerank_latency_s,
-        degraded=degraded,
     )
     return result
