@@ -17,6 +17,10 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 
+class PineconeTransportError(RuntimeError):
+    """Pinecone data-plane HTTP 失败；Knowledge ingest/query 严格模式必须抛出。"""
+
+
 @dataclass(frozen=True)
 class VectorMatch:
     id: str
@@ -77,10 +81,18 @@ class InMemoryPineconeStore:
 class HttpPineconeStore:
     """Pinecone data-plane REST（需 host + api_key）。"""
 
-    def __init__(self, *, host: str, api_key: str, namespace: str) -> None:
+    def __init__(
+        self,
+        *,
+        host: str,
+        api_key: str,
+        namespace: str,
+        strict_errors: bool = False,
+    ) -> None:
         self._host = host.rstrip("/").removeprefix("https://").removeprefix("http://")
         self._api_key = api_key
         self._namespace = namespace
+        self._strict_errors = strict_errors
 
     async def upsert(
         self,
@@ -149,6 +161,8 @@ class HttpPineconeStore:
                 return data if isinstance(data, dict) else {}
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("pinecone request failed: %s", type(exc).__name__)
+            if self._strict_errors:
+                raise PineconeTransportError(str(exc)) from exc
             return {}
 
 

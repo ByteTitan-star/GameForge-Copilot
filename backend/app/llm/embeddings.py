@@ -37,7 +37,7 @@ async def embed_texts(texts: Sequence[str]) -> list[list[float]] | None:
     body = {"model": settings.embedding_model.strip(), "input": cleaned}
     timeout = httpx.Timeout(settings.embedding_timeout_s)
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             resp = await client.post(url, headers=headers, json=body)
             resp.raise_for_status()
             data = resp.json()

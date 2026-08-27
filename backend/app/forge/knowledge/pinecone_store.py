@@ -59,4 +59,5 @@ def get_knowledge_pinecone_store() -> _KnowledgeStore | None:
         host=settings.pinecone_knowledge_host.strip(),
         api_key=settings.pinecone_api_key.strip(),
         namespace=settings.pinecone_knowledge_namespace or "global",
+        strict_errors=True,
     )
