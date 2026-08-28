@@ -14,10 +14,25 @@ from app.forge.knowledge.types import RetrievedKnowledge
 
 
 def estimate_tokens(text: str) -> int:
-    """粗估 token：按 UTF-8 字符 / 4，下限 1（空串为 0）。"""
+    """粗估 token：CJK 按字计 1，其余按字符 /4（#147 tokenizer-aware budget）。"""
     if not text:
         return 0
-    return max(1, (len(text) + 3) // 4)
+    cjk = sum(1 for ch in text if _is_cjk_char(ch))
+    other = len(text) - cjk
+    total = cjk + (other + 3) // 4
+    return max(1, total) if total > 0 else 0
+
+
+def _is_cjk_char(ch: str) -> bool:
+    if not ch:
+        return False
+    code = ord(ch)
+    return (
+        0x4E00 <= code <= 0x9FFF
+        or 0x3400 <= code <= 0x4DBF
+        or 0x3000 <= code <= 0x303F
+        or 0xFF00 <= code <= 0xFFEF
+    )
 
 
 def context_fingerprint(*, node: str, sections: dict[str, str], token_estimate: int) -> str:
