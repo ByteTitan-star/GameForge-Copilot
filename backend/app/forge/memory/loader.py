@@ -1,4 +1,9 @@
-"""从 DB 装配 ContextBuilder 输入（P1）；P5 为正式 Node 唯一拼装入口。"""
+"""从 DB 装配 ContextBuilder 输入（P1）；P5 为正式 Node 唯一拼装入口。
+
+【阅读第 4 步续】build_node_context(node, game, user_id, current_input) →
+拉 active preferences + session summary + recent turns → ContextBuilder。
+graph 的 _compose_plan_input / _compose_art_input 都走这里。
+"""
 
 from __future__ import annotations
 

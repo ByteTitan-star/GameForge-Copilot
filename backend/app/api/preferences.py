@@ -1,4 +1,8 @@
-"""用户偏好端点（P1 Memory）。"""
+"""用户偏好端点（P1 Memory）。
+
+【阅读第 1 步续】显式表达的另一入口：用户在设置页手动 PUT /me/preferences。
+GET 列表 / PUT 写入(source=explicit) / DELETE clear。存储层 preferences.py。
+"""
 
 from fastapi import APIRouter
 

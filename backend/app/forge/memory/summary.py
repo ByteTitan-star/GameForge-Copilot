@@ -1,4 +1,8 @@
-"""Session Summary schema 与刷新触发（P1）。"""
+"""Session Summary schema 与刷新触发（P1）。
+
+【阅读第 6 步选读】会话级摘要（当前目标/已确认决策），不是跨游戏长期偏好。
+长期偏好看 preferences；本文件配合 refresh.py 超阈刷新。
+"""
 
 from __future__ import annotations
 
@@ -51,9 +55,9 @@ def coerce_session_summary(raw: Any) -> SessionSummary | None:
             continue
         val = raw[key]
         if key == "current_goal":
-            base[key] = str(val or "")
+            base[key] = str(val or "")  # type: ignore[literal-required]
         elif isinstance(val, list):
-            base[key] = [str(x) for x in val]
+            base[key] = [str(x) for x in val]  # type: ignore[literal-required]
     return base
 
 
@@ -74,9 +78,7 @@ def synthesize_summary_from_turns(
             elif isinstance(val, list):
                 out[key] = list(val)  # type: ignore[literal-required]
 
-    user_texts = [
-        t.content.strip() for t in turns if t.role == "user" and t.content.strip()
-    ]
+    user_texts = [t.content.strip() for t in turns if t.role == "user" and t.content.strip()]
     if user_texts:
         out["current_goal"] = _clip(user_texts[-1], 200)
         earlier = user_texts[:-1][-5:]

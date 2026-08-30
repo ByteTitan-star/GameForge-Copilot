@@ -1,4 +1,8 @@
-"""Session Summary 持久化刷新（P1）。"""
+"""Session Summary 持久化刷新（P1）。
+
+【第 6 步选读】should_refresh_summary 超阈 → 写回 game.session_summary。
+graph._refresh_session_summary 调用。
+"""
 
 from __future__ import annotations
 
@@ -33,9 +37,7 @@ async def load_recent_turns(
             .limit(limit)
         )
     ).all()
-    return [
-        ContextTurn(role=m.role, content=m.content) for m in reversed(list(rows))
-    ]
+    return [ContextTurn(role=m.role, content=m.content) for m in reversed(list(rows))]
 
 
 async def refresh_session_summary_if_needed(
@@ -53,13 +55,14 @@ async def refresh_session_summary_if_needed(
         return coerce_session_summary(game.session_summary_json)
 
     turns = await load_recent_turns(db, game.id)
-    count = await db.scalar(
-        select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game.id)
-    ) or 0
+    count = (
+        await db.scalar(
+            select(func.count()).select_from(ForgeMessage).where(ForgeMessage.game_id == game.id)
+        )
+        or 0
+    )
     tokens = sum(estimate_tokens(t.content) for t in turns)
-    if not force and not should_refresh_summary(
-        message_count=int(count), historical_tokens=tokens
-    ):
+    if not force and not should_refresh_summary(message_count=int(count), historical_tokens=tokens):
         return coerce_session_summary(game.session_summary_json)
 
     previous = coerce_session_summary(game.session_summary_json)

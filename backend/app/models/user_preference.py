@@ -1,4 +1,8 @@
-"""用户长期偏好（P1 Explicit-only）。"""
+"""用户长期偏好（P1；source=explicit|inferred）。
+
+【阅读第 1 步】唯一约束 (user_id, category, key)；删游戏不删 Explicit（ADR-02）。
+API：/me/preferences；写入：memory/preferences.py。
+"""
 
 import uuid
 from datetime import datetime
@@ -27,9 +31,7 @@ class UserPreference(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="explicit")
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

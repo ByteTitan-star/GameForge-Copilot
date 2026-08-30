@@ -1,4 +1,9 @@
-"""P1：Explicit 偏好抽取（关键词命中 + schema）。"""
+"""P1：Explicit 偏好抽取（关键词命中 + schema）。
+
+【阅读第 2 步上半】显式表达触发词：以后/我喜欢/默认/每次都/不要再/总是/一律/固定。
+正式写入走 llm_extract（preferences.upsert_preferences_from_text）；本文件管触发语义与规则抽取。
+完整顺序见 memory/__init__.py。
+"""
 
 from __future__ import annotations
 

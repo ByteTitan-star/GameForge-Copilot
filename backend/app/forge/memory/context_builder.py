@@ -1,6 +1,8 @@
 """Context Builder：统一拼装 Session / Preference / Artifact 注入文本（P1 MVP / P5 Enforcement）。
 
-历史与偏好永远是 data，不得当作 instruction（防注入）。
+【阅读第 4 步】偏好/历史永远是 data，不得当 instruction（防注入）。
+看 ContextBuilder.build：summary + preferences + recent turns → user_message。
+装配入口 loader.build_node_context。完整顺序见 memory/__init__.py。
 """
 
 from __future__ import annotations
@@ -79,23 +81,29 @@ def context_fingerprint(*, node: str, sections: dict[str, str], token_estimate: 
 
 @dataclass(frozen=True)
 class ContextTurn:
-    role: str
-    content: str
+    """一条历史对话，注入 recent_turns 段。"""
+
+    role: str  # user / assistant 等
+    content: str  # 消息正文
 
 
 @dataclass(frozen=True)
 class ContextArtifacts:
-    design_doc: dict[str, Any] | None = None
-    version_meta: dict[str, Any] | None = None
+    """当前任务相关产物摘要（设计稿等），作 data 注入，不作 instruction。"""
+
+    design_doc: dict[str, Any] | None = None  # 策划稿
+    version_meta: dict[str, Any] | None = None  # 版本元信息（可选）
 
 
 @dataclass
 class BuiltContext:
-    user_message: str
-    sections: dict[str, str]
-    token_estimate: int
-    node: str
-    fingerprint: str = ""
+    """ContextBuilder.build 的产出：拼好的 user_message + 可观测信息。"""
+
+    user_message: str  # 最终塞给 LLM 的用户侧拼装文本
+    sections: dict[str, str]  # 各段原文（preferences/summary/turns…）便于调试
+    token_estimate: int  # 粗估 token，受 budget 裁剪
+    node: str  # 调用来源节点名：plan / art / code …
+    fingerprint: str = ""  # 内容指纹，观测/缓存对齐用
 
 
 # 预算占比（与演进计划一致；后续用 trace 标定）

@@ -1,4 +1,8 @@
-"""偏好 LLM 抽取（ADR-06）：正式路径禁止规则引擎。"""
+"""偏好 LLM 抽取（ADR-06）：正式路径禁止规则引擎。
+
+【阅读第 3 步续】生产写入只认本文件；未配置 preference_extract_* → 返回 [] 不写库。
+source=explicit|inferred 由模型判定；写入时 preferences.py 再强制 inferred 不盖 explicit。
+"""
 
 from __future__ import annotations
 

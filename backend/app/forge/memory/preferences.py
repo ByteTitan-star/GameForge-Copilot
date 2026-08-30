@@ -1,4 +1,11 @@
-"""用户偏好读写（P1 Explicit；可选 Inferred）。"""
+"""用户偏好读写（P1 Explicit；可选 Inferred）。
+
+【阅读第 3 步】核心 API：
+  upsert_preferences_from_text → llm_extract（正式写库）
+  upsert_preference / list_active_preferences / clear_preferences
+  inferred 不得覆盖同 (category,key) 的 explicit；active 上限 memory_preferences_max_active
+被 graph._upsert_preferences_from_text 与 api/preferences 调用。
+"""
 
 from __future__ import annotations
 
@@ -12,9 +19,7 @@ from app.core.config import settings
 from app.models.user_preference import UserPreference
 
 
-async def list_active_preferences(
-    db: AsyncSession, user_id: uuid.UUID
-) -> list[UserPreference]:
+async def list_active_preferences(db: AsyncSession, user_id: uuid.UUID) -> list[UserPreference]:
     rows = await db.scalars(
         select(UserPreference).where(
             UserPreference.user_id == user_id,
@@ -67,9 +72,7 @@ async def upsert_preference(
 
 async def clear_preferences(db: AsyncSession, user_id: uuid.UUID) -> int:
     """清空用户全部长期偏好（含 inactive）；返回删除行数。"""
-    rows = (
-        await db.scalars(select(UserPreference).where(UserPreference.user_id == user_id))
-    ).all()
+    rows = (await db.scalars(select(UserPreference).where(UserPreference.user_id == user_id))).all()
     count = len(rows)
     for row in rows:
         await db.delete(row)
@@ -100,11 +103,7 @@ async def upsert_preferences_from_text(
                 UserPreference.key == key,
             )
         )
-        if (
-            source == "inferred"
-            and existing is not None
-            and existing.source == "explicit"
-        ):
+        if source == "inferred" and existing is not None and existing.source == "explicit":
             continue
         row = await upsert_preference(
             db,

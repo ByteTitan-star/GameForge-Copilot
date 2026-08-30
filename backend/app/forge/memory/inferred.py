@@ -1,4 +1,8 @@
-"""P1 尾巴：Inferred 偏好抽取（弱信号；不得覆盖 Explicit）。"""
+"""P1 尾巴：Inferred 偏好抽取（弱信号；不得覆盖 Explicit）。
+
+【阅读第 2 步下半】无显式触发词时从「像素/卡通/简单/硬核」等弱信号推断；
+若 looks_like_explicit_preference 为真则返回空（交给 explicit 路径）。ADR-02。
+"""
 
 from __future__ import annotations
 
