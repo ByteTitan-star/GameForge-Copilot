@@ -471,7 +471,14 @@ async def ingest_markdown_file(
     policy_name: str | None = None,
     dry_run: bool = False,
 ) -> IngestResult:
+    from app.forge.knowledge.source_store import archive_source_text
+
     text = path.read_text(encoding="utf-8")
+    content_ptr = archive_source_text(
+        text,
+        source_id=source_id,
+        document_id=document_id,
+    )
     specs = specs_from_markdown(
         text,
         document_id=document_id,
@@ -480,6 +487,6 @@ async def ingest_markdown_file(
         title=title,
         source_id=source_id,
         policy_name=policy_name,
-        content_ptr=str(path.resolve()),
+        content_ptr=content_ptr,
     )
     return await ingest_corpus(specs, dry_run=dry_run)
