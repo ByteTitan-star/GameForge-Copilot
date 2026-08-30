@@ -1,4 +1,14 @@
-"""Playtest 失败诊断：调用 QA_PROMPT，失败时回落结构化 JSON（规格 §5.3）。"""
+"""Playtest 失败诊断：调用 QA_PROMPT，失败时回落结构化 JSON（规格 §5.3）。
+
+【本文件 = CodeQaLoop 阅读顺序第 6 步上半 · 约 8min】
+────────────────────────────────────────
+被 execute_diagnose 调用。产出字符串 qa_diagnosis：
+  - 优先 LLM（build_qa_prompt）
+  - 异常则 fallback_diagnosis（确定性 JSON，不阻断重试）
+
+诊断文本会进入下一轮 execute_code_or_repair 的 repair prompt。
+同一步下半：llm_continuation.py（截断 → 子图 after_code_or_repair 走 retry）。
+"""
 
 from __future__ import annotations
 

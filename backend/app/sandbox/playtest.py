@@ -1,6 +1,15 @@
 """Headless playtest：生产路径强制 Playwright 可交互冒烟（B 档硬门禁）。
 
 静态 DOM 检查仅作诊断 helper（`static_playtest_diagnostic`），不得作为生产 QA 通过路径。
+
+【本文件 = CodeQaLoop 阅读顺序第 4 步 · 约 25min】
+────────────────────────────────────────
+文件很长，勿通读。只抓：
+  1) PlaytestResult 不变量（ok=True ⇒ 无 errors、无 failure_kind、有 motion_signal）
+  2) failure_kind: product | build | infra
+  3) is_permanent_infra_error → 子图立刻 exhausted（缺 Playwright/Chromium）
+  4) 入口 run_playtest / run_playtest_dist；static_* 禁止当 qa_ok
+调用方：code_qa_exec.execute_playtest。下一文件：code_candidate.py（第 5 步）。
 """
 
 from __future__ import annotations
@@ -41,12 +50,17 @@ MotionSignal = Literal["raf", "canvas_diff", "engine_runtime"]
 
 @dataclass
 class PlaytestResult:
-    ok: bool
-    errors: list[str] = field(default_factory=list)
-    console_logs: list[str] = field(default_factory=list)
-    thumbnail: bytes | None = None
-    failure_kind: FailureKind | None = None
-    motion_signal: MotionSignal | None = None
+    """B 档试玩结果；__post_init__ 强制不变量，禁止手改字段绕过。
+
+    不变量：ok=True ⇒ errors=[] 且 failure_kind=None 且 motion_signal 有值。
+    """
+
+    ok: bool  # 是否通过 B 档冒烟（唯一成功标志）
+    errors: list[str] = field(default_factory=list)  # 失败原因列表；ok 时必须为空
+    console_logs: list[str] = field(default_factory=list)  # 浏览器控制台摘录
+    thumbnail: bytes | None = None  # 通过时可带封面截图 PNG；失败则为 None
+    failure_kind: FailureKind | None = None  # product|build|infra；ok 时必须为 None
+    motion_signal: MotionSignal | None = None  # 通过时必有：raf/canvas_diff/engine_runtime
 
     def __post_init__(self) -> None:
         if self.ok and self.errors:
@@ -80,6 +94,7 @@ def make_playtest_result(
 
 
 def _infra_result(code: str, detail: str, logs: list[str] | None = None) -> PlaytestResult:
+    """环境失败：failure_kind=infra，供子图 after_playtest 走 replay/exhausted。"""
     return make_playtest_result(
         errors=[f"{code}: {detail}"],
         console_logs=logs or ["playtest: infra failure"],
@@ -95,6 +110,7 @@ PERMANENT_INFRA_MARKERS = (
 
 
 def is_permanent_infra_error(errors: list[str] | None) -> bool:
+    """被 code_qa_loop.after_playtest 调用：永久 infra → exhausted，不空转 replay。"""
     text = " ".join(str(e) for e in (errors or []))
     return any(marker in text for marker in PERMANENT_INFRA_MARKERS)
 
@@ -540,6 +556,7 @@ async def run_playtest_dist(
     design_doc: dict[str, Any] | None = None,
     runtime_design_doc: dict[str, Any] | None = None,
 ) -> PlaytestResult:
+    """Vite/工程产物试玩：先自包含与资源检查，再起本地 HTTP + Playwright。"""
     refs = scan_dist_external_refs(dist_dir)
     ok, violations = validate_dist_self_contained(refs)
     if not ok:
@@ -590,6 +607,10 @@ async def run_playtest(
     design_doc: dict[str, Any] | None = None,
     runtime_design_doc: dict[str, Any] | None = None,
 ) -> PlaytestResult:
+    """单 HTML 试玩主入口（CodeQaLoop 最常见路径）。
+
+    顺序：引擎 API lint → design acceptance → Playwright 可用性 → 浏览器会话冒烟。
+    """
     api_errors = illegal_engine_api_errors(html)
     if api_errors:
         return _with_cdn_check(

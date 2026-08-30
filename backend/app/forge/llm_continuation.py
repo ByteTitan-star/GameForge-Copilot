@@ -1,4 +1,16 @@
-"""Code 阶段 LLM 输出截断检测与续写。"""
+"""Code 阶段 LLM 输出截断检测与续写。
+
+【本文件 = CodeQaLoop 阅读顺序第 6 步下半 · 约 7min】
+────────────────────────────────────────
+与子图的接点（必须记住）：
+  OUTPUT_TRUNCATED_ERROR 写入 playtest_errors
+  → after_code_or_repair 里 is_output_truncated_error → 走 "retry"
+  → 直接再 code_or_repair，不进 diagnose
+
+本文件其余：generate_code_output 内部的续写轮次；时间紧可只看
+is_output_truncated_error / OUTPUT_TRUNCATED_ERROR 两个符号。
+下一文件：reliability/policy.py（第 7 步）。
+"""
 
 from __future__ import annotations
 
@@ -33,6 +45,7 @@ class OutputTruncatedError(Exception):
 
 
 def is_output_truncated_error(errors: list[str] | None) -> bool:
+    """供 code_qa_loop.after_code_or_repair 判断是否走 retry 边。"""
     if not errors:
         return False
     prefix = "OUTPUT_TRUNCATED:"

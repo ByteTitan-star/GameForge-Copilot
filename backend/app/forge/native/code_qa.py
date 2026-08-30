@@ -1,4 +1,11 @@
-"""Native Engine CodeQa 节点：Godot template-first generate / repair。"""
+"""Native Engine CodeQa 节点：Godot template-first generate / repair。
+
+【本文件 = CodeQaLoop 阅读顺序第 8 步选读 · 可跳过】
+────────────────────────────────────────
+Web 路线（canvas/phaser/vite）走 code_qa_exec 主路径；
+Godot 等原生引擎从此处分叉，但仍复用同一 CodeQaLoop 子图边。
+3 小时上手若只关心 Web 生成，跳过本文件即可（见 ADR-13）。
+"""
 
 from __future__ import annotations
 

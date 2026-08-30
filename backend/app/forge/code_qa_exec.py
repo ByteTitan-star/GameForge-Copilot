@@ -1,4 +1,18 @@
-"""CodeQaLoop 节点执行体：generate/repair、playtest、diagnose（无 run.status 副作用）。"""
+"""CodeQaLoop 节点执行体：generate/repair、playtest、diagnose（无 run.status 副作用）。
+
+【本文件 = 阅读顺序第 3 步 · 约 40min】
+────────────────────────────────────────
+前置：已读完 code_qa_loop.py 拓扑 + graph.code_qa_loop_node。
+本步只盯三个入口函数的「输入 → 副作用 → 返回字段」：
+
+  execute_code_or_repair  — 写 candidate（不 promote）；设 candidate_ready / failure_kind
+  execute_playtest        — 调 sandbox.playtest；设 qa_ok / failure_kind / motion_signal
+  execute_diagnose        — 写 qa_diagnosis，供下一轮 repair 拼进 prompt
+
+纪律：禁止写 run.status / 禁止调 graph._fail。
+返回字段如何被 after_* 消费，回到第 1 步对照。
+下一文件：sandbox/playtest.py（第 4 步）。
+"""
 
 from __future__ import annotations
 
@@ -138,7 +152,14 @@ async def execute_code_or_repair(
     commit_native_build: Any,
     run_finalized_exc: type[BaseException],
 ) -> dict[str, Any]:
-    """单次 CodeQa attempt：generate 或 repair，成功则写入 candidate（不 promote）。"""
+    """单次 CodeQa attempt：generate 或 repair，成功则写入 candidate（不 promote）。
+
+    输入关键：design_doc / art_direction / artifacts / qa_diagnosis / attempt
+    成功输出：candidate_ready=True + candidate_version（草稿版本，尚未对外发布）
+    失败输出：candidate_ready=False + failure_kind（build/truncated/...）+ playtest_errors
+
+    依赖由主图注入（streamed_llm / commit_*），便于测试 monkeypatch，也避免循环导入。
+    """
     from app.forge.assets.picker import PickedAsset
     from app.forge.tracing import observe_phase
     from app.games import services as game_services
@@ -598,7 +619,14 @@ async def execute_playtest(
     set_phase: Any,
     save_thumbnail: Any,
 ) -> dict[str, Any]:
-    """对当前 candidate 跑 B 档 playtest；不写 run.status。"""
+    """对当前 candidate 跑 B 档 playtest；不写 run.status。
+
+    B 档 = 真实浏览器可交互冒烟（Playwright），不是静态 DOM 检查。
+    通过：qa_ok=True（主图才允许进 done / promote）
+    失败：qa_ok=False + failure_kind=product|infra|... + playtest_errors
+
+    无 candidate 时直接跳过并记失败，避免空跑沙箱。
+    """
     from app.forge.tracing import observe_phase
 
     with observe_phase("qa"):
@@ -807,7 +835,11 @@ async def execute_diagnose(
     *,
     llm: Any,
 ) -> dict[str, Any]:
-    """对 product/build 失败做诊断；infra 不得进入本节点（由子图路由保证）。"""
+    """对 product/build 失败做诊断；infra 不得进入本节点（由子图路由保证）。
+
+    产出 qa_diagnosis（文本/结构化），下一轮 execute_code_or_repair 会把它拼进 repair prompt。
+    原生引擎路径可能直接用 NativeStructuredDiagnostic，跳过通用 LLM 诊断。
+    """
     from app.forge.tracing import observe_phase
 
     with observe_phase("qa"):

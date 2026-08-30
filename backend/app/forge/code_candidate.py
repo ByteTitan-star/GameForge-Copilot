@@ -1,4 +1,18 @@
-"""Candidate 版本分配与 promote（仅 qa_ok 后提升为 current_version）。"""
+"""Candidate 版本分配与 promote（仅 qa_ok 后提升为 current_version）。
+
+【本文件 = CodeQaLoop 阅读顺序第 5 步上半 · 约 8min】
+────────────────────────────────────────
+核心心智：candidate ≠ 对外交付版。
+
+  claim_candidate_version  — code_or_repair 落盘时领号（不改 game.current_version）
+  promote_candidate        — 仅 qa_ok 后由 graph.code_qa_loop_node 调用，升为 current
+
+与 CodeQaLoop：
+  execute_code_or_repair 成功 → candidate_ready + candidate_version
+  子图 mark_ok → 主图 promote（带 Redis 幂等，见 idempotency.py）
+
+同一步下半：reliability/artifact_gate.py（previewable ≠ publishable）。
+"""
 
 from __future__ import annotations
 
@@ -26,14 +40,14 @@ CODE_OUTPUT_PARSE_MAX_ATTEMPTS = 2
 
 @dataclass
 class CandidateResult:
-    """单次 generate/repair + build 的结果。"""
+    """单次 generate/repair + build 的结果（尚未 promote）。"""
 
-    candidate_ready: bool
-    candidate_version: int | None = None
-    candidate_kind: CandidateKind | None = None
-    failure_kind: Literal["build"] | None = None
-    errors: list[str] = field(default_factory=list)
-    extra_state: dict[str, Any] = field(default_factory=dict)
+    candidate_ready: bool  # 是否写出了可试玩候选
+    candidate_version: int | None = None  # 候选版本号（≠ game.current_version）
+    candidate_kind: CandidateKind | None = None  # single-html / project
+    failure_kind: Literal["build"] | None = None  # 仅构建失败时标记 build
+    errors: list[str] = field(default_factory=list)  # 构建/解析错误
+    extra_state: dict[str, Any] = field(default_factory=dict)  # 附加回写 state 的字段
 
 
 async def next_candidate_version(session: AsyncSession, game: Game) -> int:
@@ -56,9 +70,7 @@ async def claim_candidate_version(
 
     返回 (version, is_new)。重放同一 attempt 时复用已领取版本，避免重复抬号。
     """
-    key = side_effect_key(
-        run_id, "code_or_repair", f"attempt-{int(attempt)}", "save_candidate"
-    )
+    key = side_effect_key(run_id, "code_or_repair", f"attempt-{int(attempt)}", "save_candidate")
     existing = await get_side_effect_value(r, key)
     if existing is not None and str(existing).isdigit():
         return int(existing), False
