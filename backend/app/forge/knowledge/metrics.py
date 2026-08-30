@@ -35,3 +35,12 @@ def record_knowledge_retrieve(
             KNOWLEDGE_RETRIEVE_COUNT.labels(f"{node}_injected").observe(injected_count)
     except Exception:  # noqa: BLE001
         return
+
+
+def record_knowledge_rerank_skip(node: str, *, reason: str) -> None:
+    try:
+        from app.core.metrics import KNOWLEDGE_RERANK_SKIP_TOTAL
+
+        KNOWLEDGE_RERANK_SKIP_TOTAL.labels(node, reason).inc()
+    except Exception:  # noqa: BLE001
+        return

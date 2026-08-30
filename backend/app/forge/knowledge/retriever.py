@@ -21,10 +21,14 @@ from app.forge.knowledge.guards import (
     validate_embedding_model_configured,
 )
 from app.forge.knowledge.metrics import record_knowledge_retrieve
-from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
+from app.forge.knowledge.pinecone_store import get_knowledge_reader
 from app.forge.knowledge.policy import policy_for_node
 from app.forge.knowledge.query_builder import build_retrieval_query
-from app.forge.knowledge.rerank import apply_semantic_rerank, quality_tie_break
+from app.forge.knowledge.rerank import (
+    apply_semantic_rerank,
+    quality_tie_break,
+    should_skip_semantic_rerank,
+)
 from app.forge.knowledge.types import RetrievedKnowledge
 from app.llm.embeddings import embed_one
 
@@ -114,12 +118,11 @@ async def _retrieve_knowledge_inner(
     design_doc: dict[str, Any] | None,
 ) -> tuple[list[RetrievedKnowledge], str, int, float]:
     """执行检索；返回 (注入结果, metrics_status, retrieved_count, rerank_latency_s)。"""
-    _ = node
     query = build_retrieval_query(node=node, current_input=current_input, design_doc=design_doc)
     if query is None:
         return [], "no_hit", 0, 0.0
 
-    store = get_knowledge_pinecone_store()
+    store = get_knowledge_reader()
     if store is None:
         log.warning("knowledge retrieve skipped: pinecone not configured")
         return [], "fail", 0, 0.0
@@ -166,13 +169,19 @@ async def _retrieve_knowledge_inner(
     status = "ok"
     rerank_latency_s = 0.0
     if settings.knowledge_semantic_rerank_enabled and chunks:
-        rerank_started = time.perf_counter()
-        reranked = await apply_semantic_rerank(vector, chunks)
-        rerank_latency_s = time.perf_counter() - rerank_started
-        if reranked is not chunks:
-            chunks = reranked
-        elif len(chunks) > 1:
-            status = "degraded"
+        gap = float(settings.knowledge_rerank_min_score_gap)
+        if should_skip_semantic_rerank(chunks, min_gap=gap):
+            from app.forge.knowledge.metrics import record_knowledge_rerank_skip
+
+            record_knowledge_rerank_skip(node, reason="score_gap")
+        else:
+            rerank_started = time.perf_counter()
+            reranked = await apply_semantic_rerank(vector, chunks)
+            rerank_latency_s = time.perf_counter() - rerank_started
+            if reranked is not chunks:
+                chunks = reranked
+            elif len(chunks) > 1:
+                status = "degraded"
 
     retrieved_count = len(chunks)
     min_score = float(settings.knowledge_min_relevance_score)

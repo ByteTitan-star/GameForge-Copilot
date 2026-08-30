@@ -186,6 +186,8 @@ class Settings(BaseSettings):
     knowledge_retrieve_k: int = 12
     knowledge_rerank_top_n: int = 4
     knowledge_semantic_rerank_enabled: bool = True
+    # top1−top2 retrieval_score 差距 ≥ 此值时跳过同模型二次 embed（0=禁用跳过）
+    knowledge_rerank_min_score_gap: float = 0.12
     knowledge_token_budget: int = 800
     knowledge_query_max_tokens: int = 480
     knowledge_min_relevance_score: float = 0.35

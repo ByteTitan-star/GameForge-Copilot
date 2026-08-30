@@ -13,6 +13,20 @@
       "input": "做一个平台跳跃小游戏，节奏要快",
       "design_doc": {"title": "跳跃方块", "genre": "platformer"},
       "expect_domains": ["design", "example"]
+    },
+    {
+      "id": "neg-irrelevant-cuisine",
+      "node": "plan",
+      "input": "请介绍法式甜点马卡龙的烤箱温度与糖霜配比",
+      "design_doc": {"title": "甜点食谱", "genre": "cooking"},
+      "expect_empty": true
+    },
+    {
+      "id": "neg-out-of-corpus-finance",
+      "node": "plan",
+      "input": "帮我写一份跨境对冲基金的合规尽调清单",
+      "design_doc": {"title": "金融合规", "genre": "finance"},
+      "expect_empty": true
     }
   ]
 }

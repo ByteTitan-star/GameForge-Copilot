@@ -52,6 +52,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        from app.core.http_client import aclose_http_client
+
+        await aclose_http_client()
         flush_langfuse()
 
 

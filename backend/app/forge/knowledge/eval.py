@@ -15,6 +15,7 @@ class EvalCase:
     input: str
     design_doc: dict[str, Any] | None
     expect_domains: tuple[str, ...]
+    expect_empty: bool = False
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ def load_eval_cases(path: Path) -> list[EvalCase]:
                 if isinstance(item.get("design_doc"), dict)
                 else None,
                 expect_domains=tuple(item.get("expect_domains") or ()),
+                expect_empty=bool(item.get("expect_empty") or False),
             )
         )
     return cases
@@ -68,9 +70,12 @@ async def run_eval_cases(cases: list[EvalCase]) -> EvalReport:
             design_doc=case.design_doc,
         )
         domains = tuple(sorted({h.domain for h in hits if h.domain}))
-        ok = len(hits) > 0
-        if case.expect_domains:
-            ok = ok and any(d in domains for d in case.expect_domains)
+        if case.expect_empty:
+            ok = len(hits) == 0
+        else:
+            ok = len(hits) > 0
+            if case.expect_domains:
+                ok = ok and any(d in domains for d in case.expect_domains)
         if ok:
             passed += 1
         results.append(

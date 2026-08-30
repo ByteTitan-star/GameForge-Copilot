@@ -149,16 +149,23 @@ class HttpPineconeStore:
         return out
 
     async def _post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+        from app.core.http_client import get_http_client
+
         headers = {
             "Api-Key": self._api_key,
             "content-type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-                resp = await client.post(url, headers=headers, json=body)
-                resp.raise_for_status()
-                data = resp.json()
-                return data if isinstance(data, dict) else {}
+            client = get_http_client()
+            resp = await client.post(
+                url,
+                headers=headers,
+                json=body,
+                timeout=httpx.Timeout(30.0),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, dict) else {}
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("pinecone request failed: %s", type(exc).__name__)
             if self._strict_errors:

@@ -1,4 +1,9 @@
-"""Knowledge RAG 语义 Rerank（ADR-14 §3.10 R1）。"""
+"""Knowledge RAG 语义 Rerank（ADR-14 §3.10 R1）。
+
+#147 P1 成本结论：同模型二次 embed 与 Pinecone cosine 高度冗余。
+默认仍可用开关开启；当 top1−top2 retrieval_score 差距足够大时跳过二次 embed，
+仅依赖 retrieval_score + quality_tie_break。
+"""
 
 from __future__ import annotations
 
@@ -27,6 +32,18 @@ def quality_tie_break(*, quality_tier: str, trust_level: str) -> float:
     tier = _TIER_RANK.get(quality_tier, 1)
     trust = 0.0002 if trust_level in ("curated", "internal") else 0.0
     return tier * 0.0001 + trust
+
+
+def should_skip_semantic_rerank(
+    chunks: list[RetrievedKnowledge],
+    *,
+    min_gap: float,
+) -> bool:
+    """top1 与 top2 检索分差 ≥ min_gap 时跳过同模型二次 embed。"""
+    if min_gap <= 0 or len(chunks) < 2:
+        return False
+    ranked = sorted(chunks, key=lambda c: c.retrieval_score, reverse=True)
+    return (ranked[0].retrieval_score - ranked[1].retrieval_score) >= min_gap
 
 
 async def apply_semantic_rerank(

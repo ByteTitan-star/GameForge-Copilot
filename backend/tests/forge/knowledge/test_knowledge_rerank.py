@@ -28,6 +28,39 @@ def test_quality_tie_break_prefers_gold() -> None:
     assert gold > silver
 
 
+def test_should_skip_semantic_rerank_when_gap_large() -> None:
+    from app.forge.knowledge.rerank import should_skip_semantic_rerank
+
+    chunks = [
+        _chunk("a", "x"),
+        _chunk("b", "y"),
+    ]
+    chunks[0] = RetrievedKnowledge(
+        chunk_id="a",
+        domain="design",
+        category="gameplay_mechanic",
+        title="a",
+        text="x",
+        retrieval_score=0.95,
+        source_id="test",
+        quality_tier="silver",
+        rerank_score=0.95,
+    )
+    chunks[1] = RetrievedKnowledge(
+        chunk_id="b",
+        domain="design",
+        category="gameplay_mechanic",
+        title="b",
+        text="y",
+        retrieval_score=0.50,
+        source_id="test",
+        quality_tier="silver",
+        rerank_score=0.50,
+    )
+    assert should_skip_semantic_rerank(chunks, min_gap=0.12) is True
+    assert should_skip_semantic_rerank(chunks, min_gap=0.50) is False
+
+
 @pytest.mark.asyncio
 async def test_semantic_rerank_orders_by_embedding_similarity(
     monkeypatch: pytest.MonkeyPatch,
