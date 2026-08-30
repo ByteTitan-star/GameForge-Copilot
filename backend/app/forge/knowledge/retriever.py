@@ -9,6 +9,11 @@ import time
 from typing import Any
 
 from app.core.config import settings
+from app.forge.knowledge.circuit import (
+    knowledge_circuit_is_open,
+    record_knowledge_failure,
+    record_knowledge_success,
+)
 from app.forge.knowledge.guards import (
     filter_by_min_relevance,
     metadata_embedding_version_matches,
@@ -192,6 +197,17 @@ async def retrieve_knowledge_for_node(
         return []
 
     started = time.perf_counter()
+    if knowledge_circuit_is_open():
+        log.warning("knowledge retrieve skipped: circuit open")
+        record_knowledge_retrieve(
+            node,
+            status="circuit_open",
+            retrieved_count=0,
+            injected_count=0,
+            latency_s=time.perf_counter() - started,
+        )
+        return []
+
     timeout_s = max(0.0, float(settings.knowledge_retrieve_timeout_s))
 
     try:
@@ -212,6 +228,7 @@ async def retrieve_knowledge_for_node(
             )
     except TimeoutError:
         log.warning("knowledge retrieve timed out after %.1fs", timeout_s)
+        record_knowledge_failure()
         record_knowledge_retrieve(
             node,
             status="timeout",
@@ -220,6 +237,11 @@ async def retrieve_knowledge_for_node(
             latency_s=time.perf_counter() - started,
         )
         return []
+
+    if status == "fail":
+        record_knowledge_failure()
+    elif status in {"ok", "no_hit", "degraded"}:
+        record_knowledge_success()
 
     record_knowledge_retrieve(
         node,

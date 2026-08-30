@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 # ok=注入成功；no_hit=后端正常但无命中；fail=配置/传输/embed 失败；
-# degraded=部分降级（如 rerank 失败仍返回结果）；timeout=超时
+# degraded=部分降级（如 rerank 失败仍返回结果）；timeout=超时；
+# circuit_open=熔断打开，跳过检索（fail-open）
 KnowledgeRetrieveStatus = str
 
 
