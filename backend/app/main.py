@@ -81,7 +81,7 @@ async def _dev_seed_official_games() -> None:
 
 app = FastAPI(
     title="GameForge-Copilot",
-    version="2.1.1",
+    version="2.1.2",
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url=None,

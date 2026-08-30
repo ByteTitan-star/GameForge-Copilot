@@ -1,6 +1,6 @@
 [project]
 name = "gameforge-backend"
-version = "2.1.1"
+version = "2.1.2"
 description = "GameForge-Copilot backend"
 requires-python = ">=3.12"
 dependencies = [
