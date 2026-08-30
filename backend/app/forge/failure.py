@@ -1,4 +1,12 @@
-"""P1 FailureReport Lite + P5 三层分类（规则 / Capability / LLM 辅助）。"""
+"""P1 FailureReport Lite + P5 三层分类（规则 / Capability / LLM 辅助）。
+
+【安全护栏阅读顺序 · 第 6 步 · 约 10min】
+────────────────────────────────────────
+内容护栏命中后 run 直接 FAILED（ContentAttacked），通常不走本文件。
+本文件与安全相关的是：错误文案/error_code 被归为 POLICY_SECURITY
+→ suggested_recovery=REVISE_PLAN；与 reliability.errors.SecurityViolation 对照。
+完整顺序见 forge/guard.py。
+"""
 
 from __future__ import annotations
 
@@ -25,6 +33,7 @@ SOURCE_RULE = "DETERMINISTIC_RULE"
 SOURCE_CAPABILITY = "CAPABILITY_VALIDATOR"
 SOURCE_LLM = "LLM_ASSISTED"
 
+# error_code → 硬分类
 _INFRA_CODES = frozenset(
     {
         "provider_5xx",
@@ -35,6 +44,7 @@ _INFRA_CODES = frozenset(
 )
 _RESOURCE_CODES = frozenset({"sandbox_oom"})
 _POLICY_CODES = frozenset({"security_violation"})
+# LLM 允许输出的 candidate_class 白名单
 _ASSIST_CLASSES = frozenset(
     {
         FailureClass.IMPLEMENTATION_DEFECT.value,
@@ -44,6 +54,7 @@ _ASSIST_CLASSES = frozenset(
     }
 )
 
+# 从错误文案里抠类别的正则
 _INFRA_RE = re.compile(
     r"(?i)(\b50[23]\b|http\s*50[23]|playwright_unavailable|chromium_unavailable|"
     r"sandbox allocation|browser launch)"
@@ -54,12 +65,14 @@ _IMPL_RE = re.compile(
 _RESOURCE_RE = re.compile(r"(?i)(\boom\b|out of memory|bundle size|quota exceeded)")
 _POLICY_RE = re.compile(r"(?i)(content_blocked|policy.?denied|security_violation)")
 
+# 落库前脱敏：避免把 token / api key 写进 FailureReport
 _REDACT = (
     (re.compile(r"(?i)(bearer\s+)[a-z0-9\-._~+/]+=*"), r"\1[REDACTED]"),
     (re.compile(r"(?i)((?:api[_-]?key|secret[_-]?key)\s*[:=]\s*)\S+"), r"\1[REDACTED]"),
     (re.compile(r"(?i)\bsk-[a-z0-9]{8,}\b"), "[REDACTED]"),
 )
 
+# 失败类别 → 建议的恢复命令（与 hitl.allowed_commands_for 应对齐）
 _SUGGESTED = {
     FailureClass.INFRA_TRANSIENT: RunCommandType.RETRY_INFRA.value,
     FailureClass.IMPLEMENTATION_DEFECT: RunCommandType.RETRY_IMPLEMENTATION.value,
@@ -73,6 +86,8 @@ _SUGGESTED = {
 
 @dataclass(frozen=True)
 class ClassificationResult:
+    """一次分类的完整结果，供落库与指标使用。"""
+
     failure_class: FailureClass
     classification_source: str
     classification_confidence: float
@@ -80,6 +95,7 @@ class ClassificationResult:
 
 
 def sanitize_failure_text(text: str, *, max_chars: int = SUMMARY_MAX_CHARS) -> str:
+    """脱敏 + 截断，防止敏感信息与超长日志入库。"""
     cleaned = text
     for pat, repl in _REDACT:
         cleaned = pat.sub(repl, cleaned)
@@ -107,6 +123,7 @@ def classify_failure(
     design_doc: dict[str, Any] | None = None,
     assistant_raw: str | None = None,
 ) -> ClassificationResult:
+    """三层分类入口：规则 → Capability → LLM → UNKNOWN。"""
     blob = " ".join(errors or []).strip()
     kind = (failure_kind or "").strip().lower()
     code = (error_code or "").strip().lower()
@@ -128,6 +145,7 @@ def classify_failure(
 
 
 def _classify_hard(*, blob: str, kind: str, code: str) -> FailureClass | None:
+    """确定性规则层；能判就返回，否则 None 交给后续层。"""
     if code in _POLICY_CODES or (blob and _POLICY_RE.search(blob)):
         return FailureClass.POLICY_SECURITY
     if code in _RESOURCE_CODES or (blob and _RESOURCE_RE.search(blob)):
@@ -140,6 +158,7 @@ def _classify_hard(*, blob: str, kind: str, code: str) -> FailureClass | None:
 
 
 def _llm_confidence(*, error_count: int, has_reason: bool) -> float:
+    """给 LLM 辅助分类一个保守置信度（上限 0.7，永不假装规则级确定）。"""
     score = 0.4
     if error_count >= 1:
         score += 0.15
@@ -165,6 +184,7 @@ def record_classification_metrics(
     assistant_raw: str | None = None,
     hitl_phase: str | None = None,
 ) -> None:
+    """打点：类别分布、UNKNOWN、规则覆盖 LLM、建议命令与 HITL 白名单不一致。"""
     FAILURE_CLASS_TOTAL.labels(
         classified.failure_class.value, classified.classification_source
     ).inc()
@@ -186,6 +206,7 @@ def record_classification_metrics(
 
 
 def _decode_json_object(raw: str | None) -> dict[str, Any] | None:
+    """宽松解析：整段 JSON，或从文本中抠出第一个 {...}。"""
     text = (raw or "").strip()
     if not text:
         return None
@@ -217,6 +238,7 @@ async def persist_failure_report(
     design_doc: dict[str, Any] | None = None,
     hitl_phase: str | None = None,
 ) -> FailureReport:
+    """分类 + 脱敏摘要 + 写入 FailureReport 行，并刷新 flush（由外层事务提交）。"""
     classified = classify_failure(
         errors=errors or [],
         failure_kind=failure_kind,

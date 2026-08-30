@@ -1,4 +1,17 @@
-"""Forge 可靠性子系统（P0）：错误分类、暂停原因、节点策略、幂等。"""
+"""Forge 可靠性子系统（P0）：错误分类、暂停原因、节点策略、幂等。
+
+【阅读导读 · 本地学习用注释】
+────────────────────────────────────────
+本包是 LangGraph 节点「跑多久 / 挂了怎么办 / 副作用别重做」的公共层：
+
+  policy.py      — 各节点 TimeoutPolicy / RetryPolicy（数字权威）
+  errors.py      — Recoverable vs Fatal 异常分类
+  pause.py       — paused + pause_reason + recovery checkpoint
+  idempotency.py — promote / billing 等副作用 Redis 幂等
+  artifact_gate.py — previewable / publishable 门禁（ADR-01）
+
+主图 graph.py 通过本包的 re-export 使用上述能力。
+"""
 
 from app.forge.reliability.artifact_gate import ArtifactGate, derive_artifact_gate
 from app.forge.reliability.errors import (
