@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core.config import settings
@@ -73,6 +75,37 @@ async def test_markdown_ingest_writes_chunk_metadata() -> None:
     assert "chunk_index" in meta
     assert meta["chunk_policy"] == "design_principle"
     assert len(meta["text"]) <= 2000
+
+
+@pytest.mark.asyncio
+async def test_ingest_markdown_file_archives_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.forge.knowledge.ingest import ingest_markdown_file
+
+    monkeypatch.setattr(settings, "knowledge_source_root", str(tmp_path / "ks"))
+    md = tmp_path / "note.md"
+    md.write_text("## 原则\n\n短文即可归档。\n", encoding="utf-8")
+    result = await ingest_markdown_file(
+        md,
+        document_id="doc_md",
+        domain="design",
+        category="design_principle",
+        title="note",
+        source_id="src_md",
+    )
+    assert result.upserted >= 1
+    store = __import__(
+        "app.forge.knowledge.pinecone_store", fromlist=["get_knowledge_writer"]
+    ).get_knowledge_writer()
+    assert store is not None
+    meta = next(iter(store._rows.values()))[1]  # type: ignore[attr-defined]
+    ptr = str(meta["content_ptr"])
+    assert ptr.startswith("local://knowledge-sources/")
+    from app.forge.knowledge.source_store import read_source_text
+
+    assert "短文即可归档" in read_source_text(ptr)
 
 
 @pytest.mark.asyncio

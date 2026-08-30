@@ -199,6 +199,8 @@ class Settings(BaseSettings):
     knowledge_embedding_expected_model: str = ""  # 空=跳过；应与 EMBEDDING_MODEL 一致
     knowledge_embedding_version: str = ""  # 空=跳过；ingest 写入 metadata.embedding_version
     knowledge_metadata_validation_enabled: bool = True
+    # ADR-14 §3.6.2：原文本地归档根目录（真 S3/PG 后续）；content_ptr=local://...
+    knowledge_source_root: str = ".knowledge-sources"
 
     # ADR-13 Native Engine（Godot-first；默认关，不影响 Web 管线）
     native_engine_enabled: bool = False

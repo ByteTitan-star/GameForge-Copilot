@@ -37,6 +37,7 @@ htmlcov/
 
 # 产物托管本地目录
 .hosting/
+.knowledge-sources/
 .pnpm-store/
 
 # 本机 TEI embedding 模型权重（scripts/download_embedding_model.sh）
