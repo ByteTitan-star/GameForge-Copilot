@@ -470,14 +470,23 @@ async def ingest_markdown_file(
     source_id: str,
     policy_name: str | None = None,
     dry_run: bool = False,
+    session: object | None = None,
 ) -> IngestResult:
-    from app.forge.knowledge.source_store import archive_source_text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.forge.knowledge.source_store import archive_source
 
     text = path.read_text(encoding="utf-8")
-    content_ptr = archive_source_text(
+    db = session if isinstance(session, AsyncSession) else None
+    if db is None and settings.knowledge_source_persist_db:
+        # 无 session 时仍归档 blob；DB 行跳过（脚本可显式传入 SessionLocal）
+        db = None
+    content_ptr = await archive_source(
         text,
         source_id=source_id,
         document_id=document_id,
+        title=title,
+        session=db,
     )
     specs = specs_from_markdown(
         text,

@@ -120,6 +120,34 @@ def collect_gate_items() -> list[GateItem]:
             hard=False,
         )
     )
+    backend = (settings.knowledge_source_backend or "local").strip().lower()
+    items.append(
+        GateItem(
+            name="source_backend",
+            ok=backend in {"local", "s3"},
+            detail=f"KNOWLEDGE_SOURCE_BACKEND={backend!r}",
+            hard=True,
+        )
+    )
+    if backend == "s3":
+        s3_ok = bool(
+            settings.s3_bucket.strip()
+            and settings.s3_ak.strip()
+            and settings.s3_sk.strip()
+            and settings.s3_endpoint.strip()
+            and settings.s3_region.strip()
+        )
+        items.append(
+            GateItem(
+                name="source_s3_credentials",
+                ok=s3_ok,
+                detail=(
+                    "S3_* configured for knowledge archive"
+                    if s3_ok
+                    else "knowledge_source_backend=s3 requires S3_BUCKET/AK/SK/ENDPOINT/REGION"
+                ),
+            )
+        )
     return items
 
 

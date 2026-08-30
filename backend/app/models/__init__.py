@@ -8,6 +8,7 @@ from app.models.game import Game
 from app.models.game_reaction import GameReaction
 from app.models.game_version import GameVersion
 from app.models.generation_run import GenerationRun
+from app.models.knowledge_source import KnowledgeSource
 from app.models.llm_config import UserLLMConfig
 from app.models.notification import Notification
 from app.models.oauth_account import OAuthAccount
@@ -33,6 +34,7 @@ __all__ = [
     "ForgeMessage",
     "FailureReport",
     "ArtifactRevision",
+    "KnowledgeSource",
     "GenerationRun",
     "RunCheckpoint",
     "RunCommand",

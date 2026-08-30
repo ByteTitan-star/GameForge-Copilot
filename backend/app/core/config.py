@@ -199,8 +199,11 @@ class Settings(BaseSettings):
     knowledge_embedding_expected_model: str = ""  # 空=跳过；应与 EMBEDDING_MODEL 一致
     knowledge_embedding_version: str = ""  # 空=跳过；ingest 写入 metadata.embedding_version
     knowledge_metadata_validation_enabled: bool = True
-    # ADR-14 §3.6.2：原文本地归档根目录（真 S3/PG 后续）；content_ptr=local://...
+    # ADR-14 §3.6.2：原文归档（local 默认；s3 复用 S3_* 凭据）
     knowledge_source_root: str = ".knowledge-sources"
+    knowledge_source_backend: str = "local"  # local | s3
+    knowledge_s3_prefix: str = "knowledge-sources"
+    knowledge_source_persist_db: bool = True  # archive 时写 knowledge_sources 行（需传入 session）
 
     # ADR-13 Native Engine（Godot-first；默认关，不影响 Web 管线）
     native_engine_enabled: bool = False
