@@ -14,13 +14,41 @@ from app.forge.knowledge.types import RetrievedKnowledge
 
 
 def estimate_tokens(text: str) -> int:
-    """粗估 token：CJK 按字计 1，其余按字符 /4（#147 tokenizer-aware budget）。"""
+    """Tokenizer-aware 粗估（对齐 bge-small-zh / WordPiece 量级，#147）。
+
+    - CJK 字符：约 1 token / 字
+    - 拉丁等：按空白与标点切成词片，短词约 1，长词约 ceil(len/4)
+    - 不引入重型 tokenizer 依赖；预算侧偏保守（宁可略高估）
+    """
     if not text:
         return 0
-    cjk = sum(1 for ch in text if _is_cjk_char(ch))
-    other = len(text) - cjk
-    total = cjk + (other + 3) // 4
-    return max(1, total) if total > 0 else 0
+    total = 0
+    buf: list[str] = []
+
+    def flush() -> None:
+        nonlocal total, buf
+        if not buf:
+            return
+        piece = "".join(buf)
+        buf = []
+        if not piece:
+            return
+        total += max(1, (len(piece) + 3) // 4)
+
+    for ch in text:
+        if _is_cjk_char(ch):
+            flush()
+            total += 1
+        elif ch.isspace() or _is_ascii_punct(ch):
+            flush()
+        else:
+            buf.append(ch)
+    flush()
+    return total
+
+
+def _is_ascii_punct(ch: str) -> bool:
+    return len(ch) == 1 and not ch.isalnum() and ord(ch) < 128
 
 
 def _is_cjk_char(ch: str) -> bool:

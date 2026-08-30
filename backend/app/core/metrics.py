@@ -121,6 +121,11 @@ KNOWLEDGE_RERANK_LATENCY = Histogram(
     ["node"],
     buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5),
 )
+KNOWLEDGE_RERANK_SKIP_TOTAL = Counter(
+    "gameforge_knowledge_rerank_skip_total",
+    "Knowledge RAG semantic rerank skipped (cost/benefit gate)",
+    ["node", "reason"],
+)
 KNOWLEDGE_RETRIEVE_COUNT = Histogram(
     "gameforge_knowledge_retrieved_chunks",
     "Knowledge chunks retrieved or injected per node",

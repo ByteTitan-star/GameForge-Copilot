@@ -1,6 +1,6 @@
 # ADR-13: Native Engine Agent Loop（Godot-first / Unity later）
 
-* Status: **Proposed**
+* Status: **Accepted**
 * Date: 2026-08-26
 * Author: Auto（依 Owner 规划起草）
 * Related: ADR-03（Sandbox）、ADR-09（Timeout / Tier）、ADR-11（Sandbox / Hosting 资源）、`docs/build-pipeline.md`、`engine_router`、CodeQaLoop

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 # ok=注入成功；no_hit=后端正常但无命中；fail=配置/传输/embed 失败；
-# degraded=部分降级（如 rerank 失败仍返回结果）；timeout=超时
+# degraded=部分降级（如 rerank 失败仍返回结果）；timeout=超时；
+# circuit_open=熔断打开，跳过检索（fail-open）
 KnowledgeRetrieveStatus = str
 
 
@@ -32,5 +33,14 @@ def record_knowledge_retrieve(
             KNOWLEDGE_RERANK_LATENCY.labels(node).observe(rerank_latency_s)
         if injected_count > 0:
             KNOWLEDGE_RETRIEVE_COUNT.labels(f"{node}_injected").observe(injected_count)
+    except Exception:  # noqa: BLE001
+        return
+
+
+def record_knowledge_rerank_skip(node: str, *, reason: str) -> None:
+    try:
+        from app.core.metrics import KNOWLEDGE_RERANK_SKIP_TOTAL
+
+        KNOWLEDGE_RERANK_SKIP_TOTAL.labels(node, reason).inc()
     except Exception:  # noqa: BLE001
         return

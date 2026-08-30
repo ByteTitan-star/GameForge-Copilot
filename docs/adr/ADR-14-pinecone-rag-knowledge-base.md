@@ -1,6 +1,6 @@
 # ADR-14: Pinecone RAG Knowledge Base（Agent 动态知识注入）
 
-* Status: **Proposed**
+* Status: **Accepted**
 * Date: 2026-08-26
 * Author: Auto（依 Owner 规划起草）
 * Related: ADR-02（Preference）、ADR-04（Conversation SoT）、ADR-06（Semantic Cache / Pinecone）、`ContextBuilder`

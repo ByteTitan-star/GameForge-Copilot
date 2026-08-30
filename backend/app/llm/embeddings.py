@@ -34,13 +34,15 @@ async def embed_texts(texts: Sequence[str]) -> list[list[float]] | None:
         "authorization": f"Bearer {settings.embedding_apikey.strip()}",
         "content-type": "application/json",
     }
+    from app.core.http_client import get_http_client
+
     body = {"model": settings.embedding_model.strip(), "input": cleaned}
     timeout = httpx.Timeout(settings.embedding_timeout_s)
     try:
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-            resp = await client.post(url, headers=headers, json=body)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_http_client()
+        resp = await client.post(url, headers=headers, json=body, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         log.warning("embedding request failed: %s", type(exc).__name__)
         return None

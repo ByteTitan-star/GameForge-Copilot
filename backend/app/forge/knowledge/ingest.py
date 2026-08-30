@@ -14,7 +14,7 @@ from app.forge.knowledge.guards import (
     current_embedding_version_tag,
     validate_embedding_model_configured,
 )
-from app.forge.knowledge.pinecone_store import get_knowledge_pinecone_store
+from app.forge.knowledge.pinecone_store import get_knowledge_writer
 from app.forge.knowledge.schema import metadata_validation_error
 from app.llm.embeddings import embed_one
 
@@ -132,7 +132,7 @@ async def upsert_knowledge_chunk(
     source_kind: str = "curated",
     locale: str = "zh-CN",
 ) -> bool:
-    store = get_knowledge_pinecone_store()
+    store = get_knowledge_writer()
     if store is None:
         return False
     body = text.strip()
@@ -213,7 +213,7 @@ async def ingest_corpus(
             errors=(),
         )
 
-    if get_knowledge_pinecone_store() is None:
+    if get_knowledge_writer() is None:
         return IngestResult(
             total=len(chunks),
             upserted=0,
