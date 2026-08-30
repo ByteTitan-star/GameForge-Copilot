@@ -1,5 +1,10 @@
 # ADR-07: Production Security Baseline
 
+> **【安全阅读 · 第 8 步选读 · 约 30–45min · 与「内容护栏」正交】**
+> 内容审核看 `forge/guard.py`（A 线）；本文是上线前基线（B 线）：密钥 / manifest / 认证 / SSRF / Dev 路由 / 配额试用。
+> 代码落点：`llm/url_safety.py`、`forge/build/manifest.py`、`config.dev_routes_enabled`。
+> 完整顺序见 `backend/app/forge/guard.py` 文件头。
+
 * Status: **Accepted**
 * Date: 2026-08-16
 * Accepted-by: ByteTitan-star

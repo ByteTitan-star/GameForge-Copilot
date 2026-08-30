@@ -1,5 +1,9 @@
 # ADR-02: Preference Retention
 
+> **【赶时间 · 偏好记忆第 0 步 · 约 8min】**
+> Explicit 用户级保留；Inferred 不覆盖 Explicit；清偏好全删；active≤50。
+> 读完去 `backend/app/forge/memory/__init__.py` 看完整文件顺序。
+
 * Status: **Accepted**
 * Date: 2026-08-16
 * Accepted-by: ByteTitan-star

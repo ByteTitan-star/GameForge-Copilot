@@ -1,5 +1,10 @@
 # CodeQaLoop：可交互冒烟硬门禁设计
 
+> **【3 小时上手 · 第 0 步 · 约 20min · 先读本文再碰代码】**
+> 读法：只抓 §1 目标 + 已锁定决策表 + Attempt 定义；细节章节有空再翻。
+> 读完立刻去：`backend/app/forge/subgraphs/code_qa_loop.py`（第 1 步）。
+> 完整顺序见该文件顶部「3 小时上手 · CodeQaLoop 阅读顺序」。
+
 * 日期：2026-08-15
 * 状态：已钉死歧义，待实现（实现计划见 `docs/superpowers/plans/2026-08-15-code-qa-loop.md`）
 * 关联代码：`backend/app/forge/graph.py`、`backend/app/sandbox/playtest.py`、`backend/app/forge/build/`、`backend/app/core/config.py`
