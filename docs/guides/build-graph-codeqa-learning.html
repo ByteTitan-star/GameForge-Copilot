@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GameForge · _build_graph &amp; CodeQaLoop 学习站</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "neutral",
+      flowchart: { curve: "basis", htmlLabels: true },
+      securityLevel: "loose",
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --panel: #ffffff;
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #ddd8ce;
+      --accent: #0b5fff;
+      --ok: #0d7a4f;
+      --warn: #9a5b00;
+      --hitl: #6b2d8b;
+      --code: #1e3a5f;
+      --mono: "Cascadia Code", "SF Mono", Consolas, monospace;
+      --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      background: #111;
+      color: #eee;
+      padding: 20px 14px;
+    }
+    nav h1 {
+      font-size: 15px;
+      margin: 0 0 4px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    nav .sub {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 18px;
+    }
+    nav a {
+      display: block;
+      color: #ccc;
+      text-decoration: none;
+      font-size: 13px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      margin-bottom: 2px;
+    }
+    nav a:hover { background: #222; color: #fff; }
+    nav .group {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #777;
+      margin: 14px 10px 6px;
+    }
+    main {
+      padding: 28px 36px 80px;
+      max-width: 920px;
+    }
+    h2 {
+      font-size: 22px;
+      margin: 0 0 12px;
+      padding-top: 8px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+    }
+    h3 { font-size: 16px; margin: 22px 0 10px; }
+    p, li { font-size: 14.5px; color: var(--ink); }
+    .muted { color: var(--muted); }
+    .lead {
+      font-size: 15.5px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 0 0 18px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 12px 0;
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: relative; height: auto; }
+      .grid2 { grid-template-columns: 1fr; }
+      main { padding: 20px; }
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th { background: #efece4; font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    code, .path {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      background: #efece4;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    pre {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: #1b1f24;
+      color: #e8e6e3;
+      padding: 14px;
+      border-radius: 10px;
+      overflow: auto;
+      line-height: 1.45;
+    }
+    .mermaid {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 12px 0 20px;
+      overflow-x: auto;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      font-weight: 600;
+    }
+    .tag-hitl { background: #f3e8ff; color: var(--hitl); }
+    .tag-ok { background: #e3f6ec; color: var(--ok); }
+    .tag-warn { background: #fff1d6; color: var(--warn); }
+    .tag-code { background: #e4eefc; color: var(--code); }
+    .tag-end { background: #ececec; color: #444; }
+    section { margin-bottom: 48px; }
+    .steps { counter-reset: step; list-style: none; padding: 0; }
+    .steps li {
+      position: relative;
+      padding: 10px 12px 10px 48px;
+      margin-bottom: 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .steps li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 12px;
+      top: 10px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav>
+      <h1>_build_graph 学习站</h1>
+      <div class="sub">本地静态页 · 对照 graph.py</div>
+      <div class="group">总览</div>
+      <a href="#intro">这页讲什么</a>
+      <a href="#one-liner">一句话心智模型</a>
+      <div class="group">主图</div>
+      <a href="#main-topo">主图拓扑</a>
+      <a href="#nodes">8 个节点干什么</a>
+      <a href="#route-start">route_start 入口</a>
+      <a href="#edges">条件边 after_*</a>
+      <a href="#hitl-breaks">HITL 断点</a>
+      <div class="group">子图</div>
+      <a href="#wrapper">code_qa_loop_node 包装</a>
+      <a href="#sub-topo">CodeQaLoop 拓扑</a>
+      <a href="#after-code">after_code_or_repair</a>
+      <a href="#after-play">after_playtest</a>
+      <a href="#happy-sad">成功 / 耗尽路径</a>
+      <div class="group">对照</div>
+      <a href="#files">读哪些文件</a>
+      <a href="#faq">常见误解</a>
+    </nav>
+
+    <main>
+      <section id="intro">
+        <h2>这页讲什么</h2>
+        <p class="lead">
+          专门拆 <code>_build_graph(ctx)</code>：它如何把 <strong>主图 8 节点</strong>拼起来，
+          以及主图里的 <code>code_qa_loop</code> 节点如何再嵌套
+          <strong>CodeQaLoop 子图</strong>（code ↔ playtest ↔ diagnose）。
+          用浏览器打开本 HTML 即可；对照源码：
+          <span class="path">backend/app/forge/graph.py</span>、
+          <span class="path">subgraphs/code_qa_loop.py</span>。
+        </p>
+      </section>
+
+      <section id="one-liner">
+        <h2>一句话心智模型</h2>
+        <div class="card">
+          <p style="margin:0">
+            <strong>主图</strong>管产品流水线：策划 →（HITL）→ 美术 →（HITL）→
+            <em>CodeQaLoop</em> → promote → done。<br />
+            <strong>子图</strong>只管「写出可试玩候选并冒烟通过」，最多有限次 attempt；
+            通过交给主图 promote，耗尽交给主图 <code>_pause_hitl(qa_failed|sandbox_failed)</code>。
+          </p>
+        </div>
+        <div class="mermaid">
+flowchart LR
+  U[用户需求] --> M[主图 _build_graph]
+  M --> P[plan / art]
+  P --> H1[HITL 确认]
+  H1 --> S[code_qa_loop 节点]
+  S --> L[子图 CodeQaLoop]
+  L -->|qa_ok| D[done / promote]
+  L -->|exhausted| H2[HITL qa_failed]
+        </div>
+      </section>
+
+      <section id="main-topo">
+        <h2>主图拓扑（_build_graph 装的就是这个）</h2>
+        <p class="muted">对应 <code>g = StateGraph(ForgeState)</code> + <code>add_node</code> + <code>add_conditional_edges</code> + <code>compile()</code>。</p>
+        <div class="mermaid">
+flowchart TD
+  START([START]) --> RS{route_start}
+  RS -->|首次/大改| plan
+  RS -->|改策划| revise_plan
+  RS -->|小改有版本| code_qa_loop
+  RS -->|纯问答| chat_reply
+  RS -->|resume plan_confirm 同意| art_options
+  RS -->|resume plan_confirm 修改| revise_plan
+  RS -->|resume art_confirm 同意| art_detail
+  RS -->|resume art_confirm 修改| revise_art_options
+  RS -->|resume qa_failed| code_qa_loop
+
+  plan --> EP([END 等人 HITL])
+  revise_plan --> EP
+  chat_reply --> END1([END DONE])
+
+  art_options -->|未 pause| code_qa_loop
+  art_options -->|paused| EA([END HITL])
+  revise_art_options -->|未 pause| code_qa_loop
+  revise_art_options -->|paused| EA
+  art_detail -->|未 pause| code_qa_loop
+  art_detail -->|paused| EA
+
+  code_qa_loop -->|qa_ok| done
+  code_qa_loop -->|否| EQ([END 通常已 HITL])
+  done --> END2([END])
+        </div>
+        <p>
+          注意：<code>plan</code> / <code>revise_plan</code> 的边永远进
+          <code>END</code>——因为节点内部已经 <code>_pause_hitl(plan_confirm)</code>，
+          图这次 invoke 结束，等人点了再 <code>resume</code> 进下一截。
+        </p>
+      </section>
+
+      <section id="nodes">
+        <h2>主图 8 个节点分别干什么</h2>
+        <table>
+          <thead>
+            <tr><th>节点</th><th>干什么</th><th>典型暂停</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>chat_reply</code></td>
+              <td>已有版本时纯问答，不跑生成全流程</td>
+              <td>直接 DONE</td>
+            </tr>
+            <tr>
+              <td><code>plan</code></td>
+              <td>生成策划稿 design_doc</td>
+              <td><span class="tag tag-hitl">HITL</span> plan_confirm</td>
+            </tr>
+            <tr>
+              <td><code>revise_plan</code></td>
+              <td>按用户修改意见改策划</td>
+              <td><span class="tag tag-hitl">HITL</span> plan_confirm</td>
+            </tr>
+            <tr>
+              <td><code>art_options</code></td>
+              <td>生成多套美术方向</td>
+              <td><span class="tag tag-hitl">HITL</span> art_confirm</td>
+            </tr>
+            <tr>
+              <td><code>revise_art_options</code></td>
+              <td>按意见改美术选项</td>
+              <td><span class="tag tag-hitl">HITL</span> art_confirm</td>
+            </tr>
+            <tr>
+              <td><code>art_detail</code></td>
+              <td>选定方向后写详细美术稿 / 素材</td>
+              <td>成功则进 CodeQaLoop；失败可 pause</td>
+            </tr>
+            <tr>
+              <td><code>code_qa_loop</code></td>
+              <td><strong>包装并 ainvoke 子图</strong>；成功则 promote</td>
+              <td>耗尽 → qa_failed / sandbox_failed HITL</td>
+            </tr>
+            <tr>
+              <td><code>done</code></td>
+              <td>标 DONE、写完成消息、清 checkpoint</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="muted" style="margin-top:10px">
+          每个 <code>add_node</code> 还可挂 Timeout / RetryPolicy（<code>_node_kwargs</code> →
+          <code>reliability/policy.py</code>）。策略 key：plan 族用 <code>"plan"</code>，art 族用
+          <code>"art"</code>，子图外墙用 <code>"code_qa_loop"</code>。
+        </p>
+      </section>
+
+      <section id="route-start">
+        <h2>route_start：从哪开始跑</h2>
+        <p>挂在 <code>START → conditional_edges</code>，<strong>没有</strong>单独的 entry_router 节点。</p>
+        <div class="grid2">
+          <div class="card">
+            <h3 style="margin-top:0">非 resume（新 invoke）</h3>
+            <ul>
+              <li><code>entry_phase=chat</code> → chat_reply</li>
+              <li><code>entry_phase=code</code> → code_qa_loop（小改）</li>
+              <li>默认 → plan</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">resume（HITL / 可恢复回来）</h3>
+            <ul>
+              <li>plan_confirm + 同意 → art_options</li>
+              <li>plan_confirm + 修改 → revise_plan</li>
+              <li>art_confirm + 同意 → art_detail</li>
+              <li>qa_failed / sandbox_failed → code_qa_loop</li>
+              <li>recoverable_error → 按 recovery.node 回 plan/art/code</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="edges">
+        <h2>条件边 after_*（主图为什么常 END）</h2>
+        <table>
+          <thead>
+            <tr><th>函数</th><th>行为</th><th>含义</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>after_plan</code></td>
+              <td>永远 → END</td>
+              <td>策划节点内已 HITL pause，本趟图结束</td>
+            </tr>
+            <tr>
+              <td><code>after_art</code></td>
+              <td>paused/failed → END；否则 → code_qa_loop</td>
+              <td>美术确认完才写码</td>
+            </tr>
+            <tr>
+              <td><code>after_code_qa</code></td>
+              <td>qa_ok → done；否则 → END</td>
+              <td>只有冒烟通过才收尾；否则通常已 HITL</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="hitl-breaks">
+        <h2>主图上的 HITL「断点」</h2>
+        <p>
+          LangGraph 一次 <code>ainvoke</code> 跑到 pause 就结束；用户操作后 worker
+          <code>resume_run</code> 再构图、从 checkpoint 续。
+        </p>
+        <ol class="steps">
+          <li>plan 成功 → <code>_pause_hitl(plan_confirm)</code> → 图 END</li>
+          <li>用户同意 → resume → art_options → <code>_pause_hitl(art_confirm)</code> → 图 END</li>
+          <li>用户选方向 → resume → art_detail → code_qa_loop（子图）</li>
+          <li>子图通过 → done；子图耗尽 → <code>_pause_hitl(qa_failed|sandbox_failed)</code></li>
+        </ol>
+      </section>
+
+      <section id="wrapper">
+        <h2>主图节点 code_qa_loop_node：如何嵌套子图</h2>
+        <p class="lead">
+          <code>_build_graph</code> 里的 <code>code_qa_loop</code>
+          <strong>不是</strong>把子图拓扑直接摊平到主图，而是一个包装函数：内部
+          <code>build_code_qa_loop(...).ainvoke(loop_in)</code>，跑完再根据结果 promote 或 HITL。
+        </p>
+        <div class="mermaid">
+sequenceDiagram
+  participant Main as 主图 code_qa_loop_node
+  participant Sub as 子图 build_code_qa_loop
+  participant Exec as code_qa_exec
+  Main->>Main: 拼 loop_in design_doc/art/attempt
+  Main->>Sub: ainvoke(loop_in)
+  Sub->>Exec: code_or_repair / playtest / diagnose
+  Exec-->>Sub: 更新 CodeQaLoopState
+  Sub-->>Main: qa_ok / exhausted / paused…
+  alt qa_ok
+    Main->>Main: promote_candidate 幂等
+    Main-->>Main: 返回 qa_ok → after_code_qa → done
+  else exhausted
+    Main->>Main: _pause_hitl qa_failed/sandbox_failed
+    Main-->>Main: END
+  end
+        </div>
+        <pre>subgraph = build_code_qa_loop(
+    code_or_repair=code_or_repair_node,  # → execute_code_or_repair
+    playtest=playtest_node,              # → execute_playtest
+    diagnose=diagnose_node,              # → execute_diagnose
+)
+result = await subgraph.ainvoke(loop_in)</pre>
+        <p>
+          三个业务节点的<strong>实现</strong>在
+          <code>code_qa_exec.py</code>；子图文件只编排边，且
+          <strong>禁止</strong>在子图里改 <code>run.status</code> / 调 <code>_fail</code>。
+        </p>
+      </section>
+
+      <section id="sub-topo">
+        <h2>CodeQaLoop 子图拓扑</h2>
+        <p class="muted">文件：<code>backend/app/forge/subgraphs/code_qa_loop.py</code> · 状态：<code>CodeQaLoopState</code></p>
+        <div class="mermaid">
+flowchart TD
+  START([START]) --> COR[code_or_repair]
+  COR -->|candidate_ready| PT[playtest]
+  COR -->|输出截断 retry| COR
+  COR -->|其它失败| DG[diagnose]
+  COR -->|attempt 耗尽| EX[mark_exhausted]
+  COR -->|paused/failed| SEND([END 交主图])
+
+  PT -->|qa_ok| OK[mark_ok]
+  PT -->|infra 临时| IR[infra_replay]
+  PT -->|infra 永久 / 次数满| EX
+  PT -->|产品问题| DG
+  PT -->|paused| SEND
+
+  IR --> PT
+  DG -->|默认| COR
+  DG -->|paused| SEND
+  OK --> END1([END qa_ok])
+  EX --> END2([END exhausted])
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <h3 style="margin-top:0">业务三节点</h3>
+            <ul>
+              <li><span class="tag tag-code">code_or_repair</span> 生成/修复代码 → candidate</li>
+              <li><span class="tag tag-code">playtest</span> Playwright 冒烟</li>
+              <li><span class="tag tag-code">diagnose</span> 分析失败原因给下一轮</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">控制三节点</h3>
+            <ul>
+              <li><code>infra_replay</code>：attempt+1，同 candidate 再试玩</li>
+              <li><code>mark_ok</code>：qa_ok=True</li>
+              <li><code>mark_exhausted</code>：exhausted=True，主图去 HITL</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="after-code">
+        <h2>after_code_or_repair（写码之后往哪走）</h2>
+        <table>
+          <thead><tr><th>条件（优先级从上到下）</th><th>去向</th></tr></thead>
+          <tbody>
+            <tr><td>paused / failed / hitl_stop</td><td>END</td></tr>
+            <tr><td>candidate_ready</td><td>playtest</td></tr>
+            <tr><td>attempt ≥ max</td><td>mark_exhausted</td></tr>
+            <tr><td>输出截断错误</td><td>再 code_or_repair（retry）</td></tr>
+            <tr><td>其它（如 build 失败）</td><td>diagnose</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="after-play">
+        <h2>after_playtest（试玩之后往哪走）</h2>
+        <table>
+          <thead><tr><th>条件</th><th>去向</th></tr></thead>
+          <tbody>
+            <tr><td>qa_ok</td><td><span class="tag tag-ok">mark_ok</span></td></tr>
+            <tr><td>attempt 耗尽</td><td>mark_exhausted</td></tr>
+            <tr><td>failure_kind=infra 且永久错误</td><td>立刻 exhausted（别空转）</td></tr>
+            <tr><td>failure_kind=infra 临时</td><td>infra_replay → 再 playtest</td></tr>
+            <tr><td>产品/实现问题</td><td>diagnose → 再 code_or_repair</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">成功标准是 B 档：真实可交互冒烟通过，不能用静态 DOM 检查冒充 qa_ok。</p>
+      </section>
+
+      <section id="happy-sad">
+        <h2>成功 vs 耗尽（接回主图）</h2>
+        <div class="grid2">
+          <div class="card">
+            <h3 style="margin-top:0"><span class="tag tag-ok">成功</span></h3>
+            <ol>
+              <li>子图 mark_ok → END，result.qa_ok=True</li>
+              <li>主图幂等 <code>promote_candidate</code></li>
+              <li><code>after_code_qa</code> → done</li>
+              <li>done：DONE、清 checkpoint、推完成事件</li>
+            </ol>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0"><span class="tag tag-hitl">耗尽</span></h3>
+            <ol>
+              <li>子图 mark_exhausted → END</li>
+              <li>主图写 failure report</li>
+              <li>infra → <code>sandbox_failed</code> HITL<br />其它 → <code>qa_failed</code> HITL</li>
+              <li>用户可再 resume 进 code_qa_loop（常带 code_qa_reset）</li>
+            </ol>
+          </div>
+        </div>
+        <div class="card">
+          <strong>口诀：</strong>
+          <code>previewable ≠ publishable</code>；
+          <code>build_ok ≠ qa_ok</code>；
+          只有 <code>qa_ok</code> 才进 done / 可发布。
+        </div>
+      </section>
+
+      <section id="files">
+        <h2>建议阅读顺序（对着本页）</h2>
+        <ol class="steps">
+          <li><code>graph.py</code> → 搜 <code>_build_graph</code>，只看 add_node / 边（本节主图）</li>
+          <li>同文件 → <code>route_start</code>、<code>after_plan/art/code_qa</code></li>
+          <li>同文件 → <code>code_qa_loop_node</code>（包装与 promote / HITL）</li>
+          <li><code>subgraphs/code_qa_loop.py</code> 全文（拓扑 + after_*）</li>
+          <li><code>code_qa_exec.py</code> 三个 <code>execute_*</code>（真正 IO）</li>
+          <li>选读 <code>sandbox/playtest.py</code>、<code>reliability/policy.py</code></li>
+        </ol>
+      </section>
+
+      <section id="faq">
+        <h2>常见误解</h2>
+        <table>
+          <thead><tr><th>误解</th><th>实际</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>主图有 8 个节点 = 一口气跑完</td>
+              <td>中间多次 HITL pause，一次 worker 任务往往只跑一截</td>
+            </tr>
+            <tr>
+              <td>CodeQaLoop 是主图上的三个独立节点</td>
+              <td>主图只有一个 <code>code_qa_loop</code>；内部再 compile 子图</td>
+            </tr>
+            <tr>
+              <td>QA 失败走 _pause_recoverable</td>
+              <td>预算耗尽走 <strong>_pause_hitl</strong>；recoverable 是异常/超时另一条通道</td>
+            </tr>
+            <tr>
+              <td>子图失败会直接把 run 标 FAILED</td>
+              <td>子图不改 run.status；由主图决定 promote 或 HITL</td>
+            </tr>
+            <tr>
+              <td>entry_router 是图上的一个 node</td>
+              <td>只是 START 上的 <code>route_start</code> 条件边</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <p class="muted" style="margin-top:40px">
+        本地学习页 · 勿当作产品文档发布 · 源码以仓库为准 · 2026-08-30
+      </p>
+    </main>
+  </div>
+</body>
+</html>
