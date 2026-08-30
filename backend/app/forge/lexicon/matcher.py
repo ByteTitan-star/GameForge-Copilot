@@ -1,4 +1,11 @@
-"""词库加载与 AC 扫描：allow 掩码后扫 block/suspect，按目录 mtime 热加载。"""
+"""词库加载与 AC 扫描：allow 掩码后扫 block/suspect，按目录 mtime 热加载。
+
+【学习要点】
+  block  → 即决拦截（与 blacklist 命中同级）
+  suspect → 灰名单，不即决，迫使 Guard.audit 走 LLM
+  allow  → 先掩码，减少游戏语境误伤
+被 quick_filter() 调用；开关 audit_lexicon_enabled。
+"""
 
 from __future__ import annotations
 
@@ -7,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-import ahocorasick
+import ahocorasick  # type: ignore[import-not-found]
 
 from app.core.config import settings
 from app.forge.lexicon.normalize import normalize
@@ -67,11 +74,7 @@ class LexiconMatcher:
         root = _lexicon_root()
         mtime = _dir_mtime(root)
         root_key = str(root)
-        if (
-            _cached is not None
-            and _cached_mtime == mtime
-            and _cached_dir == root_key
-        ):
+        if _cached is not None and _cached_mtime == mtime and _cached_dir == root_key:
             return _cached
 
         matcher = cls._build(root)

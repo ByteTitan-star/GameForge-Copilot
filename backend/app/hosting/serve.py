@@ -1,4 +1,8 @@
-"""产物静态文件 serving 共用逻辑（P3 多文件 Hosting）。"""
+"""产物静态文件 serving 共用逻辑（P3 多文件 Hosting）。
+
+【安全护栏第 5 步续】artifact_csp() 按单 HTML / Vite dist 选 CSP；
+实际策略在 core/cdn_policy.build_csp*。禁止直接 serve source/、build/ 前缀。
+"""
 
 from __future__ import annotations
 

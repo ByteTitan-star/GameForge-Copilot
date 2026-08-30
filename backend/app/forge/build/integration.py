@@ -1,4 +1,16 @@
-"""graph 与构建链的集成入口，避免 graph.py 直接堆构建细节。"""
+"""graph 与构建链的集成入口，避免 graph.py 直接堆构建细节。
+
+【本文件 = CodeQaLoop 阅读顺序第 8 步选读 · 约 15min】
+────────────────────────────────────────
+属于 execute_code_or_repair 内部的「单次 attempt 构建内环」：
+  parse_llm_code_output / run_project_build_loop / with_design_routing …
+
+注意预算正交：
+  CodeQaLoop 外层：code_qa_max_attempts（默认 3）
+  本文件内环：build_max_retries（单次 attempt 内 Vite 修复次数）
+
+时间不够可跳过；知道「构建失败 → failure_kind=build → diagnose」即可。
+"""
 
 from __future__ import annotations
 

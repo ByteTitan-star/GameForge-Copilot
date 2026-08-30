@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     max_published_per_user: int = 50  # 每用户已发布游戏数上限
     system_daily_token_alert: int = 5_000_000  # 系统日用量告警阈值
     # CodeQaLoop 总 attempt（含首次 generate）；infra/product/build 共用此预算。
+    # 【学习】阅读顺序第 7 步对照 policy.resolve_node_run_timeout("code_qa_loop")
     code_qa_max_attempts: int = 3
     # 单次 Forge Run 累计 LLM tokens 上限（input+output）；<=0 关闭。
     forge_run_max_tokens: int = 500_000
@@ -126,7 +127,7 @@ class Settings(BaseSettings):
     memory_context_builder: bool = True
     # P5：遗留 concat 已拆除；flag 仅兼容配置，不再切换拼装路径
     memory_context_enforcement: bool = True
-    # P1 Memory：注入/写入 Explicit Preferences
+    # 【偏好记忆】开关：关则 upsert_preferences_from_text 直接空返回
     memory_preferences: bool = True
     # 从对话推断弱偏好；不得覆盖 Explicit；与 Explicit 合计最多 N 条 active
     memory_preferences_inferred: bool = True
@@ -134,7 +135,7 @@ class Settings(BaseSettings):
     # P1 Memory：ContextBuilder 总 token 预算（后续用 trace 标定）
     memory_context_budget_tokens: int = 4000
 
-    # P1 Memory：超阈时刷新并持久化 Session Summary
+    # P1 Memory：超阈时刷新并持久化 Session Summary（会话级，非长期偏好）
     memory_session_summary: bool = True
     # Session Summary 优先 LLM（失败回落确定性）
     memory_session_summary_llm: bool = True
@@ -271,8 +272,11 @@ class Settings(BaseSettings):
     # 避免思考链占满 max_tokens。需深度推理置 false。
     llm_disable_thinking: bool = True
 
+    # ── 安全护栏阅读第 3 步：audit_* / stream_*（约 10min）──
+    # 完整顺序见 forge/guard.py。关 stream_enabled → 无打字机且无输出审核路径。
+    # audit_enabled=False 或（无 model 且快筛关）→ NoopGuard。
     # 流式输出（打字机）：complete_stream 微批 LLM_DELTA 事件给前端。关闭则 run_streamed_llm
-    # 退化为非流式 _llm（流式体验与输出审核都停）。docs/护栏机制设计。
+    # 退化为非流式 _llm（流式体验与输出审核都停）。
     stream_enabled: bool = True
     stream_batch_chars: int = 4  # 微批字符数：攒够这么多字发一个 LLM_DELTA
     stream_batch_ms: int = 80  # 微批时间窗（ms）：超时强制 flush，避免末批滞留
@@ -300,6 +304,7 @@ class Settings(BaseSettings):
     # 全局
     env: str = "development"
     # ADR-07 P1-20：dev 调试路由显式开关（默认关；本地/pytest 在 .env 或 conftest 打开）
+    # 【第 8 步 B 线】生产绝不能为 True
     dev_routes_enabled: bool = False
     log_level: str = "INFO"
     # 落盘目录：空=仓库根 logs/；-=仅 stdout（pytest）

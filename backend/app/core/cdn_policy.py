@@ -1,15 +1,15 @@
 """CDN 资源策略：用一份白名单统一管控 LLM 生成游戏可引用的外链域名。
 
-被三方共用，单一改点：
-- app.hosting.routes：build_csp() 生成产物 iframe 的 CSP 头；
-- app.forge.prompts：白名单注入代码生成提示词；
-- app.sandbox.playtest：validate_refs() 在试玩前拦截非白名单 CDN。
+【安全护栏阅读顺序 · 第 5 步 · 约 20min】
+────────────────────────────────────────
+内容审核拦「文本恶意」；本文件拦「产物跑任意外站脚本」（XSS/供应链面）。
+三方共用同一 ALLOWED_CDN_HOSTS（改一处三处生效）：
+  - hosting：build_csp() → iframe CSP
+  - prompts：白名单写进代码生成提示
+  - playtest：validate_refs() 试玩前拦截
 
-收敛此前放行整个 https: 的宽松策略——任意外站脚本不再能跑进产物 iframe，
-XSS 面收窄；游戏仍可引用 three.js / tailwind / 字体等公共库保证渲染质量。
-
-设计取舍：仅提取 HTML 属性（src/href）中的 http(s) 绝对外链；不解析 CSS
-url()、不处理 importmap（当前生成产物是单 HTML 内联结构）。
+单 HTML 允许白名单 CDN；Vite dist 默认应自包含（validate_dist_self_contained）。
+完整顺序见 forge/guard.py 文件头。
 """
 
 from __future__ import annotations

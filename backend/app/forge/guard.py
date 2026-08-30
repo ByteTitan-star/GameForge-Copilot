@@ -1,15 +1,35 @@
 """护栏机制：流式输出 + 后台并行安全审核 + 命中即中断。
 
-设计见 docs/护栏机制设计（plan: giggly-watching-raven）。核心：
-- quick_filter：正则前置快筛（命中即决，零成本），拦 80% 典型越狱/恶意代码。
-- Guard.audit：快筛未命中再调平台预设审核模型（非流式 provider.complete，0/1 判定）。
-- run_streamed_llm：编排——输入审核与输出审核均为后台并行 task（不阻塞 token 流），
-  消费 call_llm_stream 流边攒全文边微批发 LLM_DELTA、审核窗到期把窗口丢给后台
-  asyncio.Task → 命中发 ATTACKED 后 raise ContentAttacked，由 run_generation 既有
-  except 把 run 置 FAILED。滑窗周期/长度由 admin 后台可配（DB 优先 env 兜底）。
+【3 小时上手 · 安全护栏阅读顺序（严格按序）】
+────────────────────────────────────────
+本仓库「安全」分两条线，别混着读：
 
-审核模型不可用（超时/限流/key 错）→ 强制走正则快筛（_QUICK_PATTERNS）降级。
-审核模型输出非 0/1 → 带软提示重试至多 3 次，仍失败则放行。
+  A. 内容护栏（本文件主导，生成链路：越狱/敏感词/恶意代码/产物 XSS）
+  B. 生产安全基线（ADR-07：密钥/SSRF/OAuth/试用配额…）——第 8 步选读
+
+── A 线（约 2h，优先）──
+第 0 步(10min)  【本文件】先读完本导读 + 下方「设计」四条，建立分层心智
+第 1 步(35min)  【本文件】按符号读：quick_filter → Guard.audit →
+                run_streamed_llm_result → ContentAttacked
+第 2 步(20min)  blacklist.txt + lexicon/（matcher.py / normalize.py）
+                ← 正则快筛 vs AC 词库分工
+第 3 步(10min)  core/config.py 搜 audit_*
+                ← 开关、滑窗、超时、词库目录
+第 4 步(20min)  graph.py：_wrap_user_input / _streamed_llm_or_fallback /
+                except ContentAttacked（搜 ContentAttacked）
+                ← 注入包装 + 命中后如何 FAILED
+第 5 步(20min)  core/cdn_policy.py + hosting/serve.py（CSP）
+                ← 产物外链白名单与 iframe CSP
+第 6 步(10min)  failure.py（POLICY_SECURITY）+ reliability/errors.py（SecurityViolation）
+第 7 步(选读)  docs/evals/security-eval-report.md / tests/forge/guard/
+第 8 步(选读)  ADR-07 + llm/url_safety.py + build/manifest.merge_workspace
+                ← 生产基线，与内容审核正交
+
+设计（分层，命中即停）：
+- quick_filter：正则 blacklist + AC 词库（命中即决，零/低成本）
+- Guard.audit：快筛未决再调审核模型（非流式 0/1）
+- run_streamed_llm：输入/输出审核后台并行，不阻塞打字机；命中 raise ContentAttacked
+- 审核模型不可用 → 强制正则快筛降级；非 0/1 输出最多软提示重试 3 次后放行
 """
 
 from __future__ import annotations
@@ -180,9 +200,10 @@ def _decode_encoded_input(text: str) -> list[str]:
 
 
 class ContentAttacked(Exception):
-    """审核命中（输入或输出）。在节点内 raise → run_generation 既有 except 捕获置 FAILED。
+    """【第 1 步必读】审核命中（输入或输出）。
 
-    携带 category/reason/evidence/side，供失败 message 与事件 payload 组装。
+    节点内 raise → run_generation except 捕获 → run FAILED + WS ATTACKED。
+    不进 LangGraph RetryPolicy（policy._default_retry_on 已排除）。
     """
 
     def __init__(
@@ -202,18 +223,20 @@ class ContentAttacked(Exception):
 
 @dataclass
 class AuditResult:
-    is_malicious: bool
-    category: str = "none"
-    reason: str = ""
-    evidence: str = ""
-    suspected: bool = False  # 灰名单命中：不即决，交 Guard.audit 强制 LLM
+    """单次审核结论。is_malicious 即决；suspected 仅升级 LLM，不即决。"""
+
+    is_malicious: bool  # True=立刻拦截（raise ContentAttacked）
+    category: str = "none"  # 命中分类：jailbreak / porn / terrorism …
+    reason: str = ""  # 给人看的原因简述
+    evidence: str = ""  # 命中片段/关键词（落审计用，勿随意对外展示全量）
+    suspected: bool = False  # 灰名单：不即决，强制走 Guard.audit LLM
 
 
 def quick_filter(text: str, *, force: bool = False) -> AuditResult | None:
-    """快筛：原文 blacklist → AC block（即决）/ suspect（疑似，不即决）。
+    """【第 1 步】快筛流水线：原文 blacklist → AC block（即决）/ suspect（升级 LLM）。
 
-    force=True 时忽略 audit_quick_filter 开关（审核 LLM 不可用时的强制降级路径）。
-    返回值约定：is_malicious=True 即决拦截；suspected=True 仅提示升级 LLM。
+    force=True 忽略 audit_quick_filter 开关（审核 LLM 挂了时的强制降级）。
+    返回 None = 未命中；is_malicious=True = 即决拦；suspected=True = 不拦但逼 LLM。
     """
     if not text:
         return None
@@ -592,7 +615,17 @@ async def run_streamed_llm_result(
     kind: str | None = None,
     max_tokens: int | None = None,
 ) -> llm_provider.LLMCompletion:
-    """同 run_streamed_llm，但返回 LLMCompletion（含 usage / finish_reason）。"""
+    """【第 1 步编排核心】流式生成 + 并行审核。
+
+    流程概要：
+      1. build_guard → Guard 或 NoopGuard
+      2. 启动输入审核后台 task（user_msg）
+      3. 消费 token 流：微批 LLM_DELTA；按 interval/min_chars 滑窗丢给输出审核 task
+      4. 任一审核命中 → ATTACKED 事件 + raise ContentAttacked
+      5. 流结束前 wait 在途审核（受 audit_request_timeout）
+
+    被 graph._streamed_llm_or_fallback 在 stream_enabled=True 时调用。
+    """
     guard = await build_guard(ctx)
 
     # 1) 输入审核与生成流并行（异步，不阻塞首 token）；命中即中断，语义同输出侧。

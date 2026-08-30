@@ -1,4 +1,8 @@
-"""Build Manifest Generator：平台侧生成 package.json / vite.config 等（§8）。"""
+"""Build Manifest Generator：平台侧生成 package.json / vite.config 等（§8）。
+
+【安全阅读第 8 步 B 线】PROTECTED_WORKSPACE_* + merge_workspace：
+LLM 产物不得覆盖平台 manifest（ADR-07 P0-2），否则可绕过 allowBuilds。
+"""
 
 from __future__ import annotations
 

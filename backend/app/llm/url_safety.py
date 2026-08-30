@@ -1,4 +1,11 @@
-"""Validate user-supplied LLM base_url against SSRF (ADR-07 P1-19)."""
+"""Validate user-supplied LLM base_url against SSRF (ADR-07 P1-19).
+
+【安全护栏阅读顺序 · 第 8 步选读 · 生产基线】
+────────────────────────────────────────
+与内容护栏正交：防用户把 openai_compat base_url 指到内网/云 metadata。
+协议白名单（生产仅 https）+ 私网/环回/链路本地黑名单。
+完整 A/B 线顺序见 forge/guard.py；决策见 docs/adr/ADR-07-production-security-baseline.md。
+"""
 
 from __future__ import annotations
 

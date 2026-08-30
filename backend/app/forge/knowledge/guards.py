@@ -1,4 +1,9 @@
-"""Knowledge RAG 运行时防护（ADR-14 #147 P0）。"""
+"""Knowledge RAG 运行时防护（ADR-14 #147 P0）。
+
+【注意】这不是内容审核护栏（guard.py），而是知识库检索侧防护：
+  查询长度裁剪、embedding 维度/模型校验、最低相关分过滤。
+学内容护栏请走 forge/guard.py 阅读顺序；本文件属 ADR-14 选读。
+"""
 
 from __future__ import annotations
 
