@@ -7,8 +7,9 @@
 * Supersedes: [ADR-02](./ADR-02-preference-retention.md)、[ADR-06](./ADR-06-semantic-pinecone-and-preference-ops.md) §4 偏好相关决策
 
 > **范围：** 本文只描述 **当前已落地** 的用户长期偏好记忆（User Preference Memory）。
+> **成熟度：** v1 / early production 可上线；**不是**长期可演进的 Memory foundation。
 > **不包含：** Semantic Cache / Pinecone（仍见 ADR-06 缓存章节）、Session Summary、Knowledge RAG。
-> **目标态**（node 分桶 + 封闭 key catalog）见 Issue #162，未 Accept 前 **不得**当作现行行为。
+> **目标态：** 见 Issue #162（方向为 **Canonical Catalog + Policy + Resolver**；**不止**「加 node 列 + allowlist」）。未 Accept / 未落地前 **不得**当作现行行为。
 
 ---
 
@@ -19,11 +20,11 @@
 | 作用域 | **用户级**长期记忆；删 Game **不删**偏好；「清空偏好」删该用户全部行 |
 | 身份键 | `(user_id, category, key)`；`category` / `key` 均为 **开放字符串**（无 allowlist） |
 | 来源 | `source=explicit`（明确）\| `inferred`（弱推断）；**inferred 不得覆盖同键 explicit** |
-| 写入 | ① API `PUT /me/preferences`（强制 explicit）② Plan/Art 路径 LLM 抽取（ADR-06 时代约定，现归本 ADR） |
+| 写入 | ① API `PUT /me/preferences`（强制 explicit）② Plan/Art 路径 LLM 抽取 |
 | 抽取 | **仅轻量 chat LLM**；未配置 `preference_extract_*` → **不写库**；规则引擎不是正式路径 |
-| 读取 / 注入 | `list_active_preferences` 拉 **全部** active 行 → ContextBuilder 注入 Plan/Art 等节点（**不按节点过滤**） |
+| 读取 / 注入 | `list_active_preferences` 拉 **全部** active 行 → ContextBuilder（**不按节点过滤**） |
 | 上限 | active ≤ `memory_preferences_max_active`（默认 50）；超额 **物理删除** 最早 inferred，再删最早 explicit |
-| 注入语义 | 偏好是 **MEMORY_DATA**，不得当 instruction（防注入文案由 ContextBuilder 固定前缀保证） |
+| 注入语义 | 偏好是 **MEMORY_DATA**，不得当 instruction（ContextBuilder 固定前缀；**非**完整注入防护） |
 
 ---
 
@@ -52,7 +53,7 @@ Forge 需要跨 Game / 跨会话记住用户的长期创作偏好（如「像素
 | `user_id` | FK → `users.id` ON DELETE CASCADE |
 | `category` | 开放字符串，最长 64 |
 | `key` | 开放字符串，最长 64 |
-| `value_json` | JSON object |
+| `value_json` | JSON object（任意形状，仅要求为 object） |
 | `source` | `explicit` \| `inferred`（约定；DB 未 enum 强制） |
 | `confidence` | float，默认 1.0 |
 | `status` | 默认 `active`（列表 API / 注入只读 active） |
@@ -61,7 +62,7 @@ Forge 需要跨 Game / 跨会话记住用户的长期创作偏好（如「像素
 **唯一约束：** `uq_user_pref_user_cat_key` = `(user_id, category, key)`
 **索引：** `(user_id, status)` 点查 active。
 
-**没有：** node 维度、key allowlist、alias 归一化、staging 表。
+**没有：** node 维度、key allowlist、alias 归一化、staging 表、evidence / lineage、typed value schema。
 
 ### 3.2 保留与生命周期
 
@@ -141,7 +142,7 @@ Forge 需要跨 Game / 跨会话记住用户的长期创作偏好（如「像素
 2. `loader.build_node_context`：若 `memory_preferences`，把全部 active 行转成 dict 交给 `ContextBuilder`。
 3. `ContextBuilder`：
    * 格式：`- {category}.{key}={value_json}` 列表
-   * 段落标题：`【Explicit Preferences】`（文案未区分 inferred，但行内带 `source` 字段在 dict 中；格式化行 **未打印 source**）
+   * 段落标题：`【Explicit Preferences】`（文案未区分 inferred；格式化行 **未打印 source/confidence**）
    * 固定前缀声明 MEMORY_DATA，禁止当指令执行
    * 预算：preferences 约占 `memory_context_budget_tokens` 的 5%；超预算时与其它段一起裁剪
 
@@ -153,7 +154,7 @@ Forge 需要跨 Game / 跨会话记住用户的长期创作偏好（如「像素
 
 1. 取全部 active；若 `len ≤ cap` 返回。
 2. 排序键：`(0 if inferred else 1, updated_at|created_at)` —— inferred 优先删、同组删更旧。
-3. **物理 DELETE** 溢出行（非改 status=inactive）。
+3. **物理 DELETE** 溢出行（非改 status=inactive），**含 explicit**（inferred 删完后仍超额则会删 explicit）。
 
 ### 3.8 HTTP API
 
@@ -175,32 +176,84 @@ Schema：`backend/app/schemas/preferences.py`（开放 category/key，长度 1�
 | `game.session_summary_json` | 单 Game 会话摘要 | 否 |
 | `ForgeMessage` | 单 Game 对话 | 否（证据，非偏好槽位） |
 
-偏好抽取吃的是 **当次用户文本**；不替代 summary / recent turns。
+偏好抽取吃的是 **当次用户文本**；不替代 summary / recent turns。抽取器 **不**显式区分「长期偏好」与「仅本局任务指令」。
 
 ---
 
-## 4. 已知局限（As-Is 事实，非目标态）
+## 4. Architecture Invariants（现行保证 / 不保证）
 
-下列是现行设计的结构性后果，**不是**实现 bug 的独家名单；产品/架构 redesign 由 #162 跟踪。
+**现行保证：**
 
-1. **Key drift：** LLM 对同一意图可产出不同 `(category, key)`（如 `style` vs `theme`）→ 唯一键对不上 → INSERT 多行 → 矛盾偏好同时注入。
-2. **过宽注入：** 无 node 过滤；Art 可收到玩法难度类偏好，Plan 可收到纯美术槽位，浪费 token 并可能干扰生成。
-3. **开放 schema 漂移：** 野外已可见叙事式 key（如 `artistic_style.visual_expressiveness`），难治理、难做设置页稳定编辑。
-4. **格式化丢 source：** 注入文本行未展示 `source`/`confidence`，模型难以区分强弱信号。
-5. **无未知 key 拒收：** 抽取结果只要字段形状合法即入库。
+1. Preference **ownership = User**（非 Game / 非 Session）；删 Game 不删偏好。
+2. 同一精确 `(category, key)` 上，**Explicit dominates Inferred**（inferred 不得覆盖已有 explicit）。
+3. 注入侧声明偏好为 **MEMORY_DATA / data**，不得当作系统 instruction（提示层约束；见局限）。
+4. 未配置抽取模型或抽取失败时，**不自动写库**（fail-closed on write）。
+
+**现行不保证（架构债务，非遗漏文档）：**
+
+1. **不保证 semantic uniqueness**——开放字符串主键无法合并同义槽位。
+2. **不保证 node relevance**——全量 active 注入所有走 ContextBuilder 的节点。
+3. **不保证 explicit 永续**——active cap 在极端情况下会 **物理删除** explicit。
+4. **不保证 value 类型安全 / 注入面收敛**——`value_json` 可为任意 object。
+5. **不保证可解释 provenance**——无 evidence / message 溯源；upsert 覆盖历史。
 
 ---
 
-## 5. Consequences
+## 5. 已知局限（As-Is 事实，非目标态）
 
-* 新会话 / 新 Game：只要同一 `user_id`，即可注入 ≤50 条 active 偏好。
+下列是现行设计的结构性后果；产品/架构 redesign 由 #162 跟踪。
+
+1. **Key drift / 无 semantic uniqueness：** 同一意图可产出不同 `(category, key)` → INSERT 多行 → 矛盾偏好并存。
+2. **过宽注入：** 无相关性过滤；Art 可收到玩法偏好，Plan 可收到纯美术槽位。
+3. **开放 schema 漂移：** 叙事式 key 可入库，难治理、难做稳定设置页。
+4. **未知 key 不拒收：** 仅校验 JSON 形状即落库（LLM 实质在发明 schema）。
+5. **Extraction 与 Persistence 紧耦合：** 无独立 Candidate / Normalize / Policy 层。
+6. **Cap 可静默删除 explicit：** 超额时 inferred 删尽后仍可能 DELETE 用户明确偏好。
+7. **`status` 与 DELETE 语义不清：** 存在 `status` 字段，但 cap / clear 走物理删除；`inactive` 几乎无生命周期语义。
+8. **注入丢 source/confidence：** 模型难以区分强弱信号。
+9. **任意 `value_json` object：** 持久化内容可成为 prompt-injection 载体；MEMORY_DATA 文案只是第一层缓解。
+10. **长期偏好 vs 当次任务未区分：** 「这个游戏用水彩」可能污染 user-scoped 长期记忆。
+11. **无 evidence / lineage：** 无法回答「系统为何认为用户喜欢 hard」。
+
+---
+
+## 6. Non-goals（本 ADR）
+
+本 ADR **不**试图定义或落地：
+
+* Canonical preference ontology / closed catalog
+* Per-node relevance policy / Preference Resolver
+* Provenance history / evidence 表
+* Confidence decay / TTL
+* Mutation 语义（remove / correct / temporary override / do-not-remember）
+* 多 scope 继承（org / workspace / game-local）
+* 用向量库做 preference 主键或主检索
+
+以上归属 Issue #162 及后续 design / To-Be ADR。
+
+---
+
+## 7. Migration warning
+
+未来 #162（或后续 ADR）引入 **canonical `preference_key` catalog** 后：
+
+* **不能假设** 历史开放 `(category, key)` 均可一一映射到 catalog。
+* 未映射行需要 **映射表 / 归档只读 / 一次性丢弃** 之一（在 design 中显式选定）；禁止静默猜映射导致错误长期记忆。
+* Eval（#124）与 `/me/preferences` API shape 必须同步迁移；旧 runner 按开放键编写的场景会失效。
+
+---
+
+## 8. Consequences
+
+* 新会话 / 新 Game：同一 `user_id` 可注入 ≤50 条 active 偏好。
 * 运维：未配抽取模型时「看起来开了 Memory」但永不自动写偏好——属预期。
-* 评测：`eval/runners/preference_eval.py` / `#124` 按现行 `(category, key)` 契约编写；目标态变更后必须改数据集与 runner。
-* 文档：ADR-02、ADR-06 偏好章节 **废弃**；对外引用偏好记忆时 **只引用本 ADR**。Semantic Cache 仍引用 ADR-06 缓存章节（或后续独立 ADR）。
+* 评测：`eval/runners/preference_eval.py` / `#124` 按现行 `(category, key)` 契约；目标态变更后必须改数据集与 runner。
+* 文档：ADR-02、ADR-06 偏好章节 **废弃**；对外引用偏好记忆时 **只引用本 ADR**。Semantic Cache 仍引用 ADR-06 缓存章节。
+* 产品：可继续作为 v1 辅助体验运行；**不建议**在本开放 schema 上长期堆功能——演进见 #162。
 
 ---
 
-## 6. 代码地图
+## 9. 代码地图
 
 | 职责 | 路径 |
 | --- | --- |
@@ -216,19 +269,20 @@ Schema：`backend/app/schemas/preferences.py`（开放 category/key，长度 1�
 
 ---
 
-## 7. Verification（现行行为验收口径）
+## 10. Verification（现行行为验收口径）
 
 * [ ] 同 `(user, category, key)` upsert 更新而非重复插入。
 * [ ] inferred 不覆盖已有 explicit。
-* [ ] active 超过 cap 时先删旧 inferred。
+* [ ] active 超过 cap 时先删旧 inferred（必要时再删旧 explicit——现行行为）。
 * [ ] 删 Game 后偏好仍在；`DELETE /me/preferences` 全清。
 * [ ] 未配置 extract model/apikey 时自动路径不写库。
 * [ ] Plan/Art compose 后 Context 含 `【Explicit Preferences】`（有数据时）。
 
 ---
 
-## 8. 修订记录
+## 11. 修订记录
 
 | 日期 | 变更 |
 | --- | --- |
 | 2026-09-02 | 初版：汇总现行实现；废弃 ADR-02 与 ADR-06 偏好决策 |
+| 2026-09-02 | 补 Architecture Invariants / Non-goals / Migration warning；扩展已知局限；澄清目标态 ≠ 仅加 node 列 |
