@@ -9,11 +9,11 @@ Design-review follow-up (verify + modification guide):
 | ADR | Title | Status | Accepted-by |
 | --- | --- | --- | --- |
 | [ADR-01](./ADR-01-degraded-artifact-publishing.md) | Degraded Artifact Publishing | **Accepted** | (prior) |
-| [ADR-02](./ADR-02-preference-retention.md) | Preference Retention | **Accepted** | ByteTitan-star |
+| [ADR-02](./ADR-02-preference-retention.md) | Preference Retention | **Deprecated** → [ADR-15](./ADR-15-preference-memory-as-is.md) | ByteTitan-star |
 | [ADR-03](./ADR-03-sandbox-provider-strategy.md) | Sandbox Provider Strategy | **Accepted** (+ 2026-08-16 revision) | ByteTitan-star |
 | [ADR-04](./ADR-04-conversation-storage-migration.md) | Conversation Storage Migration | **Accepted** | ByteTitan-star |
 | [ADR-05](./ADR-05-recoverable-pause-representation.md) | Recoverable Pause Representation | **Accepted** (+ 2026-08-16 revision) | ByteTitan-star |
-| [ADR-06](./ADR-06-semantic-pinecone-and-preference-ops.md) | Semantic Cache (Pinecone) + Preference Ops | **Accepted** | ByteTitan-star |
+| [ADR-06](./ADR-06-semantic-pinecone-and-preference-ops.md) | Semantic Cache (Pinecone)；偏好章节已废 | **Accepted**（仅缓存）；偏好 → ADR-15 | ByteTitan-star |
 | [ADR-07](./ADR-07-production-security-baseline.md) | Production Security Baseline | **Accepted** | ByteTitan-star |
 | [ADR-08](./ADR-08-worker-messaging-reliability.md) | Worker & Messaging Reliability | **Accepted** | ByteTitan-star |
 | [ADR-09](./ADR-09-timeout-and-io-boundaries.md) | Timeout & IO Boundaries | **Accepted** | ByteTitan-star |
@@ -22,6 +22,7 @@ Design-review follow-up (verify + modification guide):
 | [ADR-12](./ADR-12-api-frontend-ops-debt.md) | API, Frontend & Ops Debt | **Accepted** | ByteTitan-star |
 | [ADR-13](./ADR-13-native-engine-agent-loop.md) | Native Engine Agent Loop（Godot-first） | **Proposed** | （待审批） |
 | [ADR-14](./ADR-14-pinecone-rag-knowledge-base.md) | Pinecone RAG Knowledge Base | **Proposed** | （待审批） |
+| [ADR-15](./ADR-15-preference-memory-as-is.md) | Preference Memory（As-Is） | **Accepted**（取代 ADR-02 / ADR-06 偏好） | （Owner 审阅） |
 
 Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)
 Feature flag defaults: [FLAG-INVENTORY.md](./FLAG-INVENTORY.md)

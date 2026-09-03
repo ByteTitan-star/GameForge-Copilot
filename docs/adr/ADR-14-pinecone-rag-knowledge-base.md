@@ -3,7 +3,7 @@
 * Status: **Accepted**
 * Date: 2026-08-26
 * Author: Auto（依 Owner 规划起草）
-* Related: ADR-02（Preference）、ADR-04（Conversation SoT）、ADR-06（Semantic Cache / Pinecone）、`ContextBuilder`
+* Related: ADR-15（Preference Memory As-Is；取代已废 ADR-02）、ADR-04（Conversation SoT）、ADR-06（Semantic Cache / Pinecone）、`ContextBuilder`
 
 > **Dual Index 约束：** 本 ADR 仅约束 `gameforge-knowledge`；`gameforge-semantic` 语义缓存见 ADR-06 §Revision 2026-08-26。**两套 Index 配置、客户端、开关完全独立，互不影响。**
 

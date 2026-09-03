@@ -1,9 +1,13 @@
 # ADR-06: Semantic Cache (Pinecone) + Preference Ops
 
-* Status: **Accepted**
+> **偏好章节已废弃：** §1 表中「偏好*」行、以及 **§4 偏好：检索 / 删除 / 抽取**，自 2026-09-02 起 **不再有效**。
+> 偏好记忆真相源改为 **[ADR-15](./ADR-15-preference-memory-as-is.md)**（并废弃 ADR-02）。
+> **本文件仍 Accepted 的范围仅限：Semantic Cache / Embedding / Pinecone 拓扑（含 Dual Index 修订）。**
+
+* Status: **Accepted**（仅 Semantic Cache）；偏好部分 → **Deprecated → ADR-15**
 * Date: 2026-08-16
 * Accepted-by: ByteTitan-star
-* Related: ADR-02、ADR-04、ADR-14（Knowledge RAG / Dual Index）、P4 Exact / P4.5 Semantic
+* Related: ADR-04、ADR-14（Knowledge RAG / Dual Index）、ADR-15（Preference Memory）、P4 Exact / P4.5 Semantic
 
 ---
 
@@ -14,8 +18,8 @@
 | Semantic Cache | Pinecone + Exact Redis；**存「节点结果 payload」** 而非整段聊天 transcript |
 | 相似度分层 | `<0.85` miss；`[0.85, 0.95)` **丢给轻量 LLM 再推理一次**；`≥0.95` **直接返回缓存结果** |
 | Embedding | 默认推荐 **`bge-small-zh-v1.5`**（轻量、中英够用）；需要更高召回可换 **`bge-m3`**（env 配置） |
-| 偏好表 | Postgres；索引点查；**≤50 物理删除最早** |
-| 偏好抽取 | **只用轻量 chat 模型**（禁止规则抽取作为正式路径）；配置项对齐审核模型体系，**本阶段以 `.env` 配置为准** |
+| ~~偏好表~~ | ~~Postgres；≤50 物理删除~~ → **见 ADR-15** |
+| ~~偏好抽取~~ | ~~轻量 chat~~ → **见 ADR-15** |
 | 会话向量 | 仍不做 |
 | Pinecone 拓扑 | **`gameforge-semantic` 专用于本 ADR**；Knowledge RAG 使用独立 Index `gameforge-knowledge`（ADR-14 §3.1.1，**互不影响**） |
 
@@ -83,29 +87,28 @@ else:
 
 ## 4. 偏好：检索 / 删除 / 抽取
 
-* 检索：`user_id + status=active` + 索引 → ≤50 行，快。
-* 超额：**物理删除最早**（先 inferred，再 explicit）。
-* 抽取：**禁止规则作为正式路径**；仅轻量 chat 模型抽取 JSON 偏好。
-  * 未配置 `PREFERENCE_EXTRACT_MODEL` → **不自动抽取**（不写偏好）。
-  * Explicit / Inferred 由模型输出 `source` 字段区分；服务端仍强制：不得用 inferred 覆盖已有 explicit。
-* 配置：与审核模型同体系字段风格；**本阶段只保证 `.env.example` 完整**，管理后台 UI 可随后补。
+> **Deprecated（2026-09-02）。** 全文迁至 [ADR-15](./ADR-15-preference-memory-as-is.md)。以下历史摘要勿再引用：
+>
+> * 检索 active ≤50；超额物理删除（先 inferred）
+> * 抽取仅 LLM；未配置 model → 不写；inferred 不盖 explicit
 
 ---
 
 ## 5. Flags / Env（默认开启能力，密钥自备）
 
-见 `backend/.env.example`：`PINECONE_*`、`EMBEDDING_*`、`PREFERENCE_EXTRACT_*`、`SEMANTIC_CACHE_*`。
+见 `backend/.env.example`：`PINECONE_*`、`EMBEDDING_*`、`SEMANTIC_CACHE_*`。
+偏好抽取 env（`PREFERENCE_EXTRACT_*`）文档归属 **ADR-15**；语义确认 LLM 仍可回退同一套 key（实现细节，非偏好 ADR 范围）。
 
 ---
 
 ## 6. 实施顺序（已确认）
 
-Phase 0 配置与偏好删除策略 → 1 Embedding 客户端 → 2 Pinecone + 分层命中 → 3 LLM 偏好抽取（替换规则路径）→ 4 metrics。
+Phase 0 配置 → 1 Embedding 客户端 → 2 Pinecone + 分层命中 → 3（历史：LLM 偏好抽取，现归 ADR-15）→ 4 metrics。
 
 ## 7. 回滚
 
 * `SEMANTIC_CACHE_DIRECT_HIT_ENABLED=false` 或无 Pinecone key → 仅 Exact + shadow
-* 无偏好抽取模型 → 不写自动偏好
+* 偏好抽取回滚 / 关闭行为见 **ADR-15**
 
 ---
 
