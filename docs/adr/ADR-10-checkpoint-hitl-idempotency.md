@@ -42,6 +42,12 @@
 1. `load_state` 优先 Redis 时必须比对 DB `revision`（或等价）；不一致则弃缓存读 DB。
 2. 或改为 **事务 commit 成功后再写 Redis**，并提供 invalidate；禁止「DB 回滚后 Redis 残留幻影 grant」。
 
+> **实现更新（2026-09-10，[#158](https://github.com/ByteTitan-star/GameForge-Copilot/issues/158)）**：两条已同时落地于 `backend/app/forge/state.py`（方案 C = 1+2 组合）。
+>
+> * **写入顺序 = commit-then-cache**：`save_state` 带 DB 会话时只 upsert Postgres + `flush`，Redis 发布延迟到事务 `after_commit` 钩子；`after_rollback` / `after_soft_rollback`（savepoint 回滚）丢弃待发布；同事务内 `save_state` 后 `clear_state` 同样丢弃待发布，防止 commit 后把已删除 state 写回 Redis。无 DB 会话（纯缓存/dev 路径）仍为立即写入。
+> * **读取 = 廉价 revision 校验**：Redis 命中时仅 `SELECT revision` 单列比对，一致即返回缓存 state，不再加载完整 JSON 行；缺失/legacy/revision 不一致才回源 DB 并回填。
+> * **残余不一致窗口（stale-but-safe，接受）**：① 发布失败或被丢弃 → Redis 落后于 DB，下次 load 对账修复；② `load_state` 回填路径若读的是**同一事务**内未提交数据，可能短暂领先——由所有读者的 revision 校验兜底；③ savepoint 回滚会连带丢弃 savepoint 之前的合法待发布（宁缺勿幻影）。
+
 ### 6. resolve 锁与条件提交（P2-12）
 
 1. 防重锁包 try/finally（或等价释放），避免异常后 60s 误 409。
