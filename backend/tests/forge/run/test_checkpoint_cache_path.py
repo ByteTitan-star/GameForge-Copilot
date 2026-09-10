@@ -1,16 +1,19 @@
-"""#158：checkpoint 缓存写入路径（commit-then-cache）。
+"""#158：checkpoint 缓存读写路径（commit-then-cache + 廉价 revision 校验）。
 
 验收点：
-1. flush 后回滚：Redis 不得携带未提交状态（幻影防护）。
-2. save 后 clear 同事务：commit 后不得把已删除 state 写回 Redis。
-3. Redis 不可用时 save 仍可靠 Postgres 工作。
+1. 命中且 revision 一致时，load_state 不得加载完整 state 行（仅 revision 列）。
+2. flush 后回滚：Redis 不得携带未提交状态（幻影防护）。
+3. save 后 clear 同事务：commit 后不得把已删除 state 写回 Redis。
+4. Redis 不可用时 save/load 仍可靠 Postgres 工作。
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
+from unittest.mock import AsyncMock
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.forge import state as ckpt
@@ -32,6 +35,36 @@ class _DeadRedis:
 
     async def delete(self, *a, **k):
         raise ConnectionError("redis down")
+
+
+async def test_load_state_cache_hit_skips_full_state_load(
+    db_session: AsyncSession, redis_client
+) -> None:
+    run_id = uuid.uuid4()
+    state = {"phase": "plan_confirm", "payload": "x" * 128}
+    db_session.add(RunCheckpoint(run_id=run_id, state=state, revision=2))
+    await db_session.commit()
+    await redis_client.set(_key(run_id), ckpt._cache_payload(2, state))
+
+    captured: list[str] = []
+    sync_engine = db_session.get_bind()  # AsyncSession.get_bind 返回同步 Engine
+
+    def _capture(conn, cursor, statement, params, context, executemany):
+        if "run_checkpoints" in statement:
+            captured.append(" ".join(statement.split()))
+
+    event.listen(sync_engine, "before_cursor_execute", _capture)
+    try:
+        # 命中且 revision 一致 → 不得走 db.get 全量加载分支
+        db_session.get = AsyncMock(side_effect=AssertionError("full row load must not happen"))
+        loaded = await ckpt.load_state(redis_client, run_id, db_session)
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", _capture)
+
+    assert loaded == state
+    assert len(captured) == 1, f"expect single checkpoint query, got: {captured}"
+    assert "revision" in captured[0]
+    assert "state" not in captured[0], f"query must not select state column: {captured[0]}"
 
 
 async def test_save_state_publishes_cache_only_after_commit(

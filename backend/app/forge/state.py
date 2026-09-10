@@ -8,6 +8,10 @@ Write/read ordering (ADR-10 §5, #158):
   transaction commits (session ``after_commit`` hook); rollback discards the
   pending publish. Redis can therefore fall behind Postgres (stale-but-safe,
   repaired on next load) but never ahead of it with uncommitted state.
+- ``load_state`` validates a Redis hit against a revision-only DB query, so a
+  cache hit never pays the full JSON ``state`` row read. Remaining window: the
+  refill on miss/mismatch may publish uncommitted data read from the *same*
+  transaction; readers reject it via the revision check until it commits.
 """
 
 import asyncio
@@ -17,7 +21,7 @@ import uuid
 from typing import Any
 
 import redis.asyncio as redis
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.run_checkpoint import RunCheckpoint
@@ -147,6 +151,14 @@ async def load_state(
 
     if db is None:
         return cached_state
+
+    # 廉价校验：仅查 revision 列，命中且一致时无需加载完整 state 行（#158）
+    if cached_state is not None and cached_rev is not None:
+        db_rev = (
+            await db.scalars(select(RunCheckpoint.revision).where(RunCheckpoint.run_id == run_id))
+        ).one_or_none()
+        if db_rev is None or cached_rev == db_rev:
+            return cached_state
 
     # Redis missing, legacy, or revision mismatch → DB is SoT
     row = await db.get(RunCheckpoint, run_id)
