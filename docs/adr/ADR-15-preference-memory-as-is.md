@@ -5,6 +5,7 @@
 * Accepted-by: （Owner 审阅中；以代码为准）
 * Related: Issue [#162](https://github.com/ByteTitan-star/AutoGame/issues/162)（目标态 redesign，**非**本 ADR）、[#124](https://github.com/ByteTitan-star/AutoGame/issues/124)（eval）
 * Supersedes: [ADR-02](./ADR-02-preference-retention.md)、[ADR-06](./ADR-06-semantic-pinecone-and-preference-ops.md) §4 偏好相关决策
+* Target-state: 已由 [ADR-16](./ADR-16-preference-memory-to-be.md) Accept（2026-09-11）；本文在迁移完成前仍是 As-Is 真相源
 
 > **范围：** 本文只描述 **当前已落地** 的用户长期偏好记忆（User Preference Memory）。
 > **成熟度：** v1 / early production 可上线；**不是**长期可演进的 Memory foundation。
