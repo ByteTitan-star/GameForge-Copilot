@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from app.enums import FailureClass, RunCommandType
 
-HITL_PHASES = frozenset({"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed"})
+HITL_PHASES = frozenset(
+    {"plan_confirm", "art_confirm", "sandbox_failed", "qa_failed", "agent_question"}
+)
 
 _ALLOWED: dict[str, frozenset[str]] = {
     "plan_confirm": frozenset({"approve", "modify"}),
     "art_confirm": frozenset({"select_a", "select_b", "modify"}),
     "sandbox_failed": frozenset({"approve", "modify"}),
     "qa_failed": frozenset({"approve", "modify"}),
+    # ADR-17：模型主动提问；modify=回答（modify_text 承载），skip=让模型自行决策
+    "agent_question": frozenset({"skip", "modify"}),
 }
 
 _ALLOWED_COMMANDS: dict[str, tuple[str, ...]] = {
@@ -34,6 +38,10 @@ _ALLOWED_COMMANDS: dict[str, tuple[str, ...]] = {
     ),
     "qa_failed": (
         RunCommandType.RETRY_IMPLEMENTATION.value,
+        RunCommandType.REVISE_PLAN.value,
+        RunCommandType.CANCEL_RUN.value,
+    ),
+    "agent_question": (
         RunCommandType.REVISE_PLAN.value,
         RunCommandType.CANCEL_RUN.value,
     ),
