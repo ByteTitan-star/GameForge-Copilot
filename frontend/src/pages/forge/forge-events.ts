@@ -216,18 +216,31 @@ export function handleForgeWsEvent(ev: WsEnvelope, h: ForgeEventHandlers) {
       })
       return
     }
-    case WSEventType.qa_report:
+    case WSEventType.qa_report: {
       if (!p.passed) {
         h.setStagePipeline?.((prev) => markStageFailed(prev, RunPhase.qa))
       }
+      // C 级视觉验收（#160）：B 级通过但有风格/布局漂移 → 以 warning 形式展示，不改变通过态
+      const visualWarnings = Array.isArray(p.visual_warnings)
+        ? (p.visual_warnings as string[]).filter((w) => typeof w === 'string' && w)
+        : []
       h.pushItem({
-        label: p.passed ? h.t('qaPassed') : h.t('qaFailed'),
-        detail: Array.isArray(p.issues) ? (p.issues as string[]).join(' · ') : String(p.log_excerpt ?? ''),
-        tone: p.passed ? 'ok' : 'err',
+        label: p.passed
+          ? visualWarnings.length
+            ? `${h.t('qaPassed')} · ${h.t('qaVisualWarnings')}`
+            : h.t('qaPassed')
+          : h.t('qaFailed'),
+        detail: visualWarnings.length
+          ? visualWarnings.join(' · ')
+          : Array.isArray(p.issues)
+            ? (p.issues as string[]).join(' · ')
+            : String(p.log_excerpt ?? ''),
+        tone: !p.passed ? 'err' : visualWarnings.length ? 'warn' : 'ok',
         at: ev.ts,
         phase: RunPhase.qa,
       })
       return
+    }
     case WSEventType.usage: {
       const used = Number(p.today_used ?? 0)
       const remain = Number(p.remaining ?? 0)

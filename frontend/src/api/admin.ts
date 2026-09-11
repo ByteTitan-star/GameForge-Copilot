@@ -2,6 +2,8 @@ import { apiRequest, apiRequestList } from './client'
 import type {
   AdminAuditLlmSettings,
   AdminAuditLlmTestResp,
+  AdminVisualLlmSettings,
+  AdminVisualLlmTestResp,
   AdminSettings,
   AdminUsage,
   AdminUser,
@@ -84,6 +86,15 @@ export const adminApi = {
   /** 审核模型连通测试（表单当前值 dry-test，不落库）。apikey 空/masked 时后端回退 DB 已存 key。 */
   testAuditLlm(body: AdminAuditLlmSettings, accessToken: string) {
     return apiRequest<AdminAuditLlmTestResp>('/admin/settings/audit-llm/test', {
+      method: 'POST',
+      token: accessToken,
+      body,
+    })
+  },
+
+  /** 视觉验收模型连通测试：发一张探针图，纯文本模型会被识别为配置失败。 */
+  testVisualLlm(body: AdminVisualLlmSettings, accessToken: string) {
+    return apiRequest<AdminVisualLlmTestResp>('/admin/settings/visual-llm/test', {
       method: 'POST',
       token: accessToken,
       body,

@@ -33,6 +33,12 @@ export function SettingsSection() {
   const [auditMinChars, setAuditMinChars] = useState<number | ''>('')
   const [auditMaxBuffer, setAuditMaxBuffer] = useState<number | ''>('')
   const [disableAuditConfirmOpen, setDisableAuditConfirmOpen] = useState(false)
+  // 视觉验收模型（C 级软验收）：本地空串 = 未编辑，回显 loaded 值；apikey 回显 masked，留空=不改
+  const [visualEnabled, setVisualEnabled] = useState<boolean | ''>('')
+  const [visualProvider, setVisualProvider] = useState('')
+  const [visualModel, setVisualModel] = useState('')
+  const [visualApikey, setVisualApikey] = useState('')
+  const [visualBaseUrl, setVisualBaseUrl] = useState('')
 
   const loaded = settings.data
   const dailyVal = daily === '' ? (loaded?.default_daily_token_limit ?? '') : daily
@@ -48,6 +54,13 @@ export function SettingsSection() {
   const auditIntervalMsVal = auditIntervalMs === '' ? (auditLoaded?.interval_ms ?? 60000) : auditIntervalMs
   const auditMinCharsVal = auditMinChars === '' ? (auditLoaded?.min_chars_between ?? 80) : auditMinChars
   const auditMaxBufferVal = auditMaxBuffer === '' ? (auditLoaded?.max_buffer_chars ?? 500) : auditMaxBuffer
+
+  const visualLoaded = loaded?.visual_llm
+  const visualEnabledVal = visualEnabled === '' ? (visualLoaded?.enabled ?? true) : visualEnabled
+  const visualProviderVal = visualProvider || visualLoaded?.provider || LLMProvider.openai_compat
+  const visualModelVal = visualModel || visualLoaded?.model || ''
+  const visualApikeyVal = visualApikey || visualLoaded?.apikey || ''
+  const visualBaseUrlVal = visualBaseUrl || visualLoaded?.base_url || ''
 
   const handleAuditEnabledChange = (checked: boolean) => {
     if (!checked && auditEnabledVal) {
@@ -76,6 +89,13 @@ export function SettingsSection() {
             min_chars_between: auditMinCharsVal,
             max_buffer_chars: auditMaxBufferVal,
           },
+          visual_llm: {
+            enabled: visualEnabledVal,
+            provider: visualProviderVal,
+            model: visualModelVal.trim(),
+            apikey: visualApikey.trim() ? visualApikeyVal : '',
+            base_url: visualBaseUrlVal.trim(),
+          },
         },
         token!,
       ),
@@ -93,6 +113,11 @@ export function SettingsSection() {
       setAuditIntervalMs('')
       setAuditMinChars('')
       setAuditMaxBuffer('')
+      setVisualEnabled('')
+      setVisualProvider('')
+      setVisualModel('')
+      setVisualApikey('')
+      setVisualBaseUrl('')
       onToast(t('adminSettingsSaved'))
     },
     onError: (e) => onToast(formatApiError(e, t('adminSettingsSaveFail')), 'error'),
@@ -116,6 +141,26 @@ export function SettingsSection() {
         ? onToast(t('auditLlmTestOk'))
         : onToast(r.error ?? t('auditLlmTestFail'), 'error'),
     onError: (e) => onToast(formatApiError(e, t('auditLlmTestFailed')), 'error'),
+  })
+
+  // 视觉模型连通测试：发探针图 dry-test，纯文本模型会被判失败
+  const visualTestMu = useMutation({
+    mutationFn: () =>
+      adminApi.testVisualLlm(
+        {
+          enabled: visualEnabledVal,
+          provider: visualProviderVal,
+          model: visualModelVal.trim(),
+          apikey: visualApikey.trim() ? visualApikeyVal : '',
+          base_url: visualBaseUrlVal.trim(),
+        },
+        token!,
+      ),
+    onSuccess: (r) =>
+      r.tested_ok
+        ? onToast(t('visualLlmTestOk'))
+        : onToast(r.error ?? t('visualLlmTestFail'), 'error'),
+    onError: (e) => onToast(formatApiError(e, t('visualLlmTestFailed')), 'error'),
   })
 
   if (!token) return null
@@ -306,6 +351,92 @@ export function SettingsSection() {
           >
             {auditTestMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {t('auditLlmTest')}
+          </button>
+        </div>
+      </section>
+
+      <section className="gf-admin-card max-w-lg space-y-4 rounded-xl p-5">
+        <div>
+          <h3 className="gf-page-body text-sm font-semibold">{t('visualLlmTitle')}</h3>
+          <p className="mt-1 gf-page-muted text-xs">{t('visualLlmHint')}</p>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={visualEnabledVal}
+            onChange={(e) => setVisualEnabled(e.target.checked)}
+            className="h-4 w-4"
+          />
+          {t('visualLlmEnabled')}
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+            {t('visualLlmProvider')}
+          </span>
+          <select
+            value={visualProviderVal}
+            onChange={(e) => setVisualProvider(e.target.value)}
+            className="gf-input h-10 w-full rounded-xl px-3"
+          >
+            <option value={LLMProvider.openai_compat}>openai_compat</option>
+            <option value={LLMProvider.openai}>openai</option>
+            <option value={LLMProvider.anthropic}>anthropic</option>
+          </select>
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+            {t('visualLlmModel')}
+          </span>
+          <input
+            type="text"
+            value={visualModelVal}
+            onChange={(e) => setVisualModel(e.target.value)}
+            placeholder={t('visualLlmModelPh')}
+            className="gf-input h-10 w-full rounded-xl px-3"
+          />
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+            {t('visualLlmApikey')}
+          </span>
+          <input
+            type="password"
+            value={visualApikeyVal}
+            onChange={(e) => setVisualApikey(e.target.value)}
+            placeholder={t('visualLlmApikeyPh')}
+            className="gf-input h-10 w-full rounded-xl px-3"
+          />
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <span className="gf-page-muted text-[11px] font-medium uppercase tracking-wider">
+            {t('visualLlmBaseUrl')}
+          </span>
+          <input
+            type="text"
+            value={visualBaseUrlVal}
+            onChange={(e) => setVisualBaseUrl(e.target.value)}
+            placeholder={t('visualLlmBaseUrlPh')}
+            className="gf-input h-10 w-full rounded-xl px-3"
+          />
+        </label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="gf-interactive gf-btn-primary inline-flex h-10 cursor-pointer items-center justify-center gap-2 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={saveMu.isPending || !visualModelVal.trim()}
+            onClick={() => saveMu.mutate()}
+          >
+            {saveMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t('save')}
+          </button>
+          <button
+            type="button"
+            className="gf-interactive inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={visualTestMu.isPending || !visualModelVal.trim()}
+            onClick={() => visualTestMu.mutate()}
+          >
+            {visualTestMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t('visualLlmTest')}
           </button>
         </div>
       </section>
