@@ -148,6 +148,11 @@ The frontend is normally run locally with `pnpm run dev` during development.
 
 Generation Workers **must** run real Chromium playtests. Static DOM checks are diagnostics only and cannot mark QA as passed. Without Playwright/Chromium, CodeQaLoop records `failure_kind=infra` and cannot reach `done`.
 
+QA tiers (see `backend/app/sandbox/playtest.py` and `backend/app/forge/visual_acceptance.py`):
+
+- **B-tier (hard gate)** — headless Chromium interactivity smoke: structural/CDN/engine gates plus a required motion signal (`raf` / `canvas_diff` / `engine_runtime`). `qa_ok` requires B-tier pass; nothing may replace it.
+- **C-tier (soft, warning-only)** — visual acceptance: after a *passing* playtest, the 1024x576 thumbnail is judged against the design brief (theme, palette, key element positions) by an admin-configured platform vision model (`/admin/settings` → visual acceptance model; env fallback `VISUAL_ACCEPTANCE_*`). Findings surface as `visual_warnings` in the `QA_REPORT` event and checkpoint state and are appended to the next repair prompt. C-tier never flips `qa_ok` and never blocks promote; unconfigured / timeout / unparsable model output simply skips the check.
+
 Install Playwright + Chromium on every Worker host:
 
 ```bash
