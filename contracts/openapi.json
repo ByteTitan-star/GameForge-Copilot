@@ -3105,6 +3105,7 @@
           "preferences"
         ],
         "summary": "Clear Preferences",
+        "description": "清空 = 全部归档（ADR-16：不物理删除）。",
         "operationId": "clear_preferences_api_v1_me_preferences_delete",
         "responses": {
           "200": {
@@ -3112,7 +3113,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse_dict_str__int__"
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceRemoveResult_"
                 }
               }
             }
@@ -3123,6 +3124,53 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/me/preferences/{preference_key}": {
+      "delete": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Remove Preference",
+        "operationId": "remove_preference_api_v1_me_preferences__preference_key__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preference_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preference Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_PreferenceRemoveResult_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/u/{handle}": {
@@ -6970,6 +7018,18 @@
         ],
         "title": "ApiResponse[PreferenceList]"
       },
+      "ApiResponse_PreferenceRemoveResult_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PreferenceRemoveResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[PreferenceRemoveResult]"
+      },
       "ApiResponse_PreviewTokenResp_": {
         "properties": {
           "data": {
@@ -7247,22 +7307,6 @@
           "data"
         ],
         "title": "ApiResponse[dict]"
-      },
-      "ApiResponse_dict_str__int__": {
-        "properties": {
-          "data": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "ApiResponse[dict[str, int]]"
       },
       "ApiResponse_dict_str__str__": {
         "properties": {
@@ -9252,18 +9296,17 @@
             "format": "uuid",
             "title": "Id"
           },
-          "category": {
+          "preference_key": {
             "type": "string",
-            "title": "Category"
+            "title": "Preference Key"
           },
-          "key": {
+          "value": {
             "type": "string",
-            "title": "Key"
+            "title": "Value"
           },
-          "value_json": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Value Json"
+          "value_type": {
+            "type": "string",
+            "title": "Value Type"
           },
           "source": {
             "type": "string",
@@ -9272,10 +9315,6 @@
           "confidence": {
             "type": "number",
             "title": "Confidence"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
           },
           "updated_at": {
             "anyOf": [
@@ -9293,14 +9332,14 @@
         "type": "object",
         "required": [
           "id",
-          "category",
-          "key",
-          "value_json",
+          "preference_key",
+          "value",
+          "value_type",
           "source",
-          "confidence",
-          "status"
+          "confidence"
         ],
-        "title": "PreferenceItem"
+        "title": "PreferenceItem",
+        "description": "目录槽位形态；value 为按槽位类型校验后的标量文本。"
       },
       "PreferenceList": {
         "properties": {
@@ -9318,39 +9357,54 @@
         ],
         "title": "PreferenceList"
       },
-      "PreferenceUpsert": {
+      "PreferenceRemoveResult": {
         "properties": {
-          "category": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Category"
-          },
-          "key": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Key"
-          },
-          "value_json": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Value Json"
-          },
-          "status": {
-            "type": "string",
-            "maxLength": 16,
-            "title": "Status",
-            "default": "active"
+          "archived": {
+            "type": "integer",
+            "title": "Archived"
           }
         },
         "type": "object",
         "required": [
-          "category",
-          "key",
-          "value_json"
+          "archived"
         ],
-        "title": "PreferenceUpsert"
+        "title": "PreferenceRemoveResult"
+      },
+      "PreferenceUpsert": {
+        "properties": {
+          "preference_key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Preference Key"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preference_key",
+          "value"
+        ],
+        "title": "PreferenceUpsert",
+        "description": "用户显式设置：key 须在目录内（别名自动归一），value 须符合槽位类型。"
       },
       "PreviewTokenResp": {
         "properties": {
