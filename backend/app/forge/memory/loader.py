@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.forge.memory import service as pref_service
 from app.forge.memory.context_builder import (
     BuiltContext,
     ContextArtifacts,
@@ -15,7 +16,6 @@ from app.forge.memory.context_builder import (
     ContextTurn,
     estimate_tokens,
 )
-from app.forge.memory.preferences import list_active_preferences, preference_to_context_dict
 from app.forge.memory.summary import coerce_session_summary, should_refresh_summary
 from app.models.forge_message import ForgeMessage
 from app.models.game import Game
@@ -44,8 +44,17 @@ async def build_node_context(
     summary = coerce_session_summary(game.session_summary_json)
     prefs: list[dict] = []
     if settings.memory_preferences:
-        rows = await list_active_preferences(db, user_id)
-        prefs = [preference_to_context_dict(r) for r in rows]
+        # ADR-16：按节点解析（applies_to）+ LRU touch；code/repair 天然为空
+        rows = await pref_service.resolve_for(db, user_id, node)
+        prefs = [
+            {
+                "key": r.preference_key,
+                "value": r.value,
+                "source": r.source,
+                "confidence": round(float(r.confidence), 2),
+            }
+            for r in rows
+        ]
 
     turns: list[ContextTurn] = []
     if settings.memory_context_builder:
