@@ -51,12 +51,7 @@ def run_baseline() -> dict[str, Any]:
 
     for sc in scenarios:
         prefs = [
-            {
-                "category": p["category"],
-                "key": p["key"],
-                "value_json": p["value_json"],
-                "source": p["source"],
-            }
+            {"key": p["preference_key"], "value": p["value"], "source": p["source"]}
             for p in sc["expected_preferences"]
         ]
         built = ContextBuilder.build(
@@ -107,9 +102,9 @@ def run_baseline() -> dict[str, Any]:
     }
 
 
-def _pref_match(items: list[dict[str, Any]], category: str, key: str) -> dict[str, Any] | None:
+def _pref_match(items: list[dict[str, Any]], preference_key: str) -> dict[str, Any] | None:
     for item in items:
-        if item.get("category") == category and item.get("key") == key:
+        if item.get("preference_key") == preference_key:
             return item
     return None
 
@@ -144,22 +139,23 @@ async def _register_and_login(client: Any) -> str:
 async def _seed_inferred(
     user_id: uuid.UUID,
     *,
-    category: str,
-    key: str,
-    value_json: dict[str, Any],
+    preference_key: str,
+    value: str,
 ) -> None:
-    from app.core.db import SessionLocal
-    from app.forge.memory import preferences as pref_store
+    from app.core import db as db_module
+    from app.forge.memory import service as pref_service
 
-    async with SessionLocal() as db:
-        await pref_store.upsert_preference(
+    async with db_module.SessionLocal() as db:
+        await pref_service.apply_operation(
             db,
             user_id=user_id,
-            category=category,
-            key=key,
-            value_json=value_json,
-            source="inferred",
-            confidence=0.6,
+            op={
+                "op": "set",
+                "key": preference_key,
+                "value": value,
+                "source": "inferred",
+                "confidence": 0.6,
+            },
         )
         await db.commit()
 
@@ -214,26 +210,24 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
                     newer = sc["conflict"]["newer_explicit"]
                     await _seed_inferred(
                         user_id,
-                        category=older["category"],
-                        key=older["key"],
-                        value_json=older["value_json"],
+                        preference_key=older["preference_key"],
+                        value=older["value"],
                     )
                     put = await client.put(
                         "/api/v1/me/preferences",
                         json={
-                            "category": newer["category"],
-                            "key": newer["key"],
-                            "value_json": newer["value_json"],
+                            "preference_key": newer["preference_key"],
+                            "value": newer["value"],
                         },
                     )
                     listed = await client.get("/api/v1/me/preferences")
                     items = (listed.json().get("data") or {}).get("items") or []
-                    hit = _pref_match(items, newer["category"], newer["key"])
+                    hit = _pref_match(items, newer["preference_key"])
                     ok = (
                         put.status_code in {200, 201}
                         and hit is not None
                         and hit.get("source") == "explicit"
-                        and hit.get("value_json") == newer["value_json"]
+                        and hit.get("value") == newer["value"]
                     )
                     case_result["conflict_resolved"] = ok
                     if ok:
@@ -246,17 +240,15 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
                         if source == "inferred":
                             await _seed_inferred(
                                 user_id,
-                                category=pref["category"],
-                                key=pref["key"],
-                                value_json=pref["value_json"],
+                                preference_key=pref["preference_key"],
+                                value=pref["value"],
                             )
                         else:
                             put = await client.put(
                                 "/api/v1/me/preferences",
                                 json={
-                                    "category": pref["category"],
-                                    "key": pref["key"],
-                                    "value_json": pref["value_json"],
+                                    "preference_key": pref["preference_key"],
+                                    "value": pref["value"],
                                 },
                             )
                             if put.status_code not in {200, 201}:
@@ -266,9 +258,9 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
                     items = (listed.json().get("data") or {}).get("items") or []
                     missing = []
                     for pref in sc.get("expected_preferences") or []:
-                        hit = _pref_match(items, pref["category"], pref["key"])
+                        hit = _pref_match(items, pref["preference_key"])
                         if hit is None:
-                            missing.append(f"{pref['category']}.{pref['key']}")
+                            missing.append(pref["preference_key"])
                     ok = not missing
                     case_result["db_missing"] = missing
                     if ok:
@@ -278,9 +270,8 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
                 # Context injection check using expected prefs after DB write
                 prefs_for_ctx = [
                     {
-                        "category": p["category"],
-                        "key": p["key"],
-                        "value_json": p["value_json"],
+                        "key": p["preference_key"],
+                        "value": p["value"],
                         "source": p.get("source", "explicit"),
                     }
                     for p in (sc.get("expected_preferences") or [])
@@ -289,9 +280,8 @@ async def _run_live_api(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
                     newer = sc["conflict"]["newer_explicit"]
                     prefs_for_ctx = [
                         {
-                            "category": newer["category"],
-                            "key": newer["key"],
-                            "value_json": newer["value_json"],
+                            "key": newer["preference_key"],
+                            "value": newer["value"],
                             "source": "explicit",
                         }
                     ]
