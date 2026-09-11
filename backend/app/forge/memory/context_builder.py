@@ -208,16 +208,19 @@ def _format_summary(summary: dict[str, Any] | None) -> str:
 
 
 def _format_preferences(prefs: list[dict[str, Any]]) -> str:
+    """ADR-16：目录键形态，带 source + confidence（模型可见的信号强度）。"""
     if not prefs:
         return ""
     lines = []
     for p in prefs:
-        cat = p.get("category", "")
         key = p.get("key", "")
         val = p.get("value", p.get("value_json", ""))
         if isinstance(val, (dict, list)):
             val = json.dumps(val, ensure_ascii=False)
-        lines.append(f"- {cat}.{key}={val}")
+        source = p.get("source", "")
+        conf = p.get("confidence", "")
+        suffix = f" ({source}, {conf})" if source else ""
+        lines.append(f"- {key}={val}{suffix}")
     return "\n".join(lines)
 
 
