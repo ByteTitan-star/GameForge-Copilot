@@ -5,18 +5,12 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.forge.memory.inferred import extract_inferred_preferences
-from app.forge.memory.llm_extract import extract_preferences_via_llm
-from app.forge.memory.preferences import (
-    list_active_preferences,
-    upsert_preference,
-    upsert_preferences_from_text,
-)
+from app.forge.memory.preferences import upsert_preferences_from_text
 from app.models.user import User
-from app.models.user_preference import UserPreference
 
 
 def test_inferred_extracts_pixel_without_explicit_marker() -> None:
@@ -33,35 +27,45 @@ def test_inferred_skips_when_explicit_marker_present() -> None:
 
 
 @pytest.mark.asyncio
-async def test_upsert_via_llm_does_not_overwrite_explicit(db_session, monkeypatch) -> None:
+async def test_upsert_via_llm_routes_to_service_policy(db_session, monkeypatch) -> None:
+    """操作式抽取 → v2 服务：explicit 不被 inferred 覆盖、别名归一、目录外拒绝。"""
+    from app.models.user_preference_v2 import UserPreferenceV2
+
     monkeypatch.setattr(settings, "memory_preferences", True)
     monkeypatch.setattr(settings, "memory_preferences_inferred", True)
 
-    calls = {"n": 0}
+    calls: list[list[dict]] = []
 
-    async def fake_extract(text: str):
-        calls["n"] += 1
-        if calls["n"] == 1:
+    async def fake_extract(text: str, current_prefs: list[dict]):
+        calls.append(current_prefs)
+        if len(calls) == 1:
             return [
                 {
-                    "category": "visual",
-                    "key": "style",
-                    "value_json": {"style": "pixel"},
+                    "op": "set",
+                    "key": "visual.style",
+                    "value": "pixel",
                     "source": "explicit",
                     "confidence": 0.9,
                 }
             ]
         return [
             {
-                "category": "visual",
-                "key": "style",
-                "value_json": {"style": "cartoon"},
+                "op": "set",
+                "key": "theme",  # 别名 → visual.style
+                "value": "cartoon",
                 "source": "inferred",
                 "confidence": 0.4,
-            }
+            },
+            {
+                "op": "set",
+                "key": "made_up.key",  # 目录外 → 拒绝
+                "value": "x",
+                "source": "explicit",
+                "confidence": 1.0,
+            },
         ]
 
-    monkeypatch.setattr("app.forge.memory.llm_extract.extract_preferences_via_llm", fake_extract)
+    monkeypatch.setattr("app.forge.memory.llm_extract.extract_preference_operations", fake_extract)
     user = User(
         id=uuid4(),
         email=f"llm-{uuid4().hex[:8]}@example.com",
@@ -72,17 +76,66 @@ async def test_upsert_via_llm_does_not_overwrite_explicit(db_session, monkeypatc
     await db_session.flush()
 
     await upsert_preferences_from_text(db_session, user_id=user.id, text="以后都用像素风")
-    await upsert_preferences_from_text(db_session, user_id=user.id, text="这次改成卡通风格试试")
-    row = await db_session.scalar(
-        select(UserPreference).where(
-            UserPreference.user_id == user.id,
-            UserPreference.category == "visual",
-            UserPreference.key == "style",
+    # 第二次抽取应携带现有偏好摘要（合并决策输入）
+    await upsert_preferences_from_text(db_session, user_id=user.id, text="这次试试卡通")
+    assert calls[1] == [
+        {"key": "visual.style", "value": "pixel", "source": "explicit", "confidence": 0.9}
+    ]
+    rows = (
+        await db_session.scalars(
+            select(UserPreferenceV2).where(UserPreferenceV2.user_id == user.id)
         )
+    ).all()
+    assert len(rows) == 1  # 别名归一同行 + 目录外拒绝
+    assert rows[0].preference_key == "visual.style"
+    assert rows[0].value == "pixel" and rows[0].source == "explicit"
+    # 合并被拒（inferred 压不过 explicit）→ 值与溯源保持首次触发语句
+    assert rows[0].note == "以后都用像素风"
+
+
+@pytest.mark.asyncio
+async def test_upsert_filters_inferred_when_disabled(db_session, monkeypatch) -> None:
+    """memory_preferences_inferred=False：inferred 候选被丢弃，explicit 仍写入。"""
+    from app.models.user_preference_v2 import UserPreferenceV2
+
+    monkeypatch.setattr(settings, "memory_preferences", True)
+    monkeypatch.setattr(settings, "memory_preferences_inferred", False)
+
+    async def fake_extract(text: str, current_prefs: list[dict]):
+        return [
+            {
+                "op": "set",
+                "key": "gameplay.difficulty",
+                "value": "hard",
+                "source": "inferred",
+                "confidence": 0.6,
+            },
+            {
+                "op": "set",
+                "key": "visual.style",
+                "value": "pixel",
+                "source": "explicit",
+                "confidence": 1.0,
+            },
+        ]
+
+    monkeypatch.setattr("app.forge.memory.llm_extract.extract_preference_operations", fake_extract)
+    user = User(
+        id=uuid4(),
+        email=f"noi-{uuid4().hex[:8]}@example.com",
+        password_hash="x",
+        email_verified=True,
     )
-    assert row is not None
-    assert row.source == "explicit"
-    assert row.value_json.get("style") == "pixel"
+    db_session.add(user)
+    await db_session.flush()
+
+    await upsert_preferences_from_text(db_session, user_id=user.id, text="随便说点什么")
+    rows = (
+        await db_session.scalars(
+            select(UserPreferenceV2).where(UserPreferenceV2.user_id == user.id)
+        )
+    ).all()
+    assert [r.preference_key for r in rows] == ["visual.style"]
 
 
 @pytest.mark.asyncio
@@ -102,53 +155,16 @@ async def test_upsert_preferences_noop_without_model(db_session, monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_llm_extract_parser_unit(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "preference_extract_enabled", True)
-    monkeypatch.setattr(settings, "preference_extract_model", "tiny")
-    monkeypatch.setattr(settings, "preference_extract_apikey", "sk-test")
-    monkeypatch.setattr(settings, "preference_extract_provider", "openai_compat")
-    monkeypatch.setattr(settings, "preference_extract_base_url", "http://localhost:9")
+async def test_extract_operations_parse_unit() -> None:
+    from app.forge.memory.llm_extract import _parse_operations
 
-    from app.llm.provider import LLMCompletion, Usage
-
-    async def fake_complete(*_a, **_k):
-        return LLMCompletion(
-            content=(
-                '{"preferences":[{"category":"visual","key":"style",'
-                '"value_json":{"style":"pixel"},"source":"explicit","confidence":0.9}]}'
-            ),
-            usage=Usage(1, 1),
-        )
-
-    monkeypatch.setattr("app.llm.provider.complete", fake_complete)
-    rows = await extract_preferences_via_llm("以后都用像素风")
-    assert len(rows) == 1
-    assert rows[0]["source"] == "explicit"
-
-
-@pytest.mark.asyncio
-async def test_active_preferences_physically_deleted_over_cap(db_session, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "memory_preferences_max_active", 50)
-    user = User(
-        id=uuid4(),
-        email=f"cap-{uuid4().hex[:8]}@example.com",
-        password_hash="x",
-        email_verified=True,
+    ops = _parse_operations(
+        '{"operations":[{"op":"set","key":"visual.style","value":"pixel",'
+        '"source":"explicit","confidence":0.9},'
+        '{"op":"remove","key":"gameplay.genre"},'
+        '{"op":"weird","key":"x"}]}'
     )
-    db_session.add(user)
-    await db_session.flush()
-    for i in range(55):
-        await upsert_preference(
-            db_session,
-            user_id=user.id,
-            category="misc",
-            key=f"k{i}",
-            value_json={"n": i},
-            source="inferred",
-        )
-    active = await list_active_preferences(db_session, user.id)
-    assert len(active) == 50
-    total = await db_session.scalar(
-        select(func.count()).select_from(UserPreference).where(UserPreference.user_id == user.id)
-    )
-    assert total == 50
+    assert [o["op"] for o in ops] == ["set", "remove"]  # 非法 op 丢弃
+    assert ops[0]["key"] == "visual.style"
+    fenced = _parse_operations('```json\n{"operations":[]}\n```')
+    assert fenced == []
