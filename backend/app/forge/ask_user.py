@@ -43,6 +43,14 @@ ASK_USER_CONTRACT = (
 )
 
 
+class AskUserRequested(Exception):
+    """节点输出了合法 ask_user 工具调用（payload 为解析结果）。"""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        super().__init__(payload.get("question") or "ask_user")
+        self.payload = payload
+
+
 def parse_ask_user(raw: str) -> dict[str, Any] | None:
     """严格解析；不合法返回 None（调用方按普通产物处理）。"""
     text = (raw or "").strip()
@@ -61,7 +69,8 @@ def parse_ask_user(raw: str) -> dict[str, Any] | None:
     if not question or len(question) > QUESTION_MAX:
         return None
     reason = str(data.get("reason") or "").strip()[:REASON_MAX]
-    raw_options = data.get("options") if isinstance(data.get("options"), list) else []
+    raw_opt = data.get("options")
+    raw_options = raw_opt if isinstance(raw_opt, list) else []
     options: list[str] = []
     for opt in raw_options:
         text_opt = str(opt or "").strip()[:OPTION_LEN]

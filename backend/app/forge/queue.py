@@ -51,6 +51,13 @@ async def enqueue_resume(
     retry_run / dev_requeue）。
     """
     st = await ckpt.load_state(r, run_id, db) or {}
+    if str(st.get("phase") or "") == "agent_question":
+        # ADR-17：回答/跳过统一走 revise；skip 或空回答注入合成回答
+        from app.forge.ask_user import synthetic_answer
+
+        decision = "modify"
+        if not (modify_text or "").strip():
+            modify_text = synthetic_answer()
     from app.forge.checkpoint_slim import hydrate_checkpoint_payloads
 
     st = await hydrate_checkpoint_payloads(db, st)
