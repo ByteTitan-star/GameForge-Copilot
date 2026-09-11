@@ -28,6 +28,7 @@ from app.forge import control as run_ctrl
 from app.forge import state as ckpt
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.art_options_parallel import generate_art_options_parallel
+from app.forge.ask_user import AskUserRequested, parse_ask_user
 from app.forge.assets.picker import asset_pick
 from app.forge.capability import developability_precheck
 from app.forge.checkpoint_slim import hydrate_checkpoint_payloads, slim_checkpoint_payloads
@@ -1028,6 +1029,9 @@ def _build_graph(ctx: _Ctx) -> Any:
             raw = await _streamed_llm_or_fallback(
                 ctx, system_prompt, attempt_msg, "plan", emit_delta=False
             )
+            ask = parse_ask_user(raw)
+            if ask is not None:
+                raise AskUserRequested(ask)
             design_doc = parse_design_doc(raw, ctx.game.title)
             issues = validate_design_doc(design_doc)
             issues.extend(developability_precheck(design_doc))
@@ -1046,6 +1050,41 @@ def _build_graph(ctx: _Ctx) -> Any:
                 },
             )
         raise ValueError("策划稿结构校验失败：" + "; ".join(issues))
+
+    async def _generate_plan_or_ask(
+        ctx: _Ctx, state: ForgeState, user_msg: str
+    ) -> dict[str, Any] | None:
+        """plan 生成 + ask_user 工具拦截（ADR-17）：预算内暂停提问，耗尽自动续答。
+
+        返回 None 表示已暂停为 agent_question（调用方直接 hitl_stop）。
+        """
+        from app.forge.ask_user import budget_remaining, budget_used, synthetic_answer
+
+        try:
+            return await generate_design_doc(PLAN_PROMPT, user_msg)
+        except AskUserRequested as exc:
+            used = budget_used(dict(state))
+            if budget_remaining(dict(state)):
+                await ckpt.save_state(
+                    ctx.r,
+                    ctx.run.id,
+                    {
+                        "phase": "agent_question",
+                        "agent_question": exc.payload,
+                        "ask_user_count": used + 1,
+                    },
+                    ctx.s,
+                )
+                await _pause_hitl(
+                    ctx, "agent_question", {}, extra={"agent_question": exc.payload}
+                )
+                return None
+            # 预算耗尽：注入合成回答重跑一次；模型仍坚持提问则按生成失败处理
+            retried = user_msg + "\n\n【用户对此前提问的回答】\n" + synthetic_answer()
+            try:
+                return await generate_design_doc(PLAN_PROMPT, retried)
+            except AskUserRequested:
+                raise ValueError("策划稿在注入合成回答后仍坚持 ask_user 提问") from exc
 
     async def route_start(
         state: ForgeState,
@@ -1150,7 +1189,9 @@ def _build_graph(ctx: _Ctx) -> Any:
         with observe_phase("plan"):
             await _set_phase(ctx, RunPhase.PLAN)
             user_msg = await _compose_plan_input(ctx, current_input=ctx.run.requirement)
-            design_doc = await generate_design_doc(PLAN_PROMPT, user_msg)
+            design_doc = await _generate_plan_or_ask(ctx, state, user_msg)
+            if design_doc is None:
+                return {"hitl_stop": True, "paused": True}
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
                 return {

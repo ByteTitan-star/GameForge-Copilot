@@ -844,3 +844,8 @@ __all__ = [
     "build_repair_prompt",
     "build_repair_prompt_async",
 ]
+
+# ADR-17：plan 生成可选用 ask_user 工具（先查记忆，预算护栏见 ask_user 模块）
+from app.forge.ask_user import ASK_USER_CONTRACT  # noqa: E402
+
+PLAN_PROMPT = PLAN_PROMPT + "\n\n" + ASK_USER_CONTRACT
