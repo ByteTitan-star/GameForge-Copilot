@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, MessageSquareText, Palette, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronRight, HelpCircle, MessageSquareText, Palette, ShieldCheck, X } from "lucide-react";
 import type { HitlWaitPayload } from "@/api/ws-types";
 import { Button } from "@/components/ui/button";
 import { MarkdownLite } from "@/components/forge/MarkdownLite";
@@ -89,6 +89,9 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
   );
   const [modifyFeedback, setModifyFeedback] = useState("");
   const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null);
+  const [chosenAnswer, setChosenAnswer] = useState<string | null>(null);
+  const isAgentQuestion = payload.node === "agent_question";
+  const agentQuestion = payload.agent_question;
   const isArtReview = payload.node === "art_confirm";
   const isRecovery = isHitlRecoveryNode(payload.node);
   const canRevisePlan = hitlAllows(payload, "revise_plan");
@@ -109,7 +112,8 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
   useEffect(() => {
     setModifyFeedback("");
     setSelectedOption(null);
-  }, [payload.node, payload.art_options]);
+    setChosenAnswer(null);
+  }, [payload.node, payload.art_options, agentQuestion?.question]);
 
   function handlePlanResolve() {
     const note = modifyFeedback.trim();
@@ -124,6 +128,15 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
     if (modifyFeedback.trim()) onResolve("modify", modifyFeedback.trim());
   }
 
+  function handleAnswerSubmit() {
+    const answer = modifyFeedback.trim() || chosenAnswer;
+    if (answer) onResolve("modify", String(answer));
+  }
+
+  function handleSkipAnswer() {
+    onResolve("skip", null);
+  }
+
   function handleRetry() {
     onResolve("approve", null, undefined, retryCommand ?? "retry_implementation");
   }
@@ -134,6 +147,7 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
 
   const artOptions = payload.art_options?.options ?? [];
   const artActionReady = Boolean(selectedOption || modifyFeedback.trim());
+  const answerReady = Boolean(modifyFeedback.trim() || chosenAnswer);
 
   return (
     <section
@@ -143,15 +157,86 @@ export function HitlCard({ payload, onResolve, onReject, busy }: Props) {
       <ReviewHeader
         art={isArtReview}
         title={
-          isArtReview
-            ? t("chooseArtDirection")
-            : isRecovery
-              ? t("hitlFailureTitle")
-              : `${t("confirmDesign")} · ${parsed.title || payload.node}`
+          isAgentQuestion
+            ? t("agentQuestionTitle")
+            : isArtReview
+              ? t("chooseArtDirection")
+              : isRecovery
+                ? t("hitlFailureTitle")
+                : `${t("confirmDesign")} · ${parsed.title || payload.node}`
         }
       />
 
-      {isArtReview ? (
+      {isAgentQuestion && agentQuestion ? (
+        <div className="space-y-2.5 p-3 sm:px-3.5">
+          <div className="flex items-start gap-2">
+            <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8b641c]" aria-hidden="true" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-[15px] font-bold leading-6 text-[#141a21]">
+                {agentQuestion.question}
+              </p>
+              {agentQuestion.reason ? (
+                <p className="text-[13px] leading-5 text-black/55">{agentQuestion.reason}</p>
+              ) : null}
+            </div>
+          </div>
+          {agentQuestion.options && agentQuestion.options.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {agentQuestion.options.map((option) => {
+                const active = chosenAnswer === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    disabled={busy}
+                    aria-pressed={active}
+                    onClick={() =>
+                      setChosenAnswer((prev) => (prev === option ? null : option))
+                    }
+                    className={`border px-3 py-1.5 text-[13px] font-semibold transition-[border-color,background-color] duration-150 ${
+                      active
+                        ? "border-[#23877d] bg-[#f2faf8] text-[#17665f]"
+                        : "border-black/[0.12] bg-white text-black/70 hover:border-[#8dbdb7]"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <label className="block space-y-1">
+            <span className={labelClass}>{t("agentQuestionLabel")}</span>
+            <textarea
+              rows={2}
+              value={modifyFeedback}
+              disabled={busy}
+              onChange={(e) => setModifyFeedback(e.target.value)}
+              placeholder={t("agentQuestionPlaceholder")}
+              className={fieldClass}
+            />
+          </label>
+          <div className="flex items-center gap-2 pt-0.5">
+            <Button
+              size="sm"
+              disabled={busy || !answerReady}
+              onClick={handleAnswerSubmit}
+              className="bg-[#23877d] text-white hover:bg-[#1c6f66]"
+            >
+              {t("agentQuestionSubmit")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={handleSkipAnswer}
+              className="border-black/[0.14] text-black/65"
+            >
+              {t("agentQuestionSkip")}
+            </Button>
+          </div>
+        </div>
+      ) : isArtReview ? (
         <div className="space-y-2.5 p-3 sm:px-3.5">
           <p className="text-[14px] font-medium leading-5 text-black/65">{t("chooseArtDirectionHint")}</p>
 

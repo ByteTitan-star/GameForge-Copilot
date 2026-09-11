@@ -5,6 +5,7 @@ const DEFAULT_COMMANDS: Record<string, readonly string[]> = {
   art_confirm: ["select_art_a", "select_art_b", "revise_art", "revise_plan", "cancel_run"],
   qa_failed: ["retry_implementation", "revise_plan", "cancel_run"],
   sandbox_failed: ["retry_infra", "retry_implementation", "revise_plan", "cancel_run"],
+  agent_question: ["revise_plan", "cancel_run"],
 };
 
 export function hitlCommands(payload: Pick<HitlWaitPayload, "node" | "allowed_commands">): string[] {
@@ -34,6 +35,7 @@ const DECISION_COMMAND: Record<string, Record<string, string>> = {
   },
   qa_failed: { approve: "retry_implementation", modify: "retry_implementation" },
   sandbox_failed: { approve: "retry_infra", modify: "retry_implementation" },
+  agent_question: { modify: "revise_plan", skip: "revise_plan" },
 };
 
 export function commandForHitlAction(
@@ -50,6 +52,7 @@ export function nextPhaseAfterHitl(
   command?: string | null,
 ): "plan" | "art" | "code" {
   if (command === "revise_plan") return "plan";
+  if (node === "agent_question") return "plan";
   if (node === "plan_confirm" || node === "art_confirm") return "art";
   return "code";
 }
