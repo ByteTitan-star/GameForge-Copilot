@@ -24,6 +24,7 @@ Design-review follow-up (verify + modification guide):
 | [ADR-14](./ADR-14-pinecone-rag-knowledge-base.md) | Pinecone RAG Knowledge Base | **Proposed** | （待审批） |
 | [ADR-15](./ADR-15-preference-memory-as-is.md) | Preference Memory（As-Is） | **Accepted**（取代 ADR-02 / ADR-06 偏好） | （Owner 审阅） |
 | [ADR-16](./ADR-16-preference-memory-to-be.md) | Preference Memory（To-Be：Catalog + Policy + Resolver） | **Accepted**（目标态；ADR-15 仍为迁移前 As-Is） | ByteTitan-star |
+| [ADR-17](./ADR-17-ask-user-tool.md) | On-demand HITL（ask_user 工具） | **Accepted** | ByteTitan-star |
 
 Sign-off record: [ACCEPT-CHECKLIST.md](./ACCEPT-CHECKLIST.md)
 Feature flag defaults: [FLAG-INVENTORY.md](./FLAG-INVENTORY.md)
