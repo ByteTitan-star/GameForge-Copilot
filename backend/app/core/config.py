@@ -256,8 +256,14 @@ class Settings(BaseSettings):
     llm_code_max_tokens: int = 32768
     # 输出截断后最多续写轮数（每轮独立 LLM 调用）
     llm_continuation_max_rounds: int = 3
-    # 续写 prompt 携带的已生成内容尾部字符数
-    llm_continuation_tail_chars: int = 8000
+    # 续写 prompt 携带的已生成内容尾部字符数（#159：原 8000 ×3；BYOK 模型上下文不一，
+    # 按模型能力可调，禁止一刀切拉满——长上下文检索衰减 + 每轮重发的成本）
+    llm_continuation_tail_chars: int = 24000
+    # R1 全量加载阈值：累计输出 ≤ 此值时续写轮直接携带完整原文（≈12k token，主流模型安全）
+    llm_continuation_full_load_chars: int = 48000
+    # R2 结构化续写上下文：头部锚点 / 符号映射的字符上限
+    llm_continuation_head_chars: int = 2000
+    llm_continuation_symbol_map_chars: int = 4000
     # 默认「直连（绕过桌面/系统代理）」的国内 LLM host，逗号分隔。
     # httpx 0.28 在 Windows 上会读注册表代理（即便无 *_PROXY 环境变量），
     # 国内 provider 走该代理常因代理无对应出口而超时；命中此处则强制直连。
