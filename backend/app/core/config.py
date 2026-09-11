@@ -297,6 +297,16 @@ class Settings(BaseSettings):
     audit_lexicon_enabled: bool = True
     audit_lexicon_dir: str = ""
 
+    # 平台预设视觉验收模型（C 级软验收，#160）：playtest 成功后用截图 + 设计意图判风格漂移。
+    # 仅 warning：不改 qa_ok、不阻断 promote；未配置（model/apikey 任一为空）即整体跳过。
+    # admin 后台 DB 配置优先，逐字段回退这些 env。
+    visual_acceptance_provider: str = "openai_compat"
+    visual_acceptance_model: str = ""  # 必须是视觉模型，如 glm-5.3-flash / gpt-4o
+    visual_acceptance_apikey: str = ""  # 平台 key，不进用户配置表
+    visual_acceptance_base_url: str = ""  # compat 必填
+    visual_acceptance_timeout_s: int = 30  # 单次判定读超时：超时即跳过，不拖慢 QA
+    visual_acceptance_max_tokens: int = 800  # 判定 JSON 输出预算（含可能的 reasoning）
+
     # 全局
     env: str = "development"
     # ADR-07 P1-20：dev 调试路由显式开关（默认关；本地/pytest 在 .env 或 conftest 打开）

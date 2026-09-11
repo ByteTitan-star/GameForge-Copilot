@@ -37,15 +37,36 @@ class AdminAuditLlmSettings(BaseModel):
     max_buffer_chars: int | None = Field(default=None, ge=50, le=100_000)
 
 
+class AdminVisualLlmSettings(BaseModel):
+    """平台预设视觉验收模型（C 级软验收）。GET 回 masked apikey；PUT 收明文（空/masked=保留旧值）。
+
+    与用户 LLM 配置无关；未配置 model/apikey 即整体跳过视觉验收。
+    """
+
+    enabled: bool = True
+    provider: str = "openai_compat"
+    model: str = ""
+    apikey: str = ""
+    base_url: str = ""
+
+
 class AdminSettings(BaseModel):
     default_daily_token_limit: int
     default_monthly_token_limit: int = 10_000_000
     default_rate_limit_per_min: int
     admin_contact_email: str = ""
     audit_llm: AdminAuditLlmSettings | None = None
+    visual_llm: AdminVisualLlmSettings | None = None
 
 
 class AdminAuditLlmTestResp(BaseModel):
+    tested_ok: bool
+    error: str | None = None
+
+
+class AdminVisualLlmTestResp(BaseModel):
+    """视觉模型连通测试：发一张探针图，tested_ok 要求模型真正读到了图片内容。"""
+
     tested_ok: bool
     error: str | None = None
 

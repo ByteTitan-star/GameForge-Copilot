@@ -5188,6 +5188,63 @@
         ]
       }
     },
+    "/api/v1/admin/settings/visual-llm/test": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Test Visual Llm",
+        "description": "视觉验收模型连通测试（表单当前值 dry-test，不落库）。\n\n发一张探针图：纯文本模型会 400 或读不出图片，都判失败，避免配了个看不见图的模型。\napikey 为空/masked 时回退 DB 已存密钥；按 admin 限流防成本放大。",
+        "operationId": "test_visual_llm_api_v1_admin_settings_visual_llm_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminVisualLlmSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AdminVisualLlmTestResp_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "探测限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/audit-logs": {
       "get": {
         "tags": [
@@ -6265,6 +6322,16 @@
                 "type": "null"
               }
             ]
+          },
+          "visual_llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdminVisualLlmSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -6416,6 +6483,63 @@
         ],
         "title": "AdminUserUsage"
       },
+      "AdminVisualLlmSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "openai_compat"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": ""
+          },
+          "apikey": {
+            "type": "string",
+            "title": "Apikey",
+            "default": ""
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "AdminVisualLlmSettings",
+        "description": "平台预设视觉验收模型（C 级软验收）。GET 回 masked apikey；PUT 收明文（空/masked=保留旧值）。\n\n与用户 LLM 配置无关；未配置 model/apikey 即整体跳过视觉验收。"
+      },
+      "AdminVisualLlmTestResp": {
+        "properties": {
+          "tested_ok": {
+            "type": "boolean",
+            "title": "Tested Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tested_ok"
+        ],
+        "title": "AdminVisualLlmTestResp",
+        "description": "视觉模型连通测试：发一张探针图，tested_ok 要求模型真正读到了图片内容。"
+      },
       "AnalyticsTopItem": {
         "properties": {
           "game_id": {
@@ -6545,6 +6669,18 @@
           "data"
         ],
         "title": "ApiResponse[AdminUserItem]"
+      },
+      "ApiResponse_AdminVisualLlmTestResp_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminVisualLlmTestResp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[AdminVisualLlmTestResp]"
       },
       "ApiResponse_CreatorProfile_": {
         "properties": {
