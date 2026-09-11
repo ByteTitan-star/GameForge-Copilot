@@ -62,12 +62,63 @@ def test_parse_verdict_rejects_bad_output(bad: str) -> None:
 
 def test_warning_lines_variants() -> None:
     assert va.warning_lines(None) == []
-    assert va.warning_lines({**_VERDICT, "match": True}) == []
+    assert va.warning_lines({"match": True, "issues": [], "observed": {}}) == []
+    # 实测模型可能在给出具体 issues 的同时仍判 match=true：issues 必须保留
+    assert va.warning_lines({**_VERDICT, "match": True}) == va.warning_lines(_VERDICT)
     lines = va.warning_lines(_VERDICT)
-    assert lines[0] == "[layout/high] START button is right-aligned, brief asks left"
+    # layout 类无代码冲突证据被丢弃，只剩 theme 条目
+    assert lines == ["[theme/low] palette slightly warmer than brief"]
     # match=false 但无 issues → observed 摘要兜底
     fallback = va.warning_lines({"match": False, "issues": [], "observed": {"summary": "light UI"}})
-    assert fallback == ["[style/low] render does not match the design brief: light UI"]
+    assert fallback == ["[style/low] render does not match the design brief (light UI)"]
+    # 无 issues 但分维度 checks 有失败 → 按失败维度合成
+    synth = va.warning_lines(
+        {"match": False, "checks": {"theme": True, "style": False}, "issues": [], "observed": {}}
+    )
+    assert synth == ["[style/medium] render fails the style check against the design brief"]
+
+
+def test_deterministic_layout_comparison() -> None:
+    """布局比对：模型只提取位置，结论由代码做（元素证据支撑才告警）。"""
+    brief = (
+        "Title: Space Runner\nVisual style: dark-themed UI\n"
+        "Art direction: {\"layout\": \"single START button anchored on the LEFT half\"}"
+    )
+    els_right = [{"label": "START button", "position": "right"}]
+    els_left = [{"label": "START button", "position": "left"}]
+    # brief 声明 left，实际 right → 冲突
+    assert va._layout_conflict(brief, els_right) == ("START button", "left", "right")
+    # 一致 → 无冲突
+    assert va._layout_conflict(brief, els_left) is None
+    # 找不到对应元素 → 不判（宁漏勿误报）
+    assert va._layout_conflict(brief, [{"label": "score board", "position": "right"}]) is None
+    # brief 无方位词 → 无 hint
+    assert va._layout_conflict("Visual style: neon", els_right) is None
+    # 中文方位
+    assert va._layout_conflict("按钮在左侧", [{"label": "开始按钮", "position": "right"}]) == (
+        "开始按钮",
+        "left",
+        "right",
+    )
+
+
+def test_warning_lines_layout_needs_code_evidence() -> None:
+    """模型自判 layout 不稳定：无代码冲突证据时丢弃 layout 类，防误报。"""
+    model_only = va.parse_verdict(
+        json.dumps(
+            {
+                "match": False,
+                "checks": {"layout": False},
+                "issues": [{"kind": "layout", "severity": "high", "detail": "model guess"}],
+                "observed": {},
+            }
+        )
+    )
+    assert va.warning_lines(model_only) == []  # 无 layout_conflict 字段 → 丢弃
+    with_conflict = {**model_only, "layout_conflict": ("START", "left", "right")}
+    lines = va.warning_lines(with_conflict)
+    assert any("[layout/high]" in w and "START" in w for w in lines)
+    assert not any("model guess" in w for w in lines)
 
 
 def test_visual_warning_block_for_repair_prompt() -> None:
