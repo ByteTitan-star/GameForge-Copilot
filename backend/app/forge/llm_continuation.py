@@ -1,4 +1,10 @@
-"""Code 阶段 LLM 输出截断检测与续写。"""
+"""Code 阶段 LLM 输出截断检测与续写。
+
+#159 上下文策略（详见 continuation_context.py）：
+- 无截断 happy path 单次调用，零额外开销；
+- 截断后续写轮优先全量携带（≤48k chars），超限给头部锚点+符号映射+括号栈+24k 尾窗；
+- 耗尽仍抛 OUTPUT_TRUNCATED_ERROR → 子图 retry/diagnose 契约不变。
+"""
 
 from __future__ import annotations
 
@@ -114,12 +120,25 @@ def build_continuation_user_msg(
     tail_chars: int | None = None,
 ) -> str:
     """续写轮 user message：仅续写指令 + 可选任务摘要 + 已生成尾部（不含首轮完整 prompt）。"""
-    tail_limit = tail_chars or settings.llm_continuation_tail_chars
-    tail = partial_content[-tail_limit:] if len(partial_content) > tail_limit else partial_content
+    from app.forge.continuation_context import continuation_sections
+
     parts = [_CONTINUATION_NOTICE]
     if context_summary:
         parts.append(f"【任务摘要】\n{context_summary.strip()}")
-    parts.append(f"【已生成内容末尾（从此处继续）】\n{tail}")
+    if len(partial_content) <= settings.llm_continuation_full_load_chars:
+        parts.append(f"【已生成内容（完整，从此处继续）】\n{partial_content}")
+        return "\n\n".join(parts)
+
+    sections = continuation_sections(partial_content, tail_chars=tail_chars)
+    if sections.symbols:
+        parts.append(
+            "【已定义符号/文件结构（只可引用，不得重复定义）】\n" + "\n".join(sections.symbols)
+        )
+    if sections.bracket:
+        parts.append(f"【未闭合结构（先补齐这些）】\n{sections.bracket}")
+    if sections.head:
+        parts.append(f"【内容头部锚点】\n{sections.head}")
+    parts.append(f"【已生成内容末尾（从此处继续）】\n{sections.tail}")
     return "\n\n".join(parts)
 
 
