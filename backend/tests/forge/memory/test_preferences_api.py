@@ -1,11 +1,8 @@
-"""P1：用户偏好 API 与存储。"""
+"""偏好 API（ADR-16 v2）：目录键形态 + 归档语义。"""
 
 from __future__ import annotations
 
 import httpx
-from sqlalchemy import select
-
-from app.models.user_preference import UserPreference
 
 
 async def test_preferences_crud_roundtrip(verified_client: httpx.AsyncClient) -> None:
@@ -15,49 +12,49 @@ async def test_preferences_crud_roundtrip(verified_client: httpx.AsyncClient) ->
 
     put = await verified_client.put(
         "/api/v1/me/preferences",
-        json={
-            "category": "visual",
-            "key": "style",
-            "value_json": {"style": "pixel"},
-        },
+        json={"preference_key": "theme", "value": "pixel"},  # 别名 → visual.style
     )
     assert put.status_code == 200, put.text
     body = put.json()["data"]
-    assert body["category"] == "visual"
-    assert body["value_json"]["style"] == "pixel"
+    assert body["preference_key"] == "visual.style"  # 归一后落库
+    assert body["value"] == "pixel" and body["source"] == "explicit"
 
     listed = await verified_client.get("/api/v1/me/preferences")
-    assert listed.status_code == 200
     items = listed.json()["data"]["items"]
-    assert len(items) == 1
-    assert items[0]["key"] == "style"
+    assert [i["preference_key"] for i in items] == ["visual.style"]
 
-    cleared = await verified_client.delete("/api/v1/me/preferences")
-    assert cleared.status_code == 200
-    assert cleared.json()["data"]["deleted"] == 1
+    # 单键删除 = 归档
+    removed = await verified_client.delete("/api/v1/me/preferences/visual.style")
+    assert removed.status_code == 200
+    assert removed.json()["data"]["archived"] == 1
     again = await verified_client.get("/api/v1/me/preferences")
     assert again.json()["data"]["items"] == []
 
 
-async def test_preferences_survive_game_delete(
-    verified_client: httpx.AsyncClient, db_session
+async def test_preferences_reject_unknown_key_and_bad_value(
+    verified_client: httpx.AsyncClient,
 ) -> None:
-    """ADR-02 MVP：Explicit 偏好挂在 user，删 Game 不级联删除。"""
-    await verified_client.put(
+    unknown = await verified_client.put(
         "/api/v1/me/preferences",
-        json={
-            "category": "visual",
-            "key": "style",
-            "value_json": {"style": "pixel"},
-        },
+        json={"preference_key": "random.schema_key", "value": "x"},
     )
-    game = await verified_client.post(
-        "/api/v1/games", json={"title": "临时", "requirement": "测试"}
-    )
-    assert game.status_code == 201, game.text
-    game_id = game.json()["data"]["game_id"]
-    deleted = await verified_client.delete(f"/api/v1/games/{game_id}")
-    assert deleted.status_code in (200, 204), deleted.text
+    assert unknown.status_code == 400, unknown.text
 
-    prefs = await db_session.scalars(select(UserPreference))
-    assert len(list(prefs.all())) == 1
+    bad_value = await verified_client.put(
+        "/api/v1/me/preferences",
+        json={"preference_key": "visual.style", "value": "watercolor"},
+    )
+    assert bad_value.status_code == 400, bad_value.text
+
+
+async def test_clear_all_archives_not_deletes(verified_client: httpx.AsyncClient) -> None:
+    await verified_client.put(
+        "/api/v1/me/preferences", json={"preference_key": "visual.style", "value": "pixel"}
+    )
+    await verified_client.put(
+        "/api/v1/me/preferences", json={"preference_key": "gameplay.genre", "value": "puzzle"}
+    )
+    cleared = await verified_client.delete("/api/v1/me/preferences")
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["archived"] == 2
+    assert (await verified_client.get("/api/v1/me/preferences")).json()["data"]["items"] == []

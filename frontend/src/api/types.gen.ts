@@ -901,8 +901,28 @@ export interface paths {
         /** Upsert Preference */
         put: operations["upsert_preference_api_v1_me_preferences_put"];
         post?: never;
-        /** Clear Preferences */
+        /**
+         * Clear Preferences
+         * @description 清空 = 全部归档（ADR-16：不物理删除）。
+         */
         delete: operations["clear_preferences_api_v1_me_preferences_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/preferences/{preference_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Preference */
+        delete: operations["remove_preference_api_v1_me_preferences__preference_key__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2119,6 +2139,10 @@ export interface components {
         ApiResponse_PreferenceList_: {
             data: components["schemas"]["PreferenceList"];
         };
+        /** ApiResponse[PreferenceRemoveResult] */
+        ApiResponse_PreferenceRemoveResult_: {
+            data: components["schemas"]["PreferenceRemoveResult"];
+        };
         /** ApiResponse[PreviewTokenResp] */
         ApiResponse_PreviewTokenResp_: {
             data: components["schemas"]["PreviewTokenResp"];
@@ -2212,13 +2236,6 @@ export interface components {
             /** Data */
             data: {
                 [key: string]: unknown;
-            };
-        };
-        /** ApiResponse[dict[str, int]] */
-        ApiResponse_dict_str__int__: {
-            /** Data */
-            data: {
-                [key: string]: number;
             };
         };
         /** ApiResponse[dict[str, str]] */
@@ -3034,27 +3051,26 @@ export interface components {
              */
             sent: boolean;
         };
-        /** PreferenceItem */
+        /**
+         * PreferenceItem
+         * @description 目录槽位形态；value 为按槽位类型校验后的标量文本。
+         */
         PreferenceItem: {
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Category */
-            category: string;
-            /** Key */
-            key: string;
-            /** Value Json */
-            value_json: {
-                [key: string]: unknown;
-            };
+            /** Preference Key */
+            preference_key: string;
+            /** Value */
+            value: string;
+            /** Value Type */
+            value_type: string;
             /** Source */
             source: string;
             /** Confidence */
             confidence: number;
-            /** Status */
-            status: string;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -3063,21 +3079,20 @@ export interface components {
             /** Items */
             items: components["schemas"]["PreferenceItem"][];
         };
-        /** PreferenceUpsert */
+        /** PreferenceRemoveResult */
+        PreferenceRemoveResult: {
+            /** Archived */
+            archived: number;
+        };
+        /**
+         * PreferenceUpsert
+         * @description 用户显式设置：key 须在目录内（别名自动归一），value 须符合槽位类型。
+         */
         PreferenceUpsert: {
-            /** Category */
-            category: string;
-            /** Key */
-            key: string;
-            /** Value Json */
-            value_json: {
-                [key: string]: unknown;
-            };
-            /**
-             * Status
-             * @default active
-             */
-            status: string;
+            /** Preference Key */
+            preference_key: string;
+            /** Value */
+            value: string | boolean | number;
         };
         /** PreviewTokenResp */
         PreviewTokenResp: {
@@ -5856,7 +5871,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse_dict_str__int__"];
+                    "application/json": components["schemas"]["ApiResponse_PreferenceRemoveResult_"];
+                };
+            };
+        };
+    };
+    remove_preference_api_v1_me_preferences__preference_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preference_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_PreferenceRemoveResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
