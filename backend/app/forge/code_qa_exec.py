@@ -32,6 +32,11 @@ from app.forge.prompts import (
 )
 from app.forge.qa.diagnose import diagnose_playtest_failure
 from app.forge.reliability.artifact_gate import derive_artifact_gate
+from app.forge.visual_acceptance import (
+    evaluate_visual_acceptance,
+    visual_warning_block,
+    warning_lines,
+)
 from app.hosting import serve, store
 from app.models.game_version import GameVersion
 from app.sandbox import get_sandbox
@@ -286,6 +291,9 @@ async def execute_code_or_repair(
                     repair_parts.append(f"【自动试玩/构建错误】\n{last_error}")
                 if qa_diagnosis:
                     repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
+                visual_block = visual_warning_block(state)
+                if visual_block:
+                    repair_parts.append(visual_block)
                 repair_user = format_project_repair_input(
                     "\n\n".join(repair_parts),
                     parsed_retry,
@@ -324,6 +332,9 @@ async def execute_code_or_repair(
                 repair_parts.append(f"【自动试玩/构建错误】\n{last_error}")
             if qa_diagnosis:
                 repair_parts.append(f"【QA 根因分析】\n{qa_diagnosis}")
+            visual_block = visual_warning_block(state)
+            if visual_block:
+                repair_parts.append(visual_block)
             repair_parts.append(f"【当前完整 index.html】\n{masked_html}")
             user_msg = "\n\n".join(repair_parts)
             system_prompt = await build_repair_prompt_async(
@@ -751,6 +762,14 @@ async def execute_playtest(
         if not result_ok and failure_kind is None:
             failure_kind = "product"
 
+        # C 级视觉验收（#160）：仅在 B 级通过且有截图时运行；只产 warning，不改 qa_ok
+        visual_warnings: list[str] = []
+        if result_ok and pt is not None and pt.thumbnail:
+            verdict = await evaluate_visual_acceptance(
+                ctx.s, pt.thumbnail, design_doc, state.get("art_direction") or {}
+            )
+            visual_warnings = warning_lines(verdict)
+
         log_excerpt = "\n".join(console_logs[:5]) if console_logs else ""
         await publish_event(
             ctx.run.id,
@@ -764,6 +783,7 @@ async def execute_playtest(
                 "attempt": attempt,
                 "failure_kind": None if result_ok else failure_kind,
                 "motion_signal": motion_signal,
+                "visual_warnings": visual_warnings,
             },
         )
 
@@ -782,6 +802,7 @@ async def execute_playtest(
                 "attempt": attempt,
                 "candidate_version": version,
                 "candidate_ready": True,
+                "visual_warnings": visual_warnings,
             }
 
         return {

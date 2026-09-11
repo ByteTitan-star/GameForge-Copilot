@@ -369,6 +369,7 @@ class ForgeState(TypedDict, total=False):
     candidate_kind: str | None
     playtest_errors: list[str]
     console_logs: list[str]
+    visual_warnings: list[str]  # C 级视觉验收（#160）：仅 warning，不影响 qa_ok
     failure_kind: str | None
     motion_signal: str | None
     qa_diagnosis: str
