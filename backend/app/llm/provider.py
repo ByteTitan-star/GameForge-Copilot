@@ -258,6 +258,60 @@ async def test_connectivity(
         return False, str(e)[:200]
 
 
+# 8×8 纯白 PNG：视觉连通探针用，模型必须真正读到图片才能答出「亮」
+_VISION_PROBE_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR42mP4hQMwDC0JAEMPu4FyxXnhAAAAAElFTkSuQmCC"
+)
+_VISION_PROBE_OK_WORDS = ("light", "white", "bright", "亮", "白")
+
+
+async def test_vision_connectivity(
+    provider: LLMProvider,
+    apikey: str,
+    model: str,
+    base_url: str | None = None,
+) -> tuple[bool, str | None]:
+    """探测视觉模型：发一张纯白图要求判亮暗；答不出「亮」视为不支持图片输入。
+
+    比 test_connectivity 多一层能力校验：纯文本模型对图片 part 会 400，或忽略图片瞎答，
+    两者都不能算配置成功（#160）。
+    """
+    trimmed = model.strip()
+    if not trimmed:
+        return False, "model 不能为空"
+    if provider == LLMProvider.OPENAI_COMPAT and not base_url:
+        return False, "openai_compat 需配置 base_url"
+    try:
+        result = await complete(
+            provider,
+            apikey,
+            trimmed,
+            "You are a connectivity probe for a vision model.",
+            [
+                {
+                    "type": "text",
+                    "text": (
+                        "Is this image light or dark? Reply with exactly one word: light or dark."
+                    ),
+                },
+                image_content_part(_VISION_PROBE_PNG),
+            ],
+            base_url=base_url,
+            max_tokens=256,
+            read_timeout_s=settings.visual_acceptance_timeout_s,
+        )
+        answer = result.content.strip()
+        if not answer:
+            return False, "模型返回空内容：thinking 可能耗尽 max_tokens，请关闭 thinking"
+        if not any(w in answer.lower() for w in _VISION_PROBE_OK_WORDS):
+            return False, f"模型未能读取图片内容（返回：{answer[:60]}），请确认是视觉模型"
+        return True, None
+    except httpx.HTTPError as e:
+        return False, f"网络错误: {e}"
+    except Exception as e:  # noqa: BLE001 探测失败统一返回文案
+        return False, str(e)[:200]
+
+
 async def list_models(provider: LLMProvider, apikey: str, base_url: str | None = None) -> list[str]:
     """按 provider 拉 /models；失败回退白名单（docs/05 §模型列表来源）。"""
     try:

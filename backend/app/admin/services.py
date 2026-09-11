@@ -15,12 +15,13 @@ from app.models.audit_log import AuditLog
 from app.models.game import Game
 from app.models.system_setting import SystemSetting
 from app.models.user import User
-from app.schemas.admin import AdminAuditLlmSettings, AdminSettings
+from app.schemas.admin import AdminAuditLlmSettings, AdminSettings, AdminVisualLlmSettings
 from app.usage import quota as quota_mod
 
 _LIMITS_KEY = "limits"
 _GENERAL_KEY = "general"
 _AUDIT_LLM_KEY = "audit_llm"
+_VISUAL_LLM_KEY = "visual_llm"
 
 
 def _mask_apikey(apikey: str) -> str:
@@ -90,6 +91,42 @@ async def get_audit_llm_settings_view(db: AsyncSession) -> AdminAuditLlmSettings
         interval_ms=cfg["interval_ms"],
         min_chars_between=cfg["min_chars_between"],
         max_buffer_chars=cfg["max_buffer_chars"],
+    )
+
+
+async def get_visual_llm_config(db: AsyncSession) -> dict:
+    """视觉验收模型生效配置（明文 key）：DB 覆盖优先，逐字段回退 env。
+
+    被 forge.visual_acceptance（worker 侧）和 admin 测试端点共用。与审核模型同理
+    必须 select + populate_existing，避免 worker 长会话命中 identity map 旧快照。
+    """
+    row = (
+        await db.execute(
+            select(SystemSetting)
+            .where(SystemSetting.key == _VISUAL_LLM_KEY)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    v = (row.value or {}) if row is not None else {}
+    apikey_enc = v.get("apikey_enc", "")
+    apikey = crypto.decrypt_apikey(apikey_enc) if apikey_enc else settings.visual_acceptance_apikey
+    return {
+        "enabled": bool(v.get("enabled", True)),
+        "provider": str(v.get("provider") or settings.visual_acceptance_provider),
+        "model": str(v.get("model") or settings.visual_acceptance_model).strip(),
+        "apikey": apikey,
+        "base_url": str(v.get("base_url") or settings.visual_acceptance_base_url),
+    }
+
+
+async def get_visual_llm_settings_view(db: AsyncSession) -> AdminVisualLlmSettings:
+    cfg = await get_visual_llm_config(db)
+    return AdminVisualLlmSettings(
+        enabled=cfg["enabled"],
+        provider=cfg["provider"],
+        model=cfg["model"],
+        apikey=_mask_apikey(cfg["apikey"]) if cfg["apikey"] else "",
+        base_url=cfg["base_url"],
     )
 
 
@@ -199,6 +236,7 @@ async def get_settings(db: AsyncSession) -> AdminSettings:
         default_rate_limit_per_min=rate,
         admin_contact_email=await get_admin_contact_email(db),
         audit_llm=await get_audit_llm_settings_view(db),
+        visual_llm=await get_visual_llm_settings_view(db),
     )
 
 
@@ -231,6 +269,14 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
         else:
             audit_row.value = audit_value
             audit_row.updated_by = admin.id
+    if req.visual_llm is not None:
+        visual_value = await _merge_visual_llm_value(db, req.visual_llm)
+        visual_row = await db.get(SystemSetting, _VISUAL_LLM_KEY)
+        if visual_row is None:
+            db.add(SystemSetting(key=_VISUAL_LLM_KEY, value=visual_value, updated_by=admin.id))
+        else:
+            visual_row.value = visual_value
+            visual_row.updated_by = admin.id
     db.add(
         AuditLog(
             actor_id=admin.id,
@@ -239,8 +285,9 @@ async def update_settings(db: AsyncSession, admin: User, req: AdminSettings) -> 
             detail={
                 **value,
                 **general_value,
-                # 审核模型只记非敏感字段，apikey 任何形态都不进审计日志
+                # 平台模型只记非敏感字段，apikey 任何形态都不进审计日志
                 **({"audit_llm": _audit_log_detail(req.audit_llm)} if req.audit_llm else {}),
+                **({"visual_llm": _llm_log_detail(req.visual_llm)} if req.visual_llm else {}),
             },
         )
     )
@@ -283,12 +330,36 @@ async def _merge_audit_llm_value(db: AsyncSession, req: AdminAuditLlmSettings) -
 
 def _audit_log_detail(req: AdminAuditLlmSettings) -> dict:
     """AuditLog detail 里的审核模型快照：仅非敏感字段，绝不记 apikey。"""
+    return _llm_log_detail(req)
+
+
+def _llm_log_detail(req: AdminAuditLlmSettings | AdminVisualLlmSettings) -> dict:
+    """平台模型配置的审计快照：仅非敏感字段，绝不记 apikey。"""
     return {
         "enabled": req.enabled,
         "provider": req.provider,
         "model": req.model,
         "base_url": req.base_url,
         "apikey_changed": bool(req.apikey.strip()) and "***" not in req.apikey,
+    }
+
+
+async def _merge_visual_llm_value(db: AsyncSession, req: AdminVisualLlmSettings) -> dict:
+    """合并视觉模型配置：apikey 为空或 masked → 保留 DB 旧密文；否则加密新 key。"""
+    existing = await db.get(SystemSetting, _VISUAL_LLM_KEY)
+    old = (existing.value or {}) if existing else {}
+    apikey = req.apikey.strip()
+    apikey_enc = (
+        old.get("apikey_enc", "")
+        if not apikey or "***" in apikey
+        else crypto.encrypt_apikey(apikey)
+    )
+    return {
+        "enabled": req.enabled,
+        "provider": req.provider,
+        "model": req.model.strip(),
+        "apikey_enc": apikey_enc,
+        "base_url": req.base_url.strip(),
     }
 
 

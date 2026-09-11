@@ -1,5 +1,6 @@
 """管理后台端点（M8）：用户管理 + 全局设置 + 审计 + 游戏列表，admin only。"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Query
@@ -20,13 +21,19 @@ from app.schemas.admin import (
     AdminSettings,
     AdminUserItem,
     AdminUserPatch,
+    AdminVisualLlmSettings,
+    AdminVisualLlmTestResp,
     AuditLogItem,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-ERR_404 = {404: {"model": ErrorResponse, "description": "用户不存在"}}
-ERR_429 = {429: {"model": ErrorResponse, "description": "探测限流"}}
+ERR_404: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorResponse, "description": "用户不存在"}
+}
+ERR_429: dict[int | str, dict[str, Any]] = {
+    429: {"model": ErrorResponse, "description": "探测限流"}
+}
 
 
 @router.get("/users", response_model=PaginatedData[AdminUserItem])
@@ -53,7 +60,9 @@ async def list_users(
             )
             for u in rows
         ],
-        total=total, page=page, size=size,
+        total=total,
+        page=page,
+        size=size,
     )
 
 
@@ -151,6 +160,45 @@ async def test_audit_llm(
         req.base_url.strip() or None,
     )
     return ApiResponse(data=AdminAuditLlmTestResp(tested_ok=ok, error=err))
+
+
+@router.post(
+    "/settings/visual-llm/test",
+    response_model=ApiResponse[AdminVisualLlmTestResp],
+    responses=ERR_429,
+)
+async def test_visual_llm(
+    admin: AdminUser,
+    db: DbSession,
+    r: RedisClient,
+    req: AdminVisualLlmSettings,
+) -> ApiResponse[AdminVisualLlmTestResp]:
+    """视觉验收模型连通测试（表单当前值 dry-test，不落库）。
+
+    发一张探针图：纯文本模型会 400 或读不出图片，都判失败，避免配了个看不见图的模型。
+    apikey 为空/masked 时回退 DB 已存密钥；按 admin 限流防成本放大。
+    """
+    await check_rate_limit(
+        r,
+        f"rl:llm-probe:{admin.id}",
+        settings.llm_probe_rate_limit_per_min,
+        60,
+    )
+    apikey = req.apikey.strip()
+    if not apikey or "***" in apikey:
+        cfg = await services.get_visual_llm_config(db)
+        apikey = cfg["apikey"]
+    try:
+        prov = LLMProvider(req.provider)
+    except ValueError:
+        prov = LLMProvider.OPENAI_COMPAT
+    ok, err = await llm_provider.test_vision_connectivity(
+        prov,
+        apikey,
+        req.model.strip(),
+        req.base_url.strip() or None,
+    )
+    return ApiResponse(data=AdminVisualLlmTestResp(tested_ok=ok, error=err))
 
 
 @router.get("/audit-logs", response_model=PaginatedData[AuditLogItem])
