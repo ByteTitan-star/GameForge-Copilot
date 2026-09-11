@@ -313,6 +313,9 @@ class Settings(BaseSettings):
     visual_acceptance_timeout_s: int = 30  # 单次判定读超时：超时即跳过，不拖慢 QA
     visual_acceptance_max_tokens: int = 800  # 判定 JSON 输出预算（含可能的 reasoning）
 
+    # ADR-17：模型主动提问（ask_user 工具）每 run 预算；耗尽自动合成回答继续
+    forge_ask_user_max_per_run: int = 2
+
     # 全局
     env: str = "development"
     # ADR-07 P1-20：dev 调试路由显式开关（默认关；本地/pytest 在 .env 或 conftest 打开）

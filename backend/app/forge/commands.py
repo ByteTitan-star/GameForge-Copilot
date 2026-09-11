@@ -27,6 +27,9 @@ _LEGACY_DECISION_MAP: dict[tuple[str, str], RunCommandType] = {
     ("qa_failed", "modify"): RunCommandType.RETRY_IMPLEMENTATION,
     ("sandbox_failed", "approve"): RunCommandType.RETRY_IMPLEMENTATION,
     ("sandbox_failed", "modify"): RunCommandType.RETRY_IMPLEMENTATION,
+    # ADR-17 agent_question：回答/跳过都走 revise_plan 通道，modify_text 即回答
+    ("agent_question", "modify"): RunCommandType.REVISE_PLAN,
+    ("agent_question", "skip"): RunCommandType.REVISE_PLAN,
 }
 
 _COMMAND_TO_LEGACY_DECISION: dict[RunCommandType, str] = {
