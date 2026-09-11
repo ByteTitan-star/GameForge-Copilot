@@ -79,45 +79,24 @@ async def clear_preferences(db: AsyncSession, user_id: uuid.UUID) -> int:
 
 async def upsert_preferences_from_text(
     db: AsyncSession, *, user_id: uuid.UUID, text: str
-) -> list[UserPreference]:
-    """正式路径：仅 LLM 抽取；未配置模型则不写。inferred 不覆盖 explicit。"""
+) -> list[Any]:
+    """正式写路径（ADR-16）：操作式抽取 → Preference Service 裁决入库。
+
+    返回实际写入/更新的 v2 行；抽取失败或未配置模型返回 []。
+    合并策略（explicit 恒胜 / 置信度门槛）与 LRU 归档在服务层实现。
+    """
     if not settings.memory_preferences:
         return []
-    from app.forge.memory.llm_extract import extract_preferences_via_llm
+    from app.forge.memory import service
+    from app.forge.memory.llm_extract import extract_preference_operations
 
-    items = await extract_preferences_via_llm(text)
-    written: list[UserPreference] = []
-    for item in items:
-        source = str(item.get("source") or "inferred")
-        if source == "inferred" and not settings.memory_preferences_inferred:
-            continue
-        category = str(item["category"])
-        key = str(item["key"])
-        existing = await db.scalar(
-            select(UserPreference).where(
-                UserPreference.user_id == user_id,
-                UserPreference.category == category,
-                UserPreference.key == key,
-            )
-        )
-        if (
-            source == "inferred"
-            and existing is not None
-            and existing.source == "explicit"
-        ):
-            continue
-        row = await upsert_preference(
-            db,
-            user_id=user_id,
-            category=category,
-            key=key,
-            value_json=dict(item["value_json"]),
-            source=source,
-            confidence=float(item.get("confidence") or 0.4),
-            status=str(item.get("status") or "active"),
-        )
-        written.append(row)
-    return written
+    digest = await service.active_digest(db, user_id)
+    ops = await extract_preference_operations(text, digest)
+    if not settings.memory_preferences_inferred:
+        ops = [op for op in ops if op.get("source") != "inferred"]
+    return await service.apply_operations(
+        db, user_id=user_id, ops=ops, note=(text or "").strip()[:120]
+    )
 
 
 async def upsert_explicit_from_text(
