@@ -14,17 +14,22 @@ async def platform_complete(
     apikey: str,
     model: str,
     system: str,
-    user_msg: str,
+    user_msg: provider.UserContent,
     *,
     kind: str,
     base_url: str | None = None,
     max_tokens: int | None = None,
+    read_timeout_s: int | None = None,
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
 ) -> tuple[str, provider.Usage]:
-    """执行一次平台 key 的非流式补全并上报 Langfuse generation。"""
+    """执行一次平台 key 的非流式补全并上报 Langfuse generation。
+
+    user_msg 支持多模态 content parts（视觉验收截图等）；tracing 只记文本投影。
+    """
     meta = dict(metadata or {})
     tag_list = list(tags or [])
+    trace_msg = provider.content_text(user_msg)
     with (
         propagate_trace_attrs(
             user_id=meta.get("user_id"),
@@ -35,7 +40,7 @@ async def platform_complete(
             model=model,
             provider=prov.value,
             system=system,
-            user_msg=user_msg,
+            user_msg=trace_msg,
             kind=kind,
             metadata=meta,
             tags=tag_list or None,
@@ -50,6 +55,7 @@ async def platform_complete(
                 user_msg,
                 base_url=base_url,
                 max_tokens=max_tokens,
+                read_timeout_s=read_timeout_s,
             )
         except Exception:
             if gen is not None:

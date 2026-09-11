@@ -5,12 +5,14 @@ complete() 返回 (content, usage)，usage 取响应真实字段，不估算（d
 """
 
 import asyncio
+import base64
 import logging
 import random
 import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -66,6 +68,52 @@ class LLMCompletion:
     content: str
     usage: Usage
     finish_reason: str | None = None
+
+
+# 多模态消息内容：纯文本，或 OpenAI 兼容 content parts（text / image_url）。
+UserContent = str | list[dict[str, Any]]
+
+
+def image_content_part(image: bytes, media_type: str = "image/png") -> dict[str, Any]:
+    """构造 OpenAI 兼容的图片 content part（data URI，自包含不依赖外部 URL）。"""
+    b64 = base64.b64encode(image).decode()
+    return {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}}
+
+
+def content_text(user_msg: UserContent) -> str:
+    """多模态内容的纯文本投影：图片折叠为占位符，供日志 / tracing 用。"""
+    if isinstance(user_msg, str):
+        return user_msg
+    parts = []
+    for part in user_msg:
+        if part.get("type") == "text":
+            parts.append(str(part.get("text", "")))
+        else:
+            parts.append("<image>")
+    return "\n".join(p for p in parts if p)
+
+
+def _to_anthropic_blocks(user_msg: UserContent) -> str | list[dict[str, Any]]:
+    """OpenAI content parts → Anthropic /messages blocks（图片仅支持 base64 / url source）。"""
+    if isinstance(user_msg, str):
+        return user_msg
+    blocks: list[dict[str, Any]] = []
+    for part in user_msg:
+        if part.get("type") == "text":
+            blocks.append({"type": "text", "text": str(part.get("text", ""))})
+        elif part.get("type") == "image_url":
+            url = str((part.get("image_url") or {}).get("url", ""))
+            m = re.match(r"^data:([^;]+);base64,(.+)$", url, re.DOTALL)
+            if m:
+                blocks.append(
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": m.group(1), "data": m.group(2)},
+                    }
+                )
+            elif url:
+                blocks.append({"type": "image", "source": {"type": "url", "url": url}})
+    return blocks
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
@@ -236,7 +284,7 @@ def _build_body(
     provider: LLMProvider,
     model: str,
     system: str,
-    user_msg: str,
+    user_msg: UserContent,
     base_url: str | None,
     *,
     max_tokens: int,
@@ -245,6 +293,7 @@ def _build_body(
     """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
 
     Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
+    user_msg 可为多模态 content parts（OpenAI 格式），Anthropic 路径自动转 blocks。
     thinking 默认关闭：见 ``thinking_disable_fields`` 厂商能力表。
     """
     if _uses_anthropic_native_api(provider, base_url):
@@ -252,7 +301,7 @@ def _build_body(
             "model": model,
             "max_tokens": max_tokens,
             "system": system,
-            "messages": [{"role": "user", "content": user_msg}],
+            "messages": [{"role": "user", "content": _to_anthropic_blocks(user_msg)}],
         }
     else:
         body = {
@@ -273,11 +322,14 @@ def _build_body(
     return body
 
 
-def _llm_timeout() -> httpx.Timeout:
-    """读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败。"""
+def _llm_timeout(read_timeout_s: int | None = None) -> httpx.Timeout:
+    """读超时远大于建连：整段代码生成（尤其推理模型）耗时长，而服务端不可达应快速失败。
+
+    read_timeout_s 供短判定类调用（如视觉验收）覆盖默认的长读超时。
+    """
     return httpx.Timeout(
         connect=settings.llm_connect_timeout,
-        read=settings.llm_request_timeout,
+        read=read_timeout_s if read_timeout_s is not None else settings.llm_request_timeout,
         write=settings.llm_connect_timeout,
         pool=settings.llm_connect_timeout,
     )
@@ -319,14 +371,16 @@ async def complete(
     apikey: str,
     model: str,
     system: str,
-    user_msg: str,
+    user_msg: UserContent,
     base_url: str | None = None,
     *,
     max_tokens: int | None = None,
+    read_timeout_s: int | None = None,
 ) -> LLMCompletion:
     """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
 
     传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
+    user_msg 支持多模态 content parts（见 ``image_content_part``）。
     """
     if max_tokens is None:
         max_tokens = settings.llm_max_tokens
@@ -335,7 +389,7 @@ async def complete(
     body = _build_body(
         provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=False
     )
-    timeout = _llm_timeout()
+    timeout = _llm_timeout(read_timeout_s)
     max_retries = settings.llm_http_max_retries
     # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
     started = time.monotonic()
