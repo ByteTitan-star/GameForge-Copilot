@@ -512,6 +512,7 @@ parse format
 
 * **Retry**：Vite 工程构建失败 → Repair Agent（带 stderr）→ Build，最多 `build_max_retries` 次。
 * **Dependency Error**：如 `Cannot find module "xxx"`，Repair Agent 只能：改为 catalog 允许的 package / 删除错误 dependency / 修改 import / 使用已有依赖；**不能请求任意未知 npm package**。
+* **依赖诊断软提示（#161）**：`app/forge/build/dep_diagnosis.py` 会把日志里的 `Cannot find module` / `Could not resolve` 解析成结构化 JSON（包名、是否在 catalog、`action` 修正指引），拼接在原始 stderr 前喂给 Repair Agent；白名单校验与拒绝行为不变，不自动安装任何包。
 * **最终降级**：`build_max_retries` 耗尽 → **用当前 design_doc 重新要求 Code Agent 生成 single-html 版本**（不是把多文件工程强行转单 HTML），保证至少有可交付结果。
 
 ---

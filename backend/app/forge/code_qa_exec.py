@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.enums import RunPhase, RunStatus, WSEventType
 from app.forge.assets.picker import format_assets_for_prompt
 from app.forge.build.code_output import ParsedCodeOutput
+from app.forge.build.dep_diagnosis import enrich_build_error
 from app.forge.build.integration import (
     format_project_repair_input,
     load_stored_project_source,
@@ -397,7 +398,10 @@ async def execute_code_or_repair(
                 async def _repair_project(
                     current: ParsedCodeOutput, build_error: str
                 ) -> ParsedCodeOutput:
-                    repair_user = format_project_repair_input(base_user_msg, current, build_error)
+                    # #161：module-not-found 类报错先解析成结构化 JSON 软提示，修复模型不必盲猜
+                    repair_user = format_project_repair_input(
+                        base_user_msg, current, enrich_build_error(build_error)
+                    )
                     repair_raw, truncated = await _code_llm(
                         ctx,
                         build_project_repair_prompt(engine_id, list(design_routing.dependencies)),
@@ -440,7 +444,7 @@ async def execute_code_or_repair(
                 # Vite 内环耗尽：failure_kind=build，禁止降级 single-html
                 fail_logs = ""
                 if loop_result.pipeline_result:
-                    fail_logs = (
+                    fail_logs = enrich_build_error(
                         loop_result.pipeline_result.error or loop_result.pipeline_result.logs or ""
                     )
                 await publish_event(
