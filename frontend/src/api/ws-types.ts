@@ -81,10 +81,19 @@ export type HitlFailurePayload = {
   failure_report_id?: string
 }
 
+export type AgentQuestionPayload = {
+  tool?: string
+  reason?: string
+  question: string
+  options?: string[]
+  allow_free_text?: boolean
+}
+
 export type HitlWaitPayload = {
   node: string
   design_doc: DesignDocPayload | string
   action_url: string
+  agent_question?: AgentQuestionPayload
   error?: string
   errors?: string[]
   issues?: string[]
