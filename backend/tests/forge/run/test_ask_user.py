@@ -33,7 +33,9 @@ def test_parse_valid_tool_call() -> None:
 
 
 def test_parse_fenced_and_clamped() -> None:
-    payload = json.dumps({"tool": "ask_user", "question": "Q?", "options": ["a", "b", "c", "d", "e", "f"]})
+    payload = json.dumps(
+        {"tool": "ask_user", "question": "Q?", "options": ["a", "b", "c", "d", "e", "f"]}
+    )
     fenced = f"```json\n{payload}\n```"
     out = parse_ask_user(fenced)
     assert out is not None and len(out["options"]) == 4  # 上限截断
