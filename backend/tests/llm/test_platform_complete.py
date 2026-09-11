@@ -25,8 +25,9 @@ async def test_platform_complete_writes_generation(monkeypatch) -> None:
         base_url: Any = None,
         *,
         max_tokens: int | None = None,
+        read_timeout_s: int | None = None,
     ) -> LLMCompletion:
-        _ = (prov, apikey, model, system, user_msg, base_url, max_tokens)
+        _ = (prov, apikey, model, system, user_msg, base_url, max_tokens, read_timeout_s)
         return LLMCompletion(content='{"ok":true}', usage=Usage(3, 5))
 
     class _FakeGen:
