@@ -1462,6 +1462,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/visual-llm/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Visual Llm
+         * @description 视觉验收模型连通测试（表单当前值 dry-test，不落库）。
+         *
+         *     发一张探针图：纯文本模型会 400 或读不出图片，都判失败，避免配了个看不见图的模型。
+         *     apikey 为空/masked 时回退 DB 已存密钥；按 admin 限流防成本放大。
+         */
+        post: operations["test_visual_llm_api_v1_admin_settings_visual_llm_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit-logs": {
         parameters: {
             query?: never;
@@ -1852,6 +1875,7 @@ export interface components {
              */
             admin_contact_email: string;
             audit_llm?: components["schemas"]["AdminAuditLlmSettings"] | null;
+            visual_llm?: components["schemas"]["AdminVisualLlmSettings"] | null;
         };
         /** AdminUsageResp */
         AdminUsageResp: {
@@ -1905,6 +1929,49 @@ export interface components {
             /** Calls */
             calls: number;
         };
+        /**
+         * AdminVisualLlmSettings
+         * @description 平台预设视觉验收模型（C 级软验收）。GET 回 masked apikey；PUT 收明文（空/masked=保留旧值）。
+         *
+         *     与用户 LLM 配置无关；未配置 model/apikey 即整体跳过视觉验收。
+         */
+        AdminVisualLlmSettings: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Provider
+             * @default openai_compat
+             */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Apikey
+             * @default
+             */
+            apikey: string;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+        };
+        /**
+         * AdminVisualLlmTestResp
+         * @description 视觉模型连通测试：发一张探针图，tested_ok 要求模型真正读到了图片内容。
+         */
+        AdminVisualLlmTestResp: {
+            /** Tested Ok */
+            tested_ok: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /** AnalyticsTopItem */
         AnalyticsTopItem: {
             /**
@@ -1951,6 +2018,10 @@ export interface components {
         /** ApiResponse[AdminUserItem] */
         ApiResponse_AdminUserItem_: {
             data: components["schemas"]["AdminUserItem"];
+        };
+        /** ApiResponse[AdminVisualLlmTestResp] */
+        ApiResponse_AdminVisualLlmTestResp_: {
+            data: components["schemas"]["AdminVisualLlmTestResp"];
         };
         /** ApiResponse[CreatorProfile] */
         ApiResponse_CreatorProfile_: {
@@ -3355,7 +3426,7 @@ export interface components {
          * RunStatus
          * @enum {string}
          */
-        RunStatus: "running" | "paused" | "done" | "failed";
+        RunStatus: "running" | "paused" | "done" | "failed" | "cancelled";
         /** RunStatusResp */
         RunStatusResp: {
             /**
@@ -7156,6 +7227,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse_AdminAuditLlmTestResp_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 探测限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_visual_llm_api_v1_admin_settings_visual_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminVisualLlmSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse_AdminVisualLlmTestResp_"];
                 };
             };
             /** @description Validation Error */
