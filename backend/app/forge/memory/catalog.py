@@ -76,6 +76,14 @@ PREFERENCE_CATALOG: dict[str, Slot] = {
         _slot("gameplay.pacing", ("relaxed", "standard", "intense"), ("plan",)),
         _slot("gameplay.session_length", ("short", "medium", "long"), ("plan",)),
         _slot("audio.muted", ("true", "false"), ("plan",), type_="bool"),
+        _slot(
+            "audio.music_style",
+            ("chiptune", "orchestral", "ambient", "none"),
+            ("plan", "art"),
+        ),
+        _slot("gameplay.multiplayer", ("none", "local_coop", "online"), ("plan",)),
+        _slot("input.control", ("keyboard", "mouse", "touch", "gamepad"), ("plan",)),
+        _slot("content.rating", ("family", "teen", "mature"), ("plan",)),
     )
 }
 
@@ -96,6 +104,10 @@ _ALIASES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("session_length", "length", "时长"), "gameplay.session_length"),
     (("language", "lang", "语言"), "ui.language"),
     (("muted", "audio", "静音", "无声"), "audio.muted"),
+    (("music", "bgm", "音乐", "音效风格"), "audio.music_style"),
+    (("multiplayer", "coop", "多人"), "gameplay.multiplayer"),
+    (("control", "controls", "操作"), "input.control"),
+    (("rating", "分级"), "content.rating"),
 )
 
 

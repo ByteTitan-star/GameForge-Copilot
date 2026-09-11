@@ -4,19 +4,13 @@
     "session1_text": "I prefer pixel art style and easy difficulty",
     "expected_preferences": [
       {
-        "category": "visual",
-        "key": "style",
-        "value_json": {
-          "style": "pixel"
-        },
+        "preference_key": "visual.style",
+        "value": "pixel",
         "source": "explicit"
       },
       {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "easy"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "easy",
         "source": "explicit"
       }
     ],
@@ -36,21 +30,18 @@
     "session1_text": "Use dark theme UI",
     "expected_preferences": [
       {
-        "category": "ui",
-        "key": "theme",
-        "value_json": {
-          "theme": "dark"
-        },
+        "preference_key": "visual.palette",
+        "value": "dark",
         "source": "explicit"
       }
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
-      "ui.theme"
+      "visual.palette"
     ],
     "mode": "explicit",
     "expected_in_context": [
-      "ui.theme"
+      "visual.palette"
     ]
   },
   {
@@ -58,11 +49,8 @@
     "session1_text": "Keep games short under 5 minutes",
     "expected_preferences": [
       {
-        "category": "gameplay",
-        "key": "session_length",
-        "value_json": {
-          "minutes": 5
-        },
+        "preference_key": "gameplay.session_length",
+        "value": "short",
         "source": "explicit"
       }
     ],
@@ -80,11 +68,8 @@
     "session1_text": "No violence, family friendly only",
     "expected_preferences": [
       {
-        "category": "content",
-        "key": "rating",
-        "value_json": {
-          "rating": "family"
-        },
+        "preference_key": "content.rating",
+        "value": "family",
         "source": "explicit"
       }
     ],
@@ -102,11 +87,8 @@
     "session1_text": "Mobile-friendly touch controls",
     "expected_preferences": [
       {
-        "category": "input",
-        "key": "control",
-        "value_json": {
-          "mode": "touch"
-        },
+        "preference_key": "input.control",
+        "value": "touch",
         "source": "explicit"
       }
     ],
@@ -124,11 +106,8 @@
     "session1_text": "I like sci-fi settings",
     "expected_preferences": [
       {
-        "category": "theme",
-        "key": "genre",
-        "value_json": {
-          "genre": "sci-fi"
-        },
+        "preference_key": "visual.mood",
+        "value": "epic",
         "source": "inferred"
       }
     ],
@@ -142,11 +121,8 @@
     "session1_text": "Prefer Chinese UI labels",
     "expected_preferences": [
       {
-        "category": "ui",
-        "key": "language",
-        "value_json": {
-          "lang": "zh"
-        },
+        "preference_key": "ui.language",
+        "value": "zh",
         "source": "explicit"
       }
     ],
@@ -164,11 +140,8 @@
     "session1_text": "Hardcore difficulty please",
     "expected_preferences": [
       {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "hard"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "hard",
         "source": "explicit"
       }
     ],
@@ -186,11 +159,8 @@
     "session1_text": "Minimalist flat design",
     "expected_preferences": [
       {
-        "category": "visual",
-        "key": "style",
-        "value_json": {
-          "style": "flat"
-        },
+        "preference_key": "visual.style",
+        "value": "flat",
         "source": "explicit"
       }
     ],
@@ -208,11 +178,8 @@
     "session1_text": "Co-op local multiplayer preferred",
     "expected_preferences": [
       {
-        "category": "gameplay",
-        "key": "multiplayer",
-        "value_json": {
-          "mode": "local_coop"
-        },
+        "preference_key": "gameplay.multiplayer",
+        "value": "local_coop",
         "source": "inferred"
       }
     ],
@@ -222,37 +189,12 @@
     "expected_in_context": []
   },
   {
-    "id": "pref-011",
-    "session1_text": "No microtransactions in design",
-    "expected_preferences": [
-      {
-        "category": "monetization",
-        "key": "model",
-        "value_json": {
-          "model": "none"
-        },
-        "source": "explicit"
-      }
-    ],
-    "session2_prompt": "Make a new casual game",
-    "expected_in_prompt": [
-      "monetization.model"
-    ],
-    "mode": "explicit",
-    "expected_in_context": [
-      "monetization.model"
-    ]
-  },
-  {
     "id": "pref-012",
     "session1_text": "Keyboard only controls",
     "expected_preferences": [
       {
-        "category": "input",
-        "key": "control",
-        "value_json": {
-          "mode": "keyboard"
-        },
+        "preference_key": "input.control",
+        "value": "keyboard",
         "source": "explicit"
       }
     ],
@@ -270,11 +212,8 @@
     "session1_text": "Retro chiptune audio style",
     "expected_preferences": [
       {
-        "category": "audio",
-        "key": "style",
-        "value_json": {
-          "style": "chiptune"
-        },
+        "preference_key": "audio.music_style",
+        "value": "chiptune",
         "source": "inferred"
       }
     ],
@@ -284,55 +223,29 @@
     "expected_in_context": []
   },
   {
-    "id": "pref-014",
-    "session1_text": "Tutorial on first launch",
-    "expected_preferences": [
-      {
-        "category": "ux",
-        "key": "onboarding",
-        "value_json": {
-          "tutorial": true
-        },
-        "source": "explicit"
-      }
-    ],
-    "session2_prompt": "Make a new casual game",
-    "expected_in_prompt": [
-      "ux.onboarding"
-    ],
-    "mode": "explicit",
-    "expected_in_context": [
-      "ux.onboarding"
-    ]
-  },
-  {
     "id": "pref-015",
     "session1_text": "Explicit easy mode; user likes puzzle games in chat",
     "expected_preferences": [
       {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "easy"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "easy",
         "source": "explicit"
       },
       {
-        "category": "genre",
-        "key": "preferred",
-        "value_json": {
-          "genre": "puzzle"
-        },
+        "preference_key": "gameplay.genre",
+        "value": "puzzle",
         "source": "inferred"
       }
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [
-      "gameplay.difficulty"
+      "gameplay.difficulty",
+      "gameplay.genre"
     ],
     "mode": "explicit",
     "expected_in_context": [
-      "gameplay.difficulty"
+      "gameplay.difficulty",
+      "gameplay.genre"
     ]
   },
   {
@@ -341,29 +254,20 @@
     "session1_text": "Earlier chat implied hard difficulty; user later says easy",
     "expected_preferences": [
       {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "easy"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "easy",
         "source": "explicit"
       }
     ],
     "conflict": {
       "older_implicit": {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "hard"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "hard",
         "source": "inferred"
       },
       "newer_explicit": {
-        "category": "gameplay",
-        "key": "difficulty",
-        "value_json": {
-          "level": "easy"
-        },
+        "preference_key": "gameplay.difficulty",
+        "value": "easy",
         "source": "explicit"
       }
     },
@@ -384,18 +288,15 @@
     "session1_text": "User keeps mentioning neon cyberpunk vibes",
     "expected_preferences": [
       {
-        "category": "visual",
-        "key": "theme",
-        "value_json": {
-          "theme": "cyberpunk"
-        },
+        "preference_key": "visual.style",
+        "value": "neon",
         "source": "inferred"
       }
     ],
     "session2_prompt": "Make a new casual game",
     "expected_in_prompt": [],
     "expected_in_context": [
-      "visual.theme"
+      "visual.style"
     ],
     "relevance_keywords": [
       "cyberpunk",

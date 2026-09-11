@@ -2,16 +2,16 @@
 
 ## 1. Summary
 
-Preference eval on **17** scenarios (mode=context_builder_baseline).
+Preference eval on **15** scenarios (mode=context_builder_baseline).
 
 ## 2. Methodology
 
-- **Dataset**: `eval/datasets/preference_scenarios.json` (17 entries)
+- **Dataset**: `eval/datasets/preference_scenarios.json` (15 entries)
 - **Runner**: `eval/runners/preference_eval.py`
 - **Mode**: `context_builder_baseline`
 - **Reproduce**: `cd backend && uv run python -m eval.runners.<module>`
-- **Git SHA**: `fb547ea`
-- **Date**: 2026-08-25
+- **Git SHA**: `3b833f5`
+- **Date**: 2026-09-11
 
 ## 3. Results
 
@@ -29,3 +29,4 @@ Baseline validates ContextBuilder injection formatting. Use --live for API/DB pe
 ## 6. Below-Target Items
 
 All metrics meet production targets for this mode.
+
