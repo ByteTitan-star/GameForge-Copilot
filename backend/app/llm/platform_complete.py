@@ -22,6 +22,8 @@ async def platform_complete(
     read_timeout_s: int | None = None,
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
+    tools: provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> tuple[str, provider.Usage]:
     """执行一次平台 key 的非流式补全并上报 Langfuse generation。
 
@@ -47,6 +49,12 @@ async def platform_complete(
         ) as gen,
     ):
         try:
+            # 新 kwargs 仅在显式使用时传递：未用工具的调用保持原调用形状
+            extra: dict[str, Any] = {}
+            if tools is not None:
+                extra["tools"] = tools
+                if tool_choice:
+                    extra["tool_choice"] = tool_choice
             result = await provider.complete(
                 prov,
                 apikey,
@@ -56,6 +64,7 @@ async def platform_complete(
                 base_url=base_url,
                 max_tokens=max_tokens,
                 read_timeout_s=read_timeout_s,
+                **extra,
             )
         except Exception:
             if gen is not None:

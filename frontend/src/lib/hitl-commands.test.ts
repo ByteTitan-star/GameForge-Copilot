@@ -30,3 +30,16 @@ describe('hitl command helpers', () => {
     expect(nextPhaseAfterHitl('qa_failed', 'retry_implementation')).toBe('code')
   })
 })
+
+describe('ADR-18 ask_user 工具问答', () => {
+  it('agent_question 回答/跳过映射为 answer_question', () => {
+    expect(commandForHitlAction('agent_question', 'modify')).toBe('answer_question')
+    expect(commandForHitlAction('agent_question', 'skip')).toBe('answer_question')
+    expect(hitlAllows({ node: 'agent_question' }, 'answer_question')).toBe(true)
+    expect(hitlAllows({ node: 'agent_question' }, 'revise_plan')).toBe(false)
+  })
+
+  it('answer_question 下一阶段回到发起节点（plan 居多）', () => {
+    expect(nextPhaseAfterHitl('agent_question', 'answer_question')).toBe('plan')
+  })
+})

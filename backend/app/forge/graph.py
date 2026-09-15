@@ -26,9 +26,9 @@ from app.core.errors import AppError
 from app.enums import PauseReason, RunCommandType, RunPhase, RunStatus, WSEventType
 from app.forge import control as run_ctrl
 from app.forge import state as ckpt
+from app.forge import tools as ask_tool
 from app.forge.art_direction import parse_art_detail, parse_art_options
 from app.forge.art_options_parallel import generate_art_options_parallel
-from app.forge.ask_user import AskUserRequested, parse_ask_user
 from app.forge.assets.picker import asset_pick
 from app.forge.capability import developability_precheck
 from app.forge.checkpoint_slim import hydrate_checkpoint_payloads, slim_checkpoint_payloads
@@ -43,7 +43,7 @@ from app.forge.design_doc import (
 )
 from app.forge.events import publish_event
 from app.forge.failure import persist_failure_report
-from app.forge.guard import ContentAttacked, run_streamed_llm
+from app.forge.guard import ContentAttacked, run_streamed_llm_result
 from app.forge.hitl import HITL_PHASES, allowed_commands_for
 from app.forge.lineage import (
     assert_candidate_promotable,
@@ -93,6 +93,7 @@ from app.forge.tracing import observe_phase, observe_run
 from app.hosting import preview_token as preview_token_svc
 from app.hosting import store
 from app.llm import client as llm_client
+from app.llm import provider as llm_provider
 from app.models.failure_report import FailureReport
 from app.models.game import Game
 from app.models.game_version import GameVersion
@@ -440,13 +441,125 @@ async def _refresh_session_summary(ctx: _Ctx) -> None:
     await refresh_session_summary_if_needed(ctx.s, ctx.game, summarizer=summarizer)
 
 
-async def _upsert_preferences_from_text(ctx: _Ctx, text: str) -> None:
-    """LLM 抽取偏好（未配置抽取模型则跳过）。"""
-    if not text.strip():
-        return
-    from app.forge.memory.preferences import upsert_preferences_from_text
+def _schedule_preference_extraction(ctx: _Ctx, text: str | None) -> None:
+    """偏好抽取异步化（ADR-18 follow-up）：后台任务执行，不阻塞节点首字延迟。
 
-    await upsert_preferences_from_text(ctx.s, user_id=ctx.game.owner_id, text=text)
+    抽取结果只影响后续 run/节点的偏好注入；本节点上下文已含原文，
+    移出关键路径无行为损失。
+    """
+    from app.forge.memory.async_extract import schedule_preference_extraction
+
+    schedule_preference_extraction(ctx.r, ctx.game.owner_id, text)
+
+
+def _is_ask_answer_resume(state: dict[str, Any]) -> bool:
+    """resume 且命令为 answer_question：本次执行是 ask_user 工具问答回填。"""
+    return bool(state.get("resume")) and (
+        str(state.get("command_type") or "") == RunCommandType.ANSWER_QUESTION.value
+    )
+
+
+async def _build_answer_messages(
+    ctx: _Ctx,
+    state: dict[str, Any],
+    *,
+    system: str,
+    user_msg: str,
+) -> llm_provider.Messages | None:
+    """构造 ask_user 问答回填的多轮消息（ADR-18 原生工具循环）。
+
+    checkpoint 中的提问 payload 与用户回答组装为 assistant(tool_calls) + role:"tool"
+    消息；回答同时回流偏好抽取（偏好闭环：回答是最强的 explicit 信号，
+    沉淀为偏好后同类决策不再提问）。存量 checkpoint 无 payload 时退化为普通重跑。
+    """
+    ck = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    payload = ck.get("agent_question")
+    if not isinstance(payload, dict):
+        return None
+    answer = (str(state.get("modify_text") or "").strip()) or ask_tool.synthetic_answer()
+    _schedule_preference_extraction(ctx, answer)
+    call_id = f"ask_{ask_tool.budget_used(ck)}"
+    return ask_tool.ask_messages(
+        system, user_msg, question_payload=payload, call_id=call_id, answer=answer
+    )
+
+
+async def _llm_with_ask(
+    ctx: _Ctx,
+    state: dict[str, Any],
+    *,
+    node: str,
+    system: str,
+    user_msg: str,
+    phase: str,
+    kind: str | None = None,
+    messages: llm_provider.Messages | None = None,
+) -> tuple[llm_provider.LLMCompletion, bool]:
+    """节点 LLM 调用 + ask_user 工具拦截（ADR-18）。
+
+    预算内（forge_ask_user_max_per_run，计数存 checkpoint 跨 resume 幂等）绑定
+    ask_user 工具；模型发起合法调用 → 暂停为 agent_question 相位（checkpoint 记
+    ask_node/payload/count），返回 (result, paused=True)，调用方返回 hitl_stop。
+    未调用 / 参数不合法 / 预算耗尽 → 正常返回 (result, False)，content 走产物路径。
+    """
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    used = ask_tool.budget_used(existing)
+    tools = (
+        [ask_tool.ASK_USER_TOOL_SCHEMA]
+        if used < max(0, int(settings.forge_ask_user_max_per_run))
+        else None
+    )
+    result = await _streamed_llm_result_or_fallback(
+        ctx,
+        system,
+        user_msg,
+        phase,
+        emit_delta=False,
+        kind=kind,
+        tools=tools,
+        messages=messages,
+    )
+    if result.tool_calls:
+        payload = ask_tool.extract_ask_user_call(result.tool_calls)
+        if payload is not None:
+            await ckpt.save_state(
+                ctx.r,
+                ctx.run.id,
+                {
+                    **existing,
+                    "phase": "agent_question",
+                    "agent_question": payload,
+                    "ask_user_count": used + 1,
+                    "ask_node": node,
+                },
+                ctx.s,
+            )
+            await _pause_hitl(
+                ctx, "agent_question", {}, extra={"agent_question": payload}
+            )
+            return result, True
+    return result, False
+
+
+def _auto_select_art(art_options: dict[str, Any]) -> str:
+    """无人值守自动选择（ADR-18）：选 recommended 项；解析层已强制恰好一个，
+    此处仅防御性兜底。偏好记忆已注入生成上下文，间接影响推荐本身。"""
+    for item in art_options.get("options", []) if isinstance(art_options, dict) else []:
+        if isinstance(item, dict) and item.get("recommended"):
+            option_id = str(item.get("id") or "").strip().upper()
+            if option_id == "A":
+                return "select_a"
+            if option_id == "B":
+                return "select_b"
+    return "select_b"
+
+
+def _selected_art_option(art_options: dict[str, Any], decision: str) -> dict[str, Any]:
+    selected_id = "A" if decision == "select_a" else "B"
+    for item in art_options.get("options", []) if isinstance(art_options, dict) else []:
+        if isinstance(item, dict) and str(item.get("id") or "").upper() == selected_id:
+            return item
+    return {"id": selected_id, "name": "", "summary": ""}
 
 
 async def _compose_plan_input(
@@ -454,7 +567,7 @@ async def _compose_plan_input(
 ) -> str:
     """Plan/revise 用户消息：可选写入 Explicit 偏好，并经 ContextBuilder 拼装。"""
     await _refresh_session_summary(ctx)
-    await _upsert_preferences_from_text(ctx, current_input)
+    _schedule_preference_extraction(ctx, current_input)
     wrapped = _wrap_user_input(current_input)
     from app.forge.memory.loader import build_node_context
 
@@ -481,7 +594,7 @@ async def _compose_art_input(
 ) -> str:
     """Art/revise 用户消息：经 ContextBuilder 注入 summary/preferences。"""
     await _refresh_session_summary(ctx)
-    await _upsert_preferences_from_text(ctx, current_input)
+    _schedule_preference_extraction(ctx, current_input)
     design_block = "【已确认游戏策划稿 JSON】\n" + design_doc_to_text(design_doc)
     if previous_options is not None:
         design_block += "\n\n【上一轮方向 JSON】\n" + json.dumps(
@@ -535,6 +648,38 @@ async def _compose_art_detail_input(
     return f"{task}\n\n{built.user_message}"
 
 
+async def _streamed_llm_result_or_fallback(
+    ctx: _Ctx,
+    system: str,
+    user_msg: str,
+    phase: str,
+    *,
+    emit_delta: bool = True,
+    kind: str | None = None,
+    tools: llm_provider.ToolsSpec | None = None,
+    messages: llm_provider.Messages | None = None,
+) -> llm_provider.LLMCompletion:
+    """流式开关分流（结果对象版，ADR-18）：开 → run_streamed_llm_result
+    （流式 + 输入/输出审核 + 微批 + 工具调用）；关 → _llm_result（非流式，无审核）。
+
+    emit_delta=False 时仍做审核但不发 LLM_DELTA（用于 code/art 等 JSON/长 HTML 阶段，
+    打字机价值低且避免产生上千事件）。
+    """
+    llm_kind = kind or phase
+    if settings.stream_enabled:
+        return await run_streamed_llm_result(
+            ctx,
+            system,
+            user_msg,
+            phase=phase,
+            emit_delta=emit_delta,
+            kind=llm_kind,
+            tools=tools,
+            messages=messages,
+        )
+    return await _llm_result(ctx, system, user_msg, kind=llm_kind, tools=tools, messages=messages)
+
+
 async def _streamed_llm_or_fallback(
     ctx: _Ctx,
     system: str,
@@ -544,18 +689,11 @@ async def _streamed_llm_or_fallback(
     emit_delta: bool = True,
     kind: str | None = None,
 ) -> str:
-    """流式开关分流：开 → run_streamed_llm（流式 + 输入/输出审核 + 微批）；
-    关 → _llm（非流式，无审核）。关时整体退化为护栏落地前的行为。
-
-    emit_delta=False 时仍做审核但不发 LLM_DELTA（用于 code/art 等 JSON/长 HTML 阶段，
-    打字机价值低且避免产生上千事件）。
-    """
-    llm_kind = kind or phase
-    if settings.stream_enabled:
-        return await run_streamed_llm(
-            ctx, system, user_msg, phase=phase, emit_delta=emit_delta, kind=llm_kind
-        )
-    return await _llm(ctx, system, user_msg, kind=llm_kind)
+    """兼容包装：只要文本结果（无工具）。"""
+    result = await _streamed_llm_result_or_fallback(
+        ctx, system, user_msg, phase, emit_delta=emit_delta, kind=kind
+    )
+    return result.content
 
 
 async def _emit_readable_plan_deltas(ctx: _Ctx, design_doc: dict[str, Any]) -> None:
@@ -578,7 +716,15 @@ async def _emit_readable_plan_deltas(ctx: _Ctx, design_doc: dict[str, Any]) -> N
             await asyncio.sleep(delay)
 
 
-async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None) -> str:
+async def _llm_result(
+    ctx: _Ctx,
+    system: str,
+    user_msg: str,
+    *,
+    kind: str | None = None,
+    tools: llm_provider.ToolsSpec | None = None,
+    messages: llm_provider.Messages | None = None,
+) -> llm_provider.LLMCompletion:
     stage = ctx.run.phase or "llm"
     llm_kind = kind or stage or "chat"
     started = time.monotonic()
@@ -595,6 +741,8 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None
             game_id=ctx.game.id,
             run_id=ctx.run.id,
             kind=llm_kind,
+            tools=tools,
+            messages=messages,
         )
         content = result.content
         usage = result.usage
@@ -624,7 +772,13 @@ async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None
             "output_tokens": usage.output_tokens,
         },
     )
-    return content
+    return result
+
+
+async def _llm(ctx: _Ctx, system: str, user_msg: str, *, kind: str | None = None) -> str:
+    """兼容包装：只要文本结果（无工具）。"""
+    result = await _llm_result(ctx, system, user_msg, kind=kind)
+    return result.content
 
 
 async def _set_phase(ctx: _Ctx, phase: RunPhase) -> None:
@@ -734,24 +888,120 @@ def _failure_prompt_block(snapshot: dict[str, Any] | None) -> str:
     )
 
 
-async def _attach_plan_revision(
-    ctx: _Ctx,
-    node: str,
-    design_doc: dict[str, Any],
-    extra_data: dict[str, Any],
-    *,
-    force_new_plan: bool = False,
+async def _finish_plan(
+    ctx: _Ctx, design_doc: dict[str, Any], *, force_new_plan: bool
 ) -> None:
-    if node != "plan_confirm":
-        return
+    """plan 产物副作用 + 进度检查点（原 plan_confirm 暂停时提交，ADR-18 迁移到节点尾部）。
+
+    全部幂等：标题按值同步（side-effect 标记防重放）、revision 由 lineage 去重、
+    消息按 stable key 去重。检查点 phase="art" 表示「策划完成、美术待做」，
+    供手动暂停/崩溃后的续跑路由使用（不再暂停等确认）。
+    """
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    existing = await hydrate_checkpoint_payloads(ctx.s, existing)
+    new_title = str(design_doc.get("title") or "").strip()[:255]
+    if new_title and new_title != ctx.game.title:
+        title_key = side_effect_key(ctx.run.id, "plan", "hitl", "game_title")
+        if await try_begin_side_effect(ctx.r, title_key):
+            ctx.game.title = new_title
+            ctx.s.add(ctx.game)
     row, changed, art_reused = await ensure_plan_revision(
         ctx.s, ctx.run.id, design_doc, force_new=force_new_plan
     )
-    extra_data["active_plan_revision_id"] = str(row.id)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="design",
+        content="设计方案已生成：\n\n" + design_doc_to_readable_text(design_doc),
+        metadata={"node": "plan", "design_doc": design_doc},
+        dedupe_key=stable_design_key(ctx.run.id, "plan", design_doc),
+    )
+    checkpoint = {
+        **{
+            k: v
+            for k, v in existing.items()
+            if k
+            not in {
+                "pause_reason",
+                "recovery",
+                "resume_grant",
+                "agent_question",
+                "ask_node",
+                "phase",
+            }
+        },
+        "phase": "art",
+        "design_doc": design_doc,
+        "active_plan_revision_id": str(row.id),
+    }
     if changed:
-        extra_data["active_candidate_revision_id"] = None
+        checkpoint["active_candidate_revision_id"] = None
         if not art_reused:
-            extra_data["active_art_revision_id"] = None
+            checkpoint["active_art_revision_id"] = None
+    await ckpt.save_state(ctx.r, ctx.run.id, slim_checkpoint_payloads(checkpoint), ctx.s)
+    await ctx.s.commit()
+
+
+async def _finish_art_options(
+    ctx: _Ctx,
+    design_doc: dict[str, Any],
+    art_options: dict[str, Any],
+    decision: str,
+) -> None:
+    """美术方向产物副作用 + 自动选择落点（原 art_confirm 暂停时提交，ADR-18 迁移）。
+
+    自动选择的推荐项以消息形式留痕（用户无需确认，但时间线可见 agent 选了什么）。
+    """
+    existing = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
+    existing = await hydrate_checkpoint_payloads(ctx.s, existing)
+    plan_rev = parse_revision_id(existing.get("active_plan_revision_id"))
+    row, _changed = await ensure_art_options_revision(
+        ctx.s, ctx.run.id, art_options, plan_revision_id=plan_rev
+    )
+    selected = _selected_art_option(art_options, decision)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="design",
+        content=(
+            f"已自动选定美术方向 {selected.get('id')}（推荐）："
+            f"{selected.get('name') or ''} —— {(selected.get('summary') or '')[:200]}"
+        ),
+        metadata={
+            "node": "art_options",
+            "art_options": art_options,
+            "decision": decision,
+        },
+        dedupe_key=stable_design_key(ctx.run.id, "art_options", art_options),
+    )
+    checkpoint = {
+        **{
+            k: v
+            for k, v in existing.items()
+            if k
+            not in {
+                "pause_reason",
+                "recovery",
+                "resume_grant",
+                "agent_question",
+                "ask_node",
+                "phase",
+            }
+        },
+        "phase": "art",
+        "design_doc": design_doc,
+        "art_options": art_options,
+        "decision": decision,
+        "active_art_options_revision_id": str(row.id),
+    }
+    await ckpt.save_state(ctx.r, ctx.run.id, slim_checkpoint_payloads(checkpoint), ctx.s)
+    await ctx.s.commit()
 
 
 async def _persist_art_revision(ctx: _Ctx, art_direction: dict[str, Any]) -> None:
@@ -775,8 +1025,6 @@ async def _pause_hitl(
     node: str,
     design_doc: dict[str, Any],
     extra: dict | None = None,
-    *,
-    force_new_plan: bool = False,
 ) -> None:
     """HITL 等待：先提交可幂等副作用，再落 Wait State（瘦 checkpoint）并发事件。"""
     await ctx.s.refresh(ctx.run)
@@ -790,13 +1038,31 @@ async def _pause_hitl(
         await mark_command_succeeded(ctx.resume_command_id, db=ctx.s)
 
     # --- 副作用阶段（暂停状态写入之前）---
-    await _commit_hitl_side_effects(
-        ctx,
-        node,
-        design_doc,
-        extra_data,
-        existing=existing,
-        force_new_plan=force_new_plan,
+    # ADR-18：plan_confirm/art_confirm 门已取消，此处仅剩通用幂等副作用——
+    # 设计消息（qa_failed/sandbox_failed/agent_question/legacy 门恢复路径）；
+    # 美术选项 revision（legacy art_confirm 恢复仍会带 art_options 暂停）。
+    art_opts = extra_data.get("art_options")
+    if isinstance(art_opts, dict) and art_opts:
+        plan_rev = parse_revision_id(
+            extra_data.get("active_plan_revision_id")
+        ) or parse_revision_id(existing.get("active_plan_revision_id"))
+        row, _changed = await ensure_art_options_revision(
+            ctx.s,
+            ctx.run.id,
+            art_opts,
+            plan_revision_id=plan_rev,
+        )
+        extra_data["active_art_options_revision_id"] = str(row.id)
+    await add_message(
+        ctx.s,
+        game_id=ctx.game.id,
+        run_id=ctx.run.id,
+        user_id=ctx.run.user_id,
+        role="assistant",
+        kind="design",
+        content=design_message_content(design_doc),
+        metadata={"node": node, "design_doc": design_doc},
+        dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
     )
     if not isinstance(extra_data.get("failure"), dict):
         snapshot = await _failure_snapshot(ctx, {**existing, **extra_data})
@@ -857,51 +1123,6 @@ async def _pause_hitl(
     failure_class = str(failure.get("failure_class") or "") if failure else None
     payload["allowed_commands"] = list(allowed_commands_for(node, failure_class))
     await publish_event(ctx.run.id, WSEventType.HITL_WAIT, payload)
-
-
-async def _commit_hitl_side_effects(
-    ctx: _Ctx,
-    node: str,
-    design_doc: dict[str, Any],
-    extra_data: dict[str, Any],
-    *,
-    existing: dict[str, Any],
-    force_new_plan: bool,
-) -> None:
-    """进入等待前的业务副作用：标题、revision、设计消息（均可幂等/去重）。"""
-    from app.forge.reliability.idempotency import side_effect_key, try_begin_side_effect
-
-    if node == "plan_confirm":
-        new_title = str(design_doc.get("title") or "").strip()[:255]
-        if new_title and new_title != ctx.game.title:
-            title_key = side_effect_key(ctx.run.id, node, "hitl", "game_title")
-            if await try_begin_side_effect(ctx.r, title_key):
-                ctx.game.title = new_title
-                ctx.s.add(ctx.game)
-    await _attach_plan_revision(ctx, node, design_doc, extra_data, force_new_plan=force_new_plan)
-    art_opts = extra_data.get("art_options")
-    if isinstance(art_opts, dict) and art_opts:
-        plan_rev = parse_revision_id(
-            extra_data.get("active_plan_revision_id")
-        ) or parse_revision_id(existing.get("active_plan_revision_id"))
-        row, _changed = await ensure_art_options_revision(
-            ctx.s,
-            ctx.run.id,
-            art_opts,
-            plan_revision_id=plan_rev,
-        )
-        extra_data["active_art_options_revision_id"] = str(row.id)
-    await add_message(
-        ctx.s,
-        game_id=ctx.game.id,
-        run_id=ctx.run.id,
-        user_id=ctx.run.user_id,
-        role="assistant",
-        kind="design",
-        content=design_message_content(design_doc),
-        metadata={"node": node, "design_doc": design_doc},
-        dedupe_key=stable_design_key(ctx.run.id, node, design_doc),
-    )
 
 
 async def _pause_recoverable(
@@ -1012,27 +1233,49 @@ async def _check_ctrl(
 
 
 def _build_graph(ctx: _Ctx) -> Any:
-    async def generate_design_doc(system_prompt: str, user_msg: str) -> dict[str, Any]:
-        """生成并真实校验策划稿；格式错误时把具体问题反馈给模型自修复。"""
+    async def generate_design_doc(
+        system_prompt: str,
+        user_msg: str,
+        *,
+        messages: llm_provider.Messages | None = None,
+        first_result: llm_provider.LLMCompletion | None = None,
+    ) -> dict[str, Any]:
+        """生成并真实校验策划稿；格式错误时把具体问题反馈给模型自修复。
+
+        messages（ask_user 问答回填多轮）时校验反馈以追加 user 消息返回；
+        first_result 复用调用方已完成的首轮输出（如工具循环的产物调用），避免重复调用。
+        """
         issues: list[str] = []
         design_doc: dict[str, Any] = {}
+        result = first_result
         for attempt in range(1, PLAN_MAX_ATTEMPTS + 1):
-            attempt_msg = user_msg
-            if issues:
-                attempt_msg += (
-                    "\n\n【上次设计稿校验失败，请逐条修复】\n"
-                    + "\n".join(f"- {issue}" for issue in issues)
-                    + "\n返回完整修复后的 JSON 对象；"
-                    "不要只返回修改片段，不要省略字段，不要改用同义字段。"
+            if result is None:
+                attempt_messages = messages
+                if issues:
+                    feedback = (
+                        "\n\n【上次设计稿校验失败，请逐条修复】\n"
+                        + "\n".join(f"- {issue}" for issue in issues)
+                        + "\n返回完整修复后的 JSON 对象；"
+                        "不要只返回修改片段，不要省略字段，不要改用同义字段。"
+                    )
+                    if messages is not None:
+                        attempt_messages = [
+                            *messages,
+                            {"role": "user", "content": feedback},
+                        ]
+                    else:
+                        attempt_msg = user_msg + feedback
+                else:
+                    attempt_msg = user_msg
+                result = await _streamed_llm_result_or_fallback(
+                    ctx,
+                    system_prompt,
+                    attempt_msg if messages is None else "",
+                    "plan",
+                    emit_delta=False,
+                    messages=attempt_messages,
                 )
-            # plan JSON 不对用户打字机；校验通过后再流式推可读方案
-            raw = await _streamed_llm_or_fallback(
-                ctx, system_prompt, attempt_msg, "plan", emit_delta=False
-            )
-            ask = parse_ask_user(raw)
-            if ask is not None:
-                raise AskUserRequested(ask)
-            design_doc = parse_design_doc(raw, ctx.game.title)
+            design_doc = parse_design_doc(result.content, ctx.game.title)
             issues = validate_design_doc(design_doc)
             issues.extend(developability_precheck(design_doc))
             if not issues:
@@ -1049,42 +1292,8 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "summary": "; ".join(issues[:8]),
                 },
             )
+            result = None
         raise ValueError("策划稿结构校验失败：" + "; ".join(issues))
-
-    async def _generate_plan_or_ask(
-        ctx: _Ctx, state: ForgeState, user_msg: str
-    ) -> dict[str, Any] | None:
-        """plan 生成 + ask_user 工具拦截（ADR-17）：预算内暂停提问，耗尽自动续答。
-
-        返回 None 表示已暂停为 agent_question（调用方直接 hitl_stop）。
-        """
-        from app.forge.ask_user import budget_remaining, budget_used, synthetic_answer
-
-        try:
-            return await generate_design_doc(PLAN_PROMPT, user_msg)
-        except AskUserRequested as exc:
-            used = budget_used(dict(state))
-            if budget_remaining(dict(state)):
-                await ckpt.save_state(
-                    ctx.r,
-                    ctx.run.id,
-                    {
-                        "phase": "agent_question",
-                        "agent_question": exc.payload,
-                        "ask_user_count": used + 1,
-                    },
-                    ctx.s,
-                )
-                await _pause_hitl(
-                    ctx, "agent_question", {}, extra={"agent_question": exc.payload}
-                )
-                return None
-            # 预算耗尽：注入合成回答重跑一次；模型仍坚持提问则按生成失败处理
-            retried = user_msg + "\n\n【用户对此前提问的回答】\n" + synthetic_answer()
-            try:
-                return await generate_design_doc(PLAN_PROMPT, retried)
-            except AskUserRequested:
-                raise ValueError("策划稿在注入合成回答后仍坚持 ask_user 提问") from exc
 
     async def route_start(
         state: ForgeState,
@@ -1108,11 +1317,23 @@ def _build_graph(ctx: _Ctx) -> Any:
         if str(state.get("command_type") or "") == RunCommandType.REVISE_PLAN.value:
             return "revise_plan"
         phase = st.get("phase")
-        if phase == "plan_confirm":
+        # ADR-18：ask_user 回答回到发起节点重生成（存量 checkpoint 无 ask_node
+        # 时默认 plan——旧版 agent_question 只存在于 plan 阶段）
+        if (
+            str(state.get("command_type") or "") == RunCommandType.ANSWER_QUESTION.value
+            or phase == "agent_question"
+        ):
+            ask_node = str(st.get("ask_node") or "plan")
+            if ask_node == "revise_art_options":
+                return "revise_art_options"
+            if ask_node in ("art", "art_options"):
+                return "art_options"
+            return "plan"
+        if phase == "plan_confirm":  # legacy（ADR-18 取消确认门，仅供存量 resolve）
             if state.get("decision") == "modify" and state.get("modify_text"):
                 return "revise_plan"
             return "art_options"
-        if phase == "art_confirm":
+        if phase == "art_confirm":  # legacy（ADR-18 取消确认门，仅供存量 resolve）
             if state.get("decision") == "modify" and state.get("modify_text"):
                 return "revise_art_options"
             return "art_detail"
@@ -1189,9 +1410,28 @@ def _build_graph(ctx: _Ctx) -> Any:
         with observe_phase("plan"):
             await _set_phase(ctx, RunPhase.PLAN)
             user_msg = await _compose_plan_input(ctx, current_input=ctx.run.requirement)
-            design_doc = await _generate_plan_or_ask(ctx, state, user_msg)
-            if design_doc is None:
+            # ask_user 问答回填（ADR-18）：resume 回到提问节点，回答进工具消息
+            messages = (
+                await _build_answer_messages(
+                    ctx, dict(state), system=PLAN_PROMPT, user_msg=user_msg
+                )
+                if _is_ask_answer_resume(dict(state))
+                else None
+            )
+            result, ask_paused = await _llm_with_ask(
+                ctx,
+                dict(state),
+                node="plan",
+                system=PLAN_PROMPT,
+                user_msg=user_msg,
+                phase="plan",
+                messages=messages,
+            )
+            if ask_paused:
                 return {"hitl_stop": True, "paused": True}
+            design_doc = await generate_design_doc(
+                PLAN_PROMPT, user_msg, messages=messages, first_result=result
+            )
             ctrl = await _check_ctrl(ctx, design_doc)
             if ctrl != "ok":
                 return {
@@ -1210,14 +1450,10 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "summary": "策划稿完成",
                 },
             )
-            await ckpt.save_state(
-                ctx.r,
-                ctx.run.id,
-                {"phase": "plan_confirm", "design_doc": design_doc},
-                ctx.s,
-            )
-            await _pause_hitl(ctx, "plan_confirm", design_doc)
-            return {"design_doc": design_doc, "hitl_stop": True}
+            # ADR-18：无 plan_confirm 确认门——副作用（标题/revision/消息）在节点尾部
+            # 幂等提交，直接流向美术阶段；偏好记忆 + ask_user 工具取代人工确认。
+            await _finish_plan(ctx, design_doc, force_new_plan=False)
+            return {"design_doc": design_doc}
 
     async def revise_plan_node(state: ForgeState) -> dict:
         with observe_phase("plan"):
@@ -1249,23 +1485,12 @@ def _build_graph(ctx: _Ctx) -> Any:
                     "summary": "策划稿已按修改意见重构",
                 },
             )
-            await ckpt.save_state(
-                ctx.r,
-                ctx.run.id,
-                {
-                    **existing,
-                    "phase": "plan_confirm",
-                    "design_doc": design_doc,
-                },
-                ctx.s,
-            )
-            # 用户要求只确认策划案；修改后的策划案仍属于策划确认范围。
-            await _pause_hitl(ctx, "plan_confirm", design_doc, force_new_plan=True)
+            # ADR-18：修订后不再暂停确认，副作用幂等提交并继续美术阶段
+            await _finish_plan(ctx, design_doc, force_new_plan=True)
             return {
                 "design_doc": design_doc,
                 "decision": None,
                 "modify_text": None,
-                "hitl_stop": True,
             }
 
     async def generate_art_options(system_prompt: str, user_msg: str) -> dict[str, Any]:
@@ -1288,6 +1513,57 @@ def _build_graph(ctx: _Ctx) -> Any:
                     ctx, system_prompt, user_msg, "art", emit_delta=False
                 )
                 return parse_art_options(raw)
+            except ContentAttacked:
+                # 审核命中必须立刻中止 run，不重试、不降级兜底。
+                raise
+            except Exception as exc:  # noqa: BLE001 LLM/格式错误共用有限重试与稳定兜底
+                last_error = str(exc)
+                await publish_event(
+                    ctx.run.id,
+                    WSEventType.TOOL_CALL,
+                    {
+                        "phase": "art",
+                        "tool": "art_options_lint",
+                        "args": {
+                            "attempt": attempt,
+                            "parallel": bool(settings.forge_art_options_parallel),
+                        },
+                        "status": "error",
+                        "summary": last_error,
+                    },
+                )
+        raise ValueError(last_error)
+
+    async def generate_art_options_with_ask(
+        system_prompt: str,
+        user_msg: str,
+        *,
+        messages: llm_provider.Messages | None,
+        state: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, bool]:
+        """美术方向生成 + ask_user 工具拦截（ADR-18）。
+
+        并行路径（A/B 各调一次端点）不绑定工具——两路各自提问无意义；此场景由
+        偏好记忆（visual.* 槽位恰好覆盖美术维度）+ recommended 标记自主决策。
+        返回 (options, ask_paused)；ask_paused=True 时 options 为 None。
+        """
+        if settings.forge_art_options_parallel:
+            return await generate_art_options(system_prompt, user_msg), False
+        last_error = "未知错误"
+        for attempt in range(1, settings.art_max_retries + 1):
+            try:
+                result, ask_paused = await _llm_with_ask(
+                    ctx,
+                    state,
+                    node="art_options",
+                    system=system_prompt,
+                    user_msg=user_msg,
+                    phase="art",
+                    messages=messages,
+                )
+                if ask_paused:
+                    return None, True
+                return parse_art_options(result.content), False
             except ContentAttacked:
                 # 审核命中必须立刻中止 run，不重试、不降级兜底。
                 raise
@@ -1367,32 +1643,29 @@ def _build_graph(ctx: _Ctx) -> Any:
                 system_prompt = await build_art_options_prompt_async(
                     art_hints, complete=lambda s, u: _llm(ctx, s, u, kind="skill_select")
                 )
-                art_options = await generate_art_options(system_prompt, user_msg)
+                messages = (
+                    await _build_answer_messages(
+                        ctx, dict(state), system=system_prompt, user_msg=user_msg
+                    )
+                    if _is_ask_answer_resume(dict(state))
+                    else None
+                )
+                art_options, ask_paused = await generate_art_options_with_ask(
+                    system_prompt, user_msg, messages=messages, state=dict(state)
+                )
+                if ask_paused:
+                    return {"hitl_stop": True, "paused": True}
             except ContentAttacked:
                 raise
             except Exception as exc:  # noqa: BLE001 重试耗尽必须降级而非终止 run
                 return await fallback_art(design_doc, str(exc))
-            prior = await ckpt.load_state(ctx.r, ctx.run.id, ctx.s) or {}
-            checkpoint = {
-                "phase": "art_confirm",
-                "design_doc": design_doc,
-                "art_options": art_options,
-            }
-            for key in (
-                "active_plan_revision_id",
-                "active_art_revision_id",
-                "active_art_options_revision_id",
-                "active_candidate_revision_id",
-                "hitl_trace",
-            ):
-                if prior.get(key) is not None:
-                    checkpoint[key] = prior[key]
-            await ckpt.save_state(ctx.r, ctx.run.id, checkpoint, ctx.s)
-            await _pause_hitl(ctx, "art_confirm", design_doc, extra={"art_options": art_options})
+            # ADR-18：无 art_confirm 确认门——自动选定 recommended 项继续详细设计
+            decision = _auto_select_art(art_options or {})
+            await _finish_art_options(ctx, design_doc, art_options or {}, decision)
             return {
                 "design_doc": design_doc,
                 "art_options": art_options,
-                "hitl_stop": True,
+                "decision": decision,
             }
 
     async def revise_art_options_node(state: ForgeState) -> dict:
@@ -1771,8 +2044,25 @@ def _build_graph(ctx: _Ctx) -> Any:
             )
             return {}
 
-    def after_plan(state: ForgeState) -> Literal["__end__"]:
-        return END  # type: ignore[return-value]
+    def after_plan(
+        state: ForgeState,
+    ) -> Literal["art_options", "__end__"]:
+        # ADR-18：plan_confirm 门已取消，策划通过后直接进美术阶段；
+        # 仍在等待的只有 ask_user 暂停 / 手动暂停 / 取消 / 失败。
+        if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
+            return END  # type: ignore[return-value]
+        return "art_options"
+
+    def after_art_options(
+        state: ForgeState,
+    ) -> Literal["art_detail", "code_qa_loop", "__end__"]:
+        # ADR-18：art_confirm 门已取消——正常自动选择后进详细设计；
+        # 生成失败已走 fallback_art（带 art_direction/素材）时跳过详细设计直接开发。
+        if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
+            return END  # type: ignore[return-value]
+        if state.get("art_direction"):
+            return "code_qa_loop"
+        return "art_detail"
 
     def after_art(state: ForgeState) -> Literal["code_qa_loop", "__end__"]:
         if state.get("paused") or state.get("failed") or state.get("hitl_stop"):
@@ -1817,9 +2107,21 @@ def _build_graph(ctx: _Ctx) -> Any:
         },
     )
     g.add_edge("chat_reply", END)
-    g.add_conditional_edges("plan", after_plan, {END: END})
-    g.add_conditional_edges("revise_plan", after_plan, {END: END})
-    g.add_conditional_edges("art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END})
+    g.add_conditional_edges(
+        "plan",
+        after_plan,
+        {"art_options": "art_options", END: END},
+    )
+    g.add_conditional_edges(
+        "revise_plan",
+        after_plan,
+        {"art_options": "art_options", END: END},
+    )
+    g.add_conditional_edges(
+        "art_options",
+        after_art_options,
+        {"art_detail": "art_detail", "code_qa_loop": "code_qa_loop", END: END},
+    )
     g.add_conditional_edges(
         "revise_art_options", after_art, {"code_qa_loop": "code_qa_loop", END: END}
     )

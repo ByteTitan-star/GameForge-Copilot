@@ -43,9 +43,12 @@ from eval.runners.telemetry import (
 )
 
 # HITL auto-resolve map for unattended agent eval.
+# ADR-18：plan_confirm/art_confirm 固定门不再产生（仅为存量暂停 run 保留映射）；
+# agent_question（ask_user 工具提问）在无人评估里选 skip——让模型自行决策。
 _HITL_DECISION: dict[str, str] = {
     "plan_confirm": "approve",
     "art_confirm": "select_a",
+    "agent_question": "skip",
     "sandbox_failed": "approve",
     "qa_failed": "approve",
 }

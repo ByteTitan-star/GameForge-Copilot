@@ -1,10 +1,10 @@
 # ADR-17: On-demand HITL — ask_user as a Model-invoked Tool
 
-* Status: **Accepted**
+* Status: **Superseded by [ADR-18](./ADR-18-native-tool-hitl-no-fixed-gates.md)**（inline JSON 协议被原生工具绑定取代；固定确认门同批取消）
 * Date: 2026-09-11
 * Accepted-by: ByteTitan-star（owner 提案：HITL 不灵活，应作为工具按需调用；偏好已含答案则不问）
 * Related: [ADR-05](./ADR-05-recoverable-pause-representation.md)（暂停表示）、[ADR-10](./ADR-10-checkpoint-hitl-idempotency.md)（HITL/幂等）、[ADR-16](./ADR-16-preference-memory-to-be.md)（偏好记忆 = "不问"的信号源）、Issue [#169](https://github.com/ByteTitan-star/GameForge-Copilot/issues/169)
-* Complements: 现有固定确认门（plan_confirm / art_confirm）继续保留——它们守晋升，ask_user 守信息。
+* Complements: 现有固定确认门（plan_confirm / art_confirm）继续保留——它们守晋升，ask_user 守信息。**（该条已被 ADR-18 取消：固定门全部取消）**
 
 ---
 

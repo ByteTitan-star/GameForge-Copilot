@@ -55,12 +55,14 @@ class Usage:
 class StreamChunk:
     """complete_stream 的单帧：delta 为增量文本（可能为 ""，如纯 usage 帧），
     usage 仅在流末尾/usage 帧非 None。调用方累加 usage 即得最终用量。
-    finish_reason 仅在流末帧非 None（如 length / stop）。
+    finish_reason 仅在流末帧非 None（如 length / stop / tool_calls）。
+    tool_calls 仅在流末帧非 None：本轮模型请求调用的工具（OpenAI 规范形态）。
     """
 
     delta: str
     usage: Usage | None = None
     finish_reason: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -68,10 +70,18 @@ class LLMCompletion:
     content: str
     usage: Usage
     finish_reason: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 # 多模态消息内容：纯文本，或 OpenAI 兼容 content parts（text / image_url）。
 UserContent = str | list[dict[str, Any]]
+
+# 多轮消息（OpenAI 规范形态）：role ∈ system/user/assistant/tool；
+# assistant 消息可带 tool_calls，tool 消息带 tool_call_id + content（工具结果）。
+Messages = list[dict[str, Any]]
+
+# 工具 schema（OpenAI 规范形态）：[{"type":"function","function":{name,description,parameters}}]
+ToolsSpec = list[dict[str, Any]]
 
 
 def image_content_part(image: bytes, media_type: str = "image/png") -> dict[str, Any]:
@@ -114,6 +124,145 @@ def _to_anthropic_blocks(user_msg: UserContent) -> str | list[dict[str, Any]]:
             elif url:
                 blocks.append({"type": "image", "source": {"type": "url", "url": url}})
     return blocks
+
+
+def _tools_to_anthropic(tools: ToolsSpec) -> list[dict[str, Any]]:
+    """OpenAI 工具规范 → Anthropic tools 字段（name/description/input_schema）。"""
+    out: list[dict[str, Any]] = []
+    for tool in tools:
+        func = tool.get("function") or {}
+        if not func.get("name"):
+            continue
+        out.append(
+            {
+                "name": func["name"],
+                "description": str(func.get("description") or ""),
+                "input_schema": func.get("parameters")
+                or {"type": "object", "properties": {}},
+            }
+        )
+    return out
+
+
+def _tool_calls_to_anthropic_blocks(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """OpenAI tool_calls → Anthropic tool_use content blocks（arguments JSON 串转 dict）。"""
+    import json
+
+    blocks: list[dict[str, Any]] = []
+    for call in tool_calls:
+        func = call.get("function") or {}
+        try:
+            args = json.loads(func.get("arguments") or "{}")
+        except (ValueError, TypeError):
+            args = {}
+        blocks.append(
+            {
+                "type": "tool_use",
+                "id": call.get("id") or "",
+                "name": func.get("name") or "",
+                "input": args if isinstance(args, dict) else {},
+            }
+        )
+    return blocks
+
+
+def _messages_to_anthropic(
+    messages: Messages, system: str
+) -> tuple[str, list[dict[str, Any]]]:
+    """OpenAI 规范多轮消息 → Anthropic (system, messages)。
+
+    - system 角色合并进独立 system 字段（Anthropic 不允许 system 在 messages 里）；
+    - assistant.tool_calls → tool_use blocks（正文文本保留为 text block）；
+    - role:"tool" → user 消息的 tool_result block（工具结果回填）。
+    """
+    system_parts = [system] if system else []
+    out: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "system":
+            text = msg.get("content")
+            if isinstance(text, str) and text.strip():
+                system_parts.append(text.strip())
+            continue
+        if role == "tool":
+            tool_content = msg.get("content")
+            out.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg.get("tool_call_id") or "",
+                            "content": (
+                                tool_content if isinstance(tool_content, str) else ""
+                            ),
+                        }
+                    ],
+                }
+            )
+            continue
+        if role == "assistant":
+            blocks: list[dict[str, Any]] = []
+            content = msg.get("content")
+            if isinstance(content, str) and content:
+                blocks.append({"type": "text", "text": content})
+            if msg.get("tool_calls"):
+                blocks.extend(_tool_calls_to_anthropic_blocks(msg["tool_calls"]))
+            out.append({"role": "assistant", "content": blocks or ""})
+            continue
+        # user：字符串直传，parts 走 blocks 转换
+        content = msg.get("content")
+        if isinstance(content, list):
+            out.append({"role": "user", "content": _to_anthropic_blocks(content)})
+        else:
+            out.append({"role": "user", "content": content or ""})
+    return "\n\n".join(p for p in system_parts if p), out
+
+
+def _anthropic_tool_calls(content_blocks: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    """Anthropic tool_use blocks → OpenAI tool_calls 规范形态（arguments 序列化为 JSON 串）。"""
+    import json
+
+    calls: list[dict[str, Any]] = []
+    for block in content_blocks:
+        if isinstance(block, dict) and block.get("type") == "tool_use":
+            calls.append(
+                {
+                    "id": block.get("id") or "",
+                    "type": "function",
+                    "function": {
+                        "name": block.get("name") or "",
+                        "arguments": json.dumps(
+                            block.get("input") or {}, ensure_ascii=False
+                        ),
+                    },
+                }
+            )
+    return calls or None
+
+
+# 工具调用能力表：BYOK 下游能力不一（见 thinking_disable_fields 同类问题）。
+# 默认三大协议族均支持 OpenAI 风格 tools / Anthropic tool_use；
+# settings.llm_tools_blocklist（模型前缀逗号分隔）可按模型关掉。
+_TOOLS_SUPPORT: dict[LLMProvider, bool] = {
+    LLMProvider.ANTHROPIC: True,
+    LLMProvider.OPENAI: True,
+    LLMProvider.OPENAI_COMPAT: True,
+}
+
+
+def tools_supported(
+    provider: LLMProvider, model: str, base_url: str | None = None
+) -> bool:
+    """该 provider/model 是否可绑定工具；不支持时不绑定（行为降级，不报错）。"""
+    if not _TOOLS_SUPPORT.get(provider, False):
+        return False
+    model_name = (model or "").strip().lower()
+    for prefix in settings.llm_tools_blocklist.split(","):
+        prefix = prefix.strip().lower()
+        if prefix and model_name.startswith(prefix):
+            return False
+    return True
 
 
 def _host_from_base_url(base_url: str | None) -> str | None:
@@ -343,29 +492,55 @@ def _build_body(
     *,
     max_tokens: int,
     stream: bool,
+    messages: Messages | None = None,
+    tools: ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> dict:
     """构造 chat/messages 请求体。非流式与流式共用，仅 stream 字段不同。
 
     Anthropic 官方域名走原生 /messages（system 独立字段）；其余一律 OpenAI 兼容。
     user_msg 可为多模态 content parts（OpenAI 格式），Anthropic 路径自动转 blocks。
     thinking 默认关闭：见 ``thinking_disable_fields`` 厂商能力表。
+
+    工具调用（ADR-18）：messages 提供时替代 system/user_msg 单轮构造（多轮对话含
+    assistant tool_calls 与 role:"tool" 结果回填）；tools/tool_choice 仅在显式传入时
+    携带——未传入的调用与既有行为完全一致（compat 端点不感知新字段）。
     """
     if _uses_anthropic_native_api(provider, base_url):
-        body = {
+        merged_system, chat_messages = (
+            _messages_to_anthropic(messages, system) if messages is not None else (
+                system,
+                [{"role": "user", "content": _to_anthropic_blocks(user_msg)}],
+            )
+        )
+        body: dict = {
             "model": model,
             "max_tokens": max_tokens,
-            "system": system,
-            "messages": [{"role": "user", "content": _to_anthropic_blocks(user_msg)}],
+            "system": merged_system,
+            "messages": chat_messages,
         }
+        if tools:
+            body["tools"] = _tools_to_anthropic(tools)
+            if tool_choice == "auto":
+                body["tool_choice"] = {"type": "auto"}
     else:
-        body = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "messages": [
+        if messages is not None:
+            chat_messages = messages
+        else:
+            default_messages: Messages = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
-            ],
+            ]
+            chat_messages = default_messages
+        body = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": chat_messages,
         }
+        if tools:
+            body["tools"] = tools
+            if tool_choice:
+                body["tool_choice"] = tool_choice
         # OpenAI 兼容流式：请求末帧带 usage（标准约定）；部分 compat 实现不支持，
         # 缺失时由 complete_stream 兜底估算。
         if stream:
@@ -420,34 +595,17 @@ async def _sleep_before_retry(*, attempt: int, model: str, reason: str) -> None:
     await asyncio.sleep(delay)
 
 
-async def complete(
-    provider: LLMProvider,
-    apikey: str,
-    model: str,
-    system: str,
-    user_msg: UserContent,
-    base_url: str | None = None,
+async def _post_with_retries(
+    url: str,
+    headers: dict[str, str],
+    body: dict,
+    timeout: httpx.Timeout,
     *,
-    max_tokens: int | None = None,
-    read_timeout_s: int | None = None,
-) -> LLMCompletion:
-    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
-
-    传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
-    user_msg 支持多模态 content parts（见 ``image_content_part``）。
-    """
-    if max_tokens is None:
-        max_tokens = settings.llm_max_tokens
-    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
-    url = _messages_url(provider, base_url)
-    body = _build_body(
-        provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=False
-    )
-    timeout = _llm_timeout(read_timeout_s)
+    model: str,
+    started: float,
+) -> httpx.Response:
+    """带传输层重试（网络错误 / 429 / 502-504 指数退避）的单次 POST。"""
     max_retries = settings.llm_http_max_retries
-    # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
-    started = time.monotonic()
-    log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
     last_http_error: httpx.HTTPError | None = None
     resp: httpx.Response | None = None
     for attempt in range(max_retries + 1):
@@ -474,10 +632,79 @@ async def complete(
             )
             continue
         break
-
     if resp is None:
         assert last_http_error is not None
         raise last_http_error
+    return resp
+
+
+def _degrade_tools_on_400(
+    resp: httpx.Response, tools: ToolsSpec | None
+) -> bool:
+    """ADR-18 运行时降级判定：绑定 tools 收到 400 → 视为端点不支持工具。
+
+    静态能力表（tools_supported）覆盖不到的 compat 端点在此兜底：
+    行为降级为无工具调用（agent 自主决策），不把能力问题抛给用户。
+    """
+    return resp.status_code == 400 and tools is not None
+
+
+async def complete(
+    provider: LLMProvider,
+    apikey: str,
+    model: str,
+    system: str | None = None,
+    user_msg: UserContent | None = None,
+    base_url: str | None = None,
+    *,
+    max_tokens: int | None = None,
+    read_timeout_s: int | None = None,
+    messages: Messages | None = None,
+    tools: ToolsSpec | None = None,
+    tool_choice: str | None = None,
+) -> LLMCompletion:
+    """调一次补全，返回 (content, usage)。usage 取响应真实字段（docs/05 不估算）。
+
+    传输层对网络错误与 429/502-504 做有限指数退避重试，不消耗业务自修复预算。
+    user_msg 支持多模态 content parts（见 ``image_content_part``）。
+    工具调用（ADR-18）：传 messages（多轮）与 tools 时，模型可返回 tool_calls
+    （OpenAI 规范形态，list[dict]），调用方负责执行工具并回填结果；
+    绑定 tools 收到 400 时自动去 tools 重试一次（运行时能力降级）。
+    """
+    if max_tokens is None:
+        max_tokens = settings.llm_max_tokens
+    headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
+    url = _messages_url(provider, base_url)
+
+    def _body(effective_tools: ToolsSpec | None) -> dict:
+        return _build_body(
+            provider,
+            model,
+            system or "",
+            user_msg or "",
+            base_url,
+            max_tokens=max_tokens,
+            stream=False,
+            messages=messages,
+            tools=effective_tools,
+            tool_choice=tool_choice if effective_tools is not None else None,
+        )
+
+    timeout = _llm_timeout(read_timeout_s)
+    # 只记 url（仅含 host+path，无 key）/model/status/duration，绝不记 headers（含 apikey）
+    started = time.monotonic()
+    log.info("llm http request", extra={"stage": "http", "model": model, "url": url})
+    resp = await _post_with_retries(
+        url, headers, _body(tools), timeout, model=model, started=started
+    )
+    if _degrade_tools_on_400(resp, tools):
+        log.warning(
+            "llm tools rejected with 400, retrying without tools (runtime degrade)",
+            extra={"stage": "http", "model": model},
+        )
+        resp = await _post_with_retries(
+            url, headers, _body(None), timeout, model=model, started=started
+        )
 
     duration = round(time.monotonic() - started, 3)
     log.info(
@@ -497,23 +724,37 @@ async def complete(
         )
     data = resp.json()
     finish_reason: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
     if _uses_anthropic_native_api(provider, base_url):
-        content = "".join(b.get("text", "") for b in data.get("content", []))
+        content_blocks = data.get("content", [])
+        content = "".join(
+            b.get("text", "") for b in content_blocks if isinstance(b, dict)
+        )
         usage = Usage(
             input_tokens=data.get("usage", {}).get("input_tokens", 0),
             output_tokens=data.get("usage", {}).get("output_tokens", 0),
         )
         finish_reason = data.get("stop_reason")
+        tool_calls = _anthropic_tool_calls(content_blocks)
     else:
         choice = data["choices"][0]
-        raw = choice.get("message", {}).get("content")
+        message = choice.get("message", {})
+        raw = message.get("content")
         content = raw if isinstance(raw, str) else (raw or "")
         usage = Usage(
             input_tokens=data.get("usage", {}).get("prompt_tokens", 0),
             output_tokens=data.get("usage", {}).get("completion_tokens", 0),
         )
         finish_reason = choice.get("finish_reason")
-    return LLMCompletion(content=content or "", usage=usage, finish_reason=finish_reason)
+        raw_calls = message.get("tool_calls")
+        if isinstance(raw_calls, list) and raw_calls:
+            tool_calls = raw_calls
+    return LLMCompletion(
+        content=content or "",
+        usage=usage,
+        finish_reason=finish_reason,
+        tool_calls=tool_calls,
+    )
 
 
 async def _iter_sse(resp: httpx.Response) -> AsyncIterator[tuple[str | None, str]]:
@@ -559,12 +800,15 @@ async def _parse_anthropic_stream(
 
     关键事件：
     - message_start：data.message.usage.input_tokens（input 在此帧）
-    - content_block_delta：delta.text（正文增量）
+    - content_block_start：type==tool_use 的块开始（id/name，input 稍后增量到达）
+    - content_block_delta：delta.text（正文增量）/ delta.partial_json（tool 参数增量）
     - message_delta：usage.output_tokens（output 在此帧，注意是累计终值）
-    - message_stop：流结束
+    - message_stop：流结束（tool_calls 随终帧一并发出）
     """
     input_tokens = 0
     output_tokens = 0
+    # tool_use 累积：block index → {id, name, args_parts}
+    tool_blocks: dict[int, dict[str, Any]] = {}
     async for event_name, data in _iter_sse(resp):
         if data == "[DONE]":
             break
@@ -577,6 +821,14 @@ async def _parse_anthropic_stream(
             msg_usage = (obj.get("message") or {}).get("usage") or {}
             input_tokens = msg_usage.get("input_tokens", 0)
             output_tokens = msg_usage.get("output_tokens", 0)
+        elif etype == "content_block_start":
+            block = obj.get("content_block") or {}
+            if block.get("type") == "tool_use":
+                tool_blocks[obj.get("index", 0)] = {
+                    "id": block.get("id") or "",
+                    "name": block.get("name") or "",
+                    "args_parts": [],
+                }
         elif etype == "content_block_delta":
             delta = obj.get("delta") or {}
             # text_delta 才是正文；thinking_delta/其他丢弃（见 qwen 关 thinking 注释）
@@ -584,15 +836,32 @@ async def _parse_anthropic_stream(
                 text = delta.get("text", "")
                 if text:
                     yield StreamChunk(delta=text)
+            elif delta.get("type") == "input_json_delta":
+                idx = obj.get("index", 0)
+                if idx in tool_blocks:
+                    tool_blocks[idx]["args_parts"].append(delta.get("partial_json", ""))
         elif etype == "message_delta":
             usage = obj.get("usage") or {}
             if "output_tokens" in usage:
                 output_tokens = usage["output_tokens"]
         elif etype == "message_stop":
+
+            calls = [
+                {
+                    "id": tb["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tb["name"],
+                        "arguments": "".join(tb["args_parts"]) or "{}",
+                    },
+                }
+                for tb in tool_blocks.values()
+            ]
             yield StreamChunk(
                 delta="",
                 usage=Usage(input_tokens, output_tokens),
                 finish_reason=obj.get("stop_reason"),
+                tool_calls=calls or None,
             )
             return
 
@@ -611,6 +880,8 @@ async def _parse_openai_stream(
     char_count = 0
     final_usage: Usage | None = None
     finish_reason: str | None = None
+    # tool_calls 增量累积：index → {id, name, arguments_parts}
+    tool_acc: dict[int, dict[str, Any]] = {}
     async for _event_name, data in _iter_sse(resp):
         if data == "[DONE]":
             break
@@ -637,14 +908,48 @@ async def _parse_openai_stream(
         if text:
             char_count += len(text)
             yield StreamChunk(delta=text)
+        # tool_calls 分片：id/name 首帧到达，arguments 逐帧追加
+        for frag in delta.get("tool_calls") or []:
+            if not isinstance(frag, dict):
+                continue
+            idx = int(frag.get("index") or 0)
+            slot = tool_acc.setdefault(idx, {"id": "", "name": "", "arguments_parts": []})
+            if frag.get("id"):
+                slot["id"] = frag["id"]
+            func = frag.get("function") or {}
+            if func.get("name"):
+                slot["name"] = func["name"]
+            if func.get("arguments"):
+                slot["arguments_parts"].append(func["arguments"])
+    tool_calls = [
+        {
+            "id": slot["id"],
+            "type": "function",
+            "function": {
+                "name": slot["name"],
+                "arguments": "".join(slot["arguments_parts"]) or "{}",
+            },
+        }
+        for slot in tool_acc.values()
+    ] or None
     if final_usage is not None:
-        yield StreamChunk(delta="", usage=final_usage, finish_reason=finish_reason)
-    elif char_count:
+        yield StreamChunk(
+            delta="",
+            usage=final_usage,
+            finish_reason=finish_reason,
+            tool_calls=tool_calls,
+        )
+    elif char_count or tool_calls:
         # 兜底：provider 没给 usage，按字符数估 output（中英混合代码 ~4 chars/token），
         # input 记 0（解析器拿不到 prompt）。与 docs「不估算」原则的已知例外
         # （compat 流式 usage 缺失），比此前按 chunk 计数更接近真实值。
         est = Usage(input_tokens=0, output_tokens=max(1, char_count // 4))
-        yield StreamChunk(delta="", usage=est, finish_reason=finish_reason)
+        yield StreamChunk(
+            delta="",
+            usage=est,
+            finish_reason=finish_reason,
+            tool_calls=tool_calls,
+        )
         log.warning(
             "llm stream usage missing, estimated by char count",
             extra={"stage": "http", "chars": char_count},
@@ -655,13 +960,16 @@ async def complete_stream(
     provider: LLMProvider,
     apikey: str,
     model: str,
-    system: str,
-    user_msg: str,
+    system: str | None = None,
+    user_msg: str | None = None,
     base_url: str | None = None,
     *,
     max_tokens: int | None = None,
+    messages: Messages | None = None,
+    tools: ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> AsyncIterator[StreamChunk]:
-    """流式补全：逐 token yield StreamChunk，末帧带 usage。
+    """流式补全：逐 token yield StreamChunk，末帧带 usage（及可能的 tool_calls）。
 
     与 complete() 共享请求体构造（_build_body），双协议 SSE 解析各自一套。
     传输层仅在开流前对网络错误 / 429 / 502-504 重试；一旦开始 yield 不再重试，避免重复输出。
@@ -671,20 +979,49 @@ async def complete_stream(
         max_tokens = settings.llm_max_tokens
     headers = {**_auth_headers(provider, apikey, base_url), "content-type": "application/json"}
     url = _messages_url(provider, base_url)
-    body = _build_body(
-        provider, model, system, user_msg, base_url, max_tokens=max_tokens, stream=True
-    )
+
+    def _body(effective_tools: ToolsSpec | None) -> dict:
+        return _build_body(
+            provider,
+            model,
+            system or "",
+            user_msg or "",
+            base_url,
+            max_tokens=max_tokens,
+            stream=True,
+            messages=messages,
+            tools=effective_tools,
+            tool_choice=tool_choice if effective_tools is not None else None,
+        )
+
     timeout = _llm_timeout()
     max_retries = settings.llm_http_max_retries
     started = time.monotonic()
     log.info("llm stream request", extra={"stage": "http", "model": model, "url": url})
     started_yielding = False
-    for attempt in range(max_retries + 1):
+    effective_tools = tools
+    attempt = 0
+    while attempt <= max_retries:
         try:
             async with (
                 _build_llm_client(url, timeout) as client,
-                client.stream("POST", url, headers=headers, json=body) as resp,
+                client.stream("POST", url, headers=headers, json=_body(effective_tools)) as resp,
             ):
+                # ADR-18 运行时降级：绑定 tools 收到 400 → 端点不支持工具，
+                # 去 tools 重试一次（不消耗传输层重试预算），行为降级不报错
+                if (
+                    resp.status_code == 400
+                    and effective_tools is not None
+                    and not started_yielding
+                ):
+                    await resp.aread()
+                    log.warning(
+                        "llm stream tools rejected with 400, "
+                        "retrying without tools (runtime degrade)",
+                        extra={"stage": "http", "model": model},
+                    )
+                    effective_tools = None
+                    continue
                 if (
                     resp.status_code in _RETRYABLE_HTTP_STATUS
                     and attempt < max_retries
@@ -696,6 +1033,7 @@ async def complete_stream(
                         model=model,
                         reason=f"HTTP {resp.status_code}",
                     )
+                    attempt += 1
                     continue
                 if resp.status_code != 200:
                     err = (await resp.aread()).decode("utf-8", "replace")[:200]
@@ -720,6 +1058,7 @@ async def complete_stream(
                 )
                 raise
             await _sleep_before_retry(attempt=attempt, model=model, reason="HTTPError")
+            attempt += 1
     duration = round(time.monotonic() - started, 3)
     log.info(
         "llm stream response done",

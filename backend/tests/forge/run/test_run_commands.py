@@ -78,8 +78,23 @@ async def _paused_plan_run(
     client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[uuid.UUID, uuid.UUID]:
+    """跑到 HITL 暂停态（ADR-18 后固定确认门取消，用 qa_failed：QA 重试耗尽）。"""
+    from app.core.config import settings as app_settings
     from app.forge.runner import execute_run
+    from app.sandbox.playtest import PlaytestResult
+
+    async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
+        return PlaytestResult(
+            ok=False,
+            errors=["mock js error"],
+            console_logs=["err"],
+            failure_kind="product",
+        )
+
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail_playtest)
+    monkeypatch.setattr(app_settings, "code_qa_max_attempts", 1)
 
     gid = await _make_game(client)
     rid = uuid.UUID(
@@ -95,17 +110,18 @@ async def test_hitl_resolve_writes_run_command(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm)
+    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm, monkeypatch)
     r = await verified_client.post(
         f"/api/v1/games/{gid}/runs/{rid}/hitl/resolve",
-        json={"node": "plan_confirm", "decision": "approve"},
+        json={"node": "qa_failed", "decision": "approve"},
     )
     assert r.status_code == 200, r.text
     async with db_module.SessionLocal() as s:
         row = await s.scalar(select(RunCommand).where(RunCommand.run_id == rid))
         assert row is not None
-        assert row.command_type == RunCommandType.APPROVE_PLAN.value
+        assert row.command_type == RunCommandType.RETRY_IMPLEMENTATION.value
         assert row.status == RunCommandStatus.PENDING.value
 
 
@@ -113,12 +129,13 @@ async def test_stale_control_revision_returns_409(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm)
+    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm, monkeypatch)
     r = await verified_client.post(
         f"/api/v1/games/{gid}/runs/{rid}/hitl/resolve",
         json={
-            "node": "plan_confirm",
+            "node": "qa_failed",
             "decision": "approve",
             "expected_control_revision": 999,
         },
@@ -131,10 +148,11 @@ async def test_double_resolve_second_call_is_stale(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm)
+    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm, monkeypatch)
     body = {
-        "node": "plan_confirm",
+        "node": "qa_failed",
         "decision": "approve",
         "expected_control_revision": 0,
     }
@@ -169,10 +187,10 @@ async def test_hitl_pause_marks_command_succeeded_before_worker_ack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """业务 HITL commit 必须带上 SUCCEEDED，不能等 runner 在 ACK 前补标。"""
-    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm)
+    gid, rid = await _paused_plan_run(verified_client, redis_client, _fake_llm, monkeypatch)
     posted = await verified_client.post(
         f"/api/v1/games/{gid}/runs/{rid}/hitl/resolve",
-        json={"node": "plan_confirm", "decision": "approve"},
+        json={"node": "qa_failed", "decision": "approve"},
     )
     assert posted.status_code == 200, posted.text
     async with db_module.SessionLocal() as s:
