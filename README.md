@@ -1,7 +1,7 @@
 <h1 align="center">🎮 GameForge</h1>
 
 <p align="center">
-  <a href="https://github.com/ByteTitan-star/GameForge-Copilot/releases/tag/v2.1.3"><img src="https://img.shields.io/badge/GameForge-v2.1.3-6e40c9" alt="GameForge v2.1.3" /></a>
+  <a href="https://github.com/ByteTitan-star/GameForge-Copilot/releases/tag/v2.2.0"><img src="https://img.shields.io/badge/GameForge-v2.2.0-6e40c9" alt="GameForge v2.2.0" /></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/English-0A66C2" alt="English" />
@@ -26,7 +26,7 @@
 
 ## What is GameForge?
 
-GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description, move through AI planning, human review, and game generation, then receive a playable result in the browser — whether as a compact HTML build or a Vite project (React UI, Canvas / Phaser / PixiJS, and more) — and can keep managing versions, downloading, or publishing.
+GameForge is an AI-assisted workspace for creating browser games. Creators start with a gameplay description and the agent plans, generates, and playtests autonomously — asking one focused question only when a decision-critical preference is unknown, then deciding directly from remembered preferences — delivering a playable result in the browser — whether as a compact HTML build or a Vite project (React UI, Canvas / Phaser / PixiJS, and more) — and can keep managing versions, downloading, or publishing.
 
 ## Product flow
 
@@ -34,7 +34,7 @@ GameForge is an AI-assisted workspace for creating browser games. Creators start
 | --- | --- | --- |
 | Creative input | Describe the gameplay, characters, and rules in natural language in the Forge workspace. | A clear gameplay brief |
 | AI planning | Turn the creative direction into a game design that can be reviewed and confirmed. | A structured design plan |
-| Human review | Review the direction before generation and continue refining it when needed. | An approved generation plan |
+| On-demand clarification | When a decision-critical preference is unknown, the agent asks one focused question via the `ask_user` tool and remembers the answer; otherwise it decides directly from your preference memory. | A clarified decision, saved for next time |
 | Game generation | Turn the plan into a runnable browser game with live progress feedback. | A manageable game version |
 | Browser playtest | Open the game directly and validate the gameplay and controls. | Real playtest feedback |
 | Download or publish | Download a standalone HTML build or submit the game for publishing. | A deliverable game |
@@ -58,14 +58,15 @@ A colorful tower defense prototype. Place defensive towers, stop enemy waves, an
 | Forge workspace | Browser playtest |
 | --- | --- |
 | <img src="docs/showcase/assets/product-forge.png" alt="GameForge Forge workspace" width="100%" /> | <img src="docs/showcase/assets/product-gameplay.png" alt="GameForge browser playtest" width="100%" /> |
-| Describe an idea, review the AI plan, and confirm the generation direction. | Open the generated result and validate the gameplay and controls directly. |
+| Describe an idea, watch the agent plan and generate, and answer a clarifying question only when asked. | Open the generated result and validate the gameplay and controls directly. |
 
 ## Core features
 
 | Core feature | Description |
 | --- | --- |
 | Natural-language driven | Start creating by describing the gameplay instead of writing code. |
-| Human-guided AI | AI handles planning and generation while the creator controls the final direction. |
+| Autonomous agent, memory-first | The agent plans and generates end to end, deciding from your saved preferences and asking a question only when a decision is truly ambiguous ([ADR-18](docs/adr/ADR-18-native-tool-hitl-no-fixed-gates.md)). |
+| Preference memory | Long-term taste (style, difficulty, language, genre) is captured from your requests and answers and applied to every future creation. |
 | Flexible game stacks | Generate single-file HTML or Vite projects with React UI and engines such as Canvas, Phaser, and PixiJS. |
 | Browser native | Open and play generated results immediately without extra installation. |
 | Deliverable builds | Download, save, and share playable browser builds. |
