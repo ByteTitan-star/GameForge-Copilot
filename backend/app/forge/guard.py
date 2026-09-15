@@ -565,10 +565,12 @@ async def run_streamed_llm(
     emit_delta: bool = True,
     kind: str | None = None,
     max_tokens: int | None = None,
+    tools: llm_provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> str:
     """用户可见节点的 LLM 调用：流式 + 输入/输出审核 + 微批 LLM_DELTA。
 
-    返回完整 content 字符串。需 usage/finish_reason 时用 run_streamed_llm_result。
+    返回完整 content 字符串。需 usage/finish_reason/tool_calls 时用 run_streamed_llm_result。
     """
     result = await run_streamed_llm_result(
         ctx,
@@ -578,6 +580,8 @@ async def run_streamed_llm(
         emit_delta=emit_delta,
         kind=kind,
         max_tokens=max_tokens,
+        tools=tools,
+        tool_choice=tool_choice,
     )
     return result.content
 
@@ -591,13 +595,32 @@ async def run_streamed_llm_result(
     emit_delta: bool = True,
     kind: str | None = None,
     max_tokens: int | None = None,
+    tools: llm_provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
+    messages: llm_provider.Messages | None = None,
 ) -> llm_provider.LLMCompletion:
-    """同 run_streamed_llm，但返回 LLMCompletion（含 usage / finish_reason）。"""
+    """同 run_streamed_llm，但返回 LLMCompletion（含 usage / finish_reason / tool_calls）。
+
+    ADR-18：传入 tools 时模型可发起工具调用；tool_calls 参数会序列化后过输出审核
+    （问题文本将展示给用户，必须过审），审核命中与正文同等处理（中断 + ContentAttacked）。
+    传入 messages（多轮，含工具问答回填）时替代 system/user_msg 单轮构造；
+    输入审核取其中最后一条 user 消息的文本。
+    """
     guard = await build_guard(ctx)
 
     # 1) 输入审核与生成流并行（异步，不阻塞首 token）；命中即中断，语义同输出侧。
     #    流结束前在途必等（受 audit_request_timeout 约束，超时视为未命中）。
-    input_task: asyncio.Task | None = asyncio.create_task(guard.audit(user_msg))
+    audit_input = user_msg
+    if messages is not None:
+        audit_input = next(
+            (
+                m.get("content") or ""
+                for m in reversed(messages)
+                if m.get("role") == "user" and isinstance(m.get("content"), str)
+            ),
+            "",
+        )
+    input_task: asyncio.Task | None = asyncio.create_task(guard.audit(audit_input))
 
     started = time.monotonic()
     content_parts: list[str] = []
@@ -607,6 +630,7 @@ async def run_streamed_llm_result(
     last_audit_at = started
     usage = llm_provider.Usage()
     finish_reason: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
     audit_task: asyncio.Task | None = None  # 后台审核 task：不阻塞 token 流
 
     async def _raise_if_hit(res: AuditResult | None, side: str) -> None:
@@ -631,6 +655,9 @@ async def run_streamed_llm_result(
         run_id=ctx.run.id,
         kind=kind or phase or "chat",
         max_tokens=max_tokens,
+        tools=tools,
+        tool_choice=tool_choice,
+        messages=messages,
     )
     try:
         async for chunk in gen:
@@ -647,6 +674,8 @@ async def run_streamed_llm_result(
                 usage = chunk.usage
             if chunk.finish_reason:
                 finish_reason = chunk.finish_reason
+            if chunk.tool_calls:
+                tool_calls = chunk.tool_calls
             # 输入/输出后台审核完成 → 立刻检查结果（不阻塞 token 流）
             if input_task is not None and input_task.done():
                 done_res = input_task.result()
@@ -678,6 +707,22 @@ async def run_streamed_llm_result(
             await _raise_if_hit(input_task.result(), "input")
         if audit_task is not None and audit_task.done():
             await _raise_if_hit(audit_task.result(), "output")
+        # 工具调用参数过输出审核（同步等结果，限时防拖）：问题文本会展示给用户
+        if tool_calls:
+            import json as _json
+
+            args_text = _json.dumps(
+                [
+                    (c.get("function") or {}).get("arguments", "")
+                    for c in tool_calls
+                ],
+                ensure_ascii=False,
+            )
+            with contextlib.suppress(asyncio.TimeoutError):
+                tool_res = await asyncio.wait_for(
+                    guard.audit(args_text), timeout=settings.audit_request_timeout
+                )
+            await _raise_if_hit(tool_res, "output")
     finally:
         for pending_task in (input_task, audit_task):
             if pending_task is not None and not pending_task.done():
@@ -705,6 +750,7 @@ async def run_streamed_llm_result(
         content=content,
         usage=usage,
         finish_reason=finish_reason,
+        tool_calls=tool_calls,
     )
 
 

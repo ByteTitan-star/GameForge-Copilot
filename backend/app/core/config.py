@@ -219,6 +219,16 @@ class Settings(BaseSettings):
     preference_extract_model: str = ""
     preference_extract_apikey: str = ""
     preference_extract_base_url: str = ""
+    # ADR-18 follow-up：异步抽取任务的护栏超时（秒）；超时作废本次抽取，不影响 run
+    preference_extract_timeout_s: int = 20
+    # ADR-16 增量·时间衰减复确认：explicit 超过 N 天未被重新确认（updated_at 陈旧），
+    # 高置信 inferred 可覆盖；-1 关闭（回到 explicit 绝对恒胜）
+    preference_explicit_stale_days: int = 180
+    # inferred 覆盖陈旧 explicit 的置信度门槛（复确认缺失时行为信号须足够强）
+    preference_inferred_override_confidence: float = 0.85
+    # ADR-16 增量·行为信号：异步抽取任务携带近期需求文本，供模型识别反复口味模式
+    preference_history_infer_enabled: bool = True
+    preference_history_max_items: int = 8
 
     # 语义软命中确认 LLM（空则回退 preference_extract_*）
     semantic_confirm_provider: str = "openai_compat"
@@ -273,6 +283,9 @@ class Settings(BaseSettings):
         "open.bigmodel.cn,api.siliconflow.cn,api.minimaxi.com,"
         "api.baichuan-ai.com,api.lingyiwanwu.com"
     )
+    # ADR-18 原生工具调用：按模型前缀关闭工具绑定的黑名单（逗号分隔，小写前缀匹配）。
+    # 命中的模型不绑定 tools（agent 自主决策，行为降级不报错），其余默认支持。
+    llm_tools_blocklist: str = ""
     # 默认关 thinking：见 app.llm.thinking 厂商能力表（Qwen/GLM/DeepSeek/Kimi/…）。
     # 避免思考链占满 max_tokens。需深度推理置 false。
     llm_disable_thinking: bool = True

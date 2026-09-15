@@ -4,6 +4,7 @@
 """
 
 import hashlib
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -33,6 +34,8 @@ from app.usage.store import (
     get_user_usage,
     record_usage,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _usage_idem_key(
@@ -64,6 +67,19 @@ async def _get_config(
     if cfg is None:
         raise AppError(ErrorCode.LLM_CONFIG_INVALID, "无可用 LLM 配置")
     return cfg
+
+
+def _degrade_tools_if_unsupported(
+    prov: LLMProvider, model: str, base_url: str | None, tools: Any
+) -> Any:
+    """BYOK 能力降级（ADR-18）：模型不支持工具时静默不绑定（agent 自主决策，不报错）。"""
+    if tools and not provider.tools_supported(prov, model, base_url):
+        log.warning(
+            "llm tools unsupported by model, degraded to no-tools",
+            extra={"stage": "client", "model": model},
+        )
+        return None
+    return tools
 
 
 async def _maybe_quota_alert(db: AsyncSession, r: redis.Redis, user_id: uuid.UUID) -> None:
@@ -126,6 +142,9 @@ async def _invoke_llm(
     *,
     kind: str = "chat",
     max_tokens: int | None = None,
+    messages: provider.Messages | None = None,
+    tools: provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> provider.LLMCompletion:
     """执行 provider.complete 并挂 langfuse generation 观测。
 
@@ -140,8 +159,17 @@ async def _invoke_llm(
         metadata=trace_meta,
     ) as gen:
         try:
+            # 新 kwargs 仅在显式使用时传递：未用工具的调用保持原调用形状
+            extra: dict[str, Any] = {}
+            if messages is not None:
+                extra["messages"] = messages
+            if tools is not None:
+                extra["tools"] = tools
+                if tool_choice:
+                    extra["tool_choice"] = tool_choice
             result = await provider.complete(
-                prov, apikey, model, system, user_msg, base_url=base_url, max_tokens=max_tokens
+                prov, apikey, model, system, user_msg, base_url=base_url,
+                max_tokens=max_tokens, **extra,
             )
         except Exception:
             if gen is not None:
@@ -170,6 +198,9 @@ async def call_llm(
     run_id: uuid.UUID | None = None,
     kind: str = "chat",
     max_tokens: int | None = None,
+    messages: provider.Messages | None = None,
+    tools: provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> tuple[provider.LLMCompletion, LLMProvider]:
     _, _, rate = await admin_services.get_effective_limits(db)
     await check_rate_limit(r, f"rl:llm:{user_id}", rate, 60)
@@ -181,6 +212,7 @@ async def call_llm(
     prov = LLMProvider(cfg.provider)
     cb_key = circuit.circuit_key(user_id, prov, cfg.base_url)
     await circuit.assert_circuit_closed(r, cb_key)
+    tools = _degrade_tools_if_unsupported(prov, cfg.model, cfg.base_url, tools)
     trace_meta: dict[str, str] = {"user_id": str(user_id)}
     if game_id is not None:
         trace_meta["game_id"] = str(game_id)
@@ -197,6 +229,9 @@ async def call_llm(
             trace_meta,
             kind=kind,
             max_tokens=max_tokens,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
         )
     except Exception:
         LLM_CALLS.labels(prov.value, "error").inc()
@@ -241,8 +276,11 @@ async def call_llm_stream(
     run_id: uuid.UUID | None = None,
     kind: str = "chat",
     max_tokens: int | None = None,
+    messages: provider.Messages | None = None,
+    tools: provider.ToolsSpec | None = None,
+    tool_choice: str | None = None,
 ) -> AsyncIterator[StreamChunk]:
-    """流式版 call_llm：逐 token yield StreamChunk（末帧带 usage）。
+    """流式版 call_llm：逐 token yield StreamChunk（末帧带 usage 及可能的 tool_calls）。
 
     与 call_llm 对齐：限流在流开始前；record_usage/配额告警在流正常结束后（usage 末尾才确定）。
     observe_generation 包整个流循环，末尾填 output+usage。CancelledError（审核中断）
@@ -261,6 +299,7 @@ async def call_llm_stream(
     prov = LLMProvider(cfg.provider)
     cb_key = circuit.circuit_key(user_id, prov, cfg.base_url)
     await circuit.assert_circuit_closed(r, cb_key)
+    tools = _degrade_tools_if_unsupported(prov, cfg.model, cfg.base_url, tools)
     trace_meta: dict[str, str] = {"user_id": str(user_id)}
     if game_id is not None:
         trace_meta["game_id"] = str(game_id)
@@ -279,6 +318,14 @@ async def call_llm_stream(
             kind=kind,
             metadata=trace_meta,
         ) as gen:
+            # 新 kwargs 仅在显式使用时传递：未用工具的流保持原调用形状
+            stream_extra: dict[str, Any] = {}
+            if messages is not None:
+                stream_extra["messages"] = messages
+            if tools is not None:
+                stream_extra["tools"] = tools
+                if tool_choice:
+                    stream_extra["tool_choice"] = tool_choice
             async for chunk in provider.complete_stream(
                 prov,
                 apikey,
@@ -287,9 +334,13 @@ async def call_llm_stream(
                 user_msg,
                 cfg.base_url,
                 max_tokens=max_tokens,
+                **stream_extra,
             ):
                 if chunk.delta:
                     accumulated.append(chunk.delta)
+                    yield chunk
+                elif chunk.tool_calls or chunk.usage is not None or chunk.finish_reason:
+                    # 末帧（usage/finish_reason/可能聚合的 tool_calls）必须透传给消费方
                     yield chunk
                 if chunk.usage is not None:
                     usage_acc = chunk.usage
