@@ -42,7 +42,11 @@ async def test_normal_run_emits_llm_delta_then_call(
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
 ) -> None:
-    """正常路径：plan 阶段发若干 LLM_DELTA（打字机）+ LLM_CALL + HITL_WAIT（plan_confirm）。"""
+    """正常路径：plan 阶段发若干 LLM_DELTA（打字机）+ LLM_CALL，跑通至 DONE。
+
+    ADR-18：固定确认门取消后正常路径不产生 HITL_WAIT——全程自主直至完成；
+    HITL_WAIT 仅在 ask_user 提问 / 故障恢复暂停时出现。
+    """
     # 审核关闭，确保不误触（quick_filter 对正常设计稿 JSON 不命中，但显式 noop 更稳）
     orig = guard.build_guard
 
@@ -60,8 +64,8 @@ async def test_normal_run_emits_llm_delta_then_call(
     types = _event_types(events)
     assert WSEventType.LLM_DELTA in types, f"缺少 LLM_DELTA 事件，实际: {types}"
     assert WSEventType.LLM_CALL in types, f"缺少 LLM_CALL 事件，实际: {types}"
-    # plan 节点结束后停在 plan_confirm HITL
-    assert WSEventType.HITL_WAIT in types
+    assert WSEventType.HITL_WAIT not in types, f"正常路径不应有 HITL 暂停，实际: {types}"
+    assert WSEventType.DONE in types, f"应跑通至 DONE，实际: {types}"
 
 
 @pytest.mark.asyncio

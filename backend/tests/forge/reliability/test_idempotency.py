@@ -162,8 +162,23 @@ async def test_redelivered_execute_does_not_restart_paused_run(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An execute redelivery after HITL pause is already handled and must be a no-op."""
+    """An execute redelivery after HITL pause is already handled and must be a no-op.
+
+    ADR-18：固定门取消，用 qa_failed（QA 重试耗尽）构造 HITL 暂停态。
+    """
+    from app.core.config import settings
+    from app.sandbox.playtest import PlaytestResult
+
+    async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
+        return PlaytestResult(
+            ok=False, errors=["mock js error"], console_logs=[], failure_kind="product"
+        )
+
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail_playtest)
+    monkeypatch.setattr(settings, "code_qa_max_attempts", 1)
+
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
     await execute_run({"redis": redis_client}, rid)

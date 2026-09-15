@@ -83,40 +83,18 @@ async def test_create_list_get_run(verified_client: httpx.AsyncClient) -> None:
     assert d["ws_url"] == f"/ws/runs/{rid}"
 
 
-async def test_full_generation_with_hitl(
+async def test_full_generation_autonomous_flow(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
 ) -> None:
-    """策划确认→美术方向确认→详细美术稿→code/qa→done。"""
+    """ADR-18：固定确认门已取消——plan→美术(自动选 recommended)→详细稿→code/qa→done
+    单次执行直接跑通，全程无 HITL 暂停（偏好记忆 + ask_user 工具取代人工确认）。"""
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
 
     ctx = {"redis": redis_client}
     await execute_run(ctx, rid)
-
-    # 首次跑到 HITL 中断：状态 paused/plan，current_hitl=plan_confirm
-    r = await verified_client.get(f"/api/v1/runs/{rid}")
-    d = r.json()["data"]
-    assert d["status"] == "paused"
-    assert d["current_hitl"] == {"node": "plan_confirm"}
-
-    # 策划确认后严格串行进入美术方向 HITL，不应直接编码。
-    await _grant_resume(redis_client, rid)
-    await run_generation(ctx, rid, resume=True, decision="approve")
-
-    r = await verified_client.get(f"/api/v1/runs/{rid}")
-    art_wait = r.json()["data"]
-    assert art_wait["status"] == "paused"
-    assert art_wait["current_hitl"] == {"node": "art_confirm"}
-    assert [item["id"] for item in art_wait["hitl_wait"]["art_options"]["options"]] == [
-        "A",
-        "B",
-    ]
-
-    # 只有选定方向后才生成详细美术稿并进入代码阶段。
-    await _grant_resume(redis_client, rid, "select_a")
-    await run_generation(ctx, rid, resume=True, decision="select_a")
 
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     d = r.json()["data"]
@@ -136,36 +114,46 @@ async def test_stale_resume_without_grant_is_skipped(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """HITL 等待态下，没有 resume_grant 的陈旧 resume 必须被跳过，run 不自动推进。
+    """HITL 等待态（qa_failed）下，没有 resume_grant 的陈旧 resume 必须被跳过。
 
     钉死 app.forge.graph._run_body 的 stale-skip 分支：at-least-once 投递下的旧
-    resume 消息读不到凭据，在 plan_confirm 直接 return，堵住「用户没点确认 art/code
-    却自己跑起来」。合法入口（resolve_hitl/resume/retry）由 enqueue_resume 写 grant，
-    测试里用 _grant_resume 模拟；本用例刻意不写，验证拦截。
+    resume 消息读不到凭据直接 return，堵住「用户没决策却自己跑起来」。
+    ADR-18 后固定确认门取消，改用 qa_failed（QA 重试耗尽）作为 HITL 等待态。
     """
+    from app.core.config import settings as app_settings
+    from app.sandbox.playtest import PlaytestResult
+
+    async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
+        return PlaytestResult(
+            ok=False,
+            errors=["mock js error"],
+            console_logs=["err"],
+            failure_kind="product",
+        )
+
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail_playtest)
+    monkeypatch.setattr(app_settings, "code_qa_max_attempts", 1)
+
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
     ctx = {"redis": redis_client}
     await execute_run(ctx, rid)
 
-    # 首次跑到 HITL 中断：paused/plan，current_hitl=plan_confirm
+    # QA 重试耗尽 → paused，等待 qa_failed 决策
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     assert r.json()["data"]["status"] == "paused"
-    assert r.json()["data"]["current_hitl"] == {"node": "plan_confirm"}
+    assert r.json()["data"]["current_hitl"]["node"] == "qa_failed"
 
     # 不预置 grant，直接 resume（模拟陈旧消息重投）
     await run_generation(ctx, rid, resume=True, decision="approve")
 
-    # 仍停在 HITL：未推进到 art，未产生版本
+    # 仍停在 HITL：状态未变，run 不自动推进
     r = await verified_client.get(f"/api/v1/runs/{rid}")
     d = r.json()["data"]
     assert d["status"] == "paused"
-    assert d["phase"] == "plan"
-    assert d["current_hitl"] == {"node": "plan_confirm"}
-
-    r = await verified_client.get(f"/api/v1/games/{gid}/versions")
-    assert r.json()["data"] == []
+    assert d["current_hitl"]["node"] == "qa_failed"
 
 
 async def test_grant_consumed_after_done_prevents_replay(
@@ -244,18 +232,37 @@ async def test_hitl_resolve_endpoint(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """POST hitl/resolve 校验 plan_confirm 态 + enqueue resume（noop）+ 200。"""
+    """POST hitl/resolve 校验 qa_failed 态 + enqueue resume（noop）+ 200。
+
+    ADR-18 后固定确认门取消，resolve 的常驻场景是故障恢复（qa_failed）与
+    agent_question；此处用 qa_failed 验证端点行为。
+    """
+    from app.core.config import settings as app_settings
+    from app.sandbox.playtest import PlaytestResult
+
+    async def _fail_playtest(_html: str, **_kwargs: object) -> PlaytestResult:
+        return PlaytestResult(
+            ok=False,
+            errors=["mock js error"],
+            console_logs=["err"],
+            failure_kind="product",
+        )
+
+    monkeypatch.setattr("app.forge.code_qa_exec.run_playtest", _fail_playtest)
+    monkeypatch.setattr(app_settings, "code_qa_max_attempts", 1)
+
     gid = await _make_game(verified_client)
     rid = await _make_run(verified_client, gid)
     await execute_run({"redis": redis_client}, rid)
 
     r = await verified_client.post(
         f"/api/v1/games/{gid}/runs/{rid}/hitl/resolve",
-        json={"node": "plan_confirm", "decision": "approve"},
+        json={"node": "qa_failed", "decision": "approve"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["data"]["phase"] == "art"
+    assert r.json()["data"]["phase"] == "code"
 
 
 async def test_art_options_retry_exhaustion_falls_back_and_finishes(

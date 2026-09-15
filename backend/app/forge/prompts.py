@@ -845,7 +845,5 @@ __all__ = [
     "build_repair_prompt_async",
 ]
 
-# ADR-17：plan 生成可选用 ask_user 工具（先查记忆，预算护栏见 ask_user 模块）
-from app.forge.ask_user import ASK_USER_CONTRACT  # noqa: E402
-
-PLAN_PROMPT = PLAN_PROMPT + "\n\n" + ASK_USER_CONTRACT
+# ADR-18：ask_user 由原生工具绑定（forge/tools.py 的 ASK_USER_TOOL_SCHEMA），
+# 不再向提示词拼接文本协议；"记忆优先"纪律在工具 description 中。

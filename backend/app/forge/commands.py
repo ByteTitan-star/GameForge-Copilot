@@ -18,18 +18,18 @@ from app.models.run_command import RunCommand
 CURRENT_WORKFLOW_VERSION = 1
 
 _LEGACY_DECISION_MAP: dict[tuple[str, str], RunCommandType] = {
-    ("plan_confirm", "approve"): RunCommandType.APPROVE_PLAN,
+    ("plan_confirm", "approve"): RunCommandType.APPROVE_PLAN,  # legacy 门（ADR-18）
     ("plan_confirm", "modify"): RunCommandType.REVISE_PLAN,
-    ("art_confirm", "select_a"): RunCommandType.SELECT_ART_A,
-    ("art_confirm", "select_b"): RunCommandType.SELECT_ART_B,
-    ("art_confirm", "modify"): RunCommandType.REVISE_ART,
+    ("art_confirm", "select_a"): RunCommandType.SELECT_ART_A,  # legacy 门（ADR-18）
+    ("art_confirm", "select_b"): RunCommandType.SELECT_ART_B,  # legacy 门（ADR-18）
+    ("art_confirm", "modify"): RunCommandType.REVISE_ART,  # legacy 门（ADR-18）
     ("qa_failed", "approve"): RunCommandType.RETRY_IMPLEMENTATION,
     ("qa_failed", "modify"): RunCommandType.RETRY_IMPLEMENTATION,
     ("sandbox_failed", "approve"): RunCommandType.RETRY_IMPLEMENTATION,
     ("sandbox_failed", "modify"): RunCommandType.RETRY_IMPLEMENTATION,
-    # ADR-17 agent_question：回答/跳过都走 revise_plan 通道，modify_text 即回答
-    ("agent_question", "modify"): RunCommandType.REVISE_PLAN,
-    ("agent_question", "skip"): RunCommandType.REVISE_PLAN,
+    # ADR-18 agent_question：回答/跳过都是回答 ask_user 工具提问，modify_text 即回答
+    ("agent_question", "modify"): RunCommandType.ANSWER_QUESTION,
+    ("agent_question", "skip"): RunCommandType.ANSWER_QUESTION,
 }
 
 _COMMAND_TO_LEGACY_DECISION: dict[RunCommandType, str] = {
@@ -41,6 +41,7 @@ _COMMAND_TO_LEGACY_DECISION: dict[RunCommandType, str] = {
     RunCommandType.RETRY_IMPLEMENTATION: "approve",
     RunCommandType.RETRY_INFRA: "approve",
     RunCommandType.CANCEL_RUN: "cancel",
+    RunCommandType.ANSWER_QUESTION: "modify",
 }
 
 

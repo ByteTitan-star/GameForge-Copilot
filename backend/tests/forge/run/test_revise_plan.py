@@ -97,7 +97,7 @@ async def _to_qa_failed(
     return gid, rid
 
 
-async def test_qa_failed_revise_plan_returns_to_plan_confirm(
+async def test_qa_failed_revise_plan_reruns_pipeline(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
@@ -128,10 +128,13 @@ async def test_qa_failed_revise_plan_returns_to_plan_confirm(
         assert "design_doc" in (st.get("superseded") or {})
         command_id = uuid.UUID(st["resume_grant"]["command_id"])
 
+    # ADR-18：修订后无 plan_confirm 门——整条流水线（修订→美术→开发→QA）连续重跑；
+    # 试玩持续失败 → 再次耗尽暂停为 qa_failed（证明从策划阶段完整重来而非仅重试代码）。
     await resume_run({"redis": redis_client}, rid, "modify", "改成更简单的 2D 玩法", command_id)
     st2 = await ckpt.load_state(redis_client, rid)
     assert st2 is not None
-    assert st2.get("phase") == "plan_confirm"
+    assert st2.get("phase") == "qa_failed"
+    assert st2.get("replan_count") == 1
 
 
 async def test_replan_budget_blocks_extra_revision(
@@ -187,30 +190,18 @@ async def test_hitl_wait_payload_includes_allowed_commands(
     assert last.get("failure") is None or "failure_class" in last["failure"]
 
 
-async def test_cancel_run_command_from_plan_confirm(
+async def test_cancel_run_command_from_qa_failed(
     verified_client: httpx.AsyncClient,
     redis_client: fakeredis.aioredis.FakeRedis,
     _fake_llm,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.forge.runner import execute_run
-
-    gid = uuid.UUID(
-        (
-            await verified_client.post(
-                "/api/v1/games", json={"title": "Cancel P2", "requirement": "取消"}
-            )
-        ).json()["data"]["game_id"]
-    )
-    rid = uuid.UUID(
-        (await verified_client.post(f"/api/v1/games/{gid}/runs", json={"requirement": "x"})).json()[
-            "data"
-        ]["run_id"]
-    )
-    await execute_run({"redis": redis_client}, rid)
+    """ADR-18：固定门取消后，cancel_run 经由常驻 HITL 相位（qa_failed）验证。"""
+    gid, rid = await _to_qa_failed(verified_client, redis_client, monkeypatch)
 
     r = await verified_client.post(
         f"/api/v1/games/{gid}/runs/{rid}/hitl/resolve",
-        json={"node": "plan_confirm", "command": "cancel_run"},
+        json={"node": "qa_failed", "command": "cancel_run"},
     )
     assert r.status_code == 200, r.text
     detail = await verified_client.get(f"/api/v1/runs/{rid}")

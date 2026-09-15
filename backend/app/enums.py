@@ -41,14 +41,16 @@ class RunPhase(StrEnum):
 
 
 class RunCommandType(StrEnum):
-    APPROVE_PLAN = "approve_plan"
+    APPROVE_PLAN = "approve_plan"  # legacy：plan_confirm 门已取消（ADR-18），仅供存量 resolve
     REVISE_PLAN = "revise_plan"
-    SELECT_ART_A = "select_art_a"
-    SELECT_ART_B = "select_art_b"
-    REVISE_ART = "revise_art"
+    SELECT_ART_A = "select_art_a"  # legacy：art_confirm 门已取消（ADR-18）
+    SELECT_ART_B = "select_art_b"  # legacy：art_confirm 门已取消（ADR-18）
+    REVISE_ART = "revise_art"  # legacy：art_confirm 门已取消（ADR-18）
     RETRY_IMPLEMENTATION = "retry_implementation"
     RETRY_INFRA = "retry_infra"
     CANCEL_RUN = "cancel_run"
+    # ADR-18：回答模型 ask_user 工具的提问（取代旧 revise_plan 复用通道）
+    ANSWER_QUESTION = "answer_question"
 
 
 class RunCommandStatus(StrEnum):

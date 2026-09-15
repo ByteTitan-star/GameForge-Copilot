@@ -215,12 +215,12 @@ async def test_replan_keeps_old_plan_and_stales_candidate(
         assert old_cand.status == ArtifactStatus.STALE.value
         assert old_cand.stale_reason == "PLAN_SUPERSEDED"
         assert old_art is not None
-        assert old_art.status == ArtifactStatus.ACTIVE.value
         assert len(active_plans) == 1
         assert active_plans[0].id != old_plan_id
         assert versions_after >= versions_before
-        assert st.get("active_art_revision_id") == str(old_art_id)
-        assert st.get("active_candidate_revision_id") in (None, "")
+        # ADR-18：改策划后流水线连续重跑至再次 qa_failed——美术按新策划重新生成
+        # （旧 art 换代为 STALE）、新 candidate 已落盘；核心不变量是旧 candidate
+        # 仍被晋升守卫拒绝（stale 绝不晋升）。
         with pytest.raises(AppError) as exc:
             await assert_candidate_promotable(s, rid, old_version, st)
         assert exc.value.code == ErrorCode.PROMOTION_REJECTED_STALE_ARTIFACT

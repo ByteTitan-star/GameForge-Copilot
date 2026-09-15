@@ -52,8 +52,8 @@ async def enqueue_resume(
     """
     st = await ckpt.load_state(r, run_id, db) or {}
     if str(st.get("phase") or "") == "agent_question":
-        # ADR-17：回答/跳过统一走 revise；skip 或空回答注入合成回答
-        from app.forge.ask_user import synthetic_answer
+        # ADR-18：回答/跳过统一为 answer_question；skip 或空回答注入合成回答
+        from app.forge.tools import synthetic_answer
 
         decision = "modify"
         if not (modify_text or "").strip():

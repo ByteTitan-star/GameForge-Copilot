@@ -430,7 +430,9 @@ async def resolve_hitl(
                 "sandbox_failed": "环境问题已处理，继续重试",
                 "qa_failed": "已确认继续修复试玩问题",
             }.get(phase, "已确认，继续"),
-            "modify": "已提交修改意见",
+            "modify": {
+                "agent_question": "已回答模型提问",
+            }.get(phase, "已提交修改意见"),
         }
         decision_text = (
             modify_text.strip()
@@ -468,6 +470,9 @@ async def resolve_hitl(
         )
         await db.commit()
         if mapped.command_type is RunCommandType.REVISE_PLAN:
+            next_phase = RunPhase.PLAN
+        elif mapped.command_type is RunCommandType.ANSWER_QUESTION:
+            # ADR-18：回到发起提问的节点重生成（plan 居多，UI 预测用）
             next_phase = RunPhase.PLAN
         elif phase in {"plan_confirm", "art_confirm"}:
             next_phase = RunPhase.ART

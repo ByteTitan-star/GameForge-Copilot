@@ -73,7 +73,6 @@ async def test_qa_exhausted_persists_report_before_hitl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.core.config import settings
-    from app.forge.graph import run_generation
     from app.forge.runner import execute_run
     from app.sandbox.playtest import PlaytestResult
 
@@ -98,24 +97,8 @@ async def test_qa_exhausted_persists_report_before_hitl(
         ]["run_id"]
     )
     ctx = {"redis": redis_client}
+    # ADR-18：无固定确认门——单次执行直达 QA，重试耗尽暂停为 qa_failed 并落失败报告
     await execute_run(ctx, rid)
-
-    async with db_module.SessionLocal() as s:
-        from app.forge import state as ckpt
-
-        st = await ckpt.load_state(redis_client, rid, s) or {}
-        granted = {**st, "resume_grant": {"decision": "approve", "modify_text": None}}
-        await ckpt.save_state(redis_client, rid, granted, s)
-        await s.commit()
-    await run_generation(ctx, rid, resume=True, decision="approve")
-    async with db_module.SessionLocal() as s:
-        from app.forge import state as ckpt
-
-        st = await ckpt.load_state(redis_client, rid, s) or {}
-        granted = {**st, "resume_grant": {"decision": "select_a", "modify_text": None}}
-        await ckpt.save_state(redis_client, rid, granted, s)
-        await s.commit()
-    await run_generation(ctx, rid, resume=True, decision="select_a")
 
     async with db_module.SessionLocal() as s:
         rows = list(
