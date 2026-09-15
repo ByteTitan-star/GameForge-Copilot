@@ -19,6 +19,11 @@
 
 ## 未发布（working copy）
 
+- NOTE: ADR-18 HITL 工具化——固定确认门（plan_confirm / art_confirm）不再产生，仅为存量暂停 run 保留 resolve 一个发布窗口；常驻 HITL 相位为 qa_failed / sandbox_failed / agent_question。
+- ADDED: `RunCommandType.answer_question` — 回答模型 ask_user 工具提问（agent_question 相位 decision=modify/skip 映射于此；此前复用 revise_plan）。
+- DEPRECATED: `RunCommandType.approve_plan` / `select_art_a` / `select_art_b` / `revise_art` — 固定确认门取消后不可达，历史 run_commands 行不受影响，下个版本删除。
+- NOTE: `hitl/resolve` 请求/响应形状不变（command 为自由字符串）；正常生成流程不再出现 plan_confirm / art_confirm 的 hitl_wait 事件。
+
 - MODIFIED: `RunStatus` — 增 `cancelled`（用户取消终态，与 `failed` 区分）
 
 - MODIFIED: `GET /games/public`、`GET /games/featured`、`GET /official/games` — 增 `locale` query（zh | en，官方样例标题随 locale 切换）

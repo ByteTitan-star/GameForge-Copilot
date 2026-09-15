@@ -1,6 +1,6 @@
 # ADR-16: Preference Memory（To-Be / Canonical Catalog + Policy + Resolver）
 
-* Status: **Accepted**
+* Status: **Accepted**（2026-09-15 增量三批：①ask_user 问答回流偏好抽取（见 [ADR-18](./ADR-18-native-tool-hitl-no-fixed-gates.md) §2.4）；②explicit 时间衰减复确认——超过 `preference_explicit_stale_days`（默认 180 天，-1 关闭）未复确认的 explicit 可被 ≥`preference_inferred_override_confidence`（默认 0.85）的 inferred 覆盖，note 留 `superseded_explicit:<旧值>` 审计痕；③scope 防污染——抽取规则明确"这个游戏/本作"限定的单游戏要求不是用户偏好；④行为信号 inferred——异步抽取任务携带近期需求历史（`preference_history_infer_enabled`，最多 `preference_history_max_items` 条），同一倾向 ≥2 次历史复现才可低置信（≤0.7）inferred）
 * Date: 2026-09-11
 * Accepted-by: ByteTitan-star（owner 决策见 issue #162 2026-09-11 评论）
 * Related: [ADR-15](./ADR-15-preference-memory-as-is.md)（As-Is，保持不变）、Issue [#162](https://github.com/ByteTitan-star/GameForge-Copilot/issues/162)、[#124](https://github.com/ByteTitan-star/GameForge-Copilot/issues/124)（eval）

@@ -10,6 +10,8 @@ from eval.runners.generation_eval import (
 def test_hitl_decision_map() -> None:
     assert hitl_decision_for("plan_confirm") == "approve"
     assert hitl_decision_for("art_confirm") == "select_a"
+    # ADR-18：无人评估中模型提问选 skip（让模型自行决策）
+    assert hitl_decision_for("agent_question") == "skip"
     assert hitl_decision_for("unknown") is None
 
 
