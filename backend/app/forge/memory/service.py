@@ -53,12 +53,33 @@ async def active_digest(db: AsyncSession, user_id: uuid.UUID) -> list[dict[str, 
     ]
 
 
-def _merge_allowed(existing: UserPreferenceV2, source: str, confidence: float) -> bool:
-    """合并策略：explicit 恒胜；inferred 仅在置信度不低于现值时可更新。"""
+def _merge_allowed(
+    existing: UserPreferenceV2,
+    source: str,
+    confidence: float,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """合并策略：explicit 恒胜；inferred 仅在置信度不低于现值时可更新。
+
+    例外（ADR-16 增量·时间衰减复确认）：explicit 超过 preference_explicit_stale_days
+    未被重新确认（updated_at 陈旧——注意不是 last_used_at，后者每次注入都会刷新，
+    "被使用"不等于"被用户复确认"），且新 inferred 置信度 ≥
+    preference_inferred_override_confidence 时允许覆盖——用户口味会变，
+    一年前写下的 explicit 不应永远压过昨天的高置信行为信号；覆盖时旧值
+    进入归档历史（note 记录），可审计可回滚。
+    """
     if source == "explicit":
         return True
     if existing.source == "explicit":
-        return False
+        stale_days = int(settings.preference_explicit_stale_days)
+        if stale_days <= 0:
+            return False  # 时间衰减关闭：回到 explicit 绝对恒胜（ADR-16 原策略）
+        threshold = float(settings.preference_inferred_override_confidence)
+        reference = now or _now()
+        updated = _naive(existing.updated_at)
+        age_days = (reference.replace(tzinfo=None) - updated).days
+        return age_days >= stale_days and confidence >= threshold
     return confidence >= float(existing.confidence)
 
 
@@ -146,10 +167,14 @@ async def apply_operation(
         await db.flush()
         return existing
 
+    # 陈旧 explicit 被高置信 inferred 覆盖：note 留痕可审计回滚
+    supersede_mark = ""
+    if existing.source == "explicit" and source == "inferred":
+        supersede_mark = f" | superseded_explicit:{existing.value}"
     existing.value = value
     existing.source = source
     existing.confidence = confidence
-    existing.note = clipped_note or existing.note
+    existing.note = (clipped_note or existing.note) + supersede_mark
     existing.last_used_at = _now()
     existing.updated_at = _now()
     await db.flush()

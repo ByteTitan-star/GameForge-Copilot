@@ -36,7 +36,7 @@ async def test_upsert_via_llm_routes_to_service_policy(db_session, monkeypatch) 
 
     calls: list[list[dict]] = []
 
-    async def fake_extract(text: str, current_prefs: list[dict]):
+    async def fake_extract(text: str, current_prefs: list[dict], **kwargs):
         calls.append(current_prefs)
         if len(calls) == 1:
             return [
@@ -101,7 +101,7 @@ async def test_upsert_filters_inferred_when_disabled(db_session, monkeypatch) ->
     monkeypatch.setattr(settings, "memory_preferences", True)
     monkeypatch.setattr(settings, "memory_preferences_inferred", False)
 
-    async def fake_extract(text: str, current_prefs: list[dict]):
+    async def fake_extract(text: str, current_prefs: list[dict], **kwargs):
         return [
             {
                 "op": "set",

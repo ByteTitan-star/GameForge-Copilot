@@ -332,6 +332,11 @@ async def _consume() -> None:
             await outbox_task
         if in_flight:
             await asyncio.gather(*in_flight, return_exceptions=True)
+        # 优雅关停：等待在途偏好抽取后台任务（限时，best-effort 不拖关停）
+        from app.forge.memory.async_extract import drain_preference_tasks
+
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(drain_preference_tasks(), timeout=10.0)
         from app.core.langfuse import flush_langfuse
 
         flush_langfuse()

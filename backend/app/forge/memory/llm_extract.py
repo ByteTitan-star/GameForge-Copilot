@@ -31,12 +31,18 @@ def _system_prompt() -> str:
         "规则：\n"
         "1. 只记录长期偏好；『这次/本局/暂时/仅本次』等当前任务指令不是偏好，"
         "输出空 operations。\n"
-        "2. key 必须从下列目录选择，禁止发明：\n" + _catalog_digest() + "\n"
-        "3. op 语义：set=新增或更新偏好；remove=用户明确否定某条已有偏好"
+        "2. scope 判定（防跨游戏污染）：『这个游戏/本作/这部作品/只在这个游戏里』"
+        "限定的表述是单游戏要求而非用户偏好，不得输出为偏好操作；只有跨游戏的"
+        "普遍口味（『以后都/我一直喜欢/默认总要』）才是偏好。\n"
+        "3. key 必须从下列目录选择，禁止发明：\n" + _catalog_digest() + "\n"
+        "4. op 语义：set=新增或更新偏好；remove=用户明确否定某条已有偏好"
         "（如『别再默认暗色』）；touch=用户重申的内容与现有值相同，仅刷新。\n"
-        "4. source：用户明确声明长期偏好用 explicit（confidence>=0.9）；"
+        "5. source：用户明确声明长期偏好用 explicit（confidence>=0.9）；"
         "弱信号推断用 inferred（confidence<=0.7）。\n"
-        '5. 只输出 JSON（无围栏）：{"operations":[{"op":"set","key":"…",'
+        "6. 行为信号推断（仅当提供了历史需求）：同一倾向在历史需求中反复出现"
+        "（≥2 次）才可输出 inferred 的 set（confidence<=0.7，禁止凭单条历史臆断）；"
+        "历史与本次消息冲突时以本次消息为准。\n"
+        '7. 只输出 JSON（无围栏）：{"operations":[{"op":"set","key":"…",'
         '"value":"…","source":"…","confidence":0.0}]}；无操作输出 {"operations":[]}。'
     )
 
@@ -82,9 +88,16 @@ def _parse_operations(content: str) -> list[dict[str, Any]]:
 
 
 async def extract_preference_operations(
-    text: str, current_prefs: list[dict[str, Any]]
+    text: str,
+    current_prefs: list[dict[str, Any]],
+    *,
+    history_texts: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """调平台模型输出操作候选；未配置或失败返回 []（不写偏好）。"""
+    """调平台模型输出操作候选；未配置或失败返回 []（不写偏好）。
+
+    history_texts（ADR-16 增量·行为信号）：用户近期需求文本，供模型识别
+    反复出现的口味模式（inferred，confidence≤0.7）；空列表等价于不启用。
+    """
     raw = (text or "").strip()
     if not raw or not preference_extract_configured():
         return []
@@ -93,6 +106,10 @@ async def extract_preference_operations(
 
     prefs_json = json.dumps(current_prefs, ensure_ascii=False)
     user_msg = f"【用户消息】\n{raw}\n\n【现有偏好】\n{prefs_json}"
+    clean_history = [h.strip() for h in (history_texts or []) if h and h.strip()]
+    if clean_history:
+        history_block = "\n".join(f"- {h[:200]}" for h in clean_history)
+        user_msg += f"\n\n【用户近期需求历史（仅供行为信号推断）】\n{history_block}"
     try:
         content, _usage = await platform_complete(
             LLMProvider(settings.preference_extract_provider),

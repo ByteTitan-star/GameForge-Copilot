@@ -78,12 +78,17 @@ async def clear_preferences(db: AsyncSession, user_id: uuid.UUID) -> int:
 
 
 async def upsert_preferences_from_text(
-    db: AsyncSession, *, user_id: uuid.UUID, text: str
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    text: str,
+    history_texts: list[str] | None = None,
 ) -> list[Any]:
     """正式写路径（ADR-16）：操作式抽取 → Preference Service 裁决入库。
 
     返回实际写入/更新的 v2 行；抽取失败或未配置模型返回 []。
-    合并策略（explicit 恒胜 / 置信度门槛）与 LRU 归档在服务层实现。
+    合并策略（explicit 恒胜 / 置信度门槛 / 陈旧 explicit 时间衰减）与
+    LRU 归档在服务层实现。history_texts 供行为信号推断（反复出现的口味模式）。
     """
     if not settings.memory_preferences:
         return []
@@ -91,7 +96,7 @@ async def upsert_preferences_from_text(
     from app.forge.memory.llm_extract import extract_preference_operations
 
     digest = await service.active_digest(db, user_id)
-    ops = await extract_preference_operations(text, digest)
+    ops = await extract_preference_operations(text, digest, history_texts=history_texts)
     if not settings.memory_preferences_inferred:
         ops = [op for op in ops if op.get("source") != "inferred"]
     return await service.apply_operations(
